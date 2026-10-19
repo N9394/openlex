@@ -13,6 +13,8 @@
  *   openlex compare OLD NEW [--matter ID] [--no-rate]
  *   openlex matters
  *   openlex clauses [--type liability] [--query words] [--matter ID]
+ *   openlex grid list | new TITLE --columns cols.json [--matter ID] | run ID [--force] | show ID | export ID
+ *   openlex decide "text" --question "Is …?" | --questions q.json [--file doc] [--matter ID]
  *   openlex serve                      run the engine in the foreground
  *
  * Finds the engine via ~/.lexvault/run/sidecar.json (url + its localhost
@@ -34,6 +36,7 @@ function parseArgs(argv) {
     const a = argv[i]
     if (a === '--no-rate') out.rate = false
     else if (a === '--json') out.json = true
+    else if (a === '--force') out.force = true
     else if (a.startsWith('--')) out[a.slice(2)] = argv[++i]
     else out._.push(a)
   }
@@ -115,7 +118,7 @@ async function runWorkflow(type, body, opts) {
   }
 }
 
-const USAGE = fs.readFileSync(__filename, 'utf8').split('\n').slice(3, 18).map((l) => l.replace(/^ \* ?/, '')).join('\n')
+const USAGE = (() => { const lines = fs.readFileSync(__filename, 'utf8').split('\n'); const end = lines.findIndex((l) => l.includes('Finds the engine')) - 1; return lines.slice(3, end).map((l) => l.replace(/^ \* ?/, '')).join('\n') })()
 
 async function main() {
   const [cmd, ...rest] = process.argv.slice(2)
@@ -175,6 +178,64 @@ async function main() {
         return
       }
       for (const c of r.clauses) console.log(`\n${c.heading}  (${c.label}, ${c.uses} doc${c.uses === 1 ? '' : 's'}: ${c.documents.join(', ')})\n${c.text}`)
+      return
+    }
+    case 'grid': {
+      const [sub, arg] = a._
+      if (sub === 'list' || !sub) {
+        const r = await request('GET', `/api/grids${a.matter ? `?matterId=${encodeURIComponent(a.matter)}` : ''}`)
+        if (a.json) return console.log(JSON.stringify(r, null, 2))
+        for (const g of r.grids) console.log(`${g.id}  ${g.title}  (${g.documents} documents × ${g.columns} columns)`)
+        return
+      }
+      if (sub === 'new') {
+        if (!arg || !a.columns) throw new Error('usage: openlex grid new TITLE --columns cols.json [--matter ID]   (cols.json: [{ "label", "prompt", "type": "text|yesno|choice|date|number", "options"?, "dependsOn"? }])')
+        const r = await request('POST', '/api/grids', { title: arg, matterId: a.matter, columns: JSON.parse(fs.readFileSync(a.columns, 'utf8')) })
+        if (a.json) return console.log(JSON.stringify(r, null, 2))
+        console.log(`${r.id}  ${r.title}: ${r.rows.length} documents × ${r.columns.length} columns — run it with: openlex grid run ${r.id}`)
+        return
+      }
+      if (!arg) throw new Error(`usage: openlex grid ${sub} ID`)
+      if (sub === 'run') {
+        let done = null
+        await request('POST', '/api/grids/run', { id: arg, force: !!a.force }, {
+          onEvent: (ev) => {
+            if (a.json) { console.log(JSON.stringify(ev)); return }
+            if (ev.type === 'progress' && ev.step === 'cell') process.stderr.write(`  ${ev.document} · ${ev.column}: ${ev.status === 'ok' ? ev.value : `[${ev.status}] ${ev.value || ''}`}\n`)
+            else if (ev.type === 'error') { process.exitCode = 1; console.error(`error: ${ev.message}`) }
+            else if (ev.type === 'done') done = ev
+          },
+        })
+        if (done && !a.json) console.log(Object.entries(done.stats).filter(([, v]) => typeof v !== 'object').map(([k, v]) => `${k}: ${v}`).join(' · '))
+        return
+      }
+      if (sub === 'show') {
+        const v = await request('GET', `/api/grids/view?id=${encodeURIComponent(arg)}`)
+        if (a.json) return console.log(JSON.stringify(v, null, 2))
+        const flag = { unverified: ' [UNVERIFIED]', invalid: ' [CHECK]', edited: ' [edited]', error: ' [ERROR]' }
+        for (const row of v.rows) {
+          console.log(`\n${row.name}`)
+          row.cells.forEach((c, i) => console.log(`  ${v.columns[i].label}: ${!c ? '·' : c.status === 'not_found' ? '—' : c.value + (flag[c.status] || '')}`))
+        }
+        return
+      }
+      if (sub === 'export') {
+        const r = await request('POST', '/api/grids/export', { id: arg })
+        for (const f of r.files) console.log(f)
+        return
+      }
+      throw new Error(`unknown grid command: ${sub}`)
+    }
+    case 'decide': {
+      const state = a.file ? await readFileText(a.file) : a._.join(' ').trim()
+      if (!state || (!a.question && !a.questions)) throw new Error('usage: openlex decide "text" --question "Is …?"  |  --questions q.json  [--file doc]')
+      const questions = a.questions ? JSON.parse(fs.readFileSync(a.questions, 'utf8')) : { answer: { type: 'noul', instructions: a.question } }
+      const r = await request('POST', '/api/decide', { state, questions, matterId: a.matter })
+      if (a.json) return console.log(JSON.stringify(r, null, 2))
+      for (const [id, s] of Object.entries(r.summary)) {
+        const ans = typeof s.answer === 'boolean' ? (s.answer ? 'yes' : 'no') : s.level ? `${s.level} (${s.answer.toFixed(2)})` : s.answer
+        console.log(`${id}: ${ans}${s.p != null ? `  p=${s.p.toFixed(2)}` : ''}${s.confidence != null ? `  confidence=${s.confidence.toFixed(2)}` : ''}`)
+      }
       return
     }
     default:

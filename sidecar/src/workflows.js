@@ -369,4 +369,4 @@ function matterLabel(matterId) {
   return m ? (m.number ? `${m.number} ${m.title}` : m.title) : 'default'
 }
 
-module.exports = { runReview, runChronology, quoteInSource, extractJson, parseDate, datesInText, loadPlaybook, bundledPlaybooks, DEFAULT_PLAYBOOK, readDoc, listDocs, matterFolders, matterLabel, askJson, csvCell, norm, canonicalDates, MONTHS }
+module.exports = { runReview, runChronology, parts, quoteInSource, extractJson, parseDate, datesInText, loadPlaybook, bundledPlaybooks, DEFAULT_PLAYBOOK, readDoc, listDocs, matterFolders, matterLabel, askJson, csvCell, norm, canonicalDates, MONTHS }

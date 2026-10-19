@@ -329,7 +329,7 @@ function focusMain() {
 }
 
 // Engine API paths the renderer may use (via IPC, never directly).
-const ENGINE_PATHS = /^\/api\/(status|providers(\/key|\/test)?|policy|matters(\/update|\/bind|\/policy)?|library(\/folders(\/remove)?|\/sync)?|mcp(\/servers(\/remove)?|\/reconnect)?|workflows\/(playbooks|run|documents)|clauses|web\/login)(\?.*)?$/
+const ENGINE_PATHS = /^\/api\/(status|providers(\/key|\/test)?|policy|matters(\/update|\/bind|\/policy)?|library(\/folders(\/remove)?|\/sync)?|mcp(\/servers(\/remove)?|\/reconnect)?|workflows\/(playbooks|run|documents)|clauses|grids(\/view|\/update|\/cell|\/delete|\/export|\/run)?|decide(\/config|\/key|\/test)?|web\/login)(\?.*)?$/
 
 async function startEngine() {
   const { ensureEngine } = require('./engine')

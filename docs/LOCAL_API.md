@@ -87,6 +87,28 @@ Long-running routes answer with Server-Sent Events: `Content-Type: text/event-st
 
 All workflows stream `progress` events and end with `{ type: "done", files, stats }`. The output files are written to the matter's workspace folder. A `file` can be an absolute path or a file name inside the matter's folders.
 
+### Review grid
+Rows are documents, columns are questions, and every cell is an answer with a verbatim quote from its document.
+| Method | Path | Body / query | What |
+|---|---|---|---|
+| GET | `/api/grids` | `?matterId=` | List grids. |
+| POST | `/api/grids` | `{ matterId, title, columns, documents? }` | Create. Without `documents`, the matter's folders are used. A column is `{ label, prompt, type: text\|yesno\|choice\|date\|number, options?, dependsOn?: [columnId], reference?: file }`. |
+| GET | `/api/grids/view` | `?id=` | Rows with cells in column order. A cell is `{ value, quote, location, status, locked? }`; status is `ok`, `unverified` (quote not in the document), `invalid` (doesn't fit the type), `not_found`, `edited` or `error`. |
+| POST | `/api/grids/run` | `{ id, documents?, columns?, force? }` | SSE. Fills missing, failed and stale cells (a dependent column is stale when its input changed); `force` recomputes every unlocked cell. Events: `progress` (`step: cell` with the new value, `step: document`), `done` with stats. |
+| POST | `/api/grids/cell` | `{ id, document, column, value?, locked? }` | The lawyer's own value (locks the cell), or lock/unlock. |
+| POST | `/api/grids/update` | `{ id, patch: { title?, columns?, documents? } }` | Change columns or rows; cells of removed ones are dropped. |
+| POST | `/api/grids/export` | `{ id }` | Writes `.xlsx` (grid + sources sheet) and `.csv` to the matter's workspace folder. |
+| POST | `/api/grids/delete` | `{ id }` | Delete the grid (documents are not touched). |
+
+### Decision models (Jev / Kev compatible)
+Any endpoint that speaks the System One API (`POST {url}/v1/systemone`): a local Kev server, your own decision model, or Jev. It returns typed answers with calibrated probabilities instead of text. An endpoint on this machine or the local network counts as local; anything else needs `decide` on the matter's allow-list (and an approved region when the policy has regions).
+| Method | Path | Body | What |
+|---|---|---|---|
+| GET/POST | `/api/decide/config` | `{ url, model?, region? }` or `{ clear: true }` | Configure the endpoint. Remote endpoints must use https. |
+| POST | `/api/decide/key` | `{ key }` | Optional bearer key, stored in the OS keychain. |
+| POST | `/api/decide` | `{ state, questions, matterId? }` | `questions: { id: { type: noul\|choice\|score, instructions, criteria } }`. Returns `answers` as the endpoint sent them, plus `summary: { id: { answer, p, confidence } }`. |
+| POST | `/api/decide/test` | | One tiny call, still subject to the policy. |
+
 ### Connectors (MCP) and web
 | Method | Path | Body | What |
 |---|---|---|---|

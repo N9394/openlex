@@ -420,6 +420,80 @@ async function handle(req, res) {
       return res.end()
     }
 
+    // ── Decision models (System One API: Kev, our own, Jev) ─────────────
+    if (p === '/api/decide' || p.startsWith('/api/decide/')) {
+      const decide = require('./decide')
+      try {
+        if (req.method === 'GET' && p === '/api/decide/config') {
+          return sendJson(res, 200, { config: decide.loadConfig(), endpoint: decide.descriptor(), hasKey: await secrets.hasKey('decide') })
+        }
+        if (req.method !== 'POST') return sendJson(res, 404, { error: 'not found' })
+        const body = await readBody(req)
+        if (p === '/api/decide/config') return sendJson(res, 200, { config: decide.saveConfig(body.clear ? null : body), endpoint: decide.descriptor() })
+        if (p === '/api/decide/key') {
+          if (body.key === null || body.key === '') await secrets.deleteKey('decide')
+          else await secrets.setKey('decide', body.key)
+          return sendJson(res, 200, { ok: true, hasKey: await secrets.hasKey('decide') })
+        }
+        const matterId = body.matterId || matterIdFor(body, null)
+        if (p === '/api/decide/test') return sendJson(res, 200, await policy.withMatter(matterId, () => decide.test()))
+        if (p === '/api/decide') {
+          const r = await policy.withMatter(matterId, () => decide.systemOne({ state: body.state, questions: body.questions }))
+          return sendJson(res, 200, { ...r, summary: decide.summarize(r.answers) })
+        }
+        return sendJson(res, 404, { error: 'not found' })
+      } catch (err) {
+        return sendJson(res, err.code === 'POLICY_BLOCKED' ? 403 : 400, { error: err.message, ...(err.code ? { code: err.code } : {}) })
+      }
+    }
+
+    // ── Review grid (rows = documents, columns = questions) ──────────────
+    if (p === '/api/grids' || p.startsWith('/api/grids/')) {
+      const grid = require('./grid')
+      try {
+        if (req.method === 'GET' && p === '/api/grids') {
+          const matterId = url.searchParams.has('matterId') ? (url.searchParams.get('matterId') || null) : undefined
+          return sendJson(res, 200, { grids: grid.list(matterId), types: grid.TYPES })
+        }
+        if (req.method === 'GET' && p === '/api/grids/view') return sendJson(res, 200, grid.view(url.searchParams.get('id')))
+        if (req.method !== 'POST') return sendJson(res, 404, { error: 'not found' })
+        const body = await readBody(req)
+        if (p === '/api/grids') {
+          const g = grid.create({ matterId: body.matterId || matterIdFor(body, null), title: body.title, columns: body.columns, documents: body.documents })
+          return sendJson(res, 200, grid.view(g.id))
+        }
+        if (p === '/api/grids/update') { grid.update(body.id, body.patch || {}); return sendJson(res, 200, grid.view(body.id)) }
+        if (p === '/api/grids/cell') return sendJson(res, 200, { cell: grid.setCell(body.id, body) })
+        if (p === '/api/grids/delete') { grid.remove(body.id); return sendJson(res, 200, { ok: true }) }
+        if (p === '/api/grids/export') {
+          require('./workspace').setBase(require('./agent-config').load().workspace)
+          return sendJson(res, 200, grid.exportGrid(body.id))
+        }
+        if (p === '/api/grids/run') {
+          const g = grid.get(body.id)
+          res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' })
+          const ready = await engineReady()
+          if (!ready?.ok) { sendSse(res, { type: 'error', message: `model unavailable: ${ready.reason}` }); return res.end() }
+          const ac = new AbortController()
+          res.on('close', () => ac.abort())
+          try {
+            const r = await policy.withMatter(g.matterId, () => grid.run(body.id, {
+              documents: body.documents, columns: body.columns, force: !!body.force, signal: ac.signal,
+              onProgress: (ev) => sendSse(res, { type: 'progress', ...ev }),
+            }))
+            sendSse(res, { type: 'done', stats: r.stats })
+          } catch (err) {
+            sendSse(res, { type: 'error', message: err.message })
+          }
+          return res.end()
+        }
+        return sendJson(res, 404, { error: 'not found' })
+      } catch (err) {
+        if (res.headersSent) { sendSse(res, { type: 'error', message: err.message }); return res.end() }
+        return sendJson(res, 400, { error: err.message })
+      }
+    }
+
     // ── Connectors (MCP servers) ─────────────────────────────────────────
     if (req.method === 'GET' && p === '/api/mcp') {
       return sendJson(res, 200, { servers: mcpClient.status(), configPath: mcpClient.CONFIG_PATH })
