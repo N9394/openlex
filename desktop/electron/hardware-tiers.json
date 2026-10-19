@@ -1,0 +1,67 @@
+{
+  "schema_version": 3,
+  "comment": "Source of truth for platform \u2192 model mapping (v3, 2026-08-10). One tier per platform \u2014 no hardware tiers. Context window is derived from system RAM at runtime (8-16 GB \u2192 16K, 16-32 GB \u2192 32K, 32+ GB \u2192 64K) and can be overridden by the plugin's Analysis depth preset (8/16/32K). KV cache: asymmetric iq4_nl-K / q4_0-V (1.0 B/elem; K feeds softmax with a ~3-bit precision floor per NexusQuant research, V compresses nearly free \u2014 TurboQuant TBQ3/TBQ4 types not in mainline llama.cpp, PR #21089 closed). Quant ceiling: Q4_K_M.",
+  "tiers": {
+    "apple": {
+      "criteria": "Apple Silicon (M1+). Metal backend.",
+      "model": "lotus-2-reasoning-q4_k_m",
+      "n_gpu_layers": 999,
+      "threads_pct": 0.5,
+      "cache_type_k": "iq4_nl",
+      "cache_type_v": "q4_0"
+    },
+    "windows": {
+      "criteria": "Windows x64. GPU auto-probed (CUDA \u2192 Vulkan \u2192 CPU).",
+      "model": "lotus-2-reasoning-q4_k_m",
+      "n_gpu_layers": 999,
+      "threads_pct": 0.5,
+      "cache_type_k": "iq4_nl",
+      "cache_type_v": "q4_0"
+    },
+    "linux": {
+      "criteria": "Linux x64. GPU auto-probed (CUDA \u2192 Vulkan \u2192 CPU).",
+      "model": "lotus-2-reasoning-q4_k_m",
+      "n_gpu_layers": 999,
+      "threads_pct": 0.5,
+      "cache_type_k": "iq4_nl",
+      "cache_type_v": "q4_0"
+    }
+  },
+  "models": {
+    "lotus-ai-4b-q4_k_m": {
+      "kind": "llm",
+      "filename": "lotus-ai-q4km.gguf",
+      "size_bytes": 2708803840,
+      "sha256": "00df249d4051571bb71cb342cb90f6e394a64e260f918a58d3cae3ceef656474",
+      "comment": "Lotus AI \u2014 fine-tuned Qwen3.5 4B legal agent (93% weighted legal benchmark vs 75% for 9B). Default for all local/downloadable tiers."
+    },
+    "qwen3.5-9b-q4_k_m": {
+      "kind": "llm",
+      "filename": "Qwen3.5-9B-Q4_K_M.gguf",
+      "size_bytes": 5700000000,
+      "sha256": "",
+      "comment": "9B deep-reasoning tier \u2014 server-side only (OpenRouter); downloadable for explicit opt-in."
+    },
+    "qwen3.5-4b-q4_k_m": {
+      "kind": "llm",
+      "filename": "Qwen3.5-4B-Q4_K_M.gguf",
+      "size_bytes": 2700000000,
+      "sha256": "",
+      "comment": "Base 4B (unfine-tuned) \u2014 dev/testing fallback."
+    },
+    "bge-m3-int8": {
+      "kind": "embeddings",
+      "filename": "bge-m3-int8.onnx",
+      "size_bytes": 569000000,
+      "sha256": "bb867905f930ad2414de2346562822dffb510b51758d2bbaed5e1a544288995f",
+      "comment": "BGE-M3 int8 ONNX \u2014 dense + sparse heads for local embeddings."
+    },
+    "lotus-2-reasoning-q4_k_m": {
+      "kind": "llm",
+      "filename": "lotus-2-reasoning-q4km.gguf",
+      "size_bytes": 2783446400,
+      "sha256": "ce8abbf3fbaef632d32777db91419ab6d1ff32a7f8c74ea7abf23168aec72e76",
+      "comment": "Lotus 2 \u2014 native thinking trained in; single tool call + clean JSON under thinking; file-tool capable"
+    }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "title": "Data processing agreement (GDPR Art. 28)",
+  "version": "1.0",
+  "license": "Apache-2.0",
+  "checks": [
+    { "id": "subject_duration", "question": "Are the subject matter, duration, nature and purpose of the processing, the types of personal data and the categories of data subjects specified (Art. 28(3) GDPR)?", "severity": "high" },
+    { "id": "instructions", "question": "Does the processor process personal data only on documented instructions of the controller, including for international transfers (Art. 28(3)(a))?", "severity": "high" },
+    { "id": "confidentiality", "question": "Are persons authorised to process the data committed to confidentiality (Art. 28(3)(b))?", "severity": "medium" },
+    { "id": "security", "question": "Are technical and organisational measures under Art. 32 required and described (e.g. in an annex)?", "severity": "high" },
+    { "id": "subprocessors", "question": "Is engaging sub-processors subject to prior specific or general written authorisation, with notice of changes and a right to object (Art. 28(2),(4))?", "severity": "high" },
+    { "id": "data_subject_rights", "question": "Must the processor assist the controller with data subject requests (Art. 28(3)(e))?", "severity": "medium" },
+    { "id": "breach_notification", "question": "Must the processor notify personal data breaches, and within what time?", "severity": "high" },
+    { "id": "deletion_return", "question": "Must the processor delete or return all personal data at the end of the services (Art. 28(3)(g))?", "severity": "medium" },
+    { "id": "audits", "question": "Does the controller have audit and inspection rights, and does the processor provide the information needed to demonstrate compliance (Art. 28(3)(h))?", "severity": "medium" },
+    { "id": "transfers", "question": "Are transfers outside the EEA addressed (adequacy decision, standard contractual clauses, transfer impact assessment)?", "severity": "high" },
+    { "id": "liability", "question": "How is liability between controller and processor allocated, and is it capped?", "severity": "medium" }
+  ]
+}

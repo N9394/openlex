@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+</head>
+<body>
+<script>
+  Office.onReady(() => {})
+
+  // Ribbon "Analyze Document" → tell the sidecar to analyze the open doc.
+  Office.actions.associate('lexvaultAnalyzeDocument', async function () {
+    try {
+      const body = await Word.run(async (context) => {
+        context.document.body.load('text')
+        await context.sync()
+        return context.document.body.text
+      })
+      const res = await fetch('http://127.0.0.1:18001/api/document/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: body.slice(0, 200000) }),
+      })
+      if (!res.ok) throw new Error(await res.text())
+      const json = await res.json()
+      Office.context.ui.messageParent('analyzed:' + (json.comments || 0))
+    } catch (err) {
+      Office.context.ui.messageParent('error:' + err.message)
+    }
+  })
+</script>
+</body>
+</html>

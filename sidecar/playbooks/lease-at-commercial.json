@@ -1,0 +1,16 @@
+{
+  "title": "Commercial lease (Austria)",
+  "version": "1.0",
+  "license": "Apache-2.0",
+  "checks": [
+    { "id": "mrg_scope", "question": "Does the lease fall fully or partly under the Austrian Tenancy Act (MRG), or is it excluded (e.g. new building without public funding)? What does the contract say?", "severity": "high" },
+    { "id": "term_termination", "question": "Is the lease for a fixed term or indefinite? What are the termination rights, notice periods and dates, and any waiver of termination?", "severity": "high" },
+    { "id": "rent_indexation", "question": "What is the rent, and how is it indexed (index, base month, threshold)?", "severity": "high" },
+    { "id": "operating_costs", "question": "Which operating costs and maintenance obligations are passed on to the tenant?", "severity": "medium" },
+    { "id": "use_permitted", "question": "What use is permitted, and are there operating obligations or competition clauses?", "severity": "medium" },
+    { "id": "sublease_transfer", "question": "Can the tenant sublet or transfer the lease (e.g. on a business sale, § 12a MRG), and is the landlord's consent required?", "severity": "high" },
+    { "id": "deposit", "question": "What security is required (cash deposit, bank guarantee), in what amount and on what terms?", "severity": "medium" },
+    { "id": "alterations_restoration", "question": "May the tenant make alterations, and must the premises be restored at the end?", "severity": "medium" },
+    { "id": "stamp_duty", "question": "Who bears the lease stamp duty (Gebühr nach § 33 TP 5 GebG)?", "severity": "low" }
+  ]
+}

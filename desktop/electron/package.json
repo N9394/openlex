@@ -1,0 +1,129 @@
+{
+  "name": "lexvault-app",
+  "productName": "LexVault",
+  "version": "0.1.59",
+  "description": "LexVault — private legal AI for solo lawyers. Multilingual statute research and document analysis running fully on your machine.",
+  "main": "main/main.js",
+  "author": "LexVault",
+  "license": "Proprietary",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "start:dev": "LEXVAULT_DEVTOOLS=1 LEXVAULT_DEV_BACKEND=http://localhost:8000 LEXVAULT_DEV_FRONTEND=http://localhost:5173 electron .",
+    "package": "node scripts/prepare-resources.js && electron-builder",
+    "package:mac": "npm run package:mac:arm64 && npm run package:mac:x64",
+    "package:mac:arm64": "rm -rf resources/server resources/client && FETCH_ALL_MAC=1 PACKAGE_TARGETS=mac PACKAGE_ARCH=arm64 node scripts/prepare-resources.js && electron-builder --mac --arm64",
+    "package:mac:x64": "rm -rf resources/server resources/client && FETCH_ALL_MAC=1 PACKAGE_TARGETS=mac PACKAGE_ARCH=x64 node scripts/prepare-resources.js && electron-builder --mac --x64",
+    "package:win": "rm -rf resources/server resources/client && FETCH_WIN=1 PACKAGE_TARGETS=win PACKAGE_ARCH=x64 node scripts/prepare-resources.js && electron-builder --win",
+    "package:linux": "rm -rf resources/server resources/client && FETCH_LINUX=1 PACKAGE_TARGETS=linux PACKAGE_ARCH=x64 node scripts/prepare-resources.js && electron-builder --linux"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0",
+    "javascript-obfuscator": "^5.4.2"
+  },
+  "build": {
+    "appId": "com.lexvault.app",
+    "productName": "LexVault",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main/**/*",
+      "sidecars/**/*",
+      "package.json",
+      "!sidecars/bin/**"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/server",
+        "to": "server",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "resources/engine",
+        "to": "engine",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "resources/client",
+        "to": "client",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "resources/bin",
+        "to": "bin",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "resources/first-run.html",
+        "to": "first-run.html"
+      },
+      {
+        "from": "resources/public_key.pem",
+        "to": "public_key.pem"
+      },
+      {
+        "from": "hardware-tiers.json",
+        "to": "hardware-tiers.json"
+      }
+    ],
+    "asar": true,
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://lexvault.pinemarshlands.com/api/app/update/${os}",
+        "channel": "latest",
+        "useMultipleRangeRequest": false
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.business",
+      "target": [
+        "zip"
+      ],
+      "identity": null,
+      "icon": "build/icon.icns"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "LexVault-Setup-${version}.${ext}",
+      "icon": "build/icon.ico",
+      "publisherName": [
+        "LexVault"
+      ]
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "category": "Office"
+    }
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.0",
+    "hyparquet": "^1.18.0",
+    "hyparquet-compressors": "^1.1.1"
+  }
+}

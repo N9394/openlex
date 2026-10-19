@@ -1,0 +1,151 @@
+"use strict"
+/**
+ * Tool catalog for lazy loading. Compact catalog (~100 tokens total)
+ * in the system prompt. Model calls tool_picker to get relevant tool
+ * names, then get_tool_schemas to load full definitions.
+ *
+ * Based on Cursor/MCP-Zero patterns — 80%+ token savings on tool schemas.
+ */
+
+// Compact catalog — always in system prompt (~10 tokens per tool)
+const CATALOG = [
+  { name: 'get_document_map', desc: 'Heading outline with paragraph ranges' },
+  { name: 'get_range_text', desc: 'Section text (verbatim clause + structured table)' },
+  { name: 'get_clause_analysis', desc: 'Structured: parties, obligations, favoring — plus full clause text' },
+  { name: 'search_law', desc: 'Hybrid law search by jurisdiction + query' },
+  { name: 'get_law_section', desc: 'Full text of a law chunk by id' },
+  { name: 'search_firm_library', desc: "Search the firm's own precedents, templates and past work" },
+  { name: 'find_clause', desc: "The firm's standard clauses by type, most-used wording first" },
+  { name: 'search_ris', desc: 'Live official Austrian federal law (RIS), current versions' },
+  { name: 'search_eurlex', desc: 'Official EU law (EUR-Lex): find acts by number, name or title' },
+  { name: 'get_eu_law', desc: 'Text of an EU act / one article by CELEX' },
+  { name: 'download_to_matter', desc: 'Download a file into the matter with provenance' },
+  { name: 'web_fetch', desc: 'Read a public web page with the lawyer\'s saved logins' },
+  { name: 'web_save', desc: 'Save a web page to the matter with provenance' },
+  { name: 'propose_suggestions', desc: 'Emit suggestions for the current section' },
+  { name: 'remember', desc: 'Persist a document fact' },
+  { name: 'recall', desc: 'Read back persisted facts' },
+  { name: 'delegate_task', desc: 'Spawn focused analysis in fresh context' },
+  { name: 'tool_picker', desc: 'Get relevant tool names for a task' },
+  { name: 'compress_context', desc: 'Compress bloated context' },
+  { name: 'write_file', desc: 'Create/overwrite workspace file' },
+  { name: 'read_file', desc: 'Read workspace file' },
+  { name: 'export_document', desc: 'Export document to CSV/XML/JSON/MD/PDF' },
+  { name: 'run_playbook', desc: 'Run review playbook from workspace' },
+]
+
+// Full tool schemas — loaded on demand via get_tool_schemas
+const SCHEMAS = {
+  get_document_map: {
+    input: {},
+    description: 'Heading outline with paragraph ranges. Cheap, use first.',
+  },
+  get_range_text: {
+    input: { index: 'number', heading: 'string (optional)' },
+    description: 'Section text. Use heading instead of index when you know the clause name.',
+  },
+  get_clause_analysis: {
+    input: { index: 'number' },
+    description: 'Structured: parties, rights, obligations, favoring — plus full verbatim clause text.',
+  },
+  search_law: {
+    input: { jurisdiction: 'string', query: 'string', query2: 'string', query3: 'string' },
+    description: 'Hybrid law search. Up to 3 queries in the jurisdiction language with statutory terms.',
+  },
+  find_clause: {
+    input: { type: 'string (optional — liability, termination, governing_law, …)', query: 'string (optional)', language: 'string (optional)' },
+    description: "The firm's own clauses from its precedents, most-used wording first, with source documents.",
+  },
+  search_ris: {
+    input: { query: 'string (German statutory terms)', limit: 'number (optional)' },
+    description: 'Live search of Austrian federal law in the official RIS, with in-force dates. Needs web access in the data policy.',
+  },
+  search_eurlex: {
+    input: { query: 'string', language: 'string (optional)' },
+    description: 'EU law from the official EU Publications Office: by reference ("2016/679"), common name ("GDPR") or title words. CELEX, in-force, consolidated version.',
+  },
+  get_eu_law: {
+    input: { celex: 'string', article: 'string (optional)', language: 'string (optional)' },
+    description: 'Text of an EU act by CELEX (consolidated when available), optionally one article.',
+  },
+  download_to_matter: {
+    input: { url: 'string' },
+    description: 'Download a file into the matter folder with provenance (URL, time, sha256).',
+  },
+  web_fetch: {
+    input: { url: 'string' },
+    description: 'Read a public web page (text + links). Needs web access in the data policy.',
+  },
+  web_save: {
+    input: { url: 'string' },
+    description: 'Save a web page into the matter folder with screenshot + provenance for citation.',
+  },
+  search_firm_library: {
+    input: { query: 'string' },
+    description: "Search the firm's own documents (precedents, templates, know-how) for this matter and firm-wide. Cite results by file name.",
+  },
+  get_law_section: {
+    input: { chunk_id: 'string' },
+    description: 'Full text of a law chunk by id (cite or judge).',
+  },
+  propose_suggestions: {
+    input: { suggestions: 'array' },
+    description: 'Emit suggestions for the current section.',
+  },
+  remember: {
+    input: { entity: 'string', claim: 'string', section: 'string' },
+    description: 'Persist a document fact.',
+  },
+  recall: {
+    input: { topic: 'string' },
+    description: 'Read back persisted facts.',
+  },
+  delegate_task: {
+    input: { task: 'string (focused task description)', tools: 'array (tool names needed)', context: 'string (minimum necessary context)' },
+    description: 'Spawn focused analysis in fresh context. Returns compressed result. Use for deep clause analysis or law search.',
+  },
+  tool_picker: {
+    input: { task: 'string (what you need to do)' },
+    description: 'Get relevant tool names for a task. Call get_tool_schemas after to load definitions.',
+  },
+  compress_context: {
+    input: {},
+    description: 'Compress bloated context. Call when you feel low on output space.',
+  },
+  write_file: {
+    input: { path: 'string', content: 'string' },
+    description: 'Create/overwrite a file in the LexVault workspace.',
+  },
+  read_file: {
+    input: { path: 'string' },
+    description: 'Read a workspace file (first 4000 chars).',
+  },
+  export_document: {
+    input: { format: 'string (csv|xml|json|md|pdf)', matter: 'string' },
+    description: 'Export document to workspace file.',
+  },
+  run_playbook: {
+    input: { name: 'string' },
+    description: 'Run a review playbook from workspace playbooks/ folder.',
+  },
+}
+
+function getCatalogText() {
+  // Connector tools (MCP servers the user configured) follow the built-ins.
+  const mcp = require('./mcp/client').catalogLines()
+  return [...CATALOG.map((t) => `- ${t.name}: ${t.desc}`), ...mcp].join('\n')
+}
+
+function getSchemas(toolNames) {
+  const result = {}
+  for (const name of toolNames) {
+    if (SCHEMAS[name]) result[name] = SCHEMAS[name]
+    else if (String(name).startsWith('mcp__')) {
+      const sch = require('./mcp/client').schemaFor(name)
+      if (sch) result[name] = sch
+    }
+  }
+  return result
+}
+
+module.exports = { CATALOG, SCHEMAS, getCatalogText, getSchemas }

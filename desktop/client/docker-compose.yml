@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  client:
+    build:
+      context: .
+      args:
+        - VITE_API_URL=http://localhost:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - server
+    networks:
+      - legalclarity-network
+
+  server:
+    image: legalclarity-server:latest
+    ports:
+      - "8000:8000"
+    networks:
+      - legalclarity-network
+
+networks:
+  legalclarity-network:
+    driver: bridge

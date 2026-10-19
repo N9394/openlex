@@ -1,0 +1,16 @@
+{
+  "title": "Employment contract (Austria)",
+  "version": "1.0",
+  "license": "Apache-2.0",
+  "checks": [
+    { "id": "cba", "question": "Which collective bargaining agreement (Kollektivvertrag) applies, and what classification (Einstufung) is agreed?", "severity": "high" },
+    { "id": "all_in", "question": "Is there an all-in or overtime lump-sum clause, and is the base salary shown separately (§ 2g AVRAG)?", "severity": "high" },
+    { "id": "probation_term", "question": "What probation period and contract term (fixed or indefinite) are agreed?", "severity": "medium" },
+    { "id": "termination", "question": "What notice periods and termination dates apply, and do they deviate from statute or the CBA?", "severity": "high" },
+    { "id": "non_compete", "question": "Is there a non-compete clause (Konkurrenzklausel), and does it meet §§ 2c AVRAG / 36 AngG (salary threshold, maximum one year, penalty limit)?", "severity": "high" },
+    { "id": "training_costs", "question": "Is there a training-cost repayment clause, and does it meet § 2d AVRAG?", "severity": "medium" },
+    { "id": "forfeiture", "question": "Are there forfeiture periods (Verfallsfristen) for claims?", "severity": "medium" },
+    { "id": "ip_inventions", "question": "Who owns work results and inventions (PatG employee inventions, UrhG)?", "severity": "medium" },
+    { "id": "confidentiality", "question": "What confidentiality obligations apply during and after employment?", "severity": "low" }
+  ]
+}

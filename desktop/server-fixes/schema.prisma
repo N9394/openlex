@@ -1,0 +1,4248 @@
+// Prisma Schema for LexVault
+// Database: SQLite (for MVP simplicity)
+// For production: migrate to PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// USER MODEL
+// ============================================================================
+
+model User {
+  id           String  @id @default(cuid())
+  email        String  @unique
+  username     String? // Optional username for display
+  name         String? // Full display name
+  passwordHash String
+
+  // Subscription tier
+  tier String @default("free") // "free" or "annual"
+
+  // User type for experience customization
+  userType        String  @default("individual") // "student", "individual", "professional"
+  userPreferences String? // JSON: feature toggles, labels, AI tone, dashboard settings
+
+  // Legal jurisdiction preference
+  jurisdiction String? @default("US") // ISO country code or legal system (e.g., "US", "UK", "DE", "FR", "EU")
+
+  // Language preference for AI responses
+  language String? @default("en") // ISO language code (e.g., "en", "de", "fr", "es")
+
+  // AI thinking budget for document generation (0=none, 1=minimal, 2=standard, 3=thorough)
+  thinkingBudget Int @default(1)
+
+  // Quota management for free tier
+  documentsThisWeek Int      @default(0)
+  weekResetDate     DateTime
+
+  // Organization membership (optional)
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  memberRole     String? // "owner", "admin", "member" - only set if in organization
+
+  // Account metadata
+  createdAt           DateTime  @default(now())
+  lastLoginAt         DateTime?
+  deletionScheduledAt DateTime?
+
+  // Stripe billing (for individual Plus/Pro subscribers)
+  stripeCustomerId String? @unique
+  stripeSubId      String?
+
+  // Relations
+  documents             Document[]
+  vaultItems            VaultItem[]
+  studySets             StudySet[]
+  studyProgress         StudyProgress[]
+  studySessions         StudySession[]
+  leaderboardScores     LeaderboardScore[]
+  cases                 Case[]
+  notifications         Notification[]
+  caseCollaborations    CaseCollaborator[]
+  researchQueries       ResearchQuery[]
+  apiIntegrations       ApiIntegration[]
+  clients               Client[]
+  teamSpaceMemberships  TeamSpaceMember[]
+  mlPreferences         UserMLPreferences?
+  customPrompts         CustomPrompt[]
+  researchConversations ResearchConversation[]
+  researchSummaries     ResearchSummary[]
+  aiAuditLogs           AIAuditLog[]
+  alertPreferences      AlertPreference[]
+  proactiveAlerts       ProactiveAlert[]
+  draftSessions         DocumentDraftSession[]
+  usageRecords          UsageRecord[]
+  comparisons           DocumentComparison[]
+  bulkUploadJobs        BulkUploadJob[]
+  signatureRequests     SignatureRequest[]
+
+  // Document Research (Mike Ross features)
+  docResearchSessions   DocumentResearchSession[]
+  crossReferenceReports CrossReferenceReport[]
+  contradictionScans    ContradictionScan[]
+
+  // M&A Due Diligence
+  deals Deal[]
+
+  // Security & MFA
+  mfaEnabled          Boolean    @default(false)
+  mfaSecret           MfaSecret?
+  failedLoginAttempts Int        @default(0)
+  lockedUntil         DateTime?
+  passwordChangedAt   DateTime?
+  passwordHistory     String? // JSON array of old password hashes
+
+  // Sessions & SSO
+  sessions            UserSession[]
+  ssoSessions         SsoSession[]
+  passwordResetTokens PasswordResetToken[]
+
+  // Extended RBAC (Big Law)
+  extendedRoleId          String?
+  extendedRole            ExtendedRole?      @relation("UserExtendedRole", fields: [extendedRoleId], references: [id], onDelete: SetNull)
+  practiceAreaAssignments UserPracticeArea[]
+
+  // Time tracking (Big Law Phase 3)
+  timeEntries TimeEntry[]
+
+  @@index([email])
+  @@index([organizationId])
+  @@index([extendedRoleId])
+  @@map("users")
+}
+
+// ============================================================================
+// ORGANIZATION MODEL (for teams/law firms)
+// ============================================================================
+
+model Organization {
+  id String @id @default(cuid())
+
+  // Organization details
+  name String
+  slug String @unique // URL-friendly identifier
+  type String @default("firm") // "firm", "department", "team"
+
+  // Billing owner
+  ownerUserId String
+
+  // Subscription (shared billing for team)
+  tier String @default("free") // "free", "team", "enterprise"
+
+  // Settings stored as JSON
+  settings String? // JSON: { branding, defaultPreferences, featureAccess }
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  members     User[]
+  invitations OrganizationInvitation[]
+  clients     Client[]
+  teamSpaces  TeamSpace[]
+
+  // Enterprise & ML relations
+  mlPreferences      OrganizationMLPreferences?
+  aiInstructions     OrganizationAIInstruction[]
+  behaviorPatterns   FirmBehaviorPattern[]
+  clausePreferences  FirmClausePreference[]
+  styleProfile       FirmStyleProfile?
+  clauseExamples     FirmClauseExample[]
+  trainingExamples   MLTrainingExample[]
+  mlModels           OrganizationMLModel[]
+  predictionFeedback PredictionFeedback[]
+  billingEvents      BillingEvent[]
+  seats              Seat[]
+  subscription       Subscription?
+  documentTemplates  DocumentTemplate[]
+
+  // Security & SSO
+  ssoConfiguration SsoConfiguration?
+
+  // Integrations
+  integrations OrganizationIntegration[]
+
+  // Extended RBAC (Big Law)
+  practiceAreas PracticeArea[]
+  extendedRoles ExtendedRole[]
+
+  // Multi-office (Phase 4)
+  offices      Office[]
+  serverNodes  ServerNode[]
+  nodeRegistry NodeRegistry?
+
+  // API & Sync (Big Law)
+  apiKeys      CustomerApiKey[]
+  syncSchedule ContentSyncSchedule?
+
+  // DMS & Billing (Big Law Phase 3)
+  dmsIntegration     DmsIntegration?
+  billingIntegration BillingSystemIntegration?
+  timeEntries        TimeEntry[]
+
+  // License
+  license License?
+
+  // Update history
+  updateHistory OrganizationUpdateHistory[]
+
+  @@index([ownerUserId])
+  @@index([slug])
+  @@map("organizations")
+}
+
+model OrganizationIntegration {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Integration details
+  provider String // "slack", "teams", "docusign", "hellosign", etc.
+  config   String // JSON configuration (webhook URLs, API keys, etc.)
+  enabled  Boolean @default(true)
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, provider])
+  @@index([organizationId])
+  @@index([provider])
+  @@map("organization_integrations")
+}
+
+model OrganizationInvitation {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Invitation details
+  email     String
+  role      String @default("member") // "admin", "member"
+  invitedBy String // User ID who sent the invite
+
+  // Status
+  status    String   @default("pending") // "pending", "accepted", "declined", "expired"
+  expiresAt DateTime
+
+  // Metadata
+  createdAt DateTime @default(now())
+
+  @@unique([organizationId, email])
+  @@index([email])
+  @@index([status])
+  @@map("organization_invitations")
+}
+
+// ============================================================================
+// DOCUMENT MODEL
+// ============================================================================
+
+model Document {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // File information
+  filename String
+  filepath String
+  filesize Int
+  mimetype String
+
+  // Processing status
+  status String @default("pending") // "pending", "processing", "completed", "failed"
+
+  // Extracted content
+  extractedText String?
+
+  // PII Protection
+  anonymizedText    String? // PII-redacted text for RAG/processing
+  encryptedOriginal String? // JSON: AES-256-GCM encrypted original text
+  piiDetections     String? // JSON: array of PII detections for deanonymization
+  piiProcessedAt    DateTime? // When PII processing was completed
+
+  // Analysis results (stored as JSON strings)
+  analysis          String? // JSON: aggregated analysis metadata (jurisdiction, language, etc.)
+  summary           String? // JSON array of bullet points
+  keyClauses        String? // JSON array of {title, content, importance}
+  riskFlags         String? // JSON array of {level, category, explanation}
+  importantDates    String? // JSON array of {date, description}
+  readabilityScore  String? // JSON object {score, grade, explanation}
+  overallRiskScore  String? // JSON object {score, level, explanation}
+  missingElements   String? // JSON array of {element, importance, explanation}
+  clarityScore      String? // JSON object {overall, grade, breakdown, strengths, weaknesses, recommendation}
+  rightsObligations String? // JSON object {yourRights, yourObligations, theirRights, theirObligations}
+  complianceResults String? // JSON object {jurisdiction, checkedAt, results[]}
+
+  // Version control
+  currentVersion Int @default(1)
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  versions DocumentVersion[]
+  comments DocumentComment[]
+  dmsLink  DocumentDmsLink?
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("documents")
+}
+
+// Document version history
+model DocumentVersion {
+  id         String   @id @default(cuid())
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  // Version number
+  version Int
+
+  // File information at this version
+  filepath String
+  filesize Int
+  mimetype String
+
+  // Extracted content at this version
+  extractedText String?
+  keyClauses    String? // JSON: Clause extraction for clause-level diff
+
+  // Change tracking
+  changeNote String? // User's note about what changed
+  changedBy  String  // User ID who made the change
+
+  // Version label (e.g., "Final Draft", "Client Approved", "Under Review")
+  label String?
+
+  // Metadata
+  createdAt DateTime @default(now())
+
+  @@unique([documentId, version])
+  @@index([documentId])
+  @@index([version])
+  @@map("document_versions")
+}
+
+// Document comments and annotations
+model DocumentComment {
+  id         String   @id @default(cuid())
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  userId     String
+
+  // Comment content
+  content String
+
+  // Position in document (for annotations)
+  pageNumber   Int? // Which page (for PDFs)
+  startOffset  Int? // Character offset start
+  endOffset    Int? // Character offset end
+  selectedText String? // The text that was selected/annotated
+
+  // Comment type
+  type String @default("comment") // "comment", "suggestion", "question", "highlight"
+
+  // Thread support
+  parentId String? // For reply threads
+
+  // Status
+  isResolved Boolean   @default(false)
+  resolvedAt DateTime?
+  resolvedBy String?
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([documentId])
+  @@index([userId])
+  @@index([parentId])
+  @@index([isResolved])
+  @@map("document_comments")
+}
+
+// ============================================================================
+// VAULT ITEM MODEL
+// ============================================================================
+
+model VaultItem {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Item type: "clause", "template", "draft"
+  type String @default("clause")
+
+  // Content
+  title    String
+  content  String // Full text content
+  category String? // e.g., "Termination", "Payment", "Confidentiality", "Employment", "Rental"
+  tags     String? // JSON array of tags for organization
+
+  // Organization
+  folderId String? // Optional folder for organizing vault items
+
+  // Source tracking (optional)
+  sourceDocumentId String?
+  sourceType       String? // "document", "navigator_draft", "manual"
+
+  // Metadata
+  notes      String? // User's personal notes
+  isFavorite Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([type])
+  @@index([category])
+  @@index([folderId])
+  @@index([isFavorite])
+  @@index([createdAt])
+  @@map("vault_items")
+}
+
+// ============================================================================
+// STUDY SYSTEM MODELS
+// ============================================================================
+
+// A study set is a collection of flashcards/terms (like a Quizlet set)
+model StudySet {
+  id String @id @default(cuid())
+
+  // Owner (optional - null for official sets, set for user-created sets)
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Set information
+  title       String
+  description String?
+
+  // Country/jurisdiction for legal content
+  jurisdiction String? // "us", "uk", "de", "ch", "at", "international"
+
+  // Category
+  category String // "contracts", "property", "employment", "consumer", "basics", "terminology", "custom"
+
+  // Visibility (for future: allow users to create custom sets)
+  isOfficial Boolean @default(true) // Official LexVault sets vs user-created
+  isPublic   Boolean @default(true)
+
+  // Metadata
+  cardCount Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  cards StudyCard[]
+
+  @@index([userId])
+  @@index([category])
+  @@index([jurisdiction])
+  @@index([isOfficial])
+  @@map("study_sets")
+}
+
+// Individual flashcard/term within a study set
+model StudyCard {
+  id    String   @id @default(cuid())
+  setId String
+  set   StudySet @relation(fields: [setId], references: [id], onDelete: Cascade)
+
+  // Card content
+  term       String // Front of card / question
+  definition String // Back of card / answer
+
+  // Additional information
+  example  String? // Example usage or case
+  audioUrl String? // Pronunciation audio (for future)
+  imageUrl String? // Visual aid (for future)
+
+  // For quiz questions
+  distractors String? // JSON array of wrong answers for multiple choice
+
+  // Difficulty & importance
+  difficulty String @default("medium") // "easy", "medium", "hard"
+  importance String @default("medium") // "low", "medium", "high"
+
+  // Order in set
+  position Int @default(0)
+
+  // Quality control
+  isReported   Boolean   @default(false)
+  reportReason String? // Why user reported as bad (wrong language, wrong term, etc.)
+  reportedBy   String? // User ID who reported it
+  reportedAt   DateTime? // When it was reported
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  progress StudyProgress[]
+
+  @@index([setId])
+  @@index([difficulty])
+  @@index([isReported])
+  @@map("study_cards")
+}
+
+// User's progress on individual cards (for spaced repetition)
+model StudyProgress {
+  id     String    @id @default(cuid())
+  userId String
+  user   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cardId String
+  card   StudyCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  // Mastery tracking
+  masteryLevel Int @default(0) // 0 = not seen, 1-5 = increasing mastery
+
+  // Spaced repetition
+  nextReviewDate DateTime?
+  intervalDays   Int       @default(1) // Days until next review
+  easeFactor     Float     @default(2.5) // For SM-2 algorithm
+
+  // Statistics
+  correctCount   Int @default(0)
+  incorrectCount Int @default(0)
+  totalReviews   Int @default(0)
+
+  // Starred/flagged for review
+  isStarred Boolean @default(false)
+
+  // Last interaction
+  lastReviewedAt DateTime?
+  lastResult     String? // "correct", "incorrect", "partial"
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, cardId])
+  @@index([userId])
+  @@index([cardId])
+  @@index([nextReviewDate])
+  @@index([masteryLevel])
+  @@map("study_progress")
+}
+
+// Track individual study sessions for analytics
+model StudySession {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Session info
+  studyMode String // "flashcards", "write", "test", "match", "read"
+  setId     String? // Which set was studied (if applicable)
+
+  // Duration
+  startedAt       DateTime  @default(now())
+  endedAt         DateTime?
+  durationSeconds Int?
+
+  // Performance
+  cardsStudied     Int    @default(0)
+  correctAnswers   Int    @default(0)
+  incorrectAnswers Int    @default(0)
+  scorePercentage  Float?
+
+  // Metadata
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([studyMode])
+  @@index([startedAt])
+  @@map("study_sessions")
+}
+
+// ============================================================================
+// COMPETITIVE LEADERBOARD MODEL
+// ============================================================================
+
+// Track high scores for the competitive challenge mode
+model LeaderboardScore {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Score details
+  score          Int
+  correctAnswers Int
+  totalQuestions Int
+  timeUsed       Int // seconds
+
+  // Game metadata
+  gameMode String @default("challenge") // for future: different game modes
+
+  // Metadata
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([score])
+  @@index([createdAt])
+  @@map("leaderboard_scores")
+}
+
+// ============================================================================
+// CASE MANAGEMENT MODEL
+// ============================================================================
+
+model Case {
+  id     String @id @default(cuid())
+  userId String // Owner of the case
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Case information
+  title       String
+  caseType    String // "mediation", "trial", "consulting", "negotiation", "subpoena", "contract-drafting", "research", "other"
+  status      String  @default("active") // "active", "pending", "closed", "archived"
+  description String?
+  companyName String? // Company/organization involved
+
+  // Client information
+  clientName String?
+  clientId   String?
+  client     Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  // Important dates
+  startDate DateTime  @default(now())
+  deadline  DateTime?
+
+  // Organization
+  tags String? // JSON array of custom tags
+
+  // Notes and documents
+  notes      String? // Case notes and updates
+  documents  String? // JSON array of associated document IDs
+  vaultItems String? // JSON array of associated vault item IDs
+
+  // Case strength indicator (informational only)
+  clarityScore Int? // 0-100, based on completeness/consistency
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  collaborators         CaseCollaborator[]
+  checklists            CaseChecklist[]
+  timelineEvents        CaseTimelineEvent[]
+  activityLogs          CaseActivityLog[]
+  tags_rel              CaseTag[]
+  entities              CaseEntity[]
+  relationships         CaseRelationship[]
+  researchQueries       ResearchQuery[]
+  matters               Matter[]
+  teamSpaces            TeamSpaceCase[]
+  researchConversations ResearchConversation[]
+  researchSummaries     ResearchSummary[]
+  seatAssignments       SeatCaseAssignment[]
+  signatureRequests     SignatureRequest[]
+  billingLink           MatterBillingLink?
+  dmsWorkspaceMappings  DmsWorkspaceMapping[]
+  timeEntries           TimeEntry[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([clientId])
+  @@index([caseType])
+  @@index([createdAt])
+  @@map("cases")
+}
+
+// Case collaborator invitations and permissions
+model CaseCollaborator {
+  id     String @id @default(cuid())
+  caseId String
+  case   Case   @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Permission level
+  role String // "owner", "editor", "viewer"
+
+  // Invitation status
+  status      String    @default("pending") // "pending", "accepted", "declined"
+  invitedBy   String // User ID who sent invite
+  invitedAt   DateTime  @default(now())
+  respondedAt DateTime?
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([caseId, userId])
+  @@index([caseId])
+  @@index([userId])
+  @@index([status])
+  @@map("case_collaborators")
+}
+
+// Custom tags for cases
+model CaseTag {
+  id     String @id @default(cuid())
+  caseId String
+  case   Case   @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  // Tag details
+  name  String
+  color String @default("#D4AF37") // Gold default
+
+  // Metadata
+  createdAt DateTime @default(now())
+
+  @@index([caseId])
+  @@index([name])
+  @@map("case_tags")
+}
+
+// Team checklists within cases
+model CaseChecklist {
+  id     String @id @default(cuid())
+  caseId String
+  case   Case   @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  // Checklist details
+  title       String
+  description String?
+  position    Int     @default(0)
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  items CaseChecklistItem[]
+
+  @@index([caseId])
+  @@map("case_checklists")
+}
+
+// Individual checklist items
+model CaseChecklistItem {
+  id          String        @id @default(cuid())
+  checklistId String
+  checklist   CaseChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+
+  // Item details
+  title       String
+  description String?
+  completed   Boolean   @default(false)
+  assignedTo  String? // User ID
+  dueDate     DateTime?
+  position    Int       @default(0)
+
+  // Metadata
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  completedAt DateTime?
+  completedBy String? // User ID
+
+  // Relations
+  comments CaseChecklistComment[]
+
+  @@index([checklistId])
+  @@index([assignedTo])
+  @@map("case_checklist_items")
+}
+
+// Comments on checklist items
+model CaseChecklistComment {
+  id     String            @id @default(cuid())
+  itemId String
+  item   CaseChecklistItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  userId String
+
+  // Comment content
+  content String
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([itemId])
+  @@index([userId])
+  @@map("case_checklist_comments")
+}
+
+// Enhanced timeline events
+model CaseTimelineEvent {
+  id     String @id @default(cuid())
+  caseId String
+  case   Case   @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  // Event details
+  title       String
+  description String?
+  eventType   String // "deadline", "document_uploaded", "note_added", "meeting", "filing", "other"
+  date        DateTime
+  severity    String   @default("normal") // "critical", "high", "normal", "low"
+
+  // Manual vs auto-generated
+  isAutoGenerated Boolean @default(false)
+  sourceType      String? // "document", "note", "manual", "deadline"
+  sourceId        String? // ID of source entity
+
+  // Display
+  position Int    @default(0)
+  color    String @default("#D4AF37") // Gold default
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String // User ID
+
+  @@index([caseId])
+  @@index([date])
+  @@index([eventType])
+  @@map("case_timeline_events")
+}
+
+// Activity log for audit trail
+model CaseActivityLog {
+  id     String @id @default(cuid())
+  caseId String
+  case   Case   @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  userId String
+
+  // Activity details
+  action     String // "created", "updated", "deleted", "shared", "commented", "completed_task", etc.
+  entityType String? // "case", "checklist", "timeline_event", "document", etc.
+  entityId   String?
+  changes    String? // JSON object with before/after values
+  details    String? // JSON object with additional activity details
+
+  // Metadata
+  createdAt DateTime @default(now())
+
+  @@index([caseId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("case_activity_logs")
+}
+
+// ============================================================================
+// NOTIFICATION MODEL
+// ============================================================================
+
+model Notification {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Notification details
+  type    String // "document_analysis_complete", "study_set_generated", "case_update", "system"
+  title   String
+  message String
+
+  // Related entity (optional)
+  entityType String? // "document", "study_set", "case", "vault_item"
+  entityId   String? // ID of related entity
+
+  // Action link (optional)
+  actionUrl   String?
+  actionLabel String?
+
+  // Status
+  isRead Boolean @default(false)
+
+  // Metadata
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+// ============================================================================
+// CASE RELATIONSHIP GRAPH MODELS
+// ============================================================================
+
+// Entities in a case (people, organizations, documents)
+model CaseEntity {
+  id     String @id @default(cuid())
+  caseId String
+  case   Case   @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  // Entity details
+  name String
+  type String // "person", "organization", "document"
+  role String? // e.g., "Client", "Opposing Party", "Witness", "Judge", "Attorney", "Expert"
+
+  // Additional information
+  email   String?
+  phone   String?
+  address String?
+  notes   String?
+
+  // Link to actual document if type is "document"
+  documentId String?
+
+  // Visual positioning for graph (optional, can be auto-calculated)
+  positionX Float?
+  positionY Float?
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  relationshipsFrom CaseRelationship[] @relation("FromEntity")
+  relationshipsTo   CaseRelationship[] @relation("ToEntity")
+
+  @@index([caseId])
+  @@index([type])
+  @@map("case_entities")
+}
+
+// Relationships between entities
+model CaseRelationship {
+  id     String @id @default(cuid())
+  caseId String
+  case   Case   @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  // Connection details
+  fromEntityId String
+  fromEntity   CaseEntity @relation("FromEntity", fields: [fromEntityId], references: [id], onDelete: Cascade)
+
+  toEntityId String
+  toEntity   CaseEntity @relation("ToEntity", fields: [toEntityId], references: [id], onDelete: Cascade)
+
+  // Relationship type
+  relationType String // e.g., "employs", "represents", "opposes", "related to", "owns", "signed", "reviewed"
+  label        String? // Custom label for the relationship
+
+  // Additional context
+  description String?
+  strength    String  @default("normal") // "weak", "normal", "strong"
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([caseId])
+  @@index([fromEntityId])
+  @@index([toEntityId])
+  @@map("case_relationships")
+}
+
+// ============================================================================
+// E-SIGNATURE
+// ============================================================================
+
+model SignatureRequest {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Case and document
+  caseId     String
+  case       Case   @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  documentId String
+
+  // Provider details
+  provider   String // "docusign", "hellosign", "signwell", "mock"
+  externalId String? // Provider's ID for this request
+
+  // Request details
+  subject String?
+  message String?
+  signers String // JSON array of signer objects
+
+  // Status
+  status            String  @default("pending") // "pending", "sent", "viewed", "signed", "declined", "expired"
+  signedDocumentUrl String?
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([caseId])
+  @@index([documentId])
+  @@index([status])
+  @@index([externalId])
+  @@map("signature_requests")
+}
+
+// ============================================================================
+// RESEARCH MODE
+// ============================================================================
+
+model ResearchQuery {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Query details
+  query   String
+  sources String // JSON: array of source types searched ["vault", "courtlistener", "custom"]
+  results String? // JSON: search results summary
+
+  // Associated case (optional)
+  caseId String?
+  case   Case?   @relation(fields: [caseId], references: [id], onDelete: SetNull)
+
+  // Metadata
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([caseId])
+  @@map("research_queries")
+}
+
+model ApiIntegration {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Integration details
+  provider String // "courtlistener", "westlaw", "lexisnexis", "casetext", "custom"
+  name     String // Display name
+  apiKey   String? // Encrypted API key (null for free services)
+  baseUrl  String? // Custom API URL
+  config   String? // JSON configuration object
+
+  // Status
+  status    String    @default("active") // "active", "inactive", "error", "pending"
+  isActive  Boolean   @default(true)
+  lastUsed  DateTime?
+  lastError String?
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, provider])
+  @@index([userId])
+  @@map("api_integrations")
+}
+
+// ============================================================================
+// RESEARCH CONVERSATIONS (Chat-based Research Mode)
+// ============================================================================
+
+model ResearchConversation {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Optional case association
+  caseId String?
+  case   Case?   @relation(fields: [caseId], references: [id], onDelete: SetNull)
+
+  // Conversation metadata
+  title        String? // Auto-generated from first message
+  jurisdiction String? // Override for this conversation (defaults to user's setting)
+
+  // Messages
+  messages ResearchMessage[]
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([caseId])
+  @@map("research_conversations")
+}
+
+model ResearchMessage {
+  id             String               @id @default(cuid())
+  conversationId String
+  conversation   ResearchConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  // Message content
+  role    String // "user" | "assistant"
+  content String // Message text
+
+  // Sources cited in this message (for assistant messages)
+  sources String? // JSON array of source objects
+
+  // Actions executed (for assistant messages)
+  actions String? // JSON array of action results
+
+  // Verification result (for assistant messages)
+  verification String? // JSON object with verified/total/claims
+
+  // Metadata
+  createdAt DateTime @default(now())
+
+  @@index([conversationId])
+  @@map("research_messages")
+}
+
+// Research summary - saved research results that can be attached to cases
+model ResearchSummary {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Summary content
+  title       String
+  query       String // Original research question
+  summary     String // AI-generated summary
+  keyFindings String // JSON array of key findings
+  sources     String // JSON array with citations
+
+  // Legal context
+  jurisdiction String?
+
+  // Attachments
+  caseId      String?
+  case        Case?   @relation(fields: [caseId], references: [id], onDelete: SetNull)
+  vaultItemId String? // If saved to vault
+
+  // Source conversation (optional)
+  conversationId String?
+
+  // Quality metrics
+  sourceCount Int   @default(0)
+  confidence  Float @default(0.8)
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([caseId])
+  @@index([conversationId])
+  @@map("research_summaries")
+}
+
+// Legal API endpoints for multi-jurisdiction support
+model LegalApiEndpoint {
+  id           String @id @default(cuid())
+  jurisdiction String // US, UK, DE, EU, FR, CA, AU, AT, CH
+  provider     String // courtlistener, findcaselaw, openlegaldata, eurlex, legifrance, canlii, austlii
+
+  // Endpoint details
+  name     String // Display name
+  baseUrl  String // API endpoint
+  authType String @default("none") // none, api_key, oauth
+
+  // Status
+  isActive Boolean @default(true)
+
+  // Rate limiting
+  rateLimit Int? // Requests per minute
+
+  // Metadata
+  createdAt DateTime @default(now())
+
+  @@unique([jurisdiction, provider])
+  @@index([jurisdiction])
+  @@map("legal_api_endpoints")
+}
+
+// ============================================================================
+// CLIENT MANAGEMENT
+// ============================================================================
+
+model Client {
+  id     String @id @default(cuid())
+  userId String // Owner
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Organization (optional - for team access)
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+
+  // Client information
+  name    String
+  type    String  @default("individual") // "individual", "company", "government", "nonprofit"
+  email   String?
+  phone   String?
+  address String?
+  website String?
+  notes   String?
+
+  // Custom fields (JSON for flexibility)
+  customFields String? // JSON: { "industry": "Tech", "referralSource": "Website" }
+
+  // Status
+  status String @default("active") // "active", "inactive", "archived"
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  contacts        ClientContact[]
+  matters         Matter[]
+  cases           Case[]
+  seatAssignments SeatClientAssignment[]
+
+  @@index([userId])
+  @@index([organizationId])
+  @@index([status])
+  @@map("clients")
+}
+
+model ClientContact {
+  id       String @id @default(cuid())
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  // Contact information
+  name  String
+  role  String? // "CEO", "Legal Counsel", "Primary Contact"
+  email String?
+  phone String?
+  notes String?
+
+  // Primary contact flag
+  isPrimary Boolean @default(false)
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientId])
+  @@map("client_contacts")
+}
+
+model Matter {
+  id String @id @default(cuid())
+
+  // Client relationship
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  // Case relationship (optional - matters can exist without cases)
+  caseId String?
+  case   Case?   @relation(fields: [caseId], references: [id], onDelete: SetNull)
+
+  // Matter information
+  matterNumber String? // Firm's internal matter number
+  title        String
+  type         String  @default("general") // "litigation", "transactional", "advisory", "compliance", "general"
+  status       String  @default("open") // "open", "pending", "closed", "on-hold"
+  description  String?
+
+  // Billing
+  billingType String? // "hourly", "flat-fee", "contingency", "retainer"
+  billingRate Float? // Hourly rate or flat fee amount
+
+  // Important dates
+  openDate  DateTime  @default(now())
+  closeDate DateTime?
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientId])
+  @@index([caseId])
+  @@index([status])
+  @@map("matters")
+}
+
+// ============================================================================
+// TEAM SPACES
+// ============================================================================
+
+model TeamSpace {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Team space info
+  name        String
+  description String?
+  color       String? // Hex color for UI
+  icon        String? // Icon identifier
+
+  // Settings
+  isDefault Boolean @default(false) // Default space for new members
+  isPrivate Boolean @default(false) // Only visible to members
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  members TeamSpaceMember[]
+  cases   TeamSpaceCase[]
+
+  @@index([organizationId])
+  @@map("team_spaces")
+}
+
+model TeamSpaceMember {
+  id          String    @id @default(cuid())
+  teamSpaceId String
+  teamSpace   TeamSpace @relation(fields: [teamSpaceId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Role within team space
+  role String @default("member") // "admin", "member", "viewer"
+
+  // Metadata
+  joinedAt DateTime @default(now())
+
+  @@unique([teamSpaceId, userId])
+  @@index([teamSpaceId])
+  @@index([userId])
+  @@map("team_space_members")
+}
+
+model TeamSpaceCase {
+  id          String    @id @default(cuid())
+  teamSpaceId String
+  teamSpace   TeamSpace @relation(fields: [teamSpaceId], references: [id], onDelete: Cascade)
+  caseId      String
+  case        Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  // When case was added to space
+  addedAt DateTime @default(now())
+  addedBy String // User ID who added it
+
+  @@unique([teamSpaceId, caseId])
+  @@index([teamSpaceId])
+  @@index([caseId])
+  @@map("team_space_cases")
+}
+
+// ============================================================================
+// PRO FEATURES
+// ============================================================================
+
+model UserMLPreferences {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Model preferences
+  preferredModel String @default("auto") // "auto", "standard", "enhanced"
+  temperature    Float  @default(0.7) // 0.0 - 1.0
+  maxTokens      Int    @default(2048) // Max output tokens
+
+  // Feature flags
+  enableThinking  Boolean @default(false) // Show AI reasoning (if available)
+  enableStreaming Boolean @default(true) // Stream responses
+
+  // Analysis preferences
+  analysisDepth   String  @default("standard") // "quick", "standard", "thorough"
+  includeExamples Boolean @default(true) // Include examples in explanations
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("user_ml_preferences")
+}
+
+model CustomPrompt {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Prompt details
+  name     String // Display name
+  category String // "analysis", "drafting", "research", "chat", "other"
+  template String // The actual prompt template with placeholders
+
+  // Template placeholders (for UI)
+  placeholders String? // JSON: [{"name": "document", "description": "Document text", "required": true}]
+
+  // Settings
+  isDefault Boolean @default(false) // Use as default for this category
+  isPublic  Boolean @default(false) // Share with organization (future feature)
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([category])
+  @@map("custom_prompts")
+}
+
+// ============================================================================
+// ENTERPRISE & ML LEARNING MODELS
+// ============================================================================
+
+// Organization-level ML preferences (shared across all members)
+model OrganizationMLPreferences {
+  id             String       @id @default(cuid())
+  organizationId String       @unique
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Default ML preferences for all org members
+  defaultModel         String @default("auto")
+  defaultTemperature   Float  @default(0.7)
+  defaultMaxTokens     Int    @default(2048)
+  defaultAnalysisDepth String @default("standard")
+
+  // Feature flags for org
+  enableMLLearning   Boolean @default(true) // Learn from firm behavior
+  enableAutoTagging  Boolean @default(true) // Auto-tag cases/documents
+  enableSuggestions  Boolean @default(true) // AI suggestions based on patterns
+  enableSharedModels Boolean @default(true) // Share learned patterns across org
+
+  // Data retention for ML
+  retainTrainingData Boolean @default(true)
+  dataRetentionDays  Int     @default(365)
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("organization_ml_preferences")
+}
+
+// Organization-level AI instructions (applied to all members)
+model OrganizationAIInstruction {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Instruction details
+  name        String
+  instruction String // The instruction text
+  category    String @default("general") // "general", "analysis", "drafting", "research"
+  priority    Int    @default(0) // Higher priority = applied first
+
+  // Scope
+  isActive       Boolean @default(true)
+  appliesToTeams String? // JSON array of team IDs, null = all teams
+
+  // Metadata
+  createdBy String // User ID who created
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([isActive])
+  @@map("organization_ai_instructions")
+}
+
+// ============================================================================
+// ML BEHAVIORAL LEARNING
+// ============================================================================
+
+// Tracks patterns learned from firm behavior
+model FirmBehaviorPattern {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Pattern type
+  patternType String // "case_tagging", "document_classification", "clause_preference", "entity_naming", "risk_assessment"
+
+  // Pattern details
+  inputPattern  String // JSON: what triggers this pattern
+  outputPattern String // JSON: what the firm typically does
+  confidence    Float  @default(0.5) // 0-1, increases with more examples
+  exampleCount  Int    @default(1) // Number of examples that formed this pattern
+
+  // Context
+  caseTypes     String? // JSON array of case types this applies to
+  documentTypes String? // JSON array of document types
+  clientTypes   String? // JSON array of client types
+
+  // Status
+  isActive Boolean   @default(true)
+  lastUsed DateTime?
+  useCount Int       @default(0)
+
+  // Feedback tracking
+  acceptedCount Int @default(0) // Times user accepted suggestion
+  rejectedCount Int @default(0) // Times user rejected suggestion
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([patternType])
+  @@index([confidence])
+  @@map("firm_behavior_patterns")
+}
+
+// Training data from user actions (used to build patterns)
+model MLTrainingExample {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String // Who performed the action
+
+  // Action details
+  actionType String // "tag_case", "classify_document", "select_clause", "name_entity", "assess_risk"
+  inputData  String // JSON: the input context
+  outputData String // JSON: what the user did
+
+  // Context
+  caseId     String?
+  documentId String?
+  clientId   String?
+
+  // Quality signals
+  isExplicit     Boolean @default(true) // User explicitly made this choice
+  wasAISuggested Boolean @default(false) // Was this an accepted AI suggestion
+
+  // Metadata
+  createdAt DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([actionType])
+  @@index([createdAt])
+  @@map("ml_training_examples")
+}
+
+// Tracks AI model versions per organization
+model OrganizationMLModel {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Model details
+  modelType         String // "case_tagger", "doc_classifier", "risk_assessor", "entity_extractor"
+  version           Int    @default(1)
+  trainingDataCount Int    @default(0)
+
+  // Model performance
+  accuracy        Float? // Last measured accuracy
+  lastTrainedAt   DateTime?
+  lastEvaluatedAt DateTime?
+
+  // Embeddings/weights (stored as reference, actual data in file storage)
+  modelPath String? // Path to model file if using custom embeddings
+
+  // Status
+  status   String  @default("training") // "training", "active", "deprecated"
+  isActive Boolean @default(false)
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, modelType, version])
+  @@index([organizationId])
+  @@index([status])
+  @@map("organization_ml_models")
+}
+
+// User feedback on AI predictions
+model PredictionFeedback {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+
+  // Prediction details
+  predictionType   String // "tag_suggestion", "classification", "risk_flag", "entity_match"
+  predictionInput  String // JSON: what was the input
+  predictionOutput String // JSON: what AI suggested
+  actualOutput     String? // JSON: what user actually did (if different)
+
+  // Feedback
+  feedback       String // "accepted", "rejected", "modified"
+  feedbackReason String? // Why rejected/modified
+
+  // Context
+  patternId  String? // Which pattern was used (if any)
+  caseId     String?
+  documentId String?
+
+  // Metadata
+  createdAt DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([predictionType])
+  @@index([feedback])
+  @@index([createdAt])
+  @@map("prediction_feedback")
+}
+
+// ============================================================================
+// FIRM MEMORY (Enterprise)
+// ============================================================================
+
+// Learned clause preferences for an organization
+model FirmClausePreference {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Clause identification
+  clauseType    String // "termination", "indemnity", "confidentiality", "payment", etc.
+  clauseSubtype String? // Optional sub-classification
+
+  // Preferred language
+  preferredText String // The preferred clause text
+  alternatives  String // JSON: array of alternative phrasings used
+  avoidList     String // JSON: phrases/patterns to avoid
+
+  // Learning metadata
+  confidence    Float     @default(0.5) // 0-1 confidence score
+  exampleCount  Int       @default(1) // Number of examples used to learn
+  lastUsedAt    DateTime?
+  lastUpdatedAt DateTime  @updatedAt
+
+  // Source tracking
+  sourceDocumentIds String? // JSON: array of document IDs used to learn
+
+  createdAt DateTime @default(now())
+
+  @@unique([organizationId, clauseType, clauseSubtype])
+  @@index([organizationId])
+  @@index([clauseType])
+  @@map("firm_clause_preferences")
+}
+
+// Overall writing style profile for an organization
+model FirmStyleProfile {
+  id             String       @id @default(cuid())
+  organizationId String       @unique
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Style metrics
+  formalityLevel     Float @default(0.7) // 0-1 (casual to formal)
+  avgSentenceLength  Float @default(20) // Average words per sentence
+  avgParagraphLength Float @default(3) // Average sentences per paragraph
+
+  // Terminology preferences
+  preferredTerms String @default("{}") // JSON: {"shall": "must", "hereinafter": "below"}
+  avoidedTerms   String @default("[]") // JSON: ["hereby", "whereas"]
+  industryTerms  String @default("[]") // JSON: domain-specific terms used
+
+  // Structure patterns
+  structurePatterns String @default("{}") // JSON: common doc structure patterns
+  numberingStyle    String @default("numeric") // "numeric", "alpha", "roman"
+  headingStyle      String @default("title") // "title", "sentence", "caps"
+
+  // Learning progress
+  analyzedDocuments Int       @default(0)
+  lastAnalyzedAt    DateTime?
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("firm_style_profiles")
+}
+
+// Individual clause examples used for learning
+model FirmClauseExample {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Source
+  documentId String
+  clauseType String
+  clauseText String
+
+  // Analysis
+  extractedAt DateTime @default(now())
+  wasAccepted Boolean  @default(true) // User accepted this clause
+  quality     Float    @default(0.5) // Assessed quality 0-1
+
+  // Metadata
+  createdAt DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([clauseType])
+  @@map("firm_clause_examples")
+}
+
+// ============================================================================
+// USAGE ANALYTICS
+// ============================================================================
+
+// Granular usage events
+model UsageEvent {
+  id             String  @id @default(cuid())
+  organizationId String?
+  userId         String
+
+  // Event details
+  eventType     String // "ai_query", "document_analysis", "research_search", "draft_created", "archivist_chat"
+  eventCategory String // "ai", "documents", "research", "cases", "vault"
+
+  // Metrics
+  tokensUsed     Int? // For AI calls
+  processingTime Int? // Milliseconds
+  inputSize      Int? // Characters/bytes
+  outputSize     Int? // Characters/bytes
+
+  // Context
+  feature    String? // Specific feature used
+  caseId     String?
+  documentId String?
+
+  // Billing relevance
+  isBillable   Boolean @default(true)
+  billedAmount Float? // If usage-based billing
+
+  // Metadata
+  createdAt DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([userId])
+  @@index([eventType])
+  @@index([eventCategory])
+  @@index([createdAt])
+  @@map("usage_events")
+}
+
+// Pre-aggregated usage stats (daily rollups)
+model UsageAggregate {
+  id             String  @id @default(cuid())
+  organizationId String?
+  userId         String? // null = org-level aggregate
+
+  // Time period
+  date       DateTime
+  periodType String   @default("daily") // "daily", "weekly", "monthly"
+
+  // Aggregated metrics
+  aiQueries         Int @default(0)
+  tokensUsed        Int @default(0)
+  documentsAnalyzed Int @default(0)
+  researchSearches  Int @default(0)
+  draftsCreated     Int @default(0)
+  archivistChats    Int @default(0)
+
+  // Cost tracking
+  estimatedCost Float @default(0)
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, userId, date, periodType])
+  @@index([organizationId])
+  @@index([userId])
+  @@index([date])
+  @@map("usage_aggregates")
+}
+
+// ============================================================================
+// AUDIT LOGGING
+// ============================================================================
+
+model AuditLog {
+  id             String  @id @default(cuid())
+  organizationId String?
+  userId         String
+
+  // Action details
+  action     String // "create", "read", "update", "delete", "share", "export", "login", "logout"
+  resource   String // "case", "document", "client", "team", "user", "settings"
+  resourceId String?
+
+  // Change tracking
+  previousValue String? // JSON of previous state (for updates)
+  newValue      String? // JSON of new state
+
+  // Request context
+  ipAddress String?
+  userAgent String?
+  requestId String? // For correlating related actions
+
+  // Compliance
+  isCompliance  Boolean @default(false) // Flag for compliance-relevant actions
+  retentionDays Int     @default(365) // How long to keep this log
+
+  // Big Law compliance extensions
+  searchQuery        String? // If this was a search action
+  documentsAccessed  String? // JSON array of document IDs accessed in this action
+  matterId           String? // External billing matter ID
+  complianceCategory String? // "client_matter", "confidential", "privileged", etc.
+  dataClassification String? // "public", "internal", "confidential", "restricted"
+  sessionId          String? // Link to UserSession for session context
+
+  // Metadata
+  createdAt DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([userId])
+  @@index([action])
+  @@index([resource])
+  @@index([createdAt])
+  @@index([isCompliance])
+  @@index([matterId])
+  @@index([sessionId])
+  @@map("audit_logs")
+}
+
+// AI Audit Log - Detailed audit trail for AI/RAG operations
+model AIAuditLog {
+  id             String  @id @default(cuid())
+  userId         String?
+  user           User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+  organizationId String?
+  conversationId String?
+  caseId         String?
+
+  // Request info
+  requestType String // "research_chat", "document_analysis", "document_draft", "clause_validation", "navigator", "investigate", "compliance_check"
+  userQuery   String // Original user question/input
+
+  // RAG search details (JSON)
+  ragSearches String? // Array of search queries, results, scores
+
+  // Verification details (JSON)
+  nliVerifications   String? // Array of NLI checks with claim, source, result, confidence
+  quoteVerifications String? // Array of quote verifications with match scores
+
+  // LLM call details (JSON)
+  llmCalls String? // Array of LLM calls with model, tokens, duration
+
+  // Response
+  response    String  // Final AI response (post-verification)
+  rawResponse String? // LLM response before judge verification
+  sourcesUsed String? // JSON array of sources actually cited
+
+  // System prompt capture
+  systemPrompt String? // System prompt sent to LLM
+
+  // Verification metrics
+  overallConfidence  String @default("unverified") // "high", "medium", "low", "unverified"
+  nliVerifiedClaims  Int    @default(0)
+  totalClaims        Int    @default(0)
+  quotesVerified     Int    @default(0)
+  totalQuotes        Int    @default(0)
+
+  // Context
+  jurisdiction       String?
+  jurisdictionSource String? // "user_selected", "auto_detected", "conversation_default"
+  totalDurationMs    Int     @default(0)
+  ipAddress          String?
+  userAgent          String?
+
+  // Metadata
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([organizationId])
+  @@index([conversationId])
+  @@index([caseId])
+  @@index([requestType])
+  @@index([overallConfidence])
+  @@index([createdAt])
+  @@map("ai_audit_logs")
+}
+
+// ============================================================================
+// BILLING & SEATS
+// ============================================================================
+
+// Seat management for organizations
+model Seat {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Seat assignment
+  userId String? // null = unassigned seat
+  email  String? // For pending invitations
+
+  // Seat type
+  seatType String  @default("member") // "admin", "member", "viewer", "guest"
+  status   String  @default("active") // "active", "pending", "suspended", "cancelled"
+  isActive Boolean @default(true)
+
+  // Billing
+  monthlyCost      Float? // Cost per seat per month
+  billingStartDate DateTime?
+  billingEndDate   DateTime?
+
+  // Metadata
+  assignedAt DateTime?
+  assignedBy String? // User ID who assigned
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  // Assignment relations
+  clientAssignments SeatClientAssignment[]
+  caseAssignments   SeatCaseAssignment[]
+
+  @@index([organizationId])
+  @@index([userId])
+  @@index([isActive])
+  @@map("seats")
+}
+
+// Billing events for usage-based billing
+model BillingEvent {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Event details
+  eventType   String // "subscription", "usage", "seat_added", "seat_removed", "overage"
+  description String?
+
+  // Amounts
+  amount   Float // In cents
+  currency String @default("USD")
+  quantity Int    @default(1)
+
+  // Billing period
+  periodStart DateTime?
+  periodEnd   DateTime?
+
+  // Payment status
+  status    String  @default("pending") // "pending", "paid", "failed", "refunded"
+  invoiceId String? // External invoice reference
+  paymentId String? // External payment reference
+
+  // Metadata
+  metadata  String? // JSON for additional data
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([eventType])
+  @@index([status])
+  @@index([createdAt])
+  @@map("billing_events")
+}
+
+// Subscription details
+model Subscription {
+  id             String       @id @default(cuid())
+  organizationId String       @unique
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Plan details
+  planId       String // "free", "team", "enterprise", "enterprise_plus"
+  planName     String
+  billingCycle String @default("monthly") // "monthly", "annual"
+
+  // Pricing
+  basePrice     Float @default(0) // Monthly base price
+  pricePerSeat  Float @default(0) // Per seat pricing
+  includedSeats Int   @default(1) // Seats included in base
+
+  // Limits
+  maxSeats     Int? // null = unlimited
+  maxDocuments Int? // null = unlimited
+  maxStorage   Int? // MB, null = unlimited
+  maxAIQueries Int? // Per month, null = unlimited
+
+  // Current usage
+  currentSeats     Int @default(1)
+  currentDocuments Int @default(0)
+  currentStorage   Int @default(0) // MB
+  currentAIQueries Int @default(0)
+
+  // Billing dates
+  currentPeriodStart DateTime?
+  currentPeriodEnd   DateTime?
+  trialEndsAt        DateTime?
+
+  // Status
+  status       String    @default("active") // "active", "past_due", "canceled", "trialing"
+  canceledAt   DateTime?
+  cancelReason String?
+
+  // External references
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([planId])
+  @@map("subscriptions")
+}
+
+// ============================================================================
+// SEAT ASSIGNMENTS - Link team members to clients and cases
+// ============================================================================
+
+// Assign seats (team members) to clients
+model SeatClientAssignment {
+  id       String @id @default(cuid())
+  seatId   String
+  seat     Seat   @relation(fields: [seatId], references: [id], onDelete: Cascade)
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  // Assignment metadata
+  role       String   @default("assigned") // "lead", "assigned", "support"
+  assignedAt DateTime @default(now())
+  assignedBy String? // User ID who made assignment
+
+  @@unique([seatId, clientId])
+  @@index([seatId])
+  @@index([clientId])
+  @@map("seat_client_assignments")
+}
+
+// Assign seats (team members) to cases
+model SeatCaseAssignment {
+  id     String @id @default(cuid())
+  seatId String
+  seat   Seat   @relation(fields: [seatId], references: [id], onDelete: Cascade)
+  caseId String
+  case   Case   @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  // Assignment metadata
+  role       String   @default("assigned") // "lead", "assigned", "reviewer"
+  assignedAt DateTime @default(now())
+  assignedBy String? // User ID who made assignment
+
+  @@unique([seatId, caseId])
+  @@index([seatId])
+  @@index([caseId])
+  @@map("seat_case_assignments")
+}
+
+// ============================================================================
+// INTELLIGENCE SYSTEM - Next Best Action & Feedback
+// ============================================================================
+
+// Track user feedback on AI-generated actions
+model ActionFeedback {
+  id             String  @id @default(cuid())
+  userId         String
+  organizationId String?
+
+  // Action details
+  actionType String // 'risk_mitigation', 'clause_addition', 'deadline_action', 'clarification'
+  actionId   String // Unique identifier for the specific action
+  documentId String?
+  caseId     String?
+
+  // User feedback
+  feedback String // 'helpful', 'not_helpful', 'executed', 'dismissed'
+  outcome  String? // What happened after action was taken (optional)
+
+  // Context
+  legalMode String? // Which mode was active: 'signing', 'reviewing', 'challenging', 'learning'
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([organizationId])
+  @@index([actionType])
+  @@index([documentId])
+  @@index([caseId])
+  @@map("action_feedback")
+}
+
+// ============================================================================
+// CASE HEALTH SNAPSHOT (Phase 2: Case Health Score)
+// ============================================================================
+
+model CaseHealthSnapshot {
+  id     String @id @default(cuid())
+  caseId String
+
+  // Health score (0-100)
+  healthScore Int
+
+  // Component scores as JSON: { completeness, riskLevel, deadlinePressure, requirementsMet }
+  components String
+
+  // Red flags as JSON array: [{ type, severity, title, description }]
+  redFlags String
+
+  // Missing documents for case type as JSON array: [{ document, importance, reason }]
+  missingForType String
+
+  // Case type at time of snapshot (for historical tracking)
+  caseType String?
+
+  generatedAt DateTime @default(now())
+
+  @@index([caseId])
+  @@index([generatedAt])
+  @@map("case_health_snapshots")
+}
+
+// ============================================================================
+// PROACTIVE ARCHIVIST (Phase 3: Alert System)
+// ============================================================================
+
+// User preferences for proactive alerts
+model AlertPreference {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Alert type: 'high_risk', 'deadline', 'missing_critical', 'case_health'
+  alertType String
+
+  // Whether this alert type is enabled
+  enabled Boolean @default(true)
+
+  // Configurable thresholds
+  riskThreshold      Int? // For high_risk alerts: trigger when risk >= this (0-100)
+  daysBeforeDeadline Int? // For deadline alerts: trigger X days before
+  healthThreshold    Int? // For case_health alerts: trigger when health <= this (0-100)
+
+  // Delivery channels as JSON array: ['in_app', 'push', 'email']
+  channels String @default("[\"in_app\"]")
+
+  // Quiet hours (optional)
+  quietHoursStart String? // e.g., "22:00"
+  quietHoursEnd   String? // e.g., "08:00"
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, alertType])
+  @@index([userId])
+  @@map("alert_preferences")
+}
+
+// Individual proactive alerts generated by the system
+model ProactiveAlert {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Alert classification
+  alertType String // 'high_risk', 'deadline', 'missing_critical', 'case_health', 'conflict'
+  urgency   String // 'critical', 'high', 'medium', 'low'
+
+  // Content
+  title     String
+  message   String
+  actionUrl String? // Deep link to relevant page
+
+  // Related entities
+  documentId String?
+  caseId     String?
+
+  // Additional context as JSON
+  metadata String? // { riskScore, daysUntilDeadline, etc. }
+
+  // Status
+  isRead      Boolean   @default(false)
+  isDismissed Boolean   @default(false)
+  readAt      DateTime?
+  dismissedAt DateTime?
+
+  // Delivery tracking
+  deliveredVia String? // JSON array of channels that delivered this alert
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, isRead])
+  @@index([userId, alertType])
+  @@index([documentId])
+  @@index([caseId])
+  @@index([createdAt])
+  @@map("proactive_alerts")
+}
+
+// Track when scans were last run (for background job)
+model AlertScanLog {
+  id       String @id @default(cuid())
+  scanType String // 'high_risk', 'deadline', 'case_health', 'full'
+
+  // Scope
+  userId         String? // If null, was an org-wide or system scan
+  organizationId String?
+
+  // Results
+  alertsGenerated  Int @default(0)
+  documentsScanned Int @default(0)
+  casesScanned     Int @default(0)
+
+  // Timing
+  startedAt   DateTime
+  completedAt DateTime?
+  durationMs  Int?
+
+  // Status
+  status       String  @default("running") // 'running', 'completed', 'failed'
+  errorMessage String?
+
+  @@index([scanType])
+  @@index([userId])
+  @@index([startedAt])
+  @@map("alert_scan_logs")
+}
+
+// ============================================================================
+// NAVIGATOR TEMPLATE SYSTEM
+// ============================================================================
+
+// Document templates for Navigator drafting
+model DocumentTemplate {
+  id           String  @id @default(cuid())
+  documentType String // "nda", "service_agreement", "employment_contract", etc.
+  name         String
+  description  String?
+  version      Int     @default(1)
+  jurisdiction String  @default("US")
+
+  // Template content (JSON)
+  sections     String // JSON: Array of TemplateSection
+  placeholders String // JSON: Array of TemplatePlaceholder
+
+  // Status
+  isActive   Boolean @default(true)
+  isOfficial Boolean @default(true) // System templates vs custom
+
+  // Organization-specific templates (null = global template)
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Creator (null for system templates)
+  createdBy String?
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  variants      DocumentTemplateVariant[]
+  draftSessions DocumentDraftSession[]
+
+  @@unique([documentType, jurisdiction, version, organizationId])
+  @@index([documentType])
+  @@index([jurisdiction])
+  @@index([isActive])
+  @@index([organizationId])
+  @@map("document_templates")
+}
+
+// Jurisdiction-specific variants of templates
+model DocumentTemplateVariant {
+  id         String           @id @default(cuid())
+  templateId String
+  template   DocumentTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  // Variant details
+  jurisdiction     String
+  sectionOverrides String // JSON: overrides for specific sections
+  notes            String? // Jurisdiction-specific notes
+
+  createdAt DateTime @default(now())
+
+  @@unique([templateId, jurisdiction])
+  @@index([templateId])
+  @@map("document_template_variants")
+}
+
+// Draft session for document creation
+model DocumentDraftSession {
+  id         String           @id @default(cuid())
+  userId     String
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  templateId String
+  template   DocumentTemplate @relation(fields: [templateId], references: [id])
+
+  // Draft context
+  situation    String // User's situation description
+  jurisdiction String @default("US")
+  language     String @default("en")
+
+  // Progress tracking
+  status              String @default("in_progress") // "in_progress", "completed", "abandoned"
+  currentSectionIndex Int    @default(0)
+
+  // User inputs
+  answers           String @default("{}") // JSON: answers to questions
+  placeholderValues String @default("{}") // JSON: filled placeholder values
+
+  // Generated content
+  generatedSections String  @default("[]") // JSON: array of generated section content
+  finalDocument     String? // Combined final document
+
+  // Disclaimer
+  disclaimerAccepted   Boolean   @default(false)
+  disclaimerAcceptedAt DateTime?
+
+  // Metadata
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  completedAt DateTime?
+
+  @@index([userId])
+  @@index([templateId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("document_draft_sessions")
+}
+
+// ============================================================================
+// ANONYMOUS SESSIONS (Free Tier)
+// ============================================================================
+
+// Track anonymous users for free tier rate limiting
+model AnonymousSession {
+  id           String @id @default(cuid())
+  sessionToken String @unique
+
+  // Usage tracking
+  docsUsedThisMonth Int    @default(0)
+  lastResetMonth    String // "2025-01" format
+
+  // Client info for abuse prevention
+  ipAddress String?
+  userAgent String?
+
+  // Timestamps
+  createdAt  DateTime @default(now())
+  lastUsedAt DateTime @default(now())
+
+  @@index([sessionToken])
+  @@index([lastUsedAt])
+  @@map("anonymous_sessions")
+}
+
+// ============================================================================
+// CLIENT PORTAL SHARES
+// ============================================================================
+
+// Share links for external client access to document analyses
+model ClientShare {
+  id         String @id @default(cuid())
+  documentId String
+  userId     String // Owner who created the share
+
+  // Share token (URL-safe)
+  token String @unique
+
+  // Recipient info (optional - for tracking)
+  recipientEmail String?
+  recipientName  String?
+
+  // Access control
+  expiresAt DateTime // When the share link expires
+  maxViews  Int? // Optional limit on number of views
+  viewCount Int      @default(0)
+
+  // What to share (JSON array of section names)
+  // e.g., ["summary", "keyClauses", "riskFlags", "clarityScore"]
+  sections String @default("[\"summary\",\"keyClauses\",\"riskFlags\",\"clarityScore\"]")
+
+  // Optional password protection
+  passwordHash String?
+
+  // Status
+  isActive  Boolean   @default(true)
+  revokedAt DateTime?
+
+  // Metadata
+  createdAt    DateTime  @default(now())
+  lastViewedAt DateTime?
+
+  @@index([token])
+  @@index([documentId])
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("client_shares")
+}
+
+// ============================================================================
+// USAGE RECORDS (Per-User Monthly Tracking)
+// ============================================================================
+
+// Track monthly usage per user for quota enforcement
+model UsageRecord {
+  id             String  @id @default(cuid())
+  userId         String
+  user           User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String?
+
+  // Time period
+  month String // "2025-01" format
+
+  // Usage metrics
+  documentsAnalyzed Int @default(0)
+  aiQueriesUsed     Int @default(0)
+  draftsCreated     Int @default(0)
+  researchQueries   Int @default(0)
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, month])
+  @@index([userId])
+  @@index([month])
+  @@map("usage_records")
+}
+
+// ============================================================================
+// ANALYTICS & FEEDBACK
+// ============================================================================
+
+// Product analytics events
+model AnalyticsEvent {
+  id             String  @id @default(cuid())
+  userId         String?
+  sessionId      String?
+  organizationId String?
+
+  // Event details
+  event      String // "document.uploaded", "analysis.completed", etc.
+  category   String // "document", "analysis", "billing", etc.
+  properties String? // JSON: event-specific properties
+  metadata   String? // JSON: additional context
+
+  // Timestamp
+  timestamp DateTime @default(now())
+
+  @@index([userId])
+  @@index([organizationId])
+  @@index([event])
+  @@index([category])
+  @@index([timestamp])
+  @@map("analytics_events")
+}
+
+// Feedback on document analysis quality
+model AnalysisFeedback {
+  id         String @id @default(cuid())
+  userId     String
+  documentId String
+
+  // Rating (1-5 stars)
+  rating Int // 1-5
+
+  // Specific feedback
+  summaryHelpful  Boolean?
+  risksAccurate   Boolean?
+  clausesClear    Boolean?
+  glossaryUseful  Boolean?
+  overallAccuracy Int? // 1-5
+
+  // Free-form feedback
+  comments String?
+  issues   String? // JSON array of issue types
+
+  // Context
+  analysisVersion String? // Version of analysis system
+  jurisdiction    String?
+
+  // Timestamps
+  createdAt DateTime @default(now())
+
+  @@unique([userId, documentId])
+  @@index([userId])
+  @@index([documentId])
+  @@index([rating])
+  @@map("analysis_feedback")
+}
+
+// ============================================================================
+// DOCUMENT COMPARISON
+// ============================================================================
+
+model DocumentComparison {
+  id          String @id @default(cuid())
+  userId      String
+  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  documentAId String // First document
+  documentBId String // Second document
+
+  // Results
+  differences String // JSON: array of diff objects
+  riskChanges String // JSON: what risks changed
+  summary     String // AI-generated summary
+  stats       String? // JSON: sectionsChanged, clausesAdded, etc.
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("document_comparisons")
+}
+
+// ============================================================================
+// APPROVAL WORKFLOWS
+// ============================================================================
+
+model ApprovalWorkflow {
+  id         String  @id @default(cuid())
+  caseId     String?
+  documentId String?
+
+  // Workflow
+  name        String
+  status      String @default("pending") // pending, in_review, approved, rejected
+  currentStep Int    @default(0)
+
+  // Steps as JSON: [{ userId, userEmail, role, status, comments, timestamp }]
+  steps String
+
+  // Initiator
+  createdBy   String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  completedAt DateTime?
+
+  @@index([caseId])
+  @@index([documentId])
+  @@index([status])
+  @@index([createdBy])
+  @@map("approval_workflows")
+}
+
+// ============================================================================
+// BULK UPLOAD
+// ============================================================================
+
+model BulkUploadJob {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Job metadata
+  name       String? // Optional name for the batch
+  totalFiles Int
+  status     String  @default("pending") // pending, processing, completed, failed, cancelled
+
+  // Progress tracking
+  processedFiles Int @default(0)
+  successCount   Int @default(0)
+  failedCount    Int @default(0)
+
+  // Results stored as JSON
+  results String @default("[]") // Array of { documentId, filename, status, error? }
+
+  // Optional case association
+  caseId String?
+
+  // Timing
+  createdAt   DateTime  @default(now())
+  startedAt   DateTime?
+  completedAt DateTime?
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("bulk_upload_jobs")
+}
+
+// ============================================================================
+// SECURITY & AUTHENTICATION
+// ============================================================================
+
+// MFA (Multi-Factor Authentication)
+model MfaSecret {
+  id         String    @id @default(cuid())
+  userId     String    @unique
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  secret     String // Encrypted TOTP secret
+  isEnabled  Boolean   @default(false)
+  verifiedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  backupCodes MfaBackupCode[]
+
+  @@map("mfa_secrets")
+}
+
+model MfaBackupCode {
+  id          String    @id @default(cuid())
+  mfaSecretId String
+  mfaSecret   MfaSecret @relation(fields: [mfaSecretId], references: [id], onDelete: Cascade)
+  codeHash    String // Hashed backup code
+  usedAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([mfaSecretId])
+  @@map("mfa_backup_codes")
+}
+
+// SSO Configuration (per organization)
+model SsoConfiguration {
+  id             String       @id @default(cuid())
+  organizationId String       @unique
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  provider  String // "saml", "google", "microsoft", "okta", "azure_ad"
+  isEnabled Boolean @default(false)
+
+  // SAML settings
+  entityId    String?
+  ssoUrl      String?
+  certificate String? // X.509 certificate
+
+  // OAuth settings
+  clientId     String?
+  clientSecret String? // Encrypted
+
+  // Settings
+  enforceSso    Boolean @default(false) // Require SSO for all users
+  autoProvision Boolean @default(true) // Create users on first login
+  defaultRole   String  @default("member")
+
+  // Azure AD specific (Big Law)
+  azureTenantId String? // Azure AD Tenant ID
+  azureLoginUrl String? // Custom login URL
+  domainHints   String? // JSON array of allowed email domains
+
+  // Group-to-role mapping
+  groupMappings     String? // JSON: {"Azure-Partners": "partner", "Azure-Associates": "associate"}
+  syncGroupsOnLogin Boolean @default(true) // Sync roles from Azure AD groups on each login
+
+  // SCIM provisioning (for automated user management)
+  scimEnabled  Boolean @default(false)
+  scimToken    String? // Encrypted SCIM bearer token
+  scimEndpoint String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  groupSyncs AzureAdGroupSync[]
+
+  @@map("sso_configurations")
+}
+
+// Azure AD Group Sync - Map Azure AD groups to local roles and practice areas
+model AzureAdGroupSync {
+  id          String           @id @default(cuid())
+  ssoConfigId String
+  ssoConfig   SsoConfiguration @relation(fields: [ssoConfigId], references: [id], onDelete: Cascade)
+
+  // Azure AD group info
+  azureGroupId   String // Azure AD group object ID
+  azureGroupName String // Display name for reference
+
+  // Local mapping
+  localRole      String // "partner", "senior_associate", "associate", "paralegal", "secretary"
+  practiceAreaId String? // Optional: restrict to specific practice area
+  practiceArea   PracticeArea? @relation("PracticeAreaGroupSyncs", fields: [practiceAreaId], references: [id], onDelete: SetNull)
+
+  // Sync tracking
+  lastSyncAt  DateTime?
+  memberCount Int       @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([ssoConfigId, azureGroupId])
+  @@index([ssoConfigId])
+  @@index([practiceAreaId])
+  @@map("azure_ad_group_syncs")
+}
+
+// ============================================================================
+// EXTENDED RBAC (Big Law - Practice Areas & Professional Roles)
+// ============================================================================
+
+// Practice areas for law firms (Litigation, Corporate, IP, etc.)
+model PracticeArea {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  name String // "Litigation", "Corporate M&A", "Intellectual Property"
+  code String // "LIT", "CORP", "IP"
+
+  // Optional parent for sub-practice areas
+  parentId String?
+  parent   PracticeArea?  @relation("PracticeAreaHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children PracticeArea[] @relation("PracticeAreaHierarchy")
+
+  // Settings
+  isActive    Boolean @default(true)
+  description String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  userAssignments UserPracticeArea[]
+  extendedRoles   ExtendedRole[]
+  azureGroupSyncs AzureAdGroupSync[] @relation("PracticeAreaGroupSyncs")
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+  @@index([parentId])
+  @@map("practice_areas")
+}
+
+// Extended roles for Big Law (Partner, Senior Associate, Associate, Paralegal, etc.)
+model ExtendedRole {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  name  String // "Partner", "Senior Associate", "Associate", "Paralegal", "Secretary"
+  code  String // "PARTNER", "SR_ASSOC", "ASSOC", "PARA", "SEC"
+  level Int // 100, 80, 60, 40, 20 (higher = more authority)
+
+  // Core permissions
+  canCreateCases      Boolean @default(false)
+  canDeleteCases      Boolean @default(false)
+  canViewBilling      Boolean @default(false)
+  canApproveDocuments Boolean @default(false)
+  canAccessAllCases   Boolean @default(false) // Partners typically see everything
+  canManageTeam       Boolean @default(false)
+  canExportData       Boolean @default(false)
+  canViewAuditLogs    Boolean @default(false)
+
+  // Practice area restrictions (if null, can access all)
+  restrictedToPracticeAreaId String?
+  restrictedToPracticeArea   PracticeArea? @relation(fields: [restrictedToPracticeAreaId], references: [id], onDelete: SetNull)
+
+  // Billing integration (for Elite 3E)
+  standardHourlyRate Float? // Default hourly rate for this role
+  billingCode        String? // Timekeeper code prefix
+
+  // Additional permissions as JSON for flexibility
+  additionalPermissions String? // JSON object for custom permissions
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  users User[] @relation("UserExtendedRole")
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+  @@index([level])
+  @@map("extended_roles")
+}
+
+// User assignments to practice areas (many-to-many with access level)
+model UserPracticeArea {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  practiceAreaId String
+  practiceArea   PracticeArea @relation(fields: [practiceAreaId], references: [id], onDelete: Cascade)
+
+  // Access level within this practice area
+  accessLevel String @default("read") // "read", "write", "full", "admin"
+
+  // Role-specific overrides
+  isPrimary      Boolean @default(false) // User's primary practice area
+  canCreateCases Boolean @default(false) // Override for this specific practice area
+
+  assignedAt DateTime @default(now())
+  assignedBy String? // User ID who made this assignment
+
+  @@unique([userId, practiceAreaId])
+  @@index([userId])
+  @@index([practiceAreaId])
+  @@map("user_practice_areas")
+}
+
+// ============================================================================
+// ENHANCED AUDIT LOGGING (Big Law - Search & Compliance)
+// ============================================================================
+
+// Detailed search audit log for compliance (tracks every search query)
+model SearchAuditLog {
+  id             String  @id @default(cuid())
+  organizationId String?
+  userId         String
+
+  // Search details
+  searchType   String // "case_law", "statute", "document", "rag", "research", "bulk"
+  query        String // The actual search query
+  jurisdiction String? // "AT", "SK", "EU", "US"
+
+  // Results tracking
+  resultCount   Int // Number of results returned
+  resultsViewed String? // JSON array of result IDs that were clicked/viewed
+
+  // Context (what was the user doing)
+  caseId   String? // If search was in context of a case
+  matterId String? // External matter ID (from billing system)
+  pageUrl  String? // Where the search was initiated
+
+  // Performance
+  searchDuration Int? // milliseconds
+
+  // Request context
+  ipAddress String?
+  userAgent String?
+  sessionId String?
+
+  // Compliance flags
+  containsPII        Boolean @default(false) // Query contained potential PII
+  complianceCategory String? // "client_matter", "opposing_party", "confidential", etc.
+
+  createdAt DateTime @default(now())
+
+  @@index([organizationId, createdAt])
+  @@index([userId])
+  @@index([searchType])
+  @@index([jurisdiction])
+  @@index([caseId])
+  @@index([matterId])
+  @@map("search_audit_logs")
+}
+
+// ============================================================================
+// PUBLIC API & API KEYS (Big Law - External Integrations)
+// ============================================================================
+
+// API keys for external system integrations
+model CustomerApiKey {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Key identification
+  name      String // "Production Key", "Development Key", "Elite 3E Integration"
+  keyHash   String // SHA-256 hash of the actual key
+  keyPrefix String // "lc_live_xxx" - first 8 chars for display
+
+  // Scopes and permissions
+  scopes String // JSON array: ["cases:read", "documents:write", "search:execute"]
+
+  // Security restrictions
+  ipWhitelist String? // JSON array of allowed IPs/CIDR ranges
+  rateLimit   Int     @default(1000) // requests per hour
+
+  // Status
+  isActive   Boolean   @default(true)
+  lastUsedAt DateTime?
+  expiresAt  DateTime? // Optional expiration
+
+  // Usage tracking
+  totalRequests Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  requestLogs ApiRequestLog[]
+
+  @@index([organizationId])
+  @@index([keyHash])
+  @@index([keyPrefix])
+  @@index([isActive])
+  @@map("customer_api_keys")
+}
+
+// API request logs for rate limiting and debugging
+model ApiRequestLog {
+  id       String         @id @default(cuid())
+  apiKeyId String
+  apiKey   CustomerApiKey @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+
+  // Request details
+  method     String // "GET", "POST", etc.
+  path       String // "/api/v1/cases"
+  statusCode Int
+
+  // Performance
+  responseTime Int // milliseconds
+
+  // Request metadata
+  ipAddress    String?
+  requestBody  String? // Truncated JSON for debugging
+  errorMessage String? // If failed
+
+  createdAt DateTime @default(now())
+
+  @@index([apiKeyId, createdAt])
+  @@index([statusCode])
+  @@map("api_request_logs")
+}
+
+// ============================================================================
+// CONTENT SYNC SYSTEM (Big Law - Hybrid USB/Network Updates)
+// ============================================================================
+
+// Content update packages (monthly case law, statute updates, etc.)
+model ContentUpdatePackage {
+  id String @id @default(cuid())
+
+  // Package identification
+  version      String // "2024.01-AT-caselaw"
+  packageType  String // "case_law", "statutes", "regulatory", "patch", "full"
+  jurisdiction String? // "AT", "SK", "EU", null for multi-jurisdiction
+
+  // Content metadata
+  contentDate DateTime // Date the content is valid from
+  chunkCount  Int // Number of RAG chunks
+  sizeBytes   Int
+
+  // Security
+  sha256    String // SHA-256 hash for integrity
+  signature String // RSA signature for authenticity
+
+  // Delivery
+  channelType String // "usb", "sync", "hybrid"
+
+  // Status
+  status    String    @default("available") // "available", "downloading", "applied", "superseded"
+  appliedAt DateTime?
+  appliedBy String? // User ID who applied
+
+  // Changelog
+  changelog String? // JSON array of changes
+
+  createdAt DateTime @default(now())
+
+  @@index([version])
+  @@index([jurisdiction])
+  @@index([status])
+  @@index([contentDate])
+  @@map("content_update_packages")
+}
+
+// Organization-specific sync configuration
+model ContentSyncSchedule {
+  id             String       @id @default(cuid())
+  organizationId String       @unique
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Sync method
+  syncEnabled   Boolean @default(false)
+  syncMethod    String  @default("usb") // "usb", "sync", "hybrid"
+  syncFrequency String  @default("monthly") // "weekly", "biweekly", "monthly"
+
+  // Controlled sync window (for air-gapped deployments)
+  syncWindowEnabled Boolean @default(false)
+  syncWindowStart   String? // "02:00" (HH:MM)
+  syncWindowEnd     String? // "04:00"
+  syncWindowDays    String? // JSON: [1, 2, 3, 4, 5] (Mon-Fri)
+
+  // Server config (for sync mode)
+  serverUrl    String? // "https://updates.lexvault.com"
+  serverApiKey String? // Encrypted API key
+
+  // Jurisdictions to sync
+  jurisdictions String // JSON array: ["AT", "SK"]
+
+  // Sync tracking
+  lastSyncAt     DateTime?
+  nextSyncAt     DateTime?
+  lastSyncStatus String? // "success", "partial", "failed"
+  lastSyncError  String?
+
+  // Auto-apply settings
+  autoApply       Boolean @default(false) // Auto-apply after sync window
+  requireApproval Boolean @default(true) // Admin must approve before apply
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("content_sync_schedules")
+}
+
+// Organization-specific update history (tracks what updates each org has applied)
+model OrganizationUpdateHistory {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Update identification
+  version      String // "2024.01-AT-monthly-caselaw"
+  jurisdiction String // "AT", "SK", "EU"
+  packageType  String // "case_law", "statutes", "full"
+
+  // Application details
+  appliedBy String // User ID who applied
+  appliedAt DateTime
+  source    String   @default("usb") // "usb", "sync"
+
+  // Results
+  chunksAdded   Int @default(0)
+  chunksUpdated Int @default(0)
+  chunksRemoved Int @default(0)
+
+  // Entitlement at time of update
+  subscriptionFrequency String? // "monthly", "quarterly", "annual"
+
+  createdAt DateTime @default(now())
+
+  @@index([organizationId, jurisdiction])
+  @@index([organizationId, appliedAt])
+  @@index([version])
+  @@map("organization_update_history")
+}
+
+// SSO Session (tracks external provider sessions)
+model SsoSession {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider     String // "google", "microsoft", "okta", "saml"
+  externalId   String // ID from SSO provider
+  accessToken  String? // Encrypted
+  refreshToken String? // Encrypted
+  expiresAt    DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@unique([userId, provider])
+  @@index([userId])
+  @@map("sso_sessions")
+}
+
+// User Sessions (device tracking)
+model UserSession {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  token        String @unique // Session token
+  refreshToken String @unique
+
+  // Device info
+  deviceInfo String? // JSON: { browser, os, device }
+  ipAddress  String?
+  userAgent  String?
+  location   String? // Geo-location from IP
+
+  // Session state
+  isActive       Boolean  @default(true)
+  lastActivityAt DateTime @default(now())
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+
+  @@index([userId])
+  @@index([token])
+  @@index([expiresAt])
+  @@index([isActive])
+  @@map("user_sessions")
+}
+
+// Password Reset Tokens
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String    @unique // Secure random token
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([token])
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("password_reset_tokens")
+}
+
+// ============================================================================
+// OFFLINE UPDATE SYSTEM (USB-based updates for air-gapped deployments)
+// ============================================================================
+
+// System settings (key-value store for configuration)
+model SystemSetting {
+  id    String @id @default(cuid())
+  key   String @unique // "data_version", "license_key", etc.
+  value String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("system_settings")
+}
+
+// Track applied updates for version history
+model UpdateHistory {
+  id        String @id @default(cuid())
+  packageId String // Unique ID from the update package
+
+  // Version info
+  version      String
+  jurisdiction String // "AT", "SK", "AT+SK"
+
+  // Content stats
+  chunksAdded   Int @default(0)
+  chunksUpdated Int @default(0)
+  chunksRemoved Int @default(0)
+
+  // Package metadata (JSON)
+  metadata String?
+
+  // Application details
+  appliedAt DateTime @default(now())
+  appliedBy String? // User ID who applied the update
+
+  @@index([version])
+  @@index([appliedAt])
+  @@map("update_history")
+}
+
+// Update system metadata (singleton - only one row)
+model UpdateMetadata {
+  id String @id @default(cuid())
+
+  // Current installed version
+  currentVersion String @default("0.0.0")
+
+  // Update checking
+  lastCheckedAt DateTime?
+  checkEnabled  Boolean   @default(true)
+  checkInterval Int       @default(86400000) // 24 hours in ms
+
+  // Pending update info
+  pendingVersion     String?
+  pendingPackagePath String?
+  pendingChangelog   String? // JSON array of changelog entries
+  pendingSize        Int? // Package size in bytes
+
+  // Download progress (for partial downloads)
+  downloadProgress  Int? // Percentage (0-100)
+  downloadStartedAt DateTime?
+
+  // Last successful update
+  lastAppliedAt      DateTime?
+  lastAppliedVersion String?
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("update_metadata")
+}
+
+// ============================================================================
+// LLM CACHE (Persistent cache for LLM responses)
+// ============================================================================
+
+// Persistent cache for LLM responses to reduce costs and latency
+model LlmCache {
+  id        String @id @default(cuid())
+  inputHash String @unique // SHA-256 hash of normalized input
+
+  // Cached response
+  output String // The LLM response
+
+  // Model info
+  model    String // Model ID used (e.g., "llama3.2", "mistral")
+  taskType String // Task type (e.g., "analyze_document", "summarize", "research")
+
+  // Usage tracking
+  hitCount  Int       @default(0) // Number of cache hits
+  lastHitAt DateTime? // Last time this entry was used
+
+  // Token tracking (for cost estimation)
+  inputTokens  Int?
+  outputTokens Int?
+
+  // Expiration
+  expiresAt DateTime // When this cache entry expires
+
+  // Metadata
+  createdAt DateTime @default(now())
+
+  @@index([inputHash])
+  @@index([model])
+  @@index([taskType])
+  @@index([expiresAt])
+  @@index([lastHitAt])
+  @@map("llm_cache")
+}
+
+// ============================================================================
+// JARVIS LAYER - Cross-Feature Entity Linking
+// ============================================================================
+
+// Links between entities across different features (documents, cases, vault, research)
+// Enables bidirectional navigation and unified context awareness
+model EntityLink {
+  id     String @id @default(cuid())
+  userId String
+
+  // Source entity
+  sourceType String // "document", "case", "vault_item", "research", "research_summary"
+  sourceId   String
+
+  // Target entity
+  targetType String // "document", "case", "vault_item", "research", "research_summary"
+  targetId   String
+
+  // Link classification
+  linkType String // "contains", "references", "derived_from", "related_to", "attached_to"
+
+  // Auto-detection metadata
+  isAutoGenerated Boolean @default(false) // True if system detected, false if user created
+  confidence      Float? // 0-1 confidence score for auto-detected links
+  detectedBy      String? // Which service/algorithm detected this link
+
+  // Optional context
+  context String? // JSON: additional context about the relationship
+
+  // Metadata
+  createdAt DateTime @default(now())
+  createdBy String? // User who created manual link, null for auto-generated
+
+  @@unique([userId, sourceType, sourceId, targetType, targetId, linkType])
+  @@index([userId])
+  @@index([sourceType, sourceId])
+  @@index([targetType, targetId])
+  @@index([linkType])
+  @@map("entity_links")
+}
+
+// ============================================================================
+// JARVIS LAYER - Local Integrations (Air-gapped deployment)
+// ============================================================================
+
+// Configuration for local/on-premise integrations
+model LocalIntegration {
+  id             String  @id @default(cuid())
+  organizationId String?
+
+  // Integration type
+  type String // "exchange", "ldap", "sharepoint", "scanner", "file_share"
+
+  // Configuration (encrypted JSON)
+  config  String // Encrypted JSON with connection details
+  enabled Boolean @default(false)
+
+  // Connection status
+  status     String    @default("disconnected") // "connected", "disconnected", "error"
+  lastSyncAt DateTime?
+  lastError  String?
+  errorCount Int       @default(0)
+
+  // Sync settings
+  syncInterval Int     @default(3600000) // Default 1 hour in ms
+  autoSync     Boolean @default(true)
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, type])
+  @@index([organizationId])
+  @@index([type])
+  @@index([enabled])
+  @@map("local_integrations")
+}
+
+// ============================================================================
+// JARVIS LAYER - Sync Queue (Offline-First Operations)
+// ============================================================================
+
+// Queue for operations that need to sync when internet is available
+model SyncQueueItem {
+  id             String  @id @default(cuid())
+  userId         String
+  organizationId String?
+
+  // Operation details
+  operation String // "push_update", "fetch_cases", "sync_calendar", "send_notification"
+  payload   String // JSON payload for the operation
+
+  // Priority and ordering
+  priority  Int      @default(0) // Higher = more urgent
+  createdAt DateTime @default(now())
+
+  // Status
+  status      String    @default("pending") // "pending", "processing", "completed", "failed"
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(3)
+  lastAttempt DateTime?
+  lastError   String?
+  completedAt DateTime?
+
+  // Target endpoint (for external syncs)
+  endpoint String?
+
+  @@index([userId])
+  @@index([organizationId])
+  @@index([status])
+  @@index([priority])
+  @@index([createdAt])
+  @@map("sync_queue_items")
+}
+
+// ============================================================================
+// DMS INTEGRATION (iManage, NetDocuments)
+// ============================================================================
+
+model DmsIntegration {
+  id             String       @id @default(cuid())
+  organizationId String       @unique
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Provider configuration
+  provider String  @default("imanage") // "imanage", "netdocuments"
+  enabled  Boolean @default(false)
+
+  // Connection details (encrypted)
+  serverUrl       String? // "https://cloudimanage.com/api"
+  clientId        String?
+  clientSecretEnc String? // Encrypted
+  tenant          String? // For multi-tenant setups
+
+  // OAuth tokens (encrypted)
+  accessTokenEnc  String?
+  refreshTokenEnc String?
+  tokenExpiresAt  DateTime?
+
+  // Sync configuration
+  syncDirection        String  @default("bidirectional") // "bidirectional", "import_only", "export_only"
+  autoSync             Boolean @default(true)
+  syncFrequencyMinutes Int     @default(15)
+
+  // Workspace mapping
+  defaultWorkspaceId String? // Default DMS workspace for new documents
+  workspaceMappings  String? // JSON: {"caseId": "dmsWorkspaceId"}
+
+  // Status
+  status        String    @default("disconnected") // "connected", "disconnected", "error"
+  lastSyncAt    DateTime?
+  lastSyncError String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  documentLinks DocumentDmsLink[]
+
+  @@map("dms_integrations")
+}
+
+model DocumentDmsLink {
+  id         String   @id @default(cuid())
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  // DMS reference
+  dmsProvider   String // "imanage", "netdocuments"
+  dmsDocumentId String // Document ID in DMS
+  dmsPath       String? // Full path in DMS
+  dmsVersion    String? // DMS version number
+
+  // Integration reference
+  dmsIntegrationId String?
+  dmsIntegration   DmsIntegration? @relation(fields: [dmsIntegrationId], references: [id])
+
+  // Sync status
+  syncStatus    String    @default("synced") // "synced", "pending_push", "pending_pull", "conflict"
+  lastSyncAt    DateTime?
+  localChecksum String? // For conflict detection
+  dmsChecksum   String?
+
+  // Metadata from DMS
+  dmsMetadata String? // JSON: custom fields, folder hierarchy, etc.
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([documentId])
+  @@unique([dmsProvider, dmsDocumentId])
+  @@index([dmsIntegrationId])
+  @@map("document_dms_links")
+}
+
+// DMS workspace-to-case mappings
+model DmsWorkspaceMapping {
+  id             String @id @default(cuid())
+  organizationId String
+
+  // DMS workspace details
+  dmsWorkspaceId   String
+  dmsWorkspaceName String
+  dmsWorkspacePath String?
+
+  // LexVault case
+  caseId String?
+  case   Case?   @relation(fields: [caseId], references: [id], onDelete: SetNull)
+
+  // Sync configuration
+  syncEnabled Boolean @default(true)
+  syncFilters String? // JSON: file type filters, folder inclusions/exclusions
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, dmsWorkspaceId])
+  @@index([caseId])
+  @@map("dms_workspace_mappings")
+}
+
+// ============================================================================
+// BILLING SYSTEM INTEGRATION (Elite 3E, Aderant)
+// ============================================================================
+
+model BillingSystemIntegration {
+  id             String       @id @default(cuid())
+  organizationId String       @unique
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Provider configuration
+  provider String  @default("elite3e") // "elite3e", "aderant", "clio", "custom"
+  enabled  Boolean @default(false)
+
+  // Connection details (encrypted)
+  serverUrl       String?
+  apiKeyEnc       String? // Encrypted API key
+  clientIdEnc     String?
+  clientSecretEnc String?
+
+  // OAuth tokens (encrypted, if applicable)
+  accessTokenEnc  String?
+  refreshTokenEnc String?
+  tokenExpiresAt  DateTime?
+
+  // Sync configuration
+  syncMatters     Boolean @default(true) // Sync matter data
+  syncTimeEntries Boolean @default(true) // Push time entries
+  syncExpenses    Boolean @default(false) // Push expenses
+  syncInvoices    Boolean @default(false) // Pull invoice data
+
+  // Default mappings
+  defaultTimekeeperCode String? // Default timekeeper for auto-entries
+  defaultTaskCode       String? // Default task code
+
+  // Status
+  status        String    @default("disconnected")
+  lastSyncAt    DateTime?
+  lastSyncError String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  matterLinks MatterBillingLink[]
+  timeEntries TimeEntry[]
+
+  @@map("billing_system_integrations")
+}
+
+model MatterBillingLink {
+  id     String @id @default(cuid())
+  caseId String @unique
+  case   Case   @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  // Billing system reference
+  billingProvider String // "elite3e", "aderant"
+  billingMatterId String // Matter ID in billing system
+  matterNumber    String? // Display matter number
+  clientNumber    String? // Client number
+
+  // Integration reference
+  billingIntegrationId String?
+  billingIntegration   BillingSystemIntegration? @relation(fields: [billingIntegrationId], references: [id])
+
+  // Sync status
+  syncStatus String    @default("synced")
+  lastSyncAt DateTime?
+
+  // Billing metadata from external system
+  billingMetadata String? // JSON: rates, budgets, billing instructions
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([billingProvider, billingMatterId])
+  @@index([billingIntegrationId])
+  @@map("matter_billing_links")
+}
+
+model TimeEntry {
+  id             String       @id @default(cuid())
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Case linkage (optional)
+  caseId String?
+  case   Case?   @relation(fields: [caseId], references: [id], onDelete: SetNull)
+
+  // Time entry details
+  date        DateTime
+  hours       Float
+  description String
+  narrative   String? // Longer narrative for billing
+
+  // Billing codes
+  taskCode    String? // Task/activity code
+  phaseCode   String? // Phase code
+  expenseCode String? // If this is an expense entry
+
+  // Rates (can be overridden per entry)
+  hourlyRate Float?
+  amount     Float? // hours * rate, or fixed amount
+
+  // Status workflow
+  status String @default("draft") // "draft", "submitted", "approved", "rejected", "posted"
+
+  // Billing integration
+  billingIntegrationId String?
+  billingIntegration   BillingSystemIntegration? @relation(fields: [billingIntegrationId], references: [id])
+  billingEntryId       String? // ID in external billing system
+  syncStatus           String                    @default("pending") // "pending", "synced", "error"
+  syncError            String?
+
+  // Source tracking (how was this entry created?)
+  source String @default("manual") // "manual", "ai_suggested", "document_analysis", "timer"
+
+  // Document reference (if time spent on specific document)
+  documentId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([organizationId])
+  @@index([caseId])
+  @@index([date])
+  @@index([status])
+  @@index([billingIntegrationId])
+  @@map("time_entries")
+}
+
+// ============================================================================
+// MULTI-OFFICE DEPLOYMENT (Phase 4)
+// ============================================================================
+
+// Physical office locations within an organization
+model Office {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Office details
+  name     String // "New York", "London", "Vienna"
+  code     String // "NYC", "LON", "VIE"
+  timezone String @default("UTC") // IANA timezone
+
+  // Address (optional)
+  address   String?
+  city      String?
+  country   String?
+  latitude  Float?
+  longitude Float?
+
+  // Office configuration
+  isPrimary     Boolean @default(false) // Is this the headquarters?
+  isActive      Boolean @default(true)
+  jurisdictions String? // JSON: ["US", "NY"] - applicable jurisdictions
+
+  // Server assignment
+  serverNodes ServerNode[]
+
+  // Sync settings for this office
+  syncEnabled  Boolean   @default(true)
+  lastSyncAt   DateTime?
+  syncPriority Int       @default(0) // Higher = syncs first
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+  @@index([isPrimary])
+  @@map("offices")
+}
+
+// Server nodes in a distributed deployment
+model ServerNode {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  officeId       String?
+  office         Office?      @relation(fields: [officeId], references: [id], onDelete: SetNull)
+
+  // Node identification
+  nodeId   String  @unique // UUID generated at node installation
+  hostname String
+  version  String? // LexVault version installed
+
+  // Network configuration
+  internalUrl String // http://lexvault-node1.internal:8000
+  externalUrl String? // Optional external URL
+  publicKey   String? // For encrypted node-to-node communication
+
+  // Node role
+  isLeader        Boolean @default(false) // Is this the leader node?
+  canAcceptWrites Boolean @default(true) // Can accept write operations?
+
+  // Health monitoring
+  status         String    @default("offline") // "online", "offline", "degraded", "maintenance"
+  lastHeartbeat  DateTime?
+  cpuUsage       Float? // Last reported CPU %
+  memoryUsage    Float? // Last reported memory %
+  diskUsage      Float? // Last reported disk %
+  activeRequests Int? // Current active requests
+
+  // Sync state
+  lastSyncedVersion Int       @default(0) // Logical clock for sync
+  lastFullSyncAt    DateTime?
+  pendingChanges    Int       @default(0)
+
+  // Outgoing sync operations
+  outgoingSyncs SyncOperation[] @relation("SourceNode")
+  incomingSyncs SyncOperation[] @relation("TargetNode")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([officeId])
+  @@index([status])
+  @@index([isLeader])
+  @@map("server_nodes")
+}
+
+// Cross-node data synchronization operations
+model SyncOperation {
+  id String @id @default(cuid())
+
+  sourceNodeId String
+  sourceNode   ServerNode @relation("SourceNode", fields: [sourceNodeId], references: [id], onDelete: Cascade)
+  targetNodeId String
+  targetNode   ServerNode @relation("TargetNode", fields: [targetNodeId], references: [id], onDelete: Cascade)
+
+  // Operation details
+  operationType String // "full", "incremental", "selective"
+  dataTypes     String // JSON: ["documents", "cases", "users", "rag_chunks"]
+  fromVersion   Int // Starting logical clock
+  toVersion     Int // Ending logical clock
+
+  // Status
+  status       String  @default("pending") // "pending", "running", "completed", "failed", "cancelled"
+  progress     Float   @default(0) // 0-100
+  errorMessage String?
+
+  // Statistics
+  recordsTotal     Int @default(0)
+  recordsSynced    Int @default(0)
+  recordsFailed    Int @default(0)
+  bytesTransferred Int @default(0)
+
+  // Timing
+  scheduledAt DateTime?
+  startedAt   DateTime?
+  completedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([sourceNodeId])
+  @@index([targetNodeId])
+  @@index([status])
+  @@index([scheduledAt])
+  @@map("sync_operations")
+}
+
+// Conflict resolution for multi-office sync
+model SyncConflict {
+  id String @id @default(cuid())
+
+  syncOperationId String
+
+  // Conflict details
+  entityType String // "document", "case", "user", etc.
+  entityId   String
+  fieldName  String
+
+  // Competing values
+  sourceValue   String
+  targetValue   String
+  sourceVersion Int
+  targetVersion Int
+
+  // Resolution
+  resolvedBy    String? // User ID or "auto"
+  resolvedValue String?
+  resolvedAt    DateTime?
+  resolution    String? // "source_wins", "target_wins", "merge", "manual"
+
+  createdAt DateTime @default(now())
+
+  @@index([syncOperationId])
+  @@index([resolvedAt])
+  @@map("sync_conflicts")
+}
+
+// Node registry for leader election and discovery
+model NodeRegistry {
+  id             String       @id @default(cuid())
+  organizationId String       @unique
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Current leader
+  currentLeaderId String?
+  leaderElectedAt DateTime?
+  leaderTerm      Int       @default(0) // Raft-style term number
+
+  // Discovery settings
+  discoveryMethod String  @default("manual") // "manual", "dns", "etcd"
+  discoveryConfig String? // JSON configuration
+
+  // Sync settings
+  syncStrategy     String @default("eventual") // "eventual", "strong", "hybrid"
+  conflictStrategy String @default("last_write_wins") // "last_write_wins", "source_wins", "manual"
+  syncIntervalSec  Int    @default(300) // 5 minutes default
+
+  // Global version clock
+  globalVersion Int @default(0)
+
+  updatedAt DateTime @updatedAt
+
+  @@map("node_registry")
+}
+
+// ============================================================================
+// LICENSE & PRICING SYSTEM
+// ============================================================================
+
+// Organization license - what they paid for
+model License {
+  id             String       @id @default(cuid())
+  organizationId String       @unique
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // License identification
+  licenseKey  String @unique // LC-2026-ENT-00042
+  licenseType String // "trial", "standard", "professional", "enterprise"
+
+  // Validity
+  validFrom  DateTime
+  validUntil DateTime
+  isActive   Boolean  @default(true)
+
+  // Platform features (JSON for flexibility)
+  // { "multiOffice": true, "dmsIntegration": true, "billingIntegration": true, "apiAccess": true }
+  features String @default("{}")
+
+  // Cryptographic verification
+  signature   String // RSA signature of license payload
+  publicKeyId String // Which public key to verify with
+
+  // Offline tracking
+  lastVerifiedAt   DateTime?
+  offlineGraceDays Int       @default(30) // Days to run without verification
+
+  // Data entitlements (what RAG data they have)
+  dataEntitlements DataEntitlement[]
+
+  // Usage tracking
+  usageRecords LicenseUsageRecord[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([licenseKey])
+  @@index([validUntil])
+  @@map("licenses")
+}
+
+// What data sets they're licensed for
+model DataEntitlement {
+  id        String  @id @default(cuid())
+  licenseId String
+  license   License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  // Data identification
+  dataType    String // "jurisdiction", "case_law", "statutes", "commentary", "forms"
+  dataCode    String // "AT", "SK", "EU", "CN", "US-CA", etc.
+  dataVersion String? // "2026-01" - which build version
+
+  // Scope within the data type
+  // For jurisdictions: { "courts": ["OGH", "VfGH"], "dateFrom": "2020-01-01" }
+  scope String? // JSON
+
+  // Pricing (calculated at quote time, stored for reference)
+  priceAtPurchase Float?
+  pricingFactors  String? // JSON: factors used in calculation
+
+  // Update entitlement
+  includesUpdates Boolean   @default(true)
+  updateFrequency String    @default("monthly") // "monthly", "quarterly", "annual"
+  updatesUntil    DateTime?
+
+  // Delivery tracking
+  lastDeliveredVersion String?
+  lastDeliveredAt      DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@unique([licenseId, dataType, dataCode])
+  @@index([dataCode])
+  @@map("data_entitlements")
+}
+
+// Pricing formula configuration (for quoting, not enforcement)
+model PricingFormula {
+  id String @id @default(cuid())
+
+  // What this formula applies to
+  dataType String // "jurisdiction", "case_law", etc.
+  dataCode String? // Specific code, or null for default
+
+  // Base price
+  basePrice Float // Starting price in EUR
+
+  // Multipliers (JSON array of factors)
+  // [
+  //   { "factor": "volume", "formula": "log10(chunks) * 0.001" },
+  //   { "factor": "updateFrequency", "values": { "monthly": 1.0, "quarterly": 0.7 } },
+  //   { "factor": "historicalDepth", "formula": "years * 0.1" },
+  //   { "factor": "complexity", "values": { "common_law": 1.2, "civil_law": 1.0 } }
+  // ]
+  multipliers String @default("[]")
+
+  // Constraints
+  minPrice Float  @default(0)
+  maxPrice Float?
+
+  // Validity
+  validFrom  DateTime  @default(now())
+  validUntil DateTime?
+  isActive   Boolean   @default(true)
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([dataType, dataCode, validFrom])
+  @@map("pricing_formulas")
+}
+
+// Track usage for billing reconciliation (offline-capable)
+model LicenseUsageRecord {
+  id        String  @id @default(cuid())
+  licenseId String
+  license   License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  // What was used
+  usageType String // "rag_query", "document_analysis", "ai_chat", "export"
+  usageDate DateTime @default(now())
+
+  // Context
+  userId   String?
+  dataCode String? // Which jurisdiction/data was queried
+
+  // Metrics
+  count         Int  @default(1)
+  tokensUsed    Int? // For AI operations
+  chunksQueried Int? // For RAG operations
+
+  // For offline sync
+  syncedAt DateTime?
+
+  @@index([licenseId, usageDate])
+  @@index([usageType])
+  @@map("license_usage_records")
+}
+
+// Available data catalog (what we can sell)
+model DataCatalog {
+  id String @id @default(cuid())
+
+  // Identification
+  dataType String // "jurisdiction", "case_law", "statutes"
+  dataCode String // "AT", "SK", "CN", "US-CA"
+
+  // Display info
+  name        String // "Austrian Law"
+  description String?
+
+  // Content metadata
+  chunkCount      Int       @default(0)
+  lastUpdated     DateTime?
+  updateFrequency String    @default("monthly")
+
+  // Coverage details (JSON)
+  // { "courts": ["OGH", "VfGH", "BVwG"], "dateRange": "1990-present", "languages": ["de"] }
+  coverage String @default("{}")
+
+  // Pricing hint (actual price calculated by formula)
+  complexityTier String @default("standard") // "simple", "standard", "complex"
+
+  // Availability
+  isAvailable Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([dataType, dataCode])
+  @@map("data_catalog")
+}
+
+// ============================================================================
+// DOCUMENT RESEARCH (Mike Ross Features)
+// ============================================================================
+
+// Dig Deep Mode - conversational research on user's documents
+model DocumentResearchSession {
+  id          String  @id @default(cuid())
+  userId      String
+  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  documentIds String // JSON array of document IDs in scope
+  title       String?
+  status      String  @default("active") // "active", "archived"
+
+  // Context tracking
+  focusedClause   String? // Last clause being discussed
+  mentionedTopics String? // JSON array of topics mentioned
+
+  // Messages
+  messages DocumentResearchMessage[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@map("document_research_sessions")
+}
+
+// Messages within a Dig Deep session
+model DocumentResearchMessage {
+  id        String                  @id @default(cuid())
+  sessionId String
+  session   DocumentResearchSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role      String // "user" or "assistant"
+  content   String
+
+  // Reference tracking
+  referencedDocs    String? // JSON array of doc IDs cited in response
+  referencedClauses String? // JSON array of clause excerpts cited
+
+  createdAt DateTime @default(now())
+
+  @@index([sessionId])
+  @@map("document_research_messages")
+}
+
+// Cross-Reference Search results
+model CrossReferenceReport {
+  id          String  @id @default(cuid())
+  userId      String
+  searchTerm  String
+  documentIds String? // JSON array of doc IDs searched (null = all)
+
+  // Results
+  matrix  String // JSON: { documents: [...], comparison: {...} }
+  summary String? // AI-generated summary
+
+  createdAt DateTime @default(now())
+  User      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([searchTerm])
+  @@map("cross_reference_reports")
+}
+
+// Contradiction Finder scan results
+model ContradictionScan {
+  id          String @id @default(cuid())
+  userId      String
+  documentIds String // JSON array of document IDs scanned
+
+  // Results
+  contradictions String // JSON array of contradictions found
+  summary        String? // AI-generated summary
+  status         String  @default("pending") // "pending", "processing", "complete", "failed"
+
+  createdAt DateTime @default(now())
+  User      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([status])
+  @@map("contradiction_scans")
+}
+
+// ============================================================================
+// M&A DUE DILIGENCE
+// ============================================================================
+
+model Deal {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Deal configuration
+  name        String
+  description String?
+  perspective String @default("buyer") // "buyer", "seller", "target"
+  dealType    String @default("asset_purchase") // "asset_purchase", "share_purchase", "merger", "joint_venture"
+  industry        String? // free-text, e.g. "Brewing / Beverages", "Yacht Charter", "Semiconductor Fab"
+  industryProfile String? // JSON: LLM-generated { riskAreas, keyAssets, regulatoryBodies, industryLabel }
+
+  // Status
+  status String @default("created") // "created", "ingesting", "classifying", "plan_review", "analyzing", "rag_verifying", "risk_review", "synthesizing", "playbook_pending", "reporting", "completed", "paused", "failed"
+
+  // Aggregated results (populated during SYNTHESIZE)
+  riskSummary      String? // JSON: { dealBreaker: N, priceAffecting: N, standard: N, informational: N }
+  executiveSummary String?
+  warrantyCoverage String? // JSON: heatmap summary
+  disclosureGaps   String? // JSON: gaps summary
+  wniReadiness     String? // JSON: insurability assessment
+
+  // Timing
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  completedAt DateTime?
+
+  // Relations
+  parties     DealParty[]
+  documents   DealDocument[]
+  risks       DealRisk[]
+  warranties  DealWarranty[]
+  disclosures DealDisclosure[]
+  checkpoints DealCheckpoint[]
+  job         DealJob?
+  auditEvents DealAuditEvent[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("deals")
+}
+
+model DealParty {
+  id     String @id @default(cuid())
+  dealId String
+  deal   Deal   @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  name         String
+  role         String // "buyer", "seller", "target", "guarantor", "advisor"
+  jurisdiction String // ISO country code
+
+  // Optional details
+  entityType   String? // "corporation", "llc", "partnership", "individual"
+  registeredIn String? // Jurisdiction of incorporation
+  notes        String?
+
+  createdAt DateTime @default(now())
+
+  @@index([dealId])
+  @@map("deal_parties")
+}
+
+model DealDocument {
+  id     String @id @default(cuid())
+  dealId String
+  deal   Deal   @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  // File info
+  filename     String
+  filepath     String
+  filesize     Int
+  mimetype     String
+
+  // Classification (Stage 1)
+  docType      String? // "spa", "disclosure_letter", "financial_statement", "corporate_docs", "regulatory", "ip_schedule", "employment", "real_estate", "tax", "insurance", "litigation", "environmental", "other"
+  jurisdiction String?
+  language     String?
+  confidence   Float?   // Classification confidence 0-1
+
+  // Parsing (Stage 0)
+  extractedText String? // Full extracted text
+  textLength    Int     @default(0)
+  pageCount     Int     @default(0)
+
+  // Processing status
+  status String @default("uploaded") // "uploaded", "parsing", "parsed", "classifying", "classified", "analyzing", "analyzed", "failed"
+
+  // Party assignment
+  partyId String? // Which party this doc belongs to
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  sections DealDocumentSection[]
+
+  @@index([dealId])
+  @@index([status])
+  @@map("deal_documents")
+}
+
+model DealDocumentSection {
+  id         String       @id @default(cuid())
+  documentId String
+  document   DealDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  // Section info
+  sectionIndex Int    // Order within document
+  content      String // ~5K chars
+  heading      String? // Detected heading
+  pageNumber   Int?    // Starting page
+
+  // Analysis result (Stage 3)
+  analysisResult String? // JSON: { clauses: [], risks: [], warranties: [], dates: [] }
+  analyzed       Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([documentId])
+  @@index([analyzed])
+  @@map("deal_document_sections")
+}
+
+model DealRisk {
+  id     String @id @default(cuid())
+  dealId String
+  deal   Deal   @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  // Risk details
+  title        String
+  description  String
+  severity     String // "deal_breaker", "price_affecting", "standard", "informational"
+  category     String // "financial", "legal", "regulatory", "operational", "environmental", "tax", "employment", "ip", "litigation", "compliance"
+  jurisdiction String?
+
+  // Source
+  documentId   String?
+  sectionId    String?
+  location     String? // e.g. "Section 4.2, Page 3"
+  clauseText   String? // Relevant clause excerpt
+
+  // RAG verification (Stage 4)
+  verified       Boolean @default(false)
+  statutoryBasis String? // Statute citation from RAG
+  ragSources     String? // JSON: array of source documents used
+  verifiedAt     DateTime?
+
+  // Human override
+  humanOverride         Boolean @default(false)
+  humanSeverity         String? // Overridden severity
+  humanNotes            String?
+  humanOverrideAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([dealId])
+  @@index([severity])
+  @@index([verified])
+  @@map("deal_risks")
+}
+
+model DealWarranty {
+  id     String @id @default(cuid())
+  dealId String
+  deal   Deal   @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  // Warranty details
+  name        String
+  clauseText  String
+  documentId  String?
+  location    String?
+
+  // Heatmap scores (0-100, Stage 5)
+  breadthScore    Int? // How broadly drafted
+  disclosureScore Int? // Quality of disclosure against it
+  exposureScore   Int? // Financial exposure estimate
+  wniScore        Int? // Insurability score
+
+  // Playbook (Stage 6, on-demand)
+  playbookPositions String? // JSON: [{ position, rationale, statutoryRef }]
+  redlineText       String? // Suggested redline
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([dealId])
+  @@map("deal_warranties")
+}
+
+model DealDisclosure {
+  id     String @id @default(cuid())
+  dealId String
+  deal   Deal   @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  // Disclosure details
+  warrantyName String  // Which warranty this discloses against
+  content      String
+  documentId   String?
+  location     String?
+
+  // Assessment (Stage 5)
+  status     String  @default("pending") // "adequate", "partial", "missing", "general", "pending"
+  assessment String? // LLM assessment notes
+
+  createdAt DateTime @default(now())
+
+  @@index([dealId])
+  @@index([status])
+  @@map("deal_disclosures")
+}
+
+model DealCheckpoint {
+  id     String @id @default(cuid())
+  dealId String
+  deal   Deal   @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  // Checkpoint details
+  stage    String // "plan_review", "risk_review", "playbook_review", "counsel_signoff"
+  status   String @default("pending") // "pending", "approved", "rejected"
+  proposal String? // JSON: data for reviewer to see
+
+  // Review
+  reviewedBy  String?
+  reviewedAt  DateTime?
+  feedback    String? // Reviewer notes
+
+  createdAt DateTime @default(now())
+
+  @@index([dealId])
+  @@index([stage])
+  @@index([status])
+  @@map("deal_checkpoints")
+}
+
+model DealJob {
+  id     String @id @default(cuid())
+  dealId String @unique
+  deal   Deal   @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  // Pipeline state
+  currentStage  String @default("classify") // Current pipeline stage
+  stageProgress String @default("{}") // JSON: { completedItems: [], totalItems: N }
+
+  // Stats
+  totalLLMCalls  Int @default(0)
+  totalTokens    Int @default(0)
+  totalDurationMs Int @default(0)
+
+  // Timing
+  startedAt   DateTime?
+  pausedAt    DateTime?
+  completedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([dealId])
+  @@map("deal_jobs")
+}
+
+model DealAuditEvent {
+  id     String @id @default(cuid())
+  dealId String
+  deal   Deal   @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  // Event details
+  stage     String // Pipeline stage
+  eventType String // "stage_start", "stage_complete", "doc_classified", "risk_found", "error", etc.
+  detail    String? // JSON: event-specific data
+
+  // Token tracking
+  inputTokens  Int @default(0)
+  outputTokens Int @default(0)
+  durationMs   Int @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@index([dealId])
+  @@index([stage])
+  @@index([eventType])
+  @@index([createdAt])
+  @@map("deal_audit_events")
+}

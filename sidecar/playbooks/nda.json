@@ -1,0 +1,17 @@
+{
+  "title": "NDA / confidentiality agreement",
+  "version": "1.0",
+  "license": "Apache-2.0",
+  "checks": [
+    { "id": "parties_direction", "question": "Is the NDA one-way or mutual, and who is the disclosing and the receiving party?", "severity": "medium" },
+    { "id": "definition", "question": "How is 'Confidential Information' defined? Does it cover oral and visual information, and is marking required?", "severity": "high" },
+    { "id": "exclusions", "question": "Which standard exclusions apply (public domain, already known, independently developed, received from a third party, legally required disclosure)?", "severity": "medium" },
+    { "id": "purpose", "question": "Is the use of the information limited to a defined purpose?", "severity": "high" },
+    { "id": "recipients", "question": "To whom may the information be passed on (employees, advisers, affiliates), and is the recipient liable for them?", "severity": "medium" },
+    { "id": "term", "question": "How long do the confidentiality obligations last, including after termination?", "severity": "high" },
+    { "id": "return_destruction", "question": "Must information be returned or destroyed, and are backup copies excepted?", "severity": "low" },
+    { "id": "penalty", "question": "Is there a contractual penalty or liquidated damages for breach, and at what amount?", "severity": "high" },
+    { "id": "non_solicit", "question": "Does the NDA contain non-solicitation or non-compete obligations?", "severity": "high" },
+    { "id": "law_forum", "question": "Which law governs and which courts or arbitration have jurisdiction?", "severity": "medium" }
+  ]
+}

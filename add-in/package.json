@@ -1,0 +1,6 @@
+{
+  "name": "lexvault-word-addin",
+  "version": "0.1.0",
+  "description": "LexVault Word add-in — airgapped legal drafting agent. Task pane + sidecar.",
+  "private": true
+}

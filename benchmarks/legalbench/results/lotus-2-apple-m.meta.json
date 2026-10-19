@@ -1,0 +1,7 @@
+{
+  "model": "Lotus 2 (lotus-2-reasoning, Q4_K_M, 4B)",
+  "kind": "local",
+  "runtime": "llama.cpp b11560, Metal",
+  "hardware": "Apple M-series, 8 GB",
+  "date": "2026-10-12"
+}

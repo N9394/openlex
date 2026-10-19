@@ -1,0 +1,11 @@
+node_modules/
+dist/
+**/bin/*
+!sidecar/bin/openlex.js
+*.gguf
+*.lvpack
+certs/*.pem
+*.log
+.DS_Store
+.env*
+desktop/electron/resources/

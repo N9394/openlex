@@ -1,0 +1,28 @@
+{
+  "name": "openlex-sidecar",
+  "version": "0.2.0",
+  "description": "OpenLex local agent engine for legal work (Word add-in, desktop app, CLI)",
+  "license": "Apache-2.0",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test test/"
+  },
+  "dependencies": {
+    "hyparquet": "^1.18.0",
+    "hyparquet-compressors": "^1.1.1",
+    "pdfjs-dist": "^4.10.38",
+    "playwright-core": "^1.64.0"
+  },
+  "optionalDependencies": {
+    "@huggingface/transformers": "^4.2.0",
+    "better-sqlite3": "^11.0.0",
+    "onnxruntime-node": "^1.27.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "openlex": "bin/openlex.js"
+  }
+}

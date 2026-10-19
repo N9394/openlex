@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<OfficeApp
+  xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0"
+  xmlns:ov="http://schemas.microsoft.com/office/taskpaneappversionoverrides"
+  xsi:type="TaskPaneApp">
+
+  <Id>dd11622e-f4c7-49d4-8225-ffac4140f072</Id>
+  <Version>0.1.0.0</Version>
+  <ProviderName>OpenLex</ProviderName>
+  <DefaultLocale>en-US</DefaultLocale>
+  <DisplayName DefaultValue="OpenLex" />
+  <Description DefaultValue="Airgapped legal drafting agent — analyzes the open document against downloaded law packs and suggests changes as comments. Nothing leaves your machine." />
+  <IconUrl DefaultValue="https://localhost:18001/assets/icon-32.png" />
+  <HighResolutionIconUrl DefaultValue="https://localhost:18001/assets/icon-80.png" />
+  <SupportUrl DefaultValue="https://lexvault.pinemarshlands.com" />
+
+  <AppDomains>
+    <AppDomain>https://localhost:18001</AppDomain>
+  </AppDomains>
+
+  <Hosts>
+    <Host Name="Document" />
+  </Hosts>
+
+  <DefaultSettings>
+    <SourceLocation DefaultValue="https://localhost:18001/taskpane.html" />
+  </DefaultSettings>
+
+  <Permissions>ReadWriteDocument</Permissions>
+
+  <VersionOverrides xmlns="http://schemas.microsoft.com/office/taskpaneappversionoverrides" xsi:type="VersionOverridesV1_0">
+    <Hosts>
+      <Host xsi:type="Document">
+        <DesktopFormFactor>
+          <GetStarted>
+            <Title resid="GetStarted.Title" />
+            <Description resid="GetStarted.Description" />
+            <LearnMoreUrl resid="GetStarted.LearnMoreUrl" />
+          </GetStarted>
+
+          <FunctionFile resid="Commands.Url" />
+
+          <ExtensionPoint xsi:type="PrimaryCommandSurface">
+            <OfficeTab id="TabHome">
+              <Group id="LexVault.Group">
+                <Label resid="Group.Label" />
+                <Icon>
+                  <bt:Image size="16" resid="Icon.16" />
+                  <bt:Image size="32" resid="Icon.32" />
+                  <bt:Image size="80" resid="Icon.80" />
+                </Icon>
+                <Control xsi:type="Button" id="LexVault.OpenPane">
+                  <Label resid="OpenPane.Label" />
+                  <Supertip>
+                    <Title resid="OpenPane.Label" />
+                    <Description resid="OpenPane.Tooltip" />
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon.16" />
+                    <bt:Image size="32" resid="Icon.32" />
+                    <bt:Image size="80" resid="Icon.80" />
+                  </Icon>
+                  <Action xsi:type="ShowTaskpane">
+                    <TaskpaneId>LexVault.Taskpane</TaskpaneId>
+                    <SourceLocation resid="Taskpane.Url" />
+                  </Action>
+                </Control>
+                <Control xsi:type="Button" id="LexVault.AnalyzeDoc">
+                  <Label resid="Analyze.Label" />
+                  <Supertip>
+                    <Title resid="Analyze.Label" />
+                    <Description resid="Analyze.Tooltip" />
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon.16" />
+                    <bt:Image size="32" resid="Icon.32" />
+                    <bt:Image size="80" resid="Icon.80" />
+                  </Icon>
+                  <Action xsi:type="ExecuteFunction">
+                    <FunctionName>lexvaultAnalyzeDocument</FunctionName>
+                  </Action>
+                </Control>
+              </Group>
+            </OfficeTab>
+          </ExtensionPoint>
+
+          <ExtensionPoint xsi:type="Documents">
+            <ShowDocumentWarnings>false</ShowDocumentWarnings>
+          </ExtensionPoint>
+        </DesktopFormFactor>
+      </Host>
+    </Hosts>
+
+    <Resources>
+      <bt:Images>
+        <bt:Image id="Icon.16" DefaultValue="https://localhost:18001/assets/icon-16.png" />
+        <bt:Image id="Icon.32" DefaultValue="https://localhost:18001/assets/icon-32.png" />
+        <bt:Image id="Icon.80" DefaultValue="https://localhost:18001/assets/icon-80.png" />
+      </bt:Images>
+      <bt:Urls>
+        <bt:Url id="Commands.Url" DefaultValue="https://localhost:18001/commands.html" />
+        <bt:Url id="Taskpane.Url" DefaultValue="https://localhost:18001/taskpane.html" />
+        <bt:Url id="GetStarted.LearnMoreUrl" DefaultValue="https://lexvault.pinemarshlands.com" />
+      </bt:Urls>
+      <bt:ShortStrings>
+        <bt:String id="GetStarted.Title" DefaultValue="OpenLex is ready" />
+        <bt:String id="Group.Label" DefaultValue="OpenLex" />
+        <bt:String id="OpenPane.Label" DefaultValue="OpenLex Chat" />
+        <bt:String id="Analyze.Label" DefaultValue="Analyze Document" />
+      </bt:ShortStrings>
+      <bt:LongStrings>
+        <bt:String id="GetStarted.Description" DefaultValue="Analyze this document against downloaded law packs. The model runs locally — nothing leaves your machine." />
+        <bt:String id="OpenPane.Tooltip" DefaultValue="Open the OpenLex chat pane — ask questions about this document, get suggestions." />
+        <bt:String id="Analyze.Tooltip" DefaultValue="Run a full clause-by-clause analysis. Suggestions appear as Word comments." />
+      </bt:LongStrings>
+    </Resources>
+  </VersionOverrides>
+</OfficeApp>

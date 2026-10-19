@@ -1,0 +1,193 @@
+{
+  "version": "1.0",
+  "tools": {
+    "search_legal_database": {
+      "type": "function",
+      "function": {
+        "name": "search_legal_database",
+        "description": "Search the legal database for statutes, regulations and case law. ALWAYS use for any legal question. Skip only for greetings or off-topic chat.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "Primary search query in the jurisdiction's legal language"
+            },
+            "query2": {
+              "type": "string",
+              "description": "Formal/statutory term for the same concept, in the jurisdiction language"
+            },
+            "query3": {
+              "type": "string",
+              "description": "Optional: statute name + section if known"
+            }
+          },
+          "required": [
+            "query",
+            "query2"
+          ]
+        }
+      }
+    }
+  },
+  "cases": [
+    {
+      "id": "r_at",
+      "category": "routing",
+      "language": "de",
+      "system": "You are a senior legal research assistant for Austrian (AT) law. MANDATORY: all search queries MUST be in German. Always call the search_legal_database tool with up to 3 queries.",
+      "user": "Voraussetzungen für die Abberufung eines GmbH-Geschäftsführers?",
+      "tools": [
+        "search_legal_database"
+      ]
+    },
+    {
+      "id": "r_sk",
+      "category": "routing",
+      "language": "sk",
+      "system": "You are a senior legal research assistant for Slovak (SK) law. MANDATORY: all search queries MUST be in Slovak. Always call the search_legal_database tool with up to 3 queries.",
+      "user": "Aké sú podmienky založenia spoločnosti s ručením obmedzeným?",
+      "tools": [
+        "search_legal_database"
+      ]
+    },
+    {
+      "id": "r_ro",
+      "category": "routing",
+      "language": "ro",
+      "system": "You are a senior legal research assistant for Romanian (RO) law. MANDATORY: all search queries MUST be in Romanian. Always call the search_legal_database tool with up to 3 queries.",
+      "user": "Care sunt condițiile pentru achiziția de imobile de către persoane juridice?",
+      "tools": [
+        "search_legal_database"
+      ]
+    },
+    {
+      "id": "r_cz",
+      "category": "routing",
+      "language": "cs",
+      "system": "You are a senior legal research assistant for Czech (CZ) law. MANDATORY: all search queries MUST be in Czech. Always call the search_legal_database tool with up to 3 queries.",
+      "user": "Jaké jsou daňové povinnosti právnických osob?",
+      "tools": [
+        "search_legal_database"
+      ]
+    },
+    {
+      "id": "r_us",
+      "category": "routing",
+      "language": "en",
+      "system": "You are a senior legal research assistant for US federal law. MANDATORY: all search queries MUST be in English with precise statutory terms. Always call the search_legal_database tool with up to 3 queries.",
+      "user": "What are the SEC registration requirements for a public offering of securities?",
+      "tools": [
+        "search_legal_database"
+      ]
+    },
+    {
+      "id": "r_uk",
+      "category": "routing",
+      "language": "en",
+      "system": "You are a senior legal research assistant for UK law. MANDATORY: all search queries MUST be in English with precise statutory terms. Always call the search_legal_database tool with up to 3 queries.",
+      "user": "What constitutes unfair dismissal under UK employment law?",
+      "tools": [
+        "search_legal_database"
+      ]
+    },
+    {
+      "id": "a_at",
+      "category": "answer",
+      "language": "de",
+      "system": "You are a legal research assistant for Austrian law. Answer briefly with the governing statute.",
+      "user": "Kann die Generalversammlung einer GmbH den Geschäftsführer abberufen? Antworten Sie kurz."
+    },
+    {
+      "id": "a_sk",
+      "category": "answer",
+      "language": "sk",
+      "system": "You are a legal research assistant for Slovak law. Answer briefly with the governing statute.",
+      "user": "Aký je minimálny základný kapitál pre s.r.o. na Slovensku? Odpovedzte stručne."
+    },
+    {
+      "id": "a_ro",
+      "category": "answer",
+      "language": "ro",
+      "system": "You are a legal research assistant for Romanian law. Answer briefly with the governing statute.",
+      "user": "Pot poate dobândi o persoană juridică un imobil în România? Răspundeți pe scurt."
+    },
+    {
+      "id": "a_cz",
+      "category": "answer",
+      "language": "cs",
+      "system": "You are a legal research assistant for Czech law. Answer briefly with the governing statute.",
+      "user": "Jaká je sazba daně z příjmů právnických osob v ČR? Odpovězte stručně."
+    },
+    {
+      "id": "a_us",
+      "category": "answer",
+      "language": "en",
+      "system": "You are a legal research assistant for US federal law. Answer briefly with the governing statute.",
+      "user": "What is the general registration requirement under the Securities Act of 1933? Answer briefly."
+    },
+    {
+      "id": "a_uk",
+      "category": "answer",
+      "language": "en",
+      "system": "You are a legal research assistant for UK employment law. Answer briefly with the governing statute.",
+      "user": "What is the minimum notice period for an employee with 5 years of service in the UK? Answer briefly."
+    },
+    {
+      "id": "c_en",
+      "category": "clause",
+      "language": "en",
+      "system": "Extract structured data from the clause. Output ONLY JSON: {\"parties\":[\"...\"],\"obligations\":[\"...\"],\"prohibitions\":[\"...\"],\"values\":[\"...\"],\"durations\":[\"...\"]}",
+      "user": "Clause: \"The Lessor shall provide the Premises in good condition. The Lessee shall pay rent of EUR 1,500 per month, due on the 1st of each month, for a term of 24 months. The Lessee shall not sublet the Premises without prior written consent.\""
+    },
+    {
+      "id": "c_de",
+      "category": "clause",
+      "language": "de",
+      "system": "Extrahieren Sie strukturierte Daten aus der Klausel. Geben Sie NUR JSON aus: {\"parties\":[\"...\"],\"obligations\":[\"...\"],\"prohibitions\":[\"...\"],\"values\":[\"...\"],\"durations\":[\"...\"]}",
+      "user": "Klausel: \"Der Vermieter stellt die Räumlichkeiten in gutem Zustand bereit. Der Mieter zahlt eine monatliche Miete von EUR 1.500, fällig am 1. jedes Monats, für eine Laufzeit von 24 Monaten. Der Mieter darf die Räumlichkeiten nicht ohne vorherige schriftliche Zustimmung untervermieten.\""
+    },
+    {
+      "id": "risk1",
+      "category": "risk",
+      "language": "en",
+      "system": "You are a contract lawyer. Identify the most important risk in this clause for the CLIENT (the buyer) and suggest a concrete fix. Two sentences max.",
+      "user": "Buyer shall pay the full purchase price within 5 business days of the Purchase Order, regardless of delivery status. Seller's liability is capped at 10% of the purchase price. Governing law: Seller's home jurisdiction."
+    },
+    {
+      "id": "risk2",
+      "category": "risk",
+      "language": "en",
+      "system": "You are a contract lawyer. Identify the most important risk in this clause for the CLIENT (the employee) and suggest a concrete fix. Two sentences max.",
+      "user": "Employee shall not, during employment and for 5 years after termination, engage in any business activity whatsoever, within any jurisdiction in which the Company operates or may operate."
+    },
+    {
+      "id": "x1",
+      "category": "cross",
+      "language": "de",
+      "system": "You are a legal researcher comparing Austrian and German GmbH law. Answer briefly, naming both statutes.",
+      "user": "Unterscheidet sich die Abberufung eines GmbH-Geschäftsführers in Österreich und Deutschland grundlegend? Antworten Sie kurz."
+    },
+    {
+      "id": "x2",
+      "category": "cross",
+      "language": "en",
+      "system": "You are a legal researcher comparing jurisdictions. Answer briefly.",
+      "user": "Compare minimum share capital for private limited companies in Slovakia (s.r.o.) and the Czech Republic (s.r.o.). Answer briefly."
+    },
+    {
+      "id": "e1",
+      "category": "edge",
+      "language": "en",
+      "system": "You are a legal research assistant. Do NOT call tools for greetings or chit-chat; reply normally.",
+      "user": "Hello! How are you today?"
+    },
+    {
+      "id": "e2",
+      "category": "edge",
+      "language": "en",
+      "system": "You are a legal research assistant. Do NOT call tools for greetings or chit-chat; reply normally.",
+      "user": "Thanks, that was helpful. Have a good weekend!"
+    }
+  ]
+}

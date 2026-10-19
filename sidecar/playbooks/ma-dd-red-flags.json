@@ -1,0 +1,17 @@
+{
+  "title": "M&A due diligence — contract red flags",
+  "version": "1.0",
+  "license": "Apache-2.0",
+  "checks": [
+    { "id": "change_of_control", "question": "Does a change of control or a transfer of shares trigger consent, termination or renegotiation rights?", "severity": "high" },
+    { "id": "assignment", "question": "Can the contract be assigned or transferred (for an asset deal), and is consent required?", "severity": "high" },
+    { "id": "exclusivity_noncompete", "question": "Are there exclusivity, non-compete, most-favoured-customer or minimum purchase obligations that would bind the buyer group?", "severity": "high" },
+    { "id": "term_termination", "question": "When does the contract end, can the counterparty terminate for convenience, and what notice applies?", "severity": "high" },
+    { "id": "liability_uncapped", "question": "Is liability uncapped, or are there indemnities or guarantees given by the target?", "severity": "high" },
+    { "id": "material_value", "question": "What is the contract value or volume, and are there take-or-pay or penalty obligations?", "severity": "medium" },
+    { "id": "ip_ownership", "question": "Who owns IP created under the contract, and are licences to the target terminable or non-transferable?", "severity": "high" },
+    { "id": "data_protection", "question": "Is personal data processed, and is there a compliant data processing agreement?", "severity": "medium" },
+    { "id": "governing_law", "question": "Which law governs and where are disputes resolved?", "severity": "low" },
+    { "id": "litigation", "question": "Does the document mention pending or threatened disputes, claims or breaches?", "severity": "high" }
+  ]
+}

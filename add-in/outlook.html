@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>OpenLex for Outlook</title>
+<script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+<link rel="stylesheet" href="taskpane.css">
+<style>
+  .mail-meta { font-size: 0.72rem; color: var(--text-faint); margin: 0 0 0.5rem; }
+  .mail-out { margin-top: 0.6rem; }
+  .mail-out .md { font-size: 0.82rem; line-height: 1.45; }
+  #mailAsk { width: 100%; box-sizing: border-box; }
+</style>
+</head>
+<body>
+<header class="brandbar">
+  <h1>Open<span class="accent">Lex</span></h1>
+  <div class="status"><span class="badge" id="dataBadge">…</span><span class="dot" id="statusDot"></span><span id="statusText">starting…</span></div>
+</header>
+
+<div class="matterbar">
+  <label for="matterSel" class="matter-label">Matter</label>
+  <select id="matterSel" class="select matter-sel"><option value="">— none —</option></select>
+  <span class="badge" id="matterPolicy"></span>
+</div>
+
+<main>
+  <section class="tabpane active">
+    <div class="mail-meta" id="mailMeta">Reading the message…</div>
+    <div class="btn-row">
+      <button class="btn" id="mailSummary" type="button">Summarise</button>
+      <button class="btn btn-ghost" id="mailReply" type="button">Draft reply</button>
+      <button class="btn btn-ghost" id="mailFile" type="button">File to matter</button>
+    </div>
+    <input type="text" id="mailAsk" placeholder="Ask about this email… (Enter)" style="margin-top:0.5rem">
+    <div class="mail-out card" id="mailOut" style="display:none"><div class="md" id="mailText"></div>
+      <div class="btn-row" id="replyRow" style="display:none"><button class="btn" id="mailUseReply" type="button">Open as reply</button></div>
+    </div>
+    <div class="muted" id="mailMsg" style="font-size:0.72rem;margin-top:0.4rem"></div>
+  </section>
+</main>
+
+<script src="outlook.js"></script>
+</body>
+</html>
