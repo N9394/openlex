@@ -165,6 +165,7 @@ async function main() {
     const ENGINE = path.join(RES, 'engine')
     copyDir(path.join(SIDECAR, 'src'), path.join(ENGINE, 'src'))
     copyDir(path.join(SIDECAR, 'playbooks'), path.join(ENGINE, 'playbooks'))
+    copyDir(path.join(SIDECAR, 'skills'), path.join(ENGINE, 'skills'))
     copyDir(path.join(SIDECAR, 'bin'), path.join(ENGINE, 'bin'), { filter: (n) => n === 'openlex.js' })
     for (const f of ['package.json', 'package-lock.json']) fs.copyFileSync(path.join(SIDECAR, f), path.join(ENGINE, f))
     copyDir(path.resolve(ROOT, '..', '..', 'add-in'), path.join(ENGINE, 'add-in'), { filter: (n) => n !== 'node_modules' })

@@ -191,8 +191,78 @@
     ta.addEventListener('input', autoGrow)
     ta.addEventListener('focus', autoGrow)
     $('#input').addEventListener('keydown', (e) => {
+      if (skillMenuKey(e)) return
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }
     })
+    ta.addEventListener('input', updateSkillMenu)
+    ta.addEventListener('blur', () => setTimeout(hideSkillMenu, 150))
+  }
+
+  // ── Skills: "/" autocomplete in the composer (firm + bundled SKILL.md) ──
+  let skillCache = null
+  let skillPick = 0
+  async function loadSkills() {
+    if (skillCache) return skillCache
+    try { skillCache = (await (await fetch(SIDECAR + '/api/skills')).json()).skills.filter((s) => !s.error) } catch { skillCache = [] }
+    setTimeout(() => { skillCache = null }, 60000) // pick up new firm skills
+    return skillCache
+  }
+  function skillMatches() {
+    const m = $('#input').value.match(/^\/([a-z0-9-]*)$/)
+    if (!m || !skillCache) return []
+    return skillCache.filter((s) => s.name.startsWith(m[1]) || s.title.toLowerCase().includes(m[1])).slice(0, 8)
+  }
+  async function updateSkillMenu() {
+    if (!/^\/[a-z0-9-]*$/.test($('#input').value)) return hideSkillMenu()
+    await loadSkills()
+    const list = skillMatches()
+    let menu = $('#skillMenu')
+    if (!list.length) return hideSkillMenu()
+    if (!menu) {
+      menu = document.createElement('div')
+      menu.id = 'skillMenu'
+      menu.className = 'skill-menu'
+      $('.composer').before(menu)
+    }
+    skillPick = Math.min(skillPick, list.length - 1)
+    menu.innerHTML = ''
+    list.forEach((s, i) => {
+      const item = document.createElement('button')
+      item.type = 'button'
+      item.className = 'skill-item' + (i === skillPick ? ' active' : '')
+      item.innerHTML = `<b></b><span></span>`
+      item.querySelector('b').textContent = '/' + s.name
+      item.querySelector('span').textContent = s.description
+      item.addEventListener('mousedown', (e) => { e.preventDefault(); chooseSkill(s.name) })
+      menu.appendChild(item)
+    })
+  }
+  function hideSkillMenu() { const m = $('#skillMenu'); if (m) m.remove(); skillPick = 0 }
+  function chooseSkill(name) {
+    const ta = $('#input')
+    ta.value = `/${name} `
+    hideSkillMenu()
+    ta.focus()
+  }
+  function skillMenuKey(e) {
+    if (!$('#skillMenu')) return false
+    const list = skillMatches()
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); skillPick = (skillPick + (e.key === 'ArrowDown' ? 1 : list.length - 1)) % list.length; updateSkillMenu(); return true }
+    if ((e.key === 'Enter' || e.key === 'Tab') && list[skillPick]) { e.preventDefault(); chooseSkill(list[skillPick].name); return true }
+    if (e.key === 'Escape') { hideSkillMenu(); return true }
+    return false
+  }
+  function addSkillChip(evt) {
+    // The engine thinks a firm skill fits: offer it, never force it.
+    const row = addMsg('step', '')
+    row.textContent = ''
+    const b = document.createElement('button')
+    b.type = 'button'
+    b.className = 'btn btn-ghost skill-chip'
+    b.textContent = `Use skill: ${evt.title}`
+    b.title = evt.description || ''
+    b.addEventListener('click', () => { const ta = $('#input'); ta.value = `/${evt.name} ${lastQuestion || ''}`.trim(); ta.focus() })
+    row.appendChild(b)
   }
 
   function addMsg(kind, text) {
@@ -574,6 +644,12 @@
         } else {
           markLive(addMsg('step', evt.text))
         }
+        break
+      case 'skill':
+        addMsg('step', `Skill: ${evt.title}`)
+        break
+      case 'skill_suggestion':
+        addSkillChip(evt)
         break
       case 'reasoning':
         dismissCompaction()

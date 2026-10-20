@@ -87,6 +87,19 @@ Long-running routes answer with Server-Sent Events: `Content-Type: text/event-st
 
 All workflows stream `progress` events and end with `{ type: "done", files, stats }`. The output files are written to the matter's workspace folder. A `file` can be an absolute path or a file name inside the matter's folders.
 
+### Skills
+A skill is a `SKILL.md` file (frontmatter `name`, `title`, `description`, `triggers`, optional `tools` allow-list and `output`, then instructions). Bundled starters live in `sidecar/skills/`; the firm's own go in the workspace `skills/<name>/SKILL.md` and replace a bundled one with the same name. In `/api/chat`, a message starting with `/<name>` (or `skill: "<name>"` in the body) runs the agent with that skill: a `skill` event comes first. Without one, a `skill_suggestion` event may propose a match (decision model when configured, else keywords; `suggestSkill: false` turns it off).
+| Method | Path | Body / query | What |
+|---|---|---|---|
+| GET | `/api/skills` | | All skills (bundled + firm; invalid files listed with `error`). |
+| GET | `/api/skills/get` | `?name=` | One skill plus its `SKILL.md` text. |
+| GET | `/api/skills/suggest` | `?q=` | Best-matching skill for a request, or `null`. |
+| POST | `/api/skills` | `{ content }` | Save a firm skill from `SKILL.md` text (validated). |
+| POST | `/api/skills/draft` | `{ request, examples?, name? }` | The model drafts a `SKILL.md` from a plain-language request. Never saved automatically. |
+| POST | `/api/skills/delete` | `{ name }` | Delete a firm skill (bundled ones can only be overridden). |
+| POST | `/api/workflows/playbooks/draft` | `{ files?, matterId?, title, focus? }` | Review checklist from the firm's precedents; a check's firm `standard` is kept only with a verbatim quote from them. |
+| POST | `/api/workflows/playbooks` | `{ name, playbook }` | Save a playbook to the workspace `playbooks/` folder. |
+
 ### Review grid
 Rows are documents, columns are questions, and every cell is an answer with a verbatim quote from its document.
 | Method | Path | Body / query | What |

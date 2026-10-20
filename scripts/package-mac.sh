@@ -53,6 +53,8 @@ cp "$STAGE/node-${NODE_VERSION}-${PLATFORM}-${ARCH}/bin/node" "$PAYLOAD/node"
 # ── 3. Sidecar + deps (darwin-<arch>) ───────────────────────────────────────
 echo "… staging sidecar (${PLATFORM}-${ARCH} deps)"
 cp -R sidecar/src "$PAYLOAD/sidecar/src"
+cp -R sidecar/playbooks "$PAYLOAD/sidecar/playbooks"
+cp -R sidecar/skills "$PAYLOAD/sidecar/skills"
 cp sidecar/package.json sidecar/package-lock.json "$PAYLOAD/sidecar/"
 ( cd "$PAYLOAD/sidecar" && npm install --platform=$PLATFORM --arch=$ARCH --omit=dev --no-audit --no-fund >/dev/null 2>&1 )
 

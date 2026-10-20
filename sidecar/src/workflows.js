@@ -219,7 +219,7 @@ async function askJson(messages, maxTokens) {
 }
 
 function reviewPrompt(playbook, docName, part, idx, total) {
-  const checks = playbook.checks.map((c) => `- ${c.id}: ${c.question}`).join('\n')
+  const checks = playbook.checks.map((c) => `- ${c.id}: ${c.question}${c.standard ? ` (firm standard: ${c.standard})` : ''}`).join('\n')
   return [
     { role: 'system', content: 'You review legal documents for a law firm. Answer only from the document text. Never guess. Every finding must quote the document verbatim (copy the exact words).' },
     { role: 'user', content: `DOCUMENT: ${docName}${total > 1 ? ` (part ${idx + 1} of ${total})` : ''}\n"""\n${part}\n"""\n\nCHECKLIST:\n${checks}\n\nFor each checklist item that this text addresses, return one object. Skip items it does not address.\nReply with JSON only: [{"check": "<id>", "answer": "<one or two sentences>", "quote": "<exact words from the document, max 300 chars>", "location": "<clause/section number or [Page N] if visible>", "risk": "high|medium|low"}]` },
@@ -252,6 +252,52 @@ function loadPlaybook(name) {
   const pb = JSON.parse(raw)
   if (!Array.isArray(pb.checks) || !pb.checks.length) throw new Error(`playbook "${name}" has no "checks" (LLM checklist format: { "checks": [{ "id", "question" }] })`)
   return { title: pb.title || name, checks: pb.checks.filter((c) => c && c.id && c.question) }
+}
+
+/**
+ * Playbook builder (Phase 7.2): derive a review checklist from the firm's
+ * own precedents — the questions to ask and the firm's standard position
+ * on each, as written in those documents. Returns a draft for the lawyer
+ * to edit; savePlaybook() stores it in the workspace playbooks/ folder.
+ */
+async function draftPlaybook({ files = [], matterId = null, folder, title, focus = '' } = {}) {
+  let docs = files.map((f) => path.resolve(String(f)))
+  if (!docs.length) docs = listDocs(matterFolders(matterId, folder))
+  if (!docs.length) throw new Error('No precedent documents: pass files, or a matter/folder with documents.')
+  docs = docs.slice(0, 5)
+  const texts = []
+  for (const d of docs) {
+    try { texts.push(`=== ${path.basename(d)} ===\n${String(await readDoc(d)).slice(0, 9000)}`) } catch { /* unreadable: skip */ }
+  }
+  if (!texts.length) throw new Error('none of the documents could be read')
+  const items = await askJson([
+    { role: 'system', content: 'You build review checklists (playbooks) for a law firm from its own precedent documents. Only state positions that the precedents actually contain. Never invent law.' },
+    { role: 'user', content: `PRECEDENTS (the firm's standard documents):\n${texts.join('\n\n')}\n\n${focus ? `FOCUS: ${String(focus).slice(0, 500)}\n\n` : ''}Write 6–15 checklist items a lawyer should check when reviewing a counterparty's draft of this kind of contract. For each: the question, the firm's standard position as the precedents show it, a short verbatim quote from a precedent that shows it, and the severity if a draft deviates.\nReply with JSON only: [{"id": "<snake_case>", "question": "<question>", "standard": "<firm position, one sentence>", "quote": "<exact words from a precedent>", "severity": "high|medium|low"}]` },
+  ], 3000)
+  const all = texts.join('\n')
+  const seen = new Set()
+  const checks = []
+  for (const it of Array.isArray(items) ? items : []) {
+    const id = String(it.id || it.question || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 40)
+    if (!id || !it.question || seen.has(id)) continue
+    seen.add(id)
+    // A standard is only kept with proof from the precedents (verbatim quote).
+    const proven = quoteInSource(it.quote, all)
+    checks.push({ id, question: String(it.question).slice(0, 300), ...(proven && it.standard ? { standard: String(it.standard).slice(0, 300), source: String(it.quote).slice(0, 300) } : {}), severity: ['high', 'medium', 'low'].includes(it.severity) ? it.severity : 'medium' })
+  }
+  if (!checks.length) throw new Error('the model returned no usable checklist items')
+  return { playbook: { title: String(title || 'Firm playbook').slice(0, 120), checks }, documents: docs.map((d) => path.basename(d)), unproven: checks.filter((c) => !c.standard).length }
+}
+
+function savePlaybook(name, playbook) {
+  const file = String(name || '').toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-|-$/g, '').slice(0, 60)
+  if (!file) throw new Error('playbook name required')
+  if (!playbook || !Array.isArray(playbook.checks) || !playbook.checks.length) throw new Error('playbook needs checks: [{ id, question }]')
+  const checks = playbook.checks.filter((c) => c && c.id && c.question)
+  if (!checks.length) throw new Error('every check needs an id and a question')
+  const ws = require('./workspace')
+  const out = ws.writeFile(`playbooks/${file}.json`, JSON.stringify({ title: playbook.title || file, checks }, null, 2))
+  return { name: file, file: out, checks: checks.length }
 }
 
 const csvCell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
@@ -369,4 +415,4 @@ function matterLabel(matterId) {
   return m ? (m.number ? `${m.number} ${m.title}` : m.title) : 'default'
 }
 
-module.exports = { runReview, runChronology, parts, quoteInSource, extractJson, parseDate, datesInText, loadPlaybook, bundledPlaybooks, DEFAULT_PLAYBOOK, readDoc, listDocs, matterFolders, matterLabel, askJson, csvCell, norm, canonicalDates, MONTHS }
+module.exports = { runReview, runChronology, draftPlaybook, savePlaybook, parts, quoteInSource, extractJson, parseDate, datesInText, loadPlaybook, bundledPlaybooks, DEFAULT_PLAYBOOK, readDoc, listDocs, matterFolders, matterLabel, askJson, csvCell, norm, canonicalDates, MONTHS }

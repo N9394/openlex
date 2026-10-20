@@ -458,7 +458,12 @@ async function runAction(ctx, userMessage, onEvent, opts = {}) {
   // no hop budget spent re-fetching). Small docs already carry the full
   // text — pre-read would be redundant.
   const pre = String(ctx.doc?.text || '').length <= fullTextMaxChars() ? { block: '', indices: [] } : prereadBlock(ctx, userMessage)
-  const sysCtx = (phase) => SYSTEM(docCtx(ctx, phase) + pre.block)
+  // Active firm skill (Phase 7.2): its instructions ride in the system
+  // prompt (survives compaction); an optional tool allow-list narrows
+  // what the agent may call while the skill runs.
+  const skillBlock = opts.skill ? require('./skills').promptBlock(opts.skill) : ''
+  const skillTools = opts.skill ? require('./skills').allowedTools(opts.skill) : null
+  const sysCtx = (phase) => SYSTEM(docCtx(ctx, phase) + pre.block + skillBlock)
 
   // 1. PLAN — a single LLM call that decides the tool path (or answers directly)
   const planRes = await thinkChat([
@@ -556,7 +561,7 @@ async function runAction(ctx, userMessage, onEvent, opts = {}) {
     }
     // Alias fine-tune-era tool names onto the live tool surface.
     const toolName = TOOL_ALIASES[call.tool] || call.tool
-    if (!KNOWN_TOOLS.has(toolName) && !require('./mcp/client').hasTool(toolName)) {
+    if ((!KNOWN_TOOLS.has(toolName) && !require('./mcp/client').hasTool(toolName)) || (skillTools && !skillTools.has(toolName))) {
       // Unknown tool: NEVER surface raw JSON as the answer. Steer once
       // with the valid tool list, then hand over to the write phase.
       console.warn('[agent] unknown tool response:', String(cursor).slice(0, 120))
@@ -567,7 +572,7 @@ async function runAction(ctx, userMessage, onEvent, opts = {}) {
           { role: 'system', content: sysCtx('analyzing') },
           { role: 'user', content: userMessage },
           ...toolHistory,
-          { role: 'user', content: `"${call.tool}" is not an available tool. Available: ${[...KNOWN_TOOLS].join(', ')}. To write or apply changes, use propose_suggestions with the full replacement text in proposed_text — there is no separate write tool. Emit a valid tool call or answer in plain text.` },
+          { role: 'user', content: `"${call.tool}" is not an available tool${skillTools ? ' for this skill' : ''}. Available: ${[...(skillTools || KNOWN_TOOLS)].join(', ')}. To write or apply changes, use propose_suggestions with the full replacement text in proposed_text — there is no separate write tool. Emit a valid tool call or answer in plain text.` },
         ], { maxTokens: AGENT.WRITE_MAX_TOKENS, phase: 'analyzing', thinking: false, emit })
         if (steer.reasoning.trim()) emit('reasoning', { text: showReasoning(steer.reasoning), steer: true })
         cursor = steer.content

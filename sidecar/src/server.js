@@ -420,6 +420,51 @@ async function handle(req, res) {
       return res.end()
     }
 
+    // ── Skills (firm instructions as SKILL.md files) ─────────────────────
+    if (p === '/api/skills' || p.startsWith('/api/skills/')) {
+      const skillsMod = require('./skills')
+      require('./workspace').setBase(require('./agent-config').load().workspace)
+      try {
+        if (req.method === 'GET' && p === '/api/skills') {
+          return sendJson(res, 200, { skills: skillsMod.list().map(({ body, file, ...rest }) => rest) })
+        }
+        if (req.method === 'GET' && p === '/api/skills/get') {
+          const sk = skillsMod.get(url.searchParams.get('name'))
+          return sendJson(res, 200, { skill: sk, content: skillsMod.render(sk) })
+        }
+        if (req.method === 'GET' && p === '/api/skills/suggest') {
+          return sendJson(res, 200, { suggestion: await skillsMod.suggest(url.searchParams.get('q') || '') })
+        }
+        if (req.method !== 'POST') return sendJson(res, 404, { error: 'not found' })
+        const body = await readBody(req)
+        if (p === '/api/skills') return sendJson(res, 200, { skill: skillsMod.save(body.content) })
+        if (p === '/api/skills/delete') { skillsMod.remove(body.name); return sendJson(res, 200, { ok: true }) }
+        if (p === '/api/skills/draft') {
+          const ready = await engineReady()
+          if (!ready?.ok) return sendJson(res, 503, { error: `model unavailable: ${ready.reason}` })
+          return sendJson(res, 200, await policy.withMatter(body.matterId || null, () => skillsMod.draft(body)))
+        }
+        return sendJson(res, 404, { error: 'not found' })
+      } catch (err) {
+        return sendJson(res, err.code === 'POLICY_BLOCKED' ? 403 : 400, { error: err.message })
+      }
+    }
+    if (req.method === 'POST' && p === '/api/workflows/playbooks/draft') {
+      const body = await readBody(req)
+      try {
+        const ready = await engineReady()
+        if (!ready?.ok) return sendJson(res, 503, { error: `model unavailable: ${ready.reason}` })
+        const matterId = body.matterId || null
+        return sendJson(res, 200, await policy.withMatter(matterId, () => require('./workflows').draftPlaybook({ ...body, matterId })))
+      } catch (err) {
+        return sendJson(res, err.code === 'POLICY_BLOCKED' ? 403 : 400, { error: err.message })
+      }
+    }
+    if (req.method === 'POST' && p === '/api/workflows/playbooks') {
+      const body = await readBody(req)
+      try { return sendJson(res, 200, require('./workflows').savePlaybook(body.name, body.playbook)) } catch (err) { return sendJson(res, 400, { error: err.message }) }
+    }
+
     // ── Decision models (System One API: Kev, our own, Jev) ─────────────
     if (p === '/api/decide' || p.startsWith('/api/decide/')) {
       const decide = require('./decide')
@@ -876,12 +921,28 @@ async function handle(req, res) {
         summary: () => entry.doc.summary(),
       }
       body.message = require('./recipes').expand(body.message)
+      // Firm skills (Phase 7.2): "/name …" or body.skill runs the agent with
+      // that skill; otherwise suggest a matching one (the pane shows a chip).
+      const skillsMod = require('./skills')
+      let skill = null
+      try {
+        if (body.skill) skill = skillsMod.get(body.skill)
+        else {
+          const inv = skillsMod.parseInvocation(body.message)
+          if (inv) { skill = inv.skill; body.message = inv.message || `Apply the "${inv.skill.title}" skill to this document.` }
+        }
+      } catch (err) { sendSse(res, { type: 'error', message: err.message }); return res.end() }
+      if (skill) sendSse(res, { type: 'skill', name: skill.name, title: skill.title })
+      else if (body.suggestSkill !== false) {
+        const hint = await policy.withMatter(matterIdFor(body, entry), () => skillsMod.suggest(body.message).catch(() => null))
+        if (hint) sendSse(res, { type: 'skill_suggestion', ...hint })
+      }
       // Stop support (Batch 1.3): when the pane aborts the SSE fetch, stop
       // the run cleanly (partial results kept) instead of burning the loop.
       const ac = new AbortController()
       res.on('close', () => ac.abort())
       try {
-        const r = await policy.withMatter(matterIdFor(body, entry), () => runAction(context, body.message, (e) => sendSse(res, e), { signal: ac.signal }))
+        const r = await policy.withMatter(matterIdFor(body, entry), () => runAction(context, body.message, (e) => sendSse(res, e), { signal: ac.signal, skill }))
         // Conversation memory: persist the exchange (best-effort; the
         // model's streamed prose already went out token-by-token).
         session.append(body.message, r.text)

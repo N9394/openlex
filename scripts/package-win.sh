@@ -58,6 +58,8 @@ cp "dist/cache/node-${NODE_VERSION}-win-x64/node.exe" "$STAGE/node.exe"
 # ── 3. Sidecar + deps (win32-x64) ───────────────────────────────────────────
 echo "… staging sidecar (win32-x64 deps)"
 cp -R sidecar/src "$STAGE/sidecar/src"
+cp -R sidecar/playbooks "$STAGE/sidecar/playbooks"
+cp -R sidecar/skills "$STAGE/sidecar/skills"
 cp sidecar/package.json sidecar/package-lock.json "$STAGE/sidecar/"
 if ! ( cd "$STAGE/sidecar" && npm install --platform=win32 --arch=x64 --omit=dev --no-audit --no-fund >/dev/null 2>&1 ); then
   echo "  npm install (win32-x64) failed — retrying with visible output"

@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Cpu, Shield, Library, Plug, ListChecks, Lock, Cloud, Link2, BookOpen, Languages } from 'lucide-react'
 import { useWordLink } from '../lib/hub'
+import { SkillsPanel } from './SkillsPanel'
 
 interface Engine {
   call: (method: string, path: string, body?: unknown) => Promise<any>
@@ -251,6 +252,8 @@ export default function Hub() {
         {wfMsg && <p className="text-cream text-sm mt-2">{wfMsg}</p>}
         {wfFiles.map((f) => <p key={f} className="text-antique text-xs break-all">{f}</p>)}
       </Section>
+
+      <SkillsPanel e={e} activeMatter={activeMatter} docs={docs} />
 
       <Section icon={BookOpen} title="Firm clauses">
         <p className="text-antique text-sm mb-2">Your firm's own wording from the precedents in the firm library — most used first. Send one to the cursor in Word.</p>

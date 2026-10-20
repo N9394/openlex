@@ -15,6 +15,8 @@
  *   openlex clauses [--type liability] [--query words] [--matter ID]
  *   openlex grid list | new TITLE --columns cols.json [--matter ID] | run ID [--force] | show ID | export ID
  *   openlex decide "text" --question "Is …?" | --questions q.json [--file doc] [--matter ID]
+ *   openlex skills [show NAME | draft "what it should do" [--name N] [--save]]   ("/name …" in ask runs one)
+ *   openlex playbook draft FILE… --title T [--focus words] [--save NAME]
  *   openlex serve                      run the engine in the foreground
  *
  * Finds the engine via ~/.lexvault/run/sidecar.json (url + its localhost
@@ -37,6 +39,7 @@ function parseArgs(argv) {
     if (a === '--no-rate') out.rate = false
     else if (a === '--json') out.json = true
     else if (a === '--force') out.force = true
+    else if (a === '--save' && (i + 1 >= argv.length || argv[i + 1].startsWith('--'))) out.save = true
     else if (a.startsWith('--')) out[a.slice(2)] = argv[++i]
     else out._.push(a)
   }
@@ -225,6 +228,36 @@ async function main() {
         return
       }
       throw new Error(`unknown grid command: ${sub}`)
+    }
+    case 'skills': {
+      const [sub, ...args] = a._
+      if (!sub) {
+        const r = await request('GET', '/api/skills')
+        if (a.json) return console.log(JSON.stringify(r, null, 2))
+        for (const sk of r.skills) console.log(`/${sk.name.padEnd(28)} ${sk.error ? `INVALID: ${sk.error}` : sk.description}${sk.source === 'firm' ? '  [firm]' : ''}`)
+        return
+      }
+      if (sub === 'show') {
+        const r = await request('GET', `/api/skills/get?name=${encodeURIComponent(args[0] || '')}`)
+        return console.log(a.json ? JSON.stringify(r, null, 2) : r.content)
+      }
+      if (sub === 'draft') {
+        const r = await request('POST', '/api/skills/draft', { request: args.join(' '), name: a.name, matterId: a.matter })
+        console.log(r.content)
+        if (a.save) { const sv = await request('POST', '/api/skills', { content: r.content }); console.error(`saved as /${sv.skill.name} → ${sv.skill.file}`) }
+        else console.error('(draft only — rerun with --save to keep it, or edit and save it in the app)')
+        return
+      }
+      throw new Error(`unknown skills command: ${sub}`)
+    }
+    case 'playbook': {
+      const [sub, ...files] = a._
+      if (sub !== 'draft' || !files.length) throw new Error('usage: openlex playbook draft FILE… --title T [--focus words] [--save NAME]')
+      const r = await request('POST', '/api/workflows/playbooks/draft', { files: files.map((f) => path.resolve(f)), title: a.title, focus: a.focus, matterId: a.matter })
+      if (a.json) return console.log(JSON.stringify(r, null, 2))
+      for (const c of r.playbook.checks) console.log(`[${c.severity}] ${c.question}${c.standard ? `\n    firm standard: ${c.standard}` : '\n    (no firm standard found verbatim in the precedents)'}`)
+      if (a.save) { const sv = await request('POST', '/api/workflows/playbooks', { name: a.save, playbook: r.playbook }); console.error(`saved playbook "${sv.name}" (${sv.checks} checks) → ${sv.file}`) }
+      return
     }
     case 'decide': {
       const state = a.file ? await readFileText(a.file) : a._.join(' ').trim()
