@@ -87,6 +87,18 @@ Long-running routes answer with Server-Sent Events: `Content-Type: text/event-st
 
 All workflows stream `progress` events and end with `{ type: "done", files, stats }`. The output files are written to the matter's workspace folder. A `file` can be an absolute path or a file name inside the matter's folders.
 
+### Plans
+The model proposes a plan for a goal from capabilities OpenLex already has; nothing runs until the lawyer approves. Step kinds: `review`, `chronology`, `grid`, `translate`, `compare`, `research`, `skill`, and `checkpoint` (the run pauses until the lawyer decides). Unusable steps (unknown kind, a document not in the matter, an unknown skill or playbook) are dropped with a note; steps after a checkpoint always wait for it.
+| Method | Path | Body / query | What |
+|---|---|---|---|
+| GET | `/api/plans` | `?matterId=` | List plans. |
+| GET | `/api/plans/get` | `?id=` | One plan with its steps (`status`: pending, running, waiting, done, failed, skipped). |
+| POST | `/api/plans` | `{ goal, matterId, documents? }` | Propose a plan (status `proposed`). |
+| POST | `/api/plans/update` | `{ id, steps?, goal? }` | The lawyer's edits, re-validated. Only before running. |
+| POST | `/api/plans/approve` | `{ id }` | Approve. |
+| POST | `/api/plans/run` | `{ id }` | SSE. Runs or resumes; independent steps run side by side on hosted models, one at a time locally. Ends with `done` (`status`: done, failed, waiting, paused, stopped; `report` path; the `waiting` checkpoint). |
+| POST | `/api/plans/decide` | `{ id, stepId, decision: continue\|stop, note? }` | The lawyer's decision at a checkpoint. `stop` skips the rest and writes the report. |
+
 ### Skills
 A skill is a `SKILL.md` file (frontmatter `name`, `title`, `description`, `triggers`, optional `tools` allow-list and `output`, then instructions). Bundled starters live in `sidecar/skills/`; the firm's own go in the workspace `skills/<name>/SKILL.md` and replace a bundled one with the same name. In `/api/chat`, a message starting with `/<name>` (or `skill: "<name>"` in the body) runs the agent with that skill: a `skill` event comes first. Without one, a `skill_suggestion` event may propose a match (decision model when configured, else keywords; `suggestSkill: false` turns it off).
 | Method | Path | Body / query | What |

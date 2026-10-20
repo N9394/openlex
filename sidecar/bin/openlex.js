@@ -17,6 +17,7 @@
  *   openlex decide "text" --question "Is …?" | --questions q.json [--file doc] [--matter ID]
  *   openlex skills [show NAME | draft "what it should do" [--name N] [--save]]   ("/name …" in ask runs one)
  *   openlex playbook draft FILE… --title T [--focus words] [--save NAME]
+ *   openlex plan "goal" --matter ID | plan list | plan show ID | plan run ID (approves) | plan decide ID STEP continue|stop [--note text]
  *   openlex serve                      run the engine in the foreground
  *
  * Finds the engine via ~/.lexvault/run/sidecar.json (url + its localhost
@@ -257,6 +258,45 @@ async function main() {
       if (a.json) return console.log(JSON.stringify(r, null, 2))
       for (const c of r.playbook.checks) console.log(`[${c.severity}] ${c.question}${c.standard ? `\n    firm standard: ${c.standard}` : '\n    (no firm standard found verbatim in the precedents)'}`)
       if (a.save) { const sv = await request('POST', '/api/workflows/playbooks', { name: a.save, playbook: r.playbook }); console.error(`saved playbook "${sv.name}" (${sv.checks} checks) → ${sv.file}`) }
+      return
+    }
+    case 'plan': {
+      const [sub, ...args] = a._
+      const show = (pl) => {
+        console.log(`${pl.id}  [${pl.status}]  ${pl.goal}`)
+        pl.steps.forEach((st, i) => console.log(`  ${String(i + 1).padStart(2)}. ${st.id} ${st.kind.padEnd(10)} ${st.status.padEnd(8)} ${st.title}${st.kind === 'checkpoint' ? `\n      ? ${st.args.question}` : ''}${st.result?.summary ? `\n      → ${st.result.summary}` : ''}${st.error ? `\n      ✗ ${st.error}` : ''}`))
+        for (const n of pl.notes || []) console.log(`  note: ${n}`)
+        if (pl.report) console.log(`  report: ${pl.report}`)
+      }
+      if (sub === 'list') { const r = await request('GET', `/api/plans${a.matter ? `?matterId=${encodeURIComponent(a.matter)}` : ''}`); for (const pl of r.plans) console.log(`${pl.id}  [${pl.status}]  ${pl.goal.slice(0, 80)}`); return }
+      if (sub === 'show') { const r = await request('GET', `/api/plans/get?id=${encodeURIComponent(args[0] || '')}`); return a.json ? console.log(JSON.stringify(r, null, 2)) : show(r.plan) }
+      if (sub === 'run') {
+        const id = args[0]
+        const cur = (await request('GET', `/api/plans/get?id=${encodeURIComponent(id || '')}`)).plan
+        if (cur.status === 'proposed') await request('POST', '/api/plans/approve', { id })
+        await request('POST', '/api/plans/run', { id }, {
+          onEvent: (ev) => {
+            if (a.json) return console.log(JSON.stringify(ev))
+            if (ev.type === 'progress' && ev.status) process.stderr.write(`  ${ev.step}: ${ev.status}${ev.summary ? ` — ${ev.summary}` : ''}${ev.question ? ` — ${ev.question}` : ''}${ev.error ? ` — ${ev.error}` : ''}\n`)
+            else if (ev.type === 'error') { process.exitCode = 1; console.error(`error: ${ev.message}`) }
+            else if (ev.type === 'done') console.log(ev.status === 'waiting' ? `waiting at ${ev.waiting?.id}: ${ev.waiting?.args?.question}\n  → openlex plan decide ${id} ${ev.waiting?.id} continue|stop [--note …]` : `${ev.status}${ev.report ? `: ${ev.report}` : ''}`)
+          },
+        })
+        return
+      }
+      if (sub === 'decide') {
+        const [id, stepId, decision] = args
+        if (!['continue', 'stop'].includes(decision)) throw new Error('usage: openlex plan decide ID STEP continue|stop [--note text]')
+        const r = await request('POST', '/api/plans/decide', { id, stepId, decision, note: a.note })
+        console.log(r.plan.status === 'stopped' ? `stopped: ${r.plan.report}` : `continuing — run it again: openlex plan run ${id}`)
+        return
+      }
+      const goal = a._.join(' ').trim()
+      if (!goal) throw new Error('usage: openlex plan "goal" --matter ID')
+      const r = await request('POST', '/api/plans', { goal, matterId: a.matter })
+      if (a.json) return console.log(JSON.stringify(r, null, 2))
+      show(r.plan)
+      console.log(`\nNothing has run. Approve and run: openlex plan run ${r.plan.id}`)
       return
     }
     case 'decide': {

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { hubBridge } from '../lib/hub'
-import { Network, Table2 } from 'lucide-react'
+import { Network, Table2, Route } from 'lucide-react'
 import MatterPicker from './MatterPicker'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../contexts/AuthContext'
@@ -43,7 +43,7 @@ export default function Layout() {
     { to: '/vault', icon: Archive, label: t('nav.vault') },
     { to: '/workshop', icon: Wrench, label: t('nav.workshop'), badge: 'BETA' },
     { to: '/ma', icon: Briefcase, label: t('nav.ma'), badge: 'NEW' },
-    ...((window as any).lexvault?.engine ? [{ to: '/hub', icon: Network, label: t('nav.hub', 'OpenLex hub') }, { to: '/grid', icon: Table2, label: t('nav.grid', 'Review grid') }] : []),
+    ...((window as any).lexvault?.engine ? [{ to: '/hub', icon: Network, label: t('nav.hub', 'OpenLex hub') }, { to: '/grid', icon: Table2, label: t('nav.grid', 'Review grid') }, { to: '/plans', icon: Route, label: t('nav.plans', 'Plans') }] : []),
   ]
 
   // Electron App build: identity is the license file, so logout / signup /

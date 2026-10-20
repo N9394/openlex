@@ -420,6 +420,49 @@ async function handle(req, res) {
       return res.end()
     }
 
+    // ── Plans (propose → lawyer approves → run, with checkpoints) ───────
+    if (p === '/api/plans' || p.startsWith('/api/plans/')) {
+      const planMod = require('./plan')
+      require('./workspace').setBase(require('./agent-config').load().workspace)
+      try {
+        if (req.method === 'GET' && p === '/api/plans') {
+          const matterId = url.searchParams.has('matterId') ? (url.searchParams.get('matterId') || null) : undefined
+          return sendJson(res, 200, { plans: planMod.list(matterId), kinds: planMod.KINDS })
+        }
+        if (req.method === 'GET' && p === '/api/plans/get') return sendJson(res, 200, { plan: planMod.get(url.searchParams.get('id')) })
+        if (req.method !== 'POST') return sendJson(res, 404, { error: 'not found' })
+        const body = await readBody(req)
+        if (p === '/api/plans') {
+          const ready = await engineReady()
+          if (!ready?.ok) return sendJson(res, 503, { error: `model unavailable: ${ready.reason}` })
+          const matterId = body.matterId || null
+          return sendJson(res, 200, { plan: await policy.withMatter(matterId, () => planMod.propose({ goal: body.goal, matterId, documents: body.documents })) })
+        }
+        if (p === '/api/plans/update') return sendJson(res, 200, { plan: planMod.update(body.id, body) })
+        if (p === '/api/plans/approve') return sendJson(res, 200, { plan: planMod.approve(body.id) })
+        if (p === '/api/plans/decide') return sendJson(res, 200, { plan: planMod.decide(body.id, body) })
+        if (p === '/api/plans/run') {
+          const plan = planMod.get(body.id)
+          res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' })
+          const ready = await engineReady()
+          if (!ready?.ok) { sendSse(res, { type: 'error', message: `model unavailable: ${ready.reason}` }); return res.end() }
+          const ac = new AbortController()
+          res.on('close', () => ac.abort())
+          try {
+            const r = await policy.withMatter(plan.matterId, () => planMod.run(body.id, { signal: ac.signal, onProgress: (ev) => sendSse(res, { type: 'progress', ...ev }) }))
+            sendSse(res, { type: 'done', status: r.status, report: r.report || null, waiting: r.steps.find((x) => x.status === 'waiting') || null })
+          } catch (err) {
+            sendSse(res, { type: 'error', message: err.message })
+          }
+          return res.end()
+        }
+        return sendJson(res, 404, { error: 'not found' })
+      } catch (err) {
+        if (res.headersSent) { sendSse(res, { type: 'error', message: err.message }); return res.end() }
+        return sendJson(res, err.code === 'POLICY_BLOCKED' ? 403 : 400, { error: err.message })
+      }
+    }
+
     // ── Skills (firm instructions as SKILL.md files) ─────────────────────
     if (p === '/api/skills' || p.startsWith('/api/skills/')) {
       const skillsMod = require('./skills')
