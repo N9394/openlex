@@ -22,6 +22,7 @@ import MaDeal from './pages/MaDeal'
 import Hub from './pages/Hub'
 import Grid from './pages/Grid'
 import Plans from './pages/Plans'
+import Desk from './pages/Desk'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -58,6 +59,7 @@ function App() {
         <Route path="/hub" element={<Hub />} />
         <Route path="/grid" element={<Grid />} />
         <Route path="/plans" element={<Plans />} />
+        <Route path="/desk" element={<Desk />} />
         <Route path="/upload" element={<Upload />} />
         <Route path="/vault" element={<Vault />} />
         <Route path="/investigate" element={<Investigate />} />

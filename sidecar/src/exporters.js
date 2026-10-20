@@ -126,7 +126,8 @@ function toICS(model) {
     const safe = d.date.replace(/[-:]/g, '')
     L.push('BEGIN:VEVENT', `UID:lv-${model.matter}-${d.section}-${safe}@lexvault`,
       `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, '').slice(0, 15)}Z`,
-      `DTSTART;VALUE=DATE:${safe}`, `DTEND;VALUE=DATE:${safe}`,
+      // All-day events: DTEND is exclusive (RFC 5545), so it is the next day.
+      `DTSTART;VALUE=DATE:${safe}`, `DTEND;VALUE=DATE:${new Date(Date.parse(`${safe.slice(0, 4)}-${safe.slice(4, 6)}-${safe.slice(6, 8)}T00:00:00Z`) + 86400000).toISOString().slice(0, 10).replace(/-/g, '')}`,
       `SUMMARY:${String(d.text || 'Deadline').replace(/[,;\\\n]/g, ' ').slice(0, 100)}`,
       'END:VEVENT')
   }

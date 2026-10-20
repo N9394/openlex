@@ -30,7 +30,7 @@ const RUN_DIR = path.join(DATA_DIR, 'run')
 const TOKEN_PATH = path.join(RUN_DIR, 'hub.token')
 const SIDECAR_REG = path.join(RUN_DIR, 'sidecar.json')
 const APP_REG = path.join(RUN_DIR, 'app.json')
-const EVENT_TYPES = new Set(['insert-text', 'open-in-app', 'provider-changed', 'policy-changed', 'matter-changed', 'hello'])
+const EVENT_TYPES = new Set(['monitor-alert', 'insert-text', 'open-in-app', 'provider-changed', 'policy-changed', 'matter-changed', 'hello'])
 
 function ensureToken() {
   fs.mkdirSync(RUN_DIR, { recursive: true, mode: 0o700 })

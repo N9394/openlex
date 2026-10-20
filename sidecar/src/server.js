@@ -420,6 +420,63 @@ async function handle(req, res) {
       return res.end()
     }
 
+    // ── Lists (matter checklists and trackers, audited) ──────────────────
+    if (p === '/api/lists' || p.startsWith('/api/lists/')) {
+      const lists = require('./lists')
+      require('./workspace').setBase(require('./agent-config').load().workspace)
+      try {
+        if (req.method === 'GET' && p === '/api/lists') {
+          const matterId = url.searchParams.has('matterId') ? (url.searchParams.get('matterId') || null) : undefined
+          return sendJson(res, 200, { lists: lists.all(matterId), statuses: lists.STATUSES })
+        }
+        if (req.method === 'GET' && p === '/api/lists/get') return sendJson(res, 200, { list: lists.get(url.searchParams.get('id')) })
+        if (req.method === 'GET' && p === '/api/lists/sources') return sendJson(res, 200, { sources: lists.sources(url.searchParams.get('matterId') || null) })
+        if (req.method !== 'POST') return sendJson(res, 404, { error: 'not found' })
+        const body = await readBody(req)
+        const by = body.by || undefined
+        if (p === '/api/lists') return sendJson(res, 200, { list: lists.create({ ...body, by }) })
+        if (p === '/api/lists/rename') return sendJson(res, 200, { list: lists.rename(body.id, body.title, by) })
+        if (p === '/api/lists/delete') { lists.remove(body.id); return sendJson(res, 200, { ok: true }) }
+        if (p === '/api/lists/items') return sendJson(res, 200, { item: lists.addItem(body.id, body.item || {}, by) })
+        if (p === '/api/lists/items/update') return sendJson(res, 200, { item: lists.updateItem(body.id, body.itemId, body.patch || {}, by) })
+        if (p === '/api/lists/items/delete') { lists.removeItem(body.id, body.itemId, by); return sendJson(res, 200, { ok: true }) }
+        if (p === '/api/lists/seed') { const r = lists.seedFromFile(body.id, body.file, { all: !!body.all }, by); return sendJson(res, 200, { added: r.added, list: r.list }) }
+        if (p === '/api/lists/export') return sendJson(res, 200, lists.exportList(body.id))
+        return sendJson(res, 404, { error: 'not found' })
+      } catch (err) {
+        return sendJson(res, 400, { error: err.message })
+      }
+    }
+
+    // ── Monitors (watch official sources) ───────────────────────────────
+    if (p === '/api/monitors' || p.startsWith('/api/monitors/')) {
+      const mon = require('./monitors')
+      try {
+        if (req.method === 'GET' && p === '/api/monitors') {
+          const matterId = url.searchParams.has('matterId') ? (url.searchParams.get('matterId') || null) : undefined
+          return sendJson(res, 200, { monitors: mon.list(matterId), types: mon.TYPES })
+        }
+        if (req.method === 'GET' && p === '/api/monitors/alerts') {
+          const matterId = url.searchParams.has('matterId') ? (url.searchParams.get('matterId') || null) : undefined
+          return sendJson(res, 200, { alerts: mon.alerts({ matterId, unread: url.searchParams.get('unread') === '1' }) })
+        }
+        if (req.method !== 'POST') return sendJson(res, 404, { error: 'not found' })
+        const body = await readBody(req)
+        if (p === '/api/monitors') return sendJson(res, 200, { monitor: mon.create(body) })
+        if (p === '/api/monitors/update') return sendJson(res, 200, { monitor: mon.update(body.id, body.patch || {}) })
+        if (p === '/api/monitors/delete') { mon.remove(body.id); return sendJson(res, 200, { ok: true }) }
+        if (p === '/api/monitors/check') return sendJson(res, 200, body.id ? await mon.check(body.id) : { results: await mon.checkDue(0) })
+        if (p === '/api/monitors/alerts/read') return sendJson(res, 200, { unread: mon.markRead(body.ids || 'all') })
+        if (p === '/api/monitors/alerts/file') {
+          require('./workspace').setBase(require('./agent-config').load().workspace)
+          return sendJson(res, 200, { file: mon.fileAlert(body.id) })
+        }
+        return sendJson(res, 404, { error: 'not found' })
+      } catch (err) {
+        return sendJson(res, 400, { error: err.message })
+      }
+    }
+
     // ── Plans (propose → lawyer approves → run, with checkpoints) ───────
     if (p === '/api/plans' || p.startsWith('/api/plans/')) {
       const planMod = require('./plan')
@@ -1095,6 +1152,8 @@ if (fs.existsSync(config.HTTPS_CERT) && fs.existsSync(config.HTTPS_KEY)) {
 // Bind to loopback only — the add-in and sidecar are on the same machine.
 const server = httpsServer || http.createServer(handle)
 server.listen(config.PORT, '127.0.0.1', () => {
+  // Monitors (Phase 7.4): check due watches every 15 minutes while the engine runs.
+  if (process.env.OPENLEX_MONITORS !== '0') require('./monitors').startScheduler()
   console.log(`[sidecar] LexVault Word sidecar on https://localhost:${config.PORT}${httpsServer ? '' : ' (http fallback)'}`)
   console.log(`[sidecar] serving add-in from ${config.ADDIN_ROOT}`)
   console.log(`[sidecar] model: ${config.LLM_MODEL} (llama.cpp at ${config.LLM_BASE})`)

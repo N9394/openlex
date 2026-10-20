@@ -2001,6 +2001,21 @@
     })
   }
 
+  // Monitors (engine): new legal developments on a watched source.
+  function renderMonitorAlert(ev) {
+    const n = ev.data?.count || 1
+    const card = document.createElement('div')
+    card.className = 'msg handoff'
+    const head = document.createElement('div')
+    head.className = 'handoff-head'
+    head.textContent = `Monitor · ${ev.data?.title || 'legal updates'}`
+    const body = document.createElement('div')
+    body.textContent = `${n} new ${n === 1 ? 'item' : 'items'} found. Open the desktop app → Matter desk to read and file ${n === 1 ? 'it' : 'them'}.`
+    card.append(head, body)
+    $('#chat').appendChild(card)
+    card.scrollIntoView({ block: 'nearest' })
+  }
+
   function renderHandoff(ev) {
     const text = String(ev.data?.text || '')
     const card = document.createElement('div')
@@ -2055,6 +2070,7 @@
         else if (ev.type === 'insert-text') renderHandoff(ev)
         else if (ev.type === 'provider-changed' || ev.type === 'policy-changed') { refreshProviders?.(); refreshDataBadge(); refreshMatters() }
         else if (ev.type === 'matter-changed') refreshMatters()
+        else if (ev.type === 'monitor-alert') renderMonitorAlert(ev)
       }
       es.onerror = () => { /* EventSource reconnects by itself */ }
     }

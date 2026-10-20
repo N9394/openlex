@@ -186,4 +186,4 @@ async function text(celex, { lang = 'en', article = null, preferConsolidated = t
   return { celex: target, lang, text: part || full, article: part ? String(article) : null, url: eurlexUrl(target, lang) }
 }
 
-module.exports = { search, text, parseReference, sliceArticle, htmlToText, ALIASES }
+module.exports = { search, text, sparql, parseReference, sliceArticle, htmlToText, ALIASES, LANG3 }

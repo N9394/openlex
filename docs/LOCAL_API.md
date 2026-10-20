@@ -87,6 +87,30 @@ Long-running routes answer with Server-Sent Events: `Content-Type: text/event-st
 
 All workflows stream `progress` events and end with `{ type: "done", files, stats }`. The output files are written to the matter's workspace folder. A `file` can be an absolute path or a file name inside the matter's folders.
 
+### Lists
+Checklists and trackers per matter. Every change is written to the list's audit trail (who, when, field, from → to); "who" is the OS user unless `by` is given.
+| Method | Path | Body / query | What |
+|---|---|---|---|
+| GET | `/api/lists` | `?matterId=` | Lists with open and overdue counts. |
+| GET | `/api/lists/get` | `?id=` | One list with items and audit trail. Item: `{ id, text, owner, due, status: open\|done\|blocked\|n/a, note, source? }`. |
+| GET | `/api/lists/sources` | `?matterId=` | Chronology and review CSVs in the matter folder that can seed a list. |
+| POST | `/api/lists` | `{ matterId, title, items? }` | Create. |
+| POST | `/api/lists/items`, `/api/lists/items/update`, `/api/lists/items/delete` | `{ id, item }`, `{ id, itemId, patch }`, `{ id, itemId }` | Add, change, remove an item. |
+| POST | `/api/lists/seed` | `{ id, file, all? }` | Add items from a chronology CSV (future dates → due items) or a review CSV (high-risk findings; `all` for every finding), with the source document and quote. No duplicates. |
+| POST | `/api/lists/export` | `{ id }` | `.xlsx` (items + audit trail), `.csv` and `.ics` (open items with a due date, all-day events). |
+| POST | `/api/lists/rename`, `/api/lists/delete` | `{ id, title }`, `{ id }` | |
+
+### Monitors
+Watches on official sources: `eurlex` (new EU acts whose title matches `query`), `ris` (new Austrian federal gazette entries), `rss` (any RSS/Atom feed), `page` (a public page; alerts when its text changes). The first check sets the baseline; alerts are only for items that appear afterwards. Topics filter the items (by the decision model when configured, else by words). A check needs "web" allowed by the data policy, and only the monitor's own query or URL leaves the machine. Due monitors are checked every 15 minutes while the engine runs (`OPENLEX_MONITORS=0` turns that off); new alerts are pushed to the hub as `monitor-alert`.
+| Method | Path | Body / query | What |
+|---|---|---|---|
+| GET | `/api/monitors` | `?matterId=` | Monitors with last run and last error. |
+| POST | `/api/monitors` | `{ title, matterId, source: { type, query\|url, lang? }, topics?, everyHours?, summarize? }` | Create (at most hourly). |
+| POST | `/api/monitors/update`, `/api/monitors/delete` | `{ id, patch }`, `{ id }` | A new source resets the baseline. |
+| POST | `/api/monitors/check` | `{ id? }` | Check one now, or every due monitor. |
+| GET | `/api/monitors/alerts` | `?matterId=&unread=1` | Alerts, newest first. |
+| POST | `/api/monitors/alerts/read`, `/api/monitors/alerts/file` | `{ ids }`, `{ id }` | Mark read; file an alert into its matter folder as a note with its source. |
+
 ### Plans
 The model proposes a plan for a goal from capabilities OpenLex already has; nothing runs until the lawyer approves. Step kinds: `review`, `chronology`, `grid`, `translate`, `compare`, `research`, `skill`, and `checkpoint` (the run pauses until the lawyer decides). Unusable steps (unknown kind, a document not in the matter, an unknown skill or playbook) are dropped with a note; steps after a checkpoint always wait for it.
 | Method | Path | Body / query | What |

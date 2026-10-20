@@ -17,6 +17,8 @@
  *   openlex decide "text" --question "Is …?" | --questions q.json [--file doc] [--matter ID]
  *   openlex skills [show NAME | draft "what it should do" [--name N] [--save]]   ("/name …" in ask runs one)
  *   openlex playbook draft FILE… --title T [--focus words] [--save NAME]
+ *   openlex monitors [add eurlex|ris "words" | add rss|page URL] [--topics a,b] [--every H] | check [ID] | alerts
+ *   openlex lists [show ID | new TITLE | add ID "item" [--due YYYY-MM-DD] [--owner X] | done ID ITEM | export ID]
  *   openlex plan "goal" --matter ID | plan list | plan show ID | plan run ID (approves) | plan decide ID STEP continue|stop [--note text]
  *   openlex serve                      run the engine in the foreground
  *
@@ -259,6 +261,49 @@ async function main() {
       for (const c of r.playbook.checks) console.log(`[${c.severity}] ${c.question}${c.standard ? `\n    firm standard: ${c.standard}` : '\n    (no firm standard found verbatim in the precedents)'}`)
       if (a.save) { const sv = await request('POST', '/api/workflows/playbooks', { name: a.save, playbook: r.playbook }); console.error(`saved playbook "${sv.name}" (${sv.checks} checks) → ${sv.file}`) }
       return
+    }
+    case 'monitors': {
+      const [sub, kind, target] = a._
+      if (!sub) {
+        const r = await request('GET', `/api/monitors${a.matter ? `?matterId=${encodeURIComponent(a.matter)}` : ''}`)
+        for (const m of r.monitors) console.log(`${m.id}  ${m.title}  [${m.source.type}] every ${m.everyHours} h  ${m.lastRun ? `checked ${m.lastRun.slice(0, 16)}` : 'not checked yet'}${m.lastError ? `  ERROR ${m.lastError}` : ''}`)
+        return
+      }
+      if (sub === 'add') {
+        const source = ['eurlex', 'ris'].includes(kind) ? { type: kind, query: target } : { type: kind, url: target }
+        const r = await request('POST', '/api/monitors', { title: a.title, matterId: a.matter, source, topics: a.topics, everyHours: a.every ? Number(a.every) : undefined })
+        return console.log(`${r.monitor.id}  added — the first check sets the baseline (alerts only for what appears after today)`)
+      }
+      if (sub === 'check') {
+        const r = await request('POST', '/api/monitors/check', kind ? { id: kind } : {})
+        for (const x of r.results || [r]) console.log(x.error ? `error: ${x.error}` : `${x.checked} items checked, ${x.alerts.length} new alerts`)
+        return
+      }
+      if (sub === 'alerts') {
+        const r = await request('GET', `/api/monitors/alerts${a.matter ? `?matterId=${encodeURIComponent(a.matter)}` : ''}`)
+        for (const al of r.alerts) console.log(`${al.read ? ' ' : '*'} ${al.date || al.at.slice(0, 10)}  ${al.title}\n    ${al.url || ''}${al.summary ? `\n    ${al.summary}` : ''}`)
+        return
+      }
+      throw new Error(`unknown monitors command: ${sub}`)
+    }
+    case 'lists': {
+      const [sub, id, ...rest] = a._
+      if (!sub) {
+        const r = await request('GET', `/api/lists${a.matter ? `?matterId=${encodeURIComponent(a.matter)}` : ''}`)
+        for (const l of r.lists) console.log(`${l.id}  ${l.title}  ${l.open} open${l.overdue ? `, ${l.overdue} OVERDUE` : ''} / ${l.items}`)
+        return
+      }
+      if (sub === 'new') { const r = await request('POST', '/api/lists', { title: [id, ...rest].join(' '), matterId: a.matter }); return console.log(r.list.id) }
+      if (sub === 'show') {
+        const { list } = await request('GET', `/api/lists/get?id=${encodeURIComponent(id || '')}`)
+        console.log(list.title)
+        for (const i of list.items) console.log(`  ${i.id}  [${i.status.padEnd(7)}] ${i.due || '          '}  ${i.owner ? `(${i.owner}) ` : ''}${i.text}`)
+        return
+      }
+      if (sub === 'add') { const r = await request('POST', '/api/lists/items', { id, item: { text: rest.join(' '), due: a.due, owner: a.owner } }); return console.log(r.item.id) }
+      if (sub === 'done') { await request('POST', '/api/lists/items/update', { id, itemId: rest[0], patch: { status: 'done' } }); return console.log('done') }
+      if (sub === 'export') { const r = await request('POST', '/api/lists/export', { id }); for (const f of r.files) console.log(f); return }
+      throw new Error(`unknown lists command: ${sub}`)
     }
     case 'plan': {
       const [sub, ...args] = a._
