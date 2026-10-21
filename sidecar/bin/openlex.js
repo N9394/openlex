@@ -19,6 +19,7 @@
  *   openlex playbook draft FILE… --title T [--focus words] [--save NAME]
  *   openlex monitors [add eurlex|ris "words" | add rss|page URL] [--topics a,b] [--every H] | check [ID] | alerts
  *   openlex lists [show ID | new TITLE | add ID "item" [--due YYYY-MM-DD] [--owner X] | done ID ITEM | export ID]
+ *   openlex map [--matter ID]          which model handles each role, what is checked where
  *   openlex plan "goal" --matter ID | plan list | plan show ID | plan run ID (approves) | plan decide ID STEP continue|stop [--note text]
  *   openlex serve                      run the engine in the foreground
  *
@@ -304,6 +305,17 @@ async function main() {
       if (sub === 'done') { await request('POST', '/api/lists/items/update', { id, itemId: rest[0], patch: { status: 'done' } }); return console.log('done') }
       if (sub === 'export') { const r = await request('POST', '/api/lists/export', { id }); for (const f of r.files) console.log(f); return }
       throw new Error(`unknown lists command: ${sub}`)
+    }
+    case 'map': {
+      const r = await request('GET', `/api/harness${a.matter ? `?matterId=${encodeURIComponent(a.matter)}` : ''}`)
+      if (a.json) return console.log(JSON.stringify(r, null, 2))
+      console.log(`config: firm ${r.files.firm || '—'} · user ${r.files.user}${r.config.locked.length ? ` · firm locks: ${r.config.locked.join(', ')}` : ''}`)
+      for (const e of [...r.errors, ...r.problems]) console.log(`  ! ${e}`)
+      console.log('\nROUTES (tried in order; ✗ = skipped by the data policy)')
+      for (const role of r.routes) console.log(`  ${role.role.padEnd(10)} ${role.candidates.map((c) => `${c.allowed ? '' : '✗'}${c.provider}${c.model ? `:${c.model}` : ''} (${c.reason})`).join(' → ')}`)
+      const f = r.config.features
+      console.log(`\nFEATURES  ${Object.entries(f).map(([k, v]) => `${k}${v === false ? ' off' : ''}`).join(' · ')}`)
+      return
     }
     case 'plan': {
       const [sub, ...args] = a._

@@ -76,8 +76,8 @@ if (process.platform === 'darwin') sweepOrphans()
 ensureQdrant().then((s) => { qdrantState = s; console.log('[sidecar] qdrant:', s.reason) })
 // Only warm the local engine when it's the active provider — a firm on its
 // own cloud key shouldn't pay ~3 GB of RAM for an idle llama-server.
-if (activeProvider().kind === 'local') ensureLlama().then((s) => { llamaState = s; console.log('[sidecar] llama:', s.reason) })
-else console.log(`[sidecar] model provider: ${activeProvider().id} (${activeProvider().model || 'default'}) — local engine not started`)
+if (require('./routing').usesLocal()) ensureLlama().then((s) => { llamaState = s; console.log('[sidecar] llama:', s.reason) })
+else console.log(`[sidecar] model provider: ${activeProvider().id} (${activeProvider().model || 'default'}) — no route uses the local model, local engine not started`)
 
 process.on('SIGINT', shutdown)
 process.on('SIGTERM', shutdown)
@@ -199,7 +199,7 @@ function matterIdFor(body, entry) {
 
 /** Local engine only matters when the active provider is local. */
 async function engineReady() {
-  if (activeProvider().kind !== 'local') return { ok: true, reason: `cloud provider ${activeProvider().id}` }
+  if (!require('./routing').usesLocal()) return { ok: true, reason: `cloud provider ${activeProvider().id}` }
   try { llamaState = await ensureLlama() } catch { llamaState = { ok: false, reason: 'llama-server failed to start' } }
   return llamaState
 }
@@ -418,6 +418,28 @@ async function handle(req, res) {
         sendSse(res, { type: 'error', message: err.message })
       }
       return res.end()
+    }
+
+    // ── Harness map (routes, hooks, agents, features — layered config) ───
+    if (p === '/api/harness' || p.startsWith('/api/harness/')) {
+      const harness = require('./harness')
+      const routing = require('./routing')
+      require('./workspace').setBase(require('./agent-config').load().workspace)
+      try {
+        if (req.method === 'GET' && p === '/api/harness') {
+          const matterId = url.searchParams.get('matterId') || null
+          const cfg = harness.load()
+          return sendJson(res, 200, { config: cfg, errors: harness.errors(), problems: routing.validate(cfg.routes), routes: routing.explain({ matterId }), roles: routing.ROLES, files: { firm: harness.layers().firm.path, user: harness.USER_PATH } })
+        }
+        if (req.method === 'POST' && p === '/api/harness/section') {
+          const body = await readBody(req)
+          if (body.section === 'routes' && body.value) { const problems = routing.validate(body.value); if (problems.length) return sendJson(res, 400, { error: problems.join('; '), problems }) }
+          return sendJson(res, 200, { config: harness.setUserSection(body.section, body.value ?? null) })
+        }
+        return sendJson(res, 404, { error: 'not found' })
+      } catch (err) {
+        return sendJson(res, 400, { error: err.message })
+      }
     }
 
     // ── Lists (matter checklists and trackers, audited) ──────────────────

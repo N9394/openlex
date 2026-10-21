@@ -114,7 +114,7 @@ function batches(paras) {
 }
 
 async function translateBatch(batch, targetName, glossary, docName) {
-  const items = await wf.askJson(translatePrompt(batch, targetName, glossary, docName), Math.min(8000, 400 + Math.ceil(batch.reduce((n, b) => n + b.text.length, 0) / 2)))
+  const items = await wf.askJson(translatePrompt(batch, targetName, glossary, docName), Math.min(8000, 400 + Math.ceil(batch.reduce((n, b) => n + b.text.length, 0) / 2)), 'translate')
   const got = new Map()
   for (const it of Array.isArray(items) ? items : []) {
     const i = Number(it?.i)

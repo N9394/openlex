@@ -127,7 +127,7 @@ async function propose({ goal, matterId = null, documents } = {}) {
   const items = await wf.askJson([
     { role: 'system', content: 'You plan legal work for a lawyer as a short sequence of steps using ONLY the listed capabilities. Prefer few, high-value steps. Put a checkpoint before any step that depends on the lawyer\'s judgment. Never invent documents.' },
     { role: 'user', content: `GOAL: ${String(goal).slice(0, 2000)}\n\n${capabilities({ documents: docs, playbooks, skills: skillNames })}\n\nReply with JSON only: [{"id": "s1", "kind": "<kind>", "title": "<what this step achieves, one line>", "args": {…}, "dependsOn": ["<earlier step id>", …]}]` },
-  ], 2500)
+  ], 2500, 'plan')
   const { steps, notes } = cleanSteps(items, { documents: docs })
   if (!steps.length) throw new Error(`the model proposed no usable steps${notes.length ? ` (${notes.join('; ')})` : ''}`)
   return save({ id: crypto.randomBytes(6).toString('hex'), matterId: matterId || null, goal: String(goal).slice(0, 2000), documents: docs, steps, notes, status: 'proposed', createdAt: new Date().toISOString() })
@@ -207,7 +207,7 @@ async function run(id, { signal, onProgress } = {}) {
   if (['done', 'stopped'].includes(plan.status)) return plan
   plan.status = 'running'
   save(plan)
-  const local = require('./llm').activeProvider().kind === 'local'
+  const local = require('./llm').providerFor('extract').kind === 'local'
   const width = local ? 1 : 3
   const running = new Map()
   const doneOk = (s) => s.status === 'done'
