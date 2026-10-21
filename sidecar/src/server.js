@@ -414,6 +414,7 @@ async function handle(req, res) {
           onProgress: (ev) => sendSse(res, { type: 'progress', ...ev }),
         }))
         sendSse(res, { type: 'done', files: r.files, stats: r.stats, count: (r.findings || r.events || r.changes || r.flags || []).length })
+        require('./hooks').run('after_workflow', { workflow: body.type, files: r.files, stats: r.stats, matterId }).catch(() => {})
       } catch (err) {
         sendSse(res, { type: 'error', message: err.message })
       }
@@ -429,11 +430,11 @@ async function handle(req, res) {
         if (req.method === 'GET' && p === '/api/harness') {
           const matterId = url.searchParams.get('matterId') || null
           const cfg = harness.load()
-          return sendJson(res, 200, { config: cfg, errors: harness.errors(), problems: routing.validate(cfg.routes), routes: routing.explain({ matterId }), roles: routing.ROLES, files: { firm: harness.layers().firm.path, user: harness.USER_PATH } })
+          return sendJson(res, 200, { config: cfg, errors: harness.errors(), problems: [...routing.validate(cfg.routes), ...require('./hooks').validate(cfg.hooks)], routes: routing.explain({ matterId }), roles: routing.ROLES, files: { firm: harness.layers().firm.path, user: harness.USER_PATH } })
         }
         if (req.method === 'POST' && p === '/api/harness/section') {
           const body = await readBody(req)
-          if (body.section === 'routes' && body.value) { const problems = routing.validate(body.value); if (problems.length) return sendJson(res, 400, { error: problems.join('; '), problems }) }
+          if (body.value && ['routes', 'hooks'].includes(body.section)) { const problems = body.section === 'routes' ? routing.validate(body.value) : require('./hooks').validate(body.value); if (problems.length) return sendJson(res, 400, { error: problems.join('; '), problems }) }
           return sendJson(res, 200, { config: harness.setUserSection(body.section, body.value ?? null) })
         }
         return sendJson(res, 404, { error: 'not found' })
@@ -530,6 +531,7 @@ async function handle(req, res) {
           try {
             const r = await policy.withMatter(plan.matterId, () => planMod.run(body.id, { signal: ac.signal, onProgress: (ev) => sendSse(res, { type: 'progress', ...ev }) }))
             sendSse(res, { type: 'done', status: r.status, report: r.report || null, waiting: r.steps.find((x) => x.status === 'waiting') || null })
+            if (r.status === 'done' || r.status === 'failed') require('./hooks').run('after_workflow', { workflow: 'plan', files: [r.report, ...r.steps.flatMap((x) => x.result?.files || [])].filter(Boolean), stats: { status: r.status, steps: r.steps.length }, matterId: plan.matterId }).catch(() => {})
           } catch (err) {
             sendSse(res, { type: 'error', message: err.message })
           }
@@ -649,6 +651,7 @@ async function handle(req, res) {
               onProgress: (ev) => sendSse(res, { type: 'progress', ...ev }),
             }))
             sendSse(res, { type: 'done', stats: r.stats })
+            require('./hooks').run('after_workflow', { workflow: 'grid', files: [], stats: r.stats, matterId: g.matterId }).catch(() => {})
           } catch (err) {
             sendSse(res, { type: 'error', message: err.message })
           }
@@ -1068,10 +1071,26 @@ async function handle(req, res) {
         // Conversation memory: persist the exchange (best-effort; the
         // model's streamed prose already went out token-by-token).
         session.append(body.message, r.text)
-        // streamed=true → the write phase already streamed the prose token
-        // by token; skip the duplicate final event.
-        if (!r.streamed) sendSse(res, { type: 'text', text: r.text + '\n' })
-        for (const sug of r.suggestions) sendSse(res, { type: 'suggestion', suggestion: sug })
+        // Firm hooks at the answer (hooks.js): warn → note; deny → withheld.
+        // A streamed answer is already on screen: the pane marks it withheld.
+        const hooks = require('./hooks')
+        const mid = matterIdFor(body, entry)
+        const gate = hooks.has('before_answer') && r.text ? await hooks.run('before_answer', { text: r.text, matterId: mid }) : { decision: 'allow', warnings: [] }
+        if (gate.decision === 'deny') sendSse(res, { type: 'withheld', message: gate.reason })
+        else {
+          // streamed=true → the write phase already streamed the prose token
+          // by token; skip the duplicate final event.
+          if (!r.streamed) sendSse(res, { type: 'text', text: r.text + '\n' })
+          for (const w of gate.warnings) sendSse(res, { type: 'warning', message: w })
+        }
+        for (const sug of r.suggestions) {
+          if (hooks.has('on_suggestion')) {
+            const g = await hooks.run('on_suggestion', { text: sug.proposed_text || '', summary: sug.summary || '', severity: sug.severity, matterId: mid })
+            if (g.decision === 'deny') { sendSse(res, { type: 'warning', message: `A suggestion was removed by a firm rule: ${g.reason}` }); continue }
+            if (g.flags.length || g.warnings.length) sug.flags = [...g.flags, ...g.warnings]
+          }
+          sendSse(res, { type: 'suggestion', suggestion: sug })
+        }
         sendSse(res, { type: 'done' })
       } catch (err) {
         sendSse(res, { type: 'error', message: err.message })

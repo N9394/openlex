@@ -32,11 +32,12 @@ function active() {
 
 // ── routing (routing.js): which provider(s) to try for this call ─────────
 const routing = require('./routing')
+const hooks = require('./hooks')
 
 /** Errors worth trying the next candidate for: network, timeouts, 429, 5xx, missing key. */
 function retryable(err) {
   if (!err) return false
-  if (err.code === 'POLICY_BLOCKED' || err.code === 'NO_KEY') return true
+  if (err.code === 'POLICY_BLOCKED' || err.code === 'NO_KEY' || err.code === 'HOOK_BLOCKED') return true
   const m = String(err.message || err)
   return /ECONN|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|socket hang up|fetch failed|timed? ?out|aborted due to timeout|HTTP (429|5\d\d)|\b(429|50[0-4])\b|overloaded|rate limit/i.test(m) && !/AbortError|cancel/i.test(m)
 }
@@ -54,6 +55,11 @@ async function routed(kind, messages, opts, runLocal, runCloud) {
   let firstErr = null
   for (const [i, c] of cands.entries()) {
     try {
+      if (hooks.has('before_model')) {
+        const role = opts.role || routing.PHASE_ROLE[opts.phase] || null
+        const h = await hooks.run('before_model', { role, provider: c.provider.id, model: c.provider.model || null, local: !!c.provider.local, chars: chars(messages), matterId: policy.currentMatter(), privileged: routing.context({ matterId: policy.currentMatter() }).privileged })
+        if (h.decision === 'deny') { const e = new Error(`Blocked by firm rule: ${h.reason}`); e.code = 'HOOK_BLOCKED'; throw e }
+      }
       if (c.provider.kind === 'local') { auditLocal(kind, opts.role || opts.phase, c.reason); return await runLocal(optsOut) }
       return await runCloud(c.provider, optsOut, c.reason)
     } catch (err) {

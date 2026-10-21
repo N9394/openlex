@@ -681,7 +681,8 @@
         // same first line; the green 📋 card was pure duplication.
         break
       case 'suggestion':
-        if (autopilot && evt.suggestion) {
+        // Flagged by a firm rule (hooks): always shown for review, never auto-applied.
+        if (autopilot && evt.suggestion && !(evt.suggestion.flags && evt.suggestion.flags.length)) {
           autopilotApply(evt.suggestion)
         } else {
           renderSuggestion(evt.suggestion, true)
@@ -706,6 +707,17 @@
         }
         $('#chat').scrollTop = $('#chat').scrollHeight
         break
+      case 'warning':
+        // Firm rule (hooks: before_answer / on_suggestion) — shown under the answer.
+        addMsg('warn', '⚠ ' + (evt.message || 'firm rule'))
+        break
+      case 'withheld': {
+        // A firm rule withheld the answer. If it was already streamed, replace it.
+        const m = getAgentMsg && getAgentMsg()
+        const note = 'Withheld by a firm rule: ' + (evt.message || '')
+        if (m) { m.textContent = note; m.classList.add('withheld') } else addMsg('warn', note)
+        break
+      }
       case 'done':
         dismissCompaction()
         clearLive()
@@ -1202,6 +1214,7 @@
       <div class="basis">${s.basis ? s.basis.jurisdiction + ' · ' + s.basis.source + ' · ' + s.basis.section : ''}</div>
       ${s.citationWarning ? `<div class="basis cite-warn">⚠ ${escHtml(s.citationWarning)}</div>` : ''}
       ${s.collapseWarning ? `<div class="basis cite-warn">⚠ ${escHtml(s.collapseWarning)} — review before applying</div>` : ''}
+      ${s.flags && s.flags.length ? s.flags.map((f) => `<div class="basis cite-warn">⚑ ${escHtml(f)}</div>`).join('') : ''}
       <div class="sug-actions">
         ${s.proposed_text ? '<button class="btn">Apply</button>' : ''}
         <button class="btn btn-ghost">Comment</button>
@@ -1254,6 +1267,7 @@
       ${loc ? `<div class="basis loc">${escHtml(loc + whole)}</div>` : ''}
       ${s.citationWarning ? `<div class="basis cite-warn">⚠ ${escHtml(s.citationWarning)}</div>` : ''}
       ${s.collapseWarning ? `<div class="basis cite-warn">⚠ ${escHtml(s.collapseWarning)} — review before applying</div>` : ''}
+      ${s.flags && s.flags.length ? s.flags.map((f) => `<div class="basis cite-warn">⚑ ${escHtml(f)}</div>`).join('') : ''}
       ${(s.clauseText || s.anchor) && s.proposed_text ? diffHtml(s.anchor.wholeParagraph ? (s.clauseText || s.anchor.text) : s.anchor.text, s.proposed_text) : `<div class="muted">${s.proposed_text || ''}</div>`}
       <div class="sug-actions">
         <button class="btn chat-approve">Approve</button>
