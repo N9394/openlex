@@ -260,7 +260,7 @@ async function run(id, { documents, columns, force = false, onProgress, signal }
   const lv = levels(grid.columns)
   const stats = { documents: docs.length, cells: 0, ok: 0, unverified: 0, invalid: 0, not_found: 0, errors: [] }
   const refCache = new Map()
-  const local = require('./llm').activeProvider().kind === 'local'
+  const local = require('./llm').providerFor('extract').kind === 'local'
   const width = local ? 1 : 4
   let done = 0
 

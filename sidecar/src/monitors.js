@@ -207,7 +207,7 @@ async function summarize(items) {
       const s = await chat([
         { role: 'system', content: 'You summarise new legislation for lawyers in one sentence. Only what the title and text say; no speculation.' },
         { role: 'user', content: `${it.title}\n${it.text || ''}` },
-      ], { maxTokens: 120, temperature: 0 })
+      ], { maxTokens: 120, temperature: 0, role: 'summarize' })
       it.summary = String(s).replace(/<think>[\s\S]*?<\/think>/g, '').trim().slice(0, 400)
     } catch { /* summary is optional */ }
   }

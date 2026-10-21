@@ -208,12 +208,12 @@ function datesInText(text) {
   return [...out]
 }
 
-async function askJson(messages, maxTokens) {
+async function askJson(messages, maxTokens, role = 'extract') {
   const { chat } = require('./llm')
-  const reply = await chat(messages, { maxTokens, temperature: 0 })
+  const reply = await chat(messages, { maxTokens, temperature: 0, role })
   try { return extractJson(reply) } catch {
     // One repair attempt: ask for the JSON only.
-    const again = await chat([...messages, { role: 'assistant', content: reply }, { role: 'user', content: 'Reply again with ONLY the JSON, no prose.' }], { maxTokens, temperature: 0 })
+    const again = await chat([...messages, { role: 'assistant', content: reply }, { role: 'user', content: 'Reply again with ONLY the JSON, no prose.' }], { maxTokens, temperature: 0, role })
     return extractJson(again)
   }
 }

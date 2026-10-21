@@ -234,7 +234,7 @@ async function draft({ request, examples = '', name } = {}) {
   const reply = await chat([
     { role: 'system', content: 'You write reusable instructions ("skills") for a legal AI assistant used by a law firm. Be concrete and procedural: steps, what to check, what to output. Never invent statutes or case law; tell the assistant to search for authority instead.' },
     { role: 'user', content: `Write a SKILL.md for this request:\n"""${String(request).slice(0, 2000)}"""\n${examples ? `\nThe firm's own example to follow (style, structure, positions):\n"""${String(examples).slice(0, 6000)}"""\n` : ''}\nFormat exactly:\n---\nname: <lowercase-with-dashes>${name ? ` (use "${name}")` : ''}\ntitle: <short title>\ndescription: <one sentence: when to use this skill>\ntriggers: [<5–10 short phrases a lawyer might type, in the languages they would use>]\noutput: <suggestions | text | file>\n---\n<numbered instructions, 5–15 steps, plus an "Output" section>\n\nOnly use tools from this list if you name any: ${tools}.` },
-  ], { maxTokens: 1800, temperature: 0.2 })
+  ], { maxTokens: 1800, temperature: 0.2, role: 'draft' })
   const text = String(reply).replace(/<think>[\s\S]*?<\/think>/g, '').replace(/^[\s\S]*?(?=---\n)/, '').replace(/```\w*\n?/g, '').trim()
   const { meta, body } = parse(text)
   if (name) meta.name = name
