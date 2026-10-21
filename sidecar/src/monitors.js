@@ -229,6 +229,13 @@ async function check(id) {
     const decision = policy.check({ id: 'web', local: false }, m.matterId)
     policy.audit({ provider: 'web', model: m.source.type === 'eurlex' ? 'publications.europa.eu' : m.source.type === 'ris' ? 'data.bka.gv.at' : (() => { try { return new URL(m.source.url).hostname } catch { return '?' } })(), matter: m.matterId, call: 'monitor', decision: decision.allowed ? 'allowed' : 'blocked' })
     m.lastRun = new Date().toISOString()
+    const hostOf = m.source.type === 'eurlex' ? 'publications.europa.eu' : m.source.type === 'ris' ? 'data.bka.gv.at' : (() => { try { return new URL(m.source.url).hostname } catch { return '' } })()
+    const hookBlock = decision.allowed ? await require('./web/guard').webHook(hostOf, 'monitor', m.source.url || null) : null
+    if (hookBlock) {
+      m.lastError = hookBlock
+      store(db)
+      return { alerts: [], checked: 0, error: m.lastError }
+    }
     if (!decision.allowed) {
       m.lastError = `blocked by data policy: ${decision.reason}`
       store(db)

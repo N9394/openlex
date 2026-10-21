@@ -622,7 +622,15 @@ async function runAction(ctx, userMessage, onEvent, opts = {}) {
     } else if (toolCache.has(cacheKey)) {
       output = toolCache.get(cacheKey)
     } else {
-      r = await dispatch(ctx, toolName, call.args || {})
+      const hooks = require('./hooks')
+      const gate = hooks.has('before_tool') ? await hooks.run('before_tool', { tool: toolName, args: call.args || {}, matterId: require('./policy').currentMatter() }) : { decision: 'allow' }
+      if (gate.decision === 'deny') {
+        r = { output: `BLOCKED by firm rule: ${gate.reason}. Do not retry this tool; continue with what you have or explain the limitation.` }
+        emit('step', { text: `blocked: ${toolName}` })
+      } else {
+        r = await dispatch(ctx, toolName, call.args || {})
+        if (hooks.has('after_tool')) hooks.run('after_tool', { tool: toolName, args: call.args || {}, ok: !/^ERROR|BLOCKED/.test(String(r.output || '')), chars: String(r.output || '').length, matterId: require('./policy').currentMatter() }).catch(() => {})
+      }
       output = r.output
       // Handle delegate_task: spawn a fresh LLM call with focused context
       if (r.delegate) {

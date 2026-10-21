@@ -78,6 +78,51 @@ Switch whole features on or off for everyone (firm layer) or yourself:
 { "features": { "browser": false, "monitors": true, "skillSuggestions": true } }
 ```
 
+## `hooks`: firm rules at each decision point
+
+| Decision point | Fires | Carries | What a hook can do |
+|---|---|---|---|
+| `before_model` | before each model is tried | `role, provider, model, local, chars, privileged` | `deny`: that model is skipped and the route moves on |
+| `before_tool` | before the agent runs a tool | `tool, args` | `deny`: the agent is told the tool is blocked |
+| `after_tool` | after a tool ran | `tool, args, ok, chars` | observe (commands, audit) |
+| `before_answer` | before the answer is final | `text` | `warn`: a note under the answer; `deny`: the answer is withheld |
+| `on_suggestion` | for each suggested change | `text` (proposed), `summary, severity` | `flag`: a note on the card (never auto-applied); `deny`: dropped |
+| `before_web` | before any web request, monitors included | `host, url, call` | `deny`: refused |
+| `after_workflow` | after review, chronology, translate, compare, grid, plan | `workflow, files, stats` | observe, e.g. file outputs into the DMS |
+
+Every event also carries `matterId`. Three hook types:
+
+**Rules** (the default): conditions plus an action (`allow`, `deny`, `warn`, `flag`). Conditions, all optional and all must match: `tool`, `role`, `provider`, `workflow`, `host` (`*.example.com` globs), `local`, `privileged`, `matters`, `regex` / `notRegex` on the event text (`(?i)` = ignore case), `minChars` / `maxChars`.
+
+**Commands**: a local program that gets the event as JSON on stdin and may print `{"decision": "allow|deny|warn|flag", "message": "…"}`. Exit code 2 means deny. A command that fails or runs past `timeoutMs` (default 10 s) is treated as allowed, unless the hook says `"onError": "deny"`. Commands receive document content: they are programs you configured on your own machine, and OpenLex sends nothing anywhere itself.
+
+**Decide**: asks the decision model (Kev, your own, or Jev under the data policy) a yes/no question about the event text; at or above `threshold` the hook's `action` applies. Skipped when no decision model is configured.
+
+```json
+{
+  "hooks": {
+    "before_tool": [
+      { "match": { "tool": ["web_fetch", "web_save"] }, "action": "deny", "reason": "No open-web research on client matters." }
+    ],
+    "before_answer": [
+      { "match": { "notRegex": "§|Art\\.|Article|Section", "minChars": 400 }, "action": "warn", "message": "No legal citation in this answer; verify before use." },
+      { "type": "decide", "question": "Does this answer give tax advice?", "threshold": 0.7, "action": "warn", "message": "Tax advice: involve the tax team." }
+    ],
+    "on_suggestion": [
+      { "match": { "regex": "(?i)\\bindemnif" }, "action": "flag", "message": "Indemnity change: partner sign-off." }
+    ],
+    "before_model": [
+      { "match": { "privileged": true, "local": false }, "action": "deny" }
+    ],
+    "after_workflow": [
+      { "type": "command", "command": "python3 /opt/firm/dms_upload.py", "timeoutMs": 30000 }
+    ]
+  }
+}
+```
+
+Every deny, warn and flag is written to the audit log (decision point, hook number, action), never the content. Hooks run in order; the first deny wins.
+
 ## Coming next
 
-`hooks` (checks and actions at each decision point) and `agents` (named agent profiles) use the same file.
+`agents` (named agent profiles) use the same file.

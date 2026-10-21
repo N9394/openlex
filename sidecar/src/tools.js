@@ -273,7 +273,7 @@ async function dispatch({ doc, memory, search, embeddings, packStore }, rawName,
     case 'search_ris': {
       const query = String(args.query || '').trim()
       if (!query) return { output: 'ERROR: search_ris requires a query' }
-      const blocked = require('./web/guard').checkWeb('data.bka.gv.at', 'search_ris')
+      const blocked = require('./web/guard').checkWeb('data.bka.gv.at', 'search_ris') || await require('./web/guard').webHook('data.bka.gv.at', 'search_ris')
       if (blocked) return { output: blocked }
       try {
         const r = await require('./web/ris').searchBundesrecht(query, { limit: Math.min(20, parseInt(args.limit, 10) || 8) })
@@ -290,7 +290,7 @@ async function dispatch({ doc, memory, search, embeddings, packStore }, rawName,
     case 'search_eurlex': {
       const query = String(args.query || '').trim()
       if (!query) return { output: 'ERROR: search_eurlex requires a query' }
-      const blocked = require('./web/guard').checkWeb('publications.europa.eu', 'search_eurlex')
+      const blocked = require('./web/guard').checkWeb('publications.europa.eu', 'search_eurlex') || await require('./web/guard').webHook('publications.europa.eu', 'search_eurlex')
       if (blocked) return { output: blocked }
       const lang = euLang(args.language, doc)
       try {
@@ -308,7 +308,7 @@ async function dispatch({ doc, memory, search, embeddings, packStore }, rawName,
     case 'get_eu_law': {
       const celex = String(args.celex || '').trim()
       if (!celex) return { output: 'ERROR: get_eu_law requires a celex number (from search_eurlex)' }
-      const blocked = require('./web/guard').checkWeb('publications.europa.eu', 'get_eu_law')
+      const blocked = require('./web/guard').checkWeb('publications.europa.eu', 'get_eu_law') || await require('./web/guard').webHook('publications.europa.eu', 'get_eu_law')
       if (blocked) return { output: blocked }
       try {
         const r = await require('./web/eurlex').text(celex, { lang: euLang(args.language, doc), article: args.article ? String(args.article) : null })
@@ -326,7 +326,7 @@ async function dispatch({ doc, memory, search, embeddings, packStore }, rawName,
       const guard = require('./web/guard')
       let u
       try { u = await guard.assertPublicUrl(args.url) } catch (err) { return { output: `ERROR: ${err.message}` } }
-      const blocked = guard.checkWeb(u.hostname, name)
+      const blocked = guard.checkWeb(u.hostname, name) || await guard.webHook(u.hostname, name, u)
       if (blocked) return { output: blocked }
       try {
         const r = await require('./web/browser').downloadToMatter(u.href, require('./workspace').matterFolder(currentMatterName()))
@@ -341,7 +341,7 @@ async function dispatch({ doc, memory, search, embeddings, packStore }, rawName,
       const guard = require('./web/guard')
       let u
       try { u = await guard.assertPublicUrl(args.url) } catch (err) { return { output: `ERROR: ${err.message}` } }
-      const blocked = guard.checkWeb(u.hostname, name)
+      const blocked = guard.checkWeb(u.hostname, name) || await guard.webHook(u.hostname, name, u)
       if (blocked) return { output: blocked }
       const browser = require('./web/browser')
       try {
