@@ -23,6 +23,7 @@ import Hub from './pages/Hub'
 import Grid from './pages/Grid'
 import Plans from './pages/Plans'
 import Desk from './pages/Desk'
+import HarnessMap from './pages/HarnessMap'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -60,6 +61,7 @@ function App() {
         <Route path="/grid" element={<Grid />} />
         <Route path="/plans" element={<Plans />} />
         <Route path="/desk" element={<Desk />} />
+        <Route path="/map" element={<HarnessMap />} />
         <Route path="/upload" element={<Upload />} />
         <Route path="/vault" element={<Vault />} />
         <Route path="/investigate" element={<Investigate />} />

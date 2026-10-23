@@ -152,3 +152,7 @@ Built in: `@associate` (the default), `@researcher` (statute and EU law memo, no
 - `depth`: `fast`, `balanced`, `deep` or `ultra` (tool hops and context budget).
 
 `openlex agents` lists them; `openlex map` shows the effective map including profiles and hooks.
+
+## The map in the desktop app
+
+**Harness map** (sidebar) draws the pipeline (request → plan → tools → analyze → write → judge → answer, plus workflows, translation, monitors and the skill builder). Each node shows the model it would use first under the selected matter's data policy and how many firm rules sit there. Click a node to see every candidate in order (blocked ones struck through, with the reason) and to route that role to another provider. Below, each section of *your* layer can be edited as JSON; it is validated before saving, and sections the firm locked are read-only.
