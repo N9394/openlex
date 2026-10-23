@@ -123,6 +123,32 @@ Every event also carries `matterId`. Three hook types:
 
 Every deny, warn and flag is written to the audit log (decision point, hook number, action), never the content. Hooks run in order; the first deny wins.
 
-## Coming next
+## `agents`: named profiles
 
-`agents` (named agent profiles) use the same file.
+A profile is a way of working: extra instructions, the tools it may use, its own model routes and a depth budget. Use one with `@name` at the start of a message (Word, CLI), `agent` in `/api/chat`, or set it as a matter's default (`matter.agent`). Profiles combine with skills: `@drafter /rebalance-clause make §7 fairer`.
+
+Built in: `@associate` (the default), `@researcher` (statute and EU law memo, no document edits, deep budget), `@reviewer` (risk review with anchored fixes), `@drafter` (firm wording first). The firm and user layers add profiles or change these by name:
+
+```json
+{
+  "agents": {
+    "tax-desk": {
+      "title": "Tax desk",
+      "description": "Austrian tax questions only.",
+      "instructions": "Answer for Austrian tax law only. Search the EStG, UStG and BAO before answering…",
+      "tools": ["search_law", "get_law_section", "search_ris"],
+      "routes": { "write": "anthropic:claude-opus-5-5", "plan": "local" },
+      "depth": "deep",
+      "skills": ["research-memo"]
+    },
+    "drafter": { "routes": { "write": "custom" } }
+  }
+}
+```
+
+- `instructions` go after OpenLex's legal rules (sources, citations, verbatim anchors), which always stay.
+- `tools` is an allow-list; with a skill active, only tools both allow can run. Reading the document, notes and proposing changes are always allowed.
+- `routes` apply before the routing map's role routes. The firm's routing rules and the data policy still come first.
+- `depth`: `fast`, `balanced`, `deep` or `ultra` (tool hops and context budget).
+
+`openlex agents` lists them; `openlex map` shows the effective map including profiles and hooks.

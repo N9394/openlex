@@ -201,19 +201,24 @@
   // ── Skills: "/" autocomplete in the composer (firm + bundled SKILL.md) ──
   let skillCache = null
   let skillPick = 0
+  // "/" = skills, "@" = agent profiles (openlex.json), after an optional "@agent ".
+  let agentCache = null
   async function loadSkills() {
-    if (skillCache) return skillCache
+    if (skillCache && agentCache) return skillCache
     try { skillCache = (await (await fetch(SIDECAR + '/api/skills')).json()).skills.filter((s) => !s.error) } catch { skillCache = [] }
-    setTimeout(() => { skillCache = null }, 60000) // pick up new firm skills
+    try { agentCache = (await (await fetch(SIDECAR + '/api/agents')).json()).agents.filter((a) => !a.error).map((a) => ({ ...a, agent: true })) } catch { agentCache = [] }
+    setTimeout(() => { skillCache = null; agentCache = null }, 60000) // pick up new firm skills and profiles
     return skillCache
   }
+  const MENU_RE = /^(@[a-z0-9-]+\s+)?([/@])([a-z0-9-]*)$/
   function skillMatches() {
-    const m = $('#input').value.match(/^\/([a-z0-9-]*)$/)
+    const m = $('#input').value.match(MENU_RE)
     if (!m || !skillCache) return []
-    return skillCache.filter((s) => s.name.startsWith(m[1]) || s.title.toLowerCase().includes(m[1])).slice(0, 8)
+    const pool = m[2] === '@' ? (m[1] ? [] : agentCache || []) : skillCache
+    return pool.filter((s) => s.name.startsWith(m[3]) || String(s.title || '').toLowerCase().includes(m[3])).slice(0, 8)
   }
   async function updateSkillMenu() {
-    if (!/^\/[a-z0-9-]*$/.test($('#input').value)) return hideSkillMenu()
+    if (!MENU_RE.test($('#input').value)) return hideSkillMenu()
     await loadSkills()
     const list = skillMatches()
     let menu = $('#skillMenu')
@@ -231,16 +236,17 @@
       item.type = 'button'
       item.className = 'skill-item' + (i === skillPick ? ' active' : '')
       item.innerHTML = `<b></b><span></span>`
-      item.querySelector('b').textContent = '/' + s.name
+      item.querySelector('b').textContent = (s.agent ? '@' : '/') + s.name
       item.querySelector('span').textContent = s.description
-      item.addEventListener('mousedown', (e) => { e.preventDefault(); chooseSkill(s.name) })
+      item.addEventListener('mousedown', (e) => { e.preventDefault(); chooseSkill(s.name, s.agent) })
       menu.appendChild(item)
     })
   }
   function hideSkillMenu() { const m = $('#skillMenu'); if (m) m.remove(); skillPick = 0 }
-  function chooseSkill(name) {
+  function chooseSkill(name, isAgent) {
     const ta = $('#input')
-    ta.value = `/${name} `
+    const prefix = (ta.value.match(MENU_RE) || [])[1] || ''
+    ta.value = `${prefix}${isAgent ? '@' : '/'}${name} `
     hideSkillMenu()
     ta.focus()
   }
@@ -248,7 +254,7 @@
     if (!$('#skillMenu')) return false
     const list = skillMatches()
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); skillPick = (skillPick + (e.key === 'ArrowDown' ? 1 : list.length - 1)) % list.length; updateSkillMenu(); return true }
-    if ((e.key === 'Enter' || e.key === 'Tab') && list[skillPick]) { e.preventDefault(); chooseSkill(list[skillPick].name); return true }
+    if ((e.key === 'Enter' || e.key === 'Tab') && list[skillPick]) { e.preventDefault(); chooseSkill(list[skillPick].name, list[skillPick].agent); return true }
     if (e.key === 'Escape') { hideSkillMenu(); return true }
     return false
   }
@@ -647,6 +653,9 @@
         break
       case 'skill':
         addMsg('step', `Skill: ${evt.title}`)
+        break
+      case 'agent':
+        addMsg('step', `Agent: ${evt.title}`)
         break
       case 'skill_suggestion':
         addSkillChip(evt)

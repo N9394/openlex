@@ -124,7 +124,7 @@ test('agent with a skill: instructions in the system prompt, tools outside the a
   const system = requests[0].messages.find((m) => m.role === 'system').content
   assert.match(system, /ACTIVE SKILL: Only law/)
   assert.match(system, /Always cite the statute first\./)
-  const steer = requests.flatMap((q) => q.messages).find((m) => /not an available tool for this skill/.test(m.content || ''))
+  const steer = requests.flatMap((q) => q.messages).find((m) => /not an available tool for this agent profile or skill/.test(m.content || ''))
   assert.ok(steer, 'search_ris was refused under the skill')
   assert.match(steer.content, /Available: search_law/)
   assert.match(r.text, /Final answer/)

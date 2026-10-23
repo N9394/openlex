@@ -20,6 +20,7 @@
  *   openlex monitors [add eurlex|ris "words" | add rss|page URL] [--topics a,b] [--every H] | check [ID] | alerts
  *   openlex lists [show ID | new TITLE | add ID "item" [--due YYYY-MM-DD] [--owner X] | done ID ITEM | export ID]
  *   openlex map [--matter ID]          which model handles each role, what is checked where
+ *   openlex agents                     agent profiles (use one with "@name …" in ask)
  *   openlex plan "goal" --matter ID | plan list | plan show ID | plan run ID (approves) | plan decide ID STEP continue|stop [--note text]
  *   openlex serve                      run the engine in the foreground
  *
@@ -306,6 +307,12 @@ async function main() {
       if (sub === 'export') { const r = await request('POST', '/api/lists/export', { id }); for (const f of r.files) console.log(f); return }
       throw new Error(`unknown lists command: ${sub}`)
     }
+    case 'agents': {
+      const r = await request('GET', '/api/agents')
+      if (a.json) return console.log(JSON.stringify(r, null, 2))
+      for (const ag of r.agents) console.log(`@${ag.name.padEnd(14)} ${ag.error ? `INVALID: ${ag.error}` : `${ag.description}${ag.depth ? `  [${ag.depth}]` : ''}${Object.keys(ag.routes || {}).length ? `  routes: ${Object.entries(ag.routes).map(([k, v]) => `${k}→${v}`).join(', ')}` : ''}`}`)
+      return
+    }
     case 'map': {
       const r = await request('GET', `/api/harness${a.matter ? `?matterId=${encodeURIComponent(a.matter)}` : ''}`)
       if (a.json) return console.log(JSON.stringify(r, null, 2))
@@ -313,6 +320,9 @@ async function main() {
       for (const e of [...r.errors, ...r.problems]) console.log(`  ! ${e}`)
       console.log('\nROUTES (tried in order; ✗ = skipped by the data policy)')
       for (const role of r.routes) console.log(`  ${role.role.padEnd(10)} ${role.candidates.map((c) => `${c.allowed ? '' : '✗'}${c.provider}${c.model ? `:${c.model}` : ''} (${c.reason})`).join(' → ')}`)
+      console.log(`\nAGENTS  ${(r.agents || []).map((x) => `@${x.name}${x.error ? ' (invalid)' : ''}`).join(' · ')}`)
+      const hk = Object.entries(r.config.hooks || {}).filter(([, v]) => (v || []).length)
+      console.log(`HOOKS   ${hk.length ? hk.map(([k, v]) => `${k} ×${v.length}`).join(' · ') : 'none'}`)
       const f = r.config.features
       console.log(`\nFEATURES  ${Object.entries(f).map(([k, v]) => `${k}${v === false ? ' off' : ''}`).join(' · ')}`)
       return
