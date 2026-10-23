@@ -433,8 +433,9 @@ async function handle(req, res) {
       try {
         if (req.method === 'GET' && p === '/api/harness') {
           const matterId = url.searchParams.get('matterId') || null
+          const agentName = url.searchParams.get('agent') || null
           const cfg = harness.load()
-          return sendJson(res, 200, { config: cfg, errors: harness.errors(), problems: [...routing.validate(cfg.routes), ...require('./hooks').validate(cfg.hooks), ...require('./agents').validate(cfg.agents)], agents: require('./agents').list(), routes: routing.explain({ matterId }), roles: routing.ROLES, files: { firm: harness.layers().firm.path, user: harness.USER_PATH } })
+          return sendJson(res, 200, { config: cfg, userLayer: harness.layers().user.data || {}, errors: harness.errors(), problems: [...routing.validate(cfg.routes), ...require('./hooks').validate(cfg.hooks), ...require('./agents').validate(cfg.agents)], agents: require('./agents').list(), routes: routing.explain({ matterId, agent: agentName }), roles: routing.ROLES, providers: Object.entries(require('./providers/catalog').PROVIDERS).map(([id, x]) => ({ id, label: x.label, local: !!x.local })), hookEvents: require('./hooks').EVENTS, files: { firm: harness.layers().firm.path, user: harness.USER_PATH } })
         }
         if (req.method === 'POST' && p === '/api/harness/section') {
           const body = await readBody(req)
