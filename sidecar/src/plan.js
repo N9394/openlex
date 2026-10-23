@@ -81,6 +81,7 @@ function cleanSteps(raw, { documents = [] } = {}) {
     if (kind === 'compare') { args.fileA = docByName(args.fileA); args.fileB = docByName(args.fileB); if (!args.fileA || !args.fileB || args.fileA === args.fileB) problem = 'needs two different documents from the matter' }
     if (kind === 'skill') { args.file = docByName(args.file); try { require('./skills').get(args.skill) } catch { problem = `unknown skill "${args.skill}"` } if (!problem && !args.file) problem = 'needs a document from the matter' }
     if (kind === 'research' && !String(args.question || '').trim()) problem = 'needs a question'
+    if (!problem && args.agent) { try { require('./agents').get(args.agent) } catch { problem = `unknown agent profile "${args.agent}"` } }
     if (kind === 'checkpoint' && !String(args.question || '').trim()) problem = 'needs a question for the lawyer'
     if (kind === 'grid') { try { require('./grid').cleanColumns(args.columns || []); if (!(args.columns || []).length) problem = 'needs columns' } catch (err) { problem = err.message } }
     if (kind === 'review' && args.playbook) { try { wf.loadPlaybook(args.playbook) } catch { problem = `unknown playbook "${args.playbook}"` } }
@@ -185,7 +186,9 @@ async function runStep(plan, step, { signal, onProgress }) {
       const ctx = { doc: new Document(text, `plan:${plan.id}:${step.id}`), memory: null, session: null, summary: () => '' }
       const skill = a.skill ? skills.get(a.skill) : null
       const question = step.kind === 'skill' ? (a.instruction || `Apply the "${skill.title}" skill to ${path.basename(a.file)}.`) : a.question
-      const r = await runAction(ctx, question, (e) => { if (e.type === 'step') progress({ text: e.text }) }, { signal, skill })
+      const agentsMod = require('./agents')
+      const agent = a.agent ? agentsMod.get(a.agent) : (step.kind === 'research' ? agentsMod.get('researcher') : null)
+      const r = await agentsMod.run(agent, () => runAction(ctx, question, (e) => { if (e.type === 'step') progress({ text: e.text }) }, { signal, skill, agent }))
       const ws = require('./workspace')
       const lines = [`# ${step.title}`, '', question, '', r.text || '']
       for (const s of r.suggestions || []) lines.push('', `- **[${s.severity}] ${s.summary}**`, s.anchor ? `  > ${String(s.anchor).replace(/\n/g, ' ')}` : '', s.proposed_text ? `  → ${s.proposed_text}` : '')

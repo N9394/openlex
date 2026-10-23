@@ -421,6 +421,10 @@ async function handle(req, res) {
       return res.end()
     }
 
+    if (req.method === 'GET' && p === '/api/agents') {
+      require('./workspace').setBase(require('./agent-config').load().workspace)
+      return sendJson(res, 200, { agents: require('./agents').list() })
+    }
     // ── Harness map (routes, hooks, agents, features — layered config) ───
     if (p === '/api/harness' || p.startsWith('/api/harness/')) {
       const harness = require('./harness')
@@ -430,11 +434,11 @@ async function handle(req, res) {
         if (req.method === 'GET' && p === '/api/harness') {
           const matterId = url.searchParams.get('matterId') || null
           const cfg = harness.load()
-          return sendJson(res, 200, { config: cfg, errors: harness.errors(), problems: [...routing.validate(cfg.routes), ...require('./hooks').validate(cfg.hooks)], routes: routing.explain({ matterId }), roles: routing.ROLES, files: { firm: harness.layers().firm.path, user: harness.USER_PATH } })
+          return sendJson(res, 200, { config: cfg, errors: harness.errors(), problems: [...routing.validate(cfg.routes), ...require('./hooks').validate(cfg.hooks), ...require('./agents').validate(cfg.agents)], agents: require('./agents').list(), routes: routing.explain({ matterId }), roles: routing.ROLES, files: { firm: harness.layers().firm.path, user: harness.USER_PATH } })
         }
         if (req.method === 'POST' && p === '/api/harness/section') {
           const body = await readBody(req)
-          if (body.value && ['routes', 'hooks'].includes(body.section)) { const problems = body.section === 'routes' ? routing.validate(body.value) : require('./hooks').validate(body.value); if (problems.length) return sendJson(res, 400, { error: problems.join('; '), problems }) }
+          if (body.value && ['routes', 'hooks', 'agents'].includes(body.section)) { const problems = body.section === 'routes' ? routing.validate(body.value) : body.section === 'hooks' ? require('./hooks').validate(body.value) : require('./agents').validate(body.value); if (problems.length) return sendJson(res, 400, { error: problems.join('; '), problems }) }
           return sendJson(res, 200, { config: harness.setUserSection(body.section, body.value ?? null) })
         }
         return sendJson(res, 404, { error: 'not found' })
@@ -1049,14 +1053,24 @@ async function handle(req, res) {
       // Firm skills (Phase 7.2): "/name …" or body.skill runs the agent with
       // that skill; otherwise suggest a matching one (the pane shows a chip).
       const skillsMod = require('./skills')
+      const agentsMod = require('./agents')
       let skill = null
+      let agent = null
       try {
+        // "@agent" first, then "/skill": "@drafter /rebalance-clause make §7 fairer".
+        if (body.agent) agent = agentsMod.get(body.agent)
+        else {
+          const ai = agentsMod.parseInvocation(body.message)
+          if (ai) { agent = ai.agent; body.message = ai.message }
+          else { const mt = matterIdFor(body, entry); const dm = mt ? require('./matters').get(mt)?.agent : null; if (dm) agent = agentsMod.get(dm) }
+        }
         if (body.skill) skill = skillsMod.get(body.skill)
         else {
           const inv = skillsMod.parseInvocation(body.message)
           if (inv) { skill = inv.skill; body.message = inv.message || `Apply the "${inv.skill.title}" skill to this document.` }
         }
       } catch (err) { sendSse(res, { type: 'error', message: err.message }); return res.end() }
+      if (agent && agent.name !== 'associate') sendSse(res, { type: 'agent', name: agent.name, title: agent.title })
       if (skill) sendSse(res, { type: 'skill', name: skill.name, title: skill.title })
       else if (body.suggestSkill !== false) {
         const hint = await policy.withMatter(matterIdFor(body, entry), () => skillsMod.suggest(body.message).catch(() => null))
@@ -1067,7 +1081,7 @@ async function handle(req, res) {
       const ac = new AbortController()
       res.on('close', () => ac.abort())
       try {
-        const r = await policy.withMatter(matterIdFor(body, entry), () => runAction(context, body.message, (e) => sendSse(res, e), { signal: ac.signal, skill }))
+        const r = await policy.withMatter(matterIdFor(body, entry), () => agentsMod.run(agent, () => runAction(context, body.message, (e) => sendSse(res, e), { signal: ac.signal, skill, agent })))
         // Conversation memory: persist the exchange (best-effort; the
         // model's streamed prose already went out token-by-token).
         session.append(body.message, r.text)

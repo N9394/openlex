@@ -84,6 +84,8 @@ function update(id, patch = {}) {
   if (patch.title !== undefined) { const t = str(patch.title, 200); if (!t) throw new Error('matter title is required'); m.title = t }
   if (patch.client !== undefined) m.client = str(patch.client, 200)
   if (patch.number !== undefined) m.number = str(patch.number, 80)
+  // Default agent profile for this matter (agents.js); null clears it.
+  if (patch.agent !== undefined) { if (patch.agent) require('./agents').get(patch.agent); m.agent = patch.agent ? String(patch.agent) : null }
   if (patch.redactTerms !== undefined) {
     // Names of parties/people to pseudonymise before cloud calls.
     m.redactTerms = (Array.isArray(patch.redactTerms) ? patch.redactTerms : String(patch.redactTerms).split(/[\n,;]/))

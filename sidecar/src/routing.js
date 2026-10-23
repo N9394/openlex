@@ -17,7 +17,7 @@
  * anthropic, openai, azure, mistral, openrouter, bedrock, vertex, custom).
  *
  * Candidate order for a call: the first matching rule's targets, then the
- * role's target, then the active provider (Settings), then the fallback
+ * active agent profile's route for the role (agents.js), then the role's target, then the active provider (Settings), then the fallback
  * list. llm.js walks the candidates in order: the data policy and missing
  * keys skip a candidate, and a failed call (network, 5xx, rate limit)
  * moves on to the next one before anything was streamed. With no routes
@@ -106,6 +106,8 @@ function candidates(opts = {}) {
   const rules = asList(routes.rules)
   const hit = rules.findIndex((r) => r && r.use && matches(r.when, ctx))
   if (hit >= 0) asList(rules[hit].use).forEach((t) => add(t, `rule ${hit + 1}`))
+  const agent = require('./agents').current()
+  if (agent && ctx.role) asList(agent.routes?.[ctx.role]).forEach((t) => add(t, `agent ${agent.name}`))
   if (ctx.role) asList(routes.roles?.[ctx.role]).forEach((t) => add(t, `role ${ctx.role}`))
   add(settings.load().active, 'active provider')
   asList(routes.fallback).forEach((t) => add(t, 'fallback'))
@@ -128,7 +130,8 @@ function usesLocal() {
  * Explain the route for every role (or one context): candidates with
  * the data policy's verdict on each. Used by the map UI and `openlex map`.
  */
-function explain({ matterId = null, chars = 0 } = {}) {
+function explain({ matterId = null, chars = 0, agent = null } = {}) {
+  if (agent) return require('./agents').run(require('./agents').get(agent), () => explain({ matterId, chars }))
   const policy = require('./policy')
   return ROLES.map((role) => ({
     role,
