@@ -14,7 +14,7 @@
   <Description DefaultValue="Airgapped legal drafting agent — analyzes the open document against downloaded law packs and suggests changes as comments. Nothing leaves your machine." />
   <IconUrl DefaultValue="https://localhost:18001/assets/icon-32.png" />
   <HighResolutionIconUrl DefaultValue="https://localhost:18001/assets/icon-80.png" />
-  <SupportUrl DefaultValue="https://lexvault.pinemarshlands.com" />
+  <SupportUrl DefaultValue="https://github.com/N9394/openlex" />
 
   <AppDomains>
     <AppDomain>https://localhost:18001</AppDomain>
@@ -102,7 +102,7 @@
       <bt:Urls>
         <bt:Url id="Commands.Url" DefaultValue="https://localhost:18001/commands.html" />
         <bt:Url id="Taskpane.Url" DefaultValue="https://localhost:18001/taskpane.html" />
-        <bt:Url id="GetStarted.LearnMoreUrl" DefaultValue="https://lexvault.pinemarshlands.com" />
+        <bt:Url id="GetStarted.LearnMoreUrl" DefaultValue="https://github.com/N9394/openlex" />
       </bt:Urls>
       <bt:ShortStrings>
         <bt:String id="GetStarted.Title" DefaultValue="OpenLex is ready" />

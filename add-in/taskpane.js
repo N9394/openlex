@@ -2419,8 +2419,9 @@
     switch (lic.status) {
       case 'active': return statusCard('ok', 'Active', `Paid subscription · ${(lic.jurisdictions || []).length} jurisdiction(s) · expires ${new Date(lic.expiresAt).toLocaleDateString()}.`)
       case 'no_token': return statusCard('neutral', 'No license token', 'The plugin runs fully offline, but downloads and the subscription check need your login token.')
-      case 'invalid_token': return statusCard('bad', 'Token rejected', 'This token is not under a paid subscription.', '<a class="btn" href="https://lexvault.pinemarshlands.com/buy" target="_blank" rel="noopener">Get a subscription</a>')
-      case 'expired': return statusCard('bad', 'Subscription expired', 'Your subscription has lapsed. Renew to keep downloads and updates flowing.', '<a class="btn" href="https://lexvault.pinemarshlands.com/buy" target="_blank" rel="noopener">Renew</a>')
+      case 'community': return statusCard('ok', 'Community build', 'No licence needed. Use your own model keys or a local model; add law packs and models locally.')
+      case 'invalid_token': return statusCard('bad', 'Token rejected', 'This token is not under a paid subscription.', lic.accountUrl ? `<a class="btn" href="${escHtml(lic.accountUrl)}" target="_blank" rel="noopener">Get a subscription</a>` : '')
+      case 'expired': return statusCard('bad', 'Subscription expired', 'Your subscription has lapsed. Renew to keep downloads and updates flowing.', lic.accountUrl ? `<a class="btn" href="${escHtml(lic.accountUrl)}" target="_blank" rel="noopener">Renew</a>` : '')
       case 'offline': return statusCard('warn', 'License server unreachable', 'Could not reach the license server — a cached license may still work offline.')
       default: return statusCard('neutral', lic.status || 'Unknown', lic.error || '')
     }
@@ -2442,7 +2443,7 @@
       // STEP 1 — no token yet: paste it, then we verify the subscription.
       box.innerHTML = `
         ${licenseStatusCard(lic)}
-        <div class="muted" style="margin-bottom:0.5rem">Get your token at <b>lexvault.pinemarshlands.com/account</b>.</div>
+        <div class="muted" style="margin-bottom:0.5rem">Get your token from your distributor's account page.</div>
         <input type="text" id="tokenInput" placeholder="Paste your login token (lv_live_…)">
         <button class="btn btn-block" id="saveTokenBtn">Activate</button>
         <div id="setupProgress" class="muted" style="margin-top:0.5rem"></div>`

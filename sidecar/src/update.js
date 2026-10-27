@@ -43,6 +43,7 @@ const UPDATES_DIR = path.join(DATA_DIR, 'updates')
 fs.mkdirSync(UPDATES_DIR, { recursive: true })
 
 function licenseBase() {
+  if (!LICENSE_URL) throw new Error('community build: no update server configured')
   const u = new URL(LICENSE_URL)
   return `${u.protocol}//${u.host}`
 }

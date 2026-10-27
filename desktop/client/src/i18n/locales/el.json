@@ -682,7 +682,7 @@
       "accountId": "Αναγνωριστικό λογαριασμού",
       "tier": "Επίπεδο",
       "subscribedJurisdictions": "Εγγεγραμμένες δικαιοδοσίες",
-      "noSubscriptions": "Καμία ενεργή συνδρομή. Προσθέστε μια δικαιοδοσία στο lexvault.pinemarshlands.com.",
+      "noSubscriptions": "Καμία ενεργή συνδρομή. Προσθέστε μια δικαιοδοσία στον λογαριασμό σας στον πάροχο.",
       "appVersion": "Έκδοση εφαρμογής",
       "statuteChunks": "Τμήματα νόμων (τοπικό Qdrant)",
       "qdrantUnreachable": "Το Qdrant δεν είναι προσβάσιμο",

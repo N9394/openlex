@@ -43,8 +43,8 @@ electron/
 
 ## Dev — run against the cloud backend, no local sidecars
 
-The fastest inner loop: keep the Vite dev server and the existing legalclarity
-backend running (the production cloud one), and just open them inside Electron.
+The fastest inner loop: keep the Vite dev server and an existing OpenLex
+backend running, and just open them inside Electron.
 
 ```bash
 # Terminal 1 — Vite dev server

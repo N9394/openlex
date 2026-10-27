@@ -247,7 +247,7 @@ log_level: WARN
         EMBEDDINGS_PORT: String(PORTS.embeddings),
         EMBEDDINGS_MODELS_DIR: path.join(this.paths.models, 'embeddings'),
         LEXVAULT_TOKEN: lvToken,
-        LEXVAULT_LICENSE_SERVER: process.env.LEXVAULT_LICENSE_SERVER || 'https://lexvault.pinemarshlands.com',
+        ...(process.env.LEXVAULT_LICENSE_SERVER ? { LEXVAULT_LICENSE_SERVER: process.env.LEXVAULT_LICENSE_SERVER } : {}),
         HOME: process.env.HOME,
       },
       stdio: ['ignore', 'pipe', 'pipe'],

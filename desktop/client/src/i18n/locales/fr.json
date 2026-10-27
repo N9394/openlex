@@ -682,7 +682,7 @@
       "accountId": "Identifiant du compte",
       "tier": "Niveau",
       "subscribedJurisdictions": "Juridictions abonnées",
-      "noSubscriptions": "Aucun abonnement actif. Ajoutez une juridiction sur lexvault.pinemarshlands.com.",
+      "noSubscriptions": "Aucun abonnement actif. Ajoutez une juridiction dans votre compte chez votre fournisseur.",
       "appVersion": "Version de l'application",
       "statuteChunks": "Sections législatives (Qdrant local)",
       "qdrantUnreachable": "Qdrant injoignable",

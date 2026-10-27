@@ -3,8 +3,7 @@
 # product model (the spec-card 4B fine-tune).
 #
 # Usage:
-#   1. Get the GGUF onto this machine (from the server, or wherever it lives):
-#        scp root@$OPENLEX_DEPLOY_HOST:/opt/lexvault-packs/models/lotus-ai-q4km.gguf ~/.lexvault/models/
+#   1. Put the GGUF into ~/.lexvault/models/ (download it from your distributor or build your own).
 #   2. Run this script.
 set -euo pipefail
 
@@ -13,9 +12,7 @@ NAME="lotus-ai-4b-q4_k_m"   # must match the tier-registry variant name
 
 if [ ! -f "$MODEL_PATH" ]; then
   echo "GGUF not found: $MODEL_PATH"
-  echo "Download it first (2.7 GB):"
-  echo "  mkdir -p ~/.lexvault/models"
-  echo "  scp root@$OPENLEX_DEPLOY_HOST:/opt/lexvault-packs/models/lotus-ai-q4km.gguf ~/.lexvault/models/"
+  echo "Put the GGUF (2.7 GB) into ~/.lexvault/models/ first."
   exit 1
 fi
 

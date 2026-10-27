@@ -31,6 +31,7 @@ fs.mkdirSync(MODELS_DIR, { recursive: true })
 fs.mkdirSync(PACKS_DIR, { recursive: true })
 
 function licenseBase() {
+  if (!LICENSE_URL) throw new Error('No download server in this build (community build): add models and law packs locally, or install a distribution that provides them.')
   const u = new URL(LICENSE_URL)
   return `${u.protocol}//${u.host}`
 }

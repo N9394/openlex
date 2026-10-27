@@ -8,7 +8,7 @@
 # Output:
 #   dist/lexvault-word-plugin-{mac,win}-<ver>.zip   payload
 #   dist/plugin-{mac,win}.json                      manifest (published)
-#   deployed to /opt/lexvault-packs/plugins/ on the server
+#   uploaded by the distributor to its update server
 #
 # Usage: scripts/build-update.sh [version]   (default: bump 0.1.0 → 0.1.1)
 set -euo pipefail
@@ -72,11 +72,6 @@ print('sidecar/package.json → $VERSION')
 PY
 
 echo
-echo "== publishing to server =="
-scp -o BatchMode=yes dist/lexvault-word-plugin-mac-$VERSION.zip dist/lexvault-word-plugin-win-$VERSION.zip \
-  dist/plugin-mac.json dist/plugin-win.json \
-  root@${OPENLEX_DEPLOY_HOST:?set OPENLEX_DEPLOY_HOST}:/opt/lexvault-packs/plugins/
-ssh -o BatchMode=yes root@${OPENLEX_DEPLOY_HOST:?set OPENLEX_DEPLOY_HOST} "ls -lh /opt/lexvault-packs/plugins/ | tail -6"
-
+echo "== built: upload dist/lexvault-word-plugin-*-$VERSION.zip and dist/plugin-*.json to your update server (the distributor's publish step) =="
 echo
-echo "== done: v$CUR → v$VERSION published =="
+echo "== done: v$CUR → v$VERSION built =="

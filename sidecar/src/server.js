@@ -928,7 +928,9 @@ async function handle(req, res) {
 
     if (req.method === 'GET' && p === '/api/license/status') {
       const st = watchdog.state
-      return sendJson(res, 200, st.status === 'unknown' ? { status: 'pending', ...st } : st)
+      const dist = require('./distribution').load(config.DATA_DIR)
+      const links = { distribution: dist?.name || null, accountUrl: dist?.accountUrl || null, downloadUrl: dist?.downloadUrl || null, supportUrl: dist?.supportUrl || null }
+      return sendJson(res, 200, st.status === 'unknown' ? { status: 'pending', ...st, ...links } : { ...st, ...links })
     }
 
     if (req.method === 'GET' && p === '/api/jurisdictions') {

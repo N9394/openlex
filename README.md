@@ -76,6 +76,12 @@ OPENLEX_TEST_NETWORK=1 node --test test/web.test.js       # + live RIS and brows
 node --test desktop/electron/test/                        # app ↔ Word hub, engine bootstrap
 ```
 
+## Community build and distributions
+
+The code here has no built-in server: it is the **community build**. There is no licence check and no update feed. Use your own model keys or a local model, and add law packs and models locally.
+
+A company that distributes OpenLex (with its own licences, updates, law packs and models) ships a `distribution.json` next to the engine. See `distribution.example.json` for the format, and `sidecar/src/distribution.js` for where it is looked up. Build scripts take the path from `OPENLEX_DISTRIBUTION`; the file itself never belongs in this repository.
+
 ## Licence
 
 Apache-2.0. See [LICENSE](LICENSE). Jurisdiction data packs and model weights are distributed separately under their own terms.
