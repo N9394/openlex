@@ -39,7 +39,7 @@ function retryable(err) {
   if (!err) return false
   if (err.code === 'POLICY_BLOCKED' || err.code === 'NO_KEY' || err.code === 'HOOK_BLOCKED') return true
   const m = String(err.message || err)
-  return /ECONN|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|socket hang up|fetch failed|timed? ?out|aborted due to timeout|HTTP (429|5\d\d)|\b(429|50[0-4])\b|overloaded|rate limit/i.test(m) && !/AbortError|cancel/i.test(m)
+  return /ECONN|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|socket hang up|fetch failed|timed? ?out|aborted due to timeout|HTTP (429|5\d\d)|\b(429|50[0-4])\b|overloaded|rate limit|returned no content/i.test(m) && !/AbortError|cancel/i.test(m)
 }
 
 /**

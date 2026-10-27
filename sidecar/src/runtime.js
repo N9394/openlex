@@ -96,6 +96,10 @@ function findLlamaServer() {
   // to sidecar/, not inside it)
   candidates.push(path.join(__dirname, '..', '..', 'bin', exe))
   candidates.push(path.join(MODELS_DIR, '..', 'bin', exe))
+  // CLI installs (Homebrew, tarball): an explicit path, then llama.cpp on PATH
+  // (e.g. `brew install llama.cpp`).
+  if (process.env.OPENLEX_LLAMA_SERVER) candidates.unshift(process.env.OPENLEX_LLAMA_SERVER)
+  for (const dir of String(process.env.PATH || '').split(path.delimiter).filter(Boolean)) candidates.push(path.join(dir, exe))
   for (const c of candidates) {
     try { if (fs.existsSync(c) && fs.statSync(c).isFile()) return c } catch { }
   }

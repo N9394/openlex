@@ -134,6 +134,10 @@ async function main() {
   const a = parseArgs(rest)
   switch (cmd) {
     case 'serve':
+      // Run until stopped: without this the engine shuts down when no Word,
+      // Outlook or desktop app is attached (their idle rule), which is never
+      // the case for a terminal or server install.
+      process.env.LEXVAULT_KEEPALIVE = process.env.LEXVAULT_KEEPALIVE || '1'
       require(path.join(__dirname, '..', 'src', 'server.js'))
       return
     case 'status': {

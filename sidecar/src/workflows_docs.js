@@ -115,10 +115,23 @@ function batches(paras) {
 
 async function translateBatch(batch, targetName, glossary, docName) {
   const items = await wf.askJson(translatePrompt(batch, targetName, glossary, docName), Math.min(8000, 400 + Math.ceil(batch.reduce((n, b) => n + b.text.length, 0) / 2)), 'translate')
+  return parseTranslations(items)
+}
+
+/**
+ * Model reply → Map(paragraph number → translation). Tolerant of the shapes
+ * models actually produce: "i": 3 | "3" | "[3]", and the keys index / id /
+ * paragraph for the number, text / translation for the text.
+ */
+function parseTranslations(items) {
   const got = new Map()
   for (const it of Array.isArray(items) ? items : []) {
-    const i = Number(it?.i)
-    if (Number.isInteger(i) && typeof it.t === 'string' && it.t.trim()) got.set(i, it.t.trim())
+    if (!it || typeof it !== 'object') continue
+    const rawI = it.i ?? it.index ?? it.id ?? it.paragraph ?? it.n
+    const m = String(rawI ?? '').match(/-?\d+/)
+    const i = m ? Number(m[0]) : NaN
+    const t = it.t ?? it.text ?? it.translation
+    if (Number.isInteger(i) && typeof t === 'string' && t.trim()) got.set(i, t.trim())
   }
   return got
 }
@@ -309,4 +322,4 @@ async function runCompare({ matterId, fileA, fileB, rate = true, onProgress, sig
   return { files, changes: rows, stats: { paragraphsA: pa.length, paragraphsB: pb.length, changes: hs.length, ...counts, ...(rateError ? { rateError } : {}) } }
 }
 
-module.exports = { runTranslate, runCompare, numbersIn, sameNumbers, glossaryMisses, diff, hunks, wordRuns, paragraphs, LANGS }
+module.exports = { parseTranslations, runTranslate, runCompare, numbersIn, sameNumbers, glossaryMisses, diff, hunks, wordRuns, paragraphs, LANGS }

@@ -119,3 +119,8 @@ test('compare works offline: without a model the diff is still produced', async 
   assert.strictEqual(r.stats.changes, 2)
   assert.ok(r.changes.every((c) => !c.materiality))
 })
+
+test('translation replies: numbers as "[3]" or strings and alternative keys are understood', () => {
+  const m = wfd.parseTranslations([{ i: '[0]', t: 'LEASE' }, { i: '1', t: 'Lessor' }, { index: 2, translation: 'Premises' }, { paragraph: 'Para 3', text: 'Term' }, { i: 'x', t: 'dropped' }, { i: 4, t: '  ' }])
+  assert.deepStrictEqual([...m.entries()], [[0, 'LEASE'], [1, 'Lessor'], [2, 'Premises'], [3, 'Term']])
+})
