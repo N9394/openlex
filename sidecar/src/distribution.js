@@ -30,6 +30,7 @@ function load(dataDir) {
   if (cached !== undefined) return cached
   const candidates = [
     process.env.OPENLEX_DISTRIBUTION,
+    path.join(__dirname, 'distribution.json'), // plugin update payloads carry it inside src/
     path.join(__dirname, '..', 'distribution.json'),
     path.join(__dirname, '..', '..', 'distribution.json'),
     dataDir ? path.join(dataDir, 'distribution.json') : null,

@@ -28,7 +28,8 @@
 const fs = require('fs')
 const path = require('path')
 
-const BUNDLED = path.join(__dirname, '..', 'skills')
+// Bundled starters: sidecar/skills, or src/bundled/skills inside a plugin update payload.
+const BUNDLED = [path.join(__dirname, '..', 'skills'), path.join(__dirname, 'bundled', 'skills')].find((d) => fs.existsSync(d)) || path.join(__dirname, '..', 'skills')
 const NAME_RE = /^[a-z0-9][a-z0-9-]{1,47}$/
 const MAX_BODY = 12000
 // Tools a skill can never switch off: reading the document, notes, and

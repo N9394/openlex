@@ -236,7 +236,7 @@ function chronologyPrompt(docName, part, idx, total) {
 // ── runs ─────────────────────────────────────────────────────────────────
 // Starter playbooks shipped with OpenLex (sidecar/playbooks). A firm file
 // with the same name in the workspace playbooks/ folder takes precedence.
-const BUNDLED_PLAYBOOKS = path.join(__dirname, '..', 'playbooks')
+const BUNDLED_PLAYBOOKS = [path.join(__dirname, '..', 'playbooks'), path.join(__dirname, 'bundled', 'playbooks')].find((d) => fs.existsSync(d)) || path.join(__dirname, '..', 'playbooks')
 
 function bundledPlaybooks() {
   try { return fs.readdirSync(BUNDLED_PLAYBOOKS).filter((f) => f.endsWith('.json')).map((f) => f.slice(0, -5)) } catch { return [] }
