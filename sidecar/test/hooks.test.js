@@ -129,3 +129,16 @@ test('before_tool deny inside the agent loop; before_web deny in the web guard',
   assert.ok(calls.cloud > before)
   assert.strictEqual(await require('../src/web/guard').webHook('data.bka.gv.at', 'search_ris'), 'BLOCKED by firm rule: RIS disabled.')
 })
+
+test('a tool that throws does not end the agent run', async () => {
+  setHooks({})
+  const tools = require('../src/tools')
+  const orig = tools.TOOLS.search_law
+  const { runAction } = require('../src/agent')
+  const { Document } = require('../src/doc')
+  replies.push(JSON.stringify({ reasoning: 'law', tool: 'search_law', args: { query: 'Vertragsstrafe', jurisdiction: 'AT' } }), 'Answer without the law search.')
+  const ctx = { doc: new Document('§ 1 Test.', 'd-throw'), memory: null, session: null, summary: () => '', embeddings: { embedQueries: async () => { throw new Error('connect ECONNREFUSED 127.0.0.1:11434') } }, search: {} }
+  const r = await policy.withMatter(null, () => runAction(ctx, 'Is a penalty enforceable?', () => {}))
+  assert.match(r.text, /Answer without the law search/)
+  assert.ok(orig)
+})

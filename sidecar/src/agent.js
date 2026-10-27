@@ -629,7 +629,15 @@ async function runAction(ctx, userMessage, onEvent, opts = {}) {
         r = { output: `BLOCKED by firm rule: ${gate.reason}. Do not retry this tool; continue with what you have or explain the limitation.` }
         emit('step', { text: `blocked: ${toolName}` })
       } else {
-        r = await dispatch(ctx, toolName, call.args || {})
+        try {
+          r = await dispatch(ctx, toolName, call.args || {})
+        } catch (err) {
+          // A broken tool (no law packs, embeddings service down, network)
+          // must not end the run: the model gets the error and carries on.
+          console.warn(`[agent] tool ${toolName} failed:`, err.message)
+          const why = /ECONNREFUSED|ENOTFOUND|fetch failed/.test(String(err.message)) ? 'the service it needs is not available on this machine' : String(err.message).slice(0, 200)
+          r = { output: `ERROR: ${toolName} failed (${why}). Do not retry it; continue with the other tools or explain what could not be checked.` }
+        }
         if (hooks.has('after_tool')) hooks.run('after_tool', { tool: toolName, args: call.args || {}, ok: !/^ERROR|BLOCKED/.test(String(r.output || '')), chars: String(r.output || '').length, matterId: require('./policy').currentMatter() }).catch(() => {})
       }
       output = r.output

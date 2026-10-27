@@ -81,6 +81,8 @@ function cleanSteps(raw, { documents = [] } = {}) {
     if (kind === 'compare') { args.fileA = docByName(args.fileA); args.fileB = docByName(args.fileB); if (!args.fileA || !args.fileB || args.fileA === args.fileB) problem = 'needs two different documents from the matter' }
     if (kind === 'skill') { args.file = docByName(args.file); try { require('./skills').get(args.skill) } catch { problem = `unknown skill "${args.skill}"` } if (!problem && !args.file) problem = 'needs a document from the matter' }
     if (kind === 'research' && !String(args.question || '').trim()) problem = 'needs a question'
+    // An optional skill on a research step must exist; an invented one is dropped, the step stays.
+    if (kind === 'research' && args.skill) { try { require('./skills').get(args.skill) } catch { notes.push(`step ${i + 1}: unknown skill "${args.skill}" dropped, the research runs without it`); delete args.skill } }
     if (!problem && args.agent) { try { require('./agents').get(args.agent) } catch { problem = `unknown agent profile "${args.agent}"` } }
     if (kind === 'checkpoint' && !String(args.question || '').trim()) problem = 'needs a question for the lawyer'
     if (kind === 'grid') { try { require('./grid').cleanColumns(args.columns || []); if (!(args.columns || []).length) problem = 'needs columns' } catch (err) { problem = err.message } }
@@ -183,7 +185,9 @@ async function runStep(plan, step, { signal, onProgress }) {
       const { Document } = require('./doc')
       const skills = require('./skills')
       const text = step.kind === 'skill' ? String(await wf.readDoc(a.file)) : ''
-      const ctx = { doc: new Document(text, `plan:${plan.id}:${step.id}`), memory: null, session: null, summary: () => '' }
+      // Same context the chat route gives the agent (law search needs search + embeddings).
+      const doc = new Document(text, `plan:${plan.id}:${step.id}`)
+      const ctx = { doc, memory: null, session: null, search: require('./search'), embeddings: require('./embeddings'), summary: () => doc.summary() }
       const skill = a.skill ? skills.get(a.skill) : null
       const question = step.kind === 'skill' ? (a.instruction || `Apply the "${skill.title}" skill to ${path.basename(a.file)}.`) : a.question
       const agentsMod = require('./agents')
