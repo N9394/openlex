@@ -81,6 +81,9 @@ function cleanSteps(raw, { documents = [] } = {}) {
     if (kind === 'compare') { args.fileA = docByName(args.fileA); args.fileB = docByName(args.fileB); if (!args.fileA || !args.fileB || args.fileA === args.fileB) problem = 'needs two different documents from the matter' }
     if (kind === 'skill') { args.file = docByName(args.file); try { require('./skills').get(args.skill) } catch { problem = `unknown skill "${args.skill}"` } if (!problem && !args.file) problem = 'needs a document from the matter' }
     if (kind === 'research' && !String(args.question || '').trim()) problem = 'needs a question'
+    // An optional skill on a research step must exist; an invented one is dropped, the step stays.
+    if (kind === 'research' && args.skill) { try { require('./skills').get(args.skill) } catch { notes.push(`step ${i + 1}: unknown skill "${args.skill}" dropped, the research runs without it`); delete args.skill } }
+    if (!problem && args.agent) { try { require('./agents').get(args.agent) } catch { problem = `unknown agent profile "${args.agent}"` } }
     if (kind === 'checkpoint' && !String(args.question || '').trim()) problem = 'needs a question for the lawyer'
     if (kind === 'grid') { try { require('./grid').cleanColumns(args.columns || []); if (!(args.columns || []).length) problem = 'needs columns' } catch (err) { problem = err.message } }
     if (kind === 'review' && args.playbook) { try { wf.loadPlaybook(args.playbook) } catch { problem = `unknown playbook "${args.playbook}"` } }
@@ -127,7 +130,7 @@ async function propose({ goal, matterId = null, documents } = {}) {
   const items = await wf.askJson([
     { role: 'system', content: 'You plan legal work for a lawyer as a short sequence of steps using ONLY the listed capabilities. Prefer few, high-value steps. Put a checkpoint before any step that depends on the lawyer\'s judgment. Never invent documents.' },
     { role: 'user', content: `GOAL: ${String(goal).slice(0, 2000)}\n\n${capabilities({ documents: docs, playbooks, skills: skillNames })}\n\nReply with JSON only: [{"id": "s1", "kind": "<kind>", "title": "<what this step achieves, one line>", "args": {…}, "dependsOn": ["<earlier step id>", …]}]` },
-  ], 2500)
+  ], 2500, 'plan')
   const { steps, notes } = cleanSteps(items, { documents: docs })
   if (!steps.length) throw new Error(`the model proposed no usable steps${notes.length ? ` (${notes.join('; ')})` : ''}`)
   return save({ id: crypto.randomBytes(6).toString('hex'), matterId: matterId || null, goal: String(goal).slice(0, 2000), documents: docs, steps, notes, status: 'proposed', createdAt: new Date().toISOString() })
@@ -182,10 +185,14 @@ async function runStep(plan, step, { signal, onProgress }) {
       const { Document } = require('./doc')
       const skills = require('./skills')
       const text = step.kind === 'skill' ? String(await wf.readDoc(a.file)) : ''
-      const ctx = { doc: new Document(text, `plan:${plan.id}:${step.id}`), memory: null, session: null, summary: () => '' }
+      // Same context the chat route gives the agent (law search needs search + embeddings).
+      const doc = new Document(text, `plan:${plan.id}:${step.id}`)
+      const ctx = { doc, memory: null, session: null, search: require('./search'), embeddings: require('./embeddings'), summary: () => doc.summary() }
       const skill = a.skill ? skills.get(a.skill) : null
       const question = step.kind === 'skill' ? (a.instruction || `Apply the "${skill.title}" skill to ${path.basename(a.file)}.`) : a.question
-      const r = await runAction(ctx, question, (e) => { if (e.type === 'step') progress({ text: e.text }) }, { signal, skill })
+      const agentsMod = require('./agents')
+      const agent = a.agent ? agentsMod.get(a.agent) : (step.kind === 'research' ? agentsMod.get('researcher') : null)
+      const r = await agentsMod.run(agent, () => runAction(ctx, question, (e) => { if (e.type === 'step') progress({ text: e.text }) }, { signal, skill, agent }))
       const ws = require('./workspace')
       const lines = [`# ${step.title}`, '', question, '', r.text || '']
       for (const s of r.suggestions || []) lines.push('', `- **[${s.severity}] ${s.summary}**`, s.anchor ? `  > ${String(s.anchor).replace(/\n/g, ' ')}` : '', s.proposed_text ? `  → ${s.proposed_text}` : '')
@@ -207,7 +214,7 @@ async function run(id, { signal, onProgress } = {}) {
   if (['done', 'stopped'].includes(plan.status)) return plan
   plan.status = 'running'
   save(plan)
-  const local = require('./llm').activeProvider().kind === 'local'
+  const local = require('./llm').providerFor('extract').kind === 'local'
   const width = local ? 1 : 3
   const running = new Map()
   const doneOk = (s) => s.status === 'done'

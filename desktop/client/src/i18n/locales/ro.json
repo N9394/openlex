@@ -686,7 +686,7 @@
       "accountId": "ID cont",
       "tier": "Nivel",
       "subscribedJurisdictions": "Jurisdicții abonate",
-      "noSubscriptions": "Niciun abonament activ. Adăugați o jurisdicție pe lexvault.pinemarshlands.com.",
+      "noSubscriptions": "Niciun abonament activ. Adăugați o jurisdicție în contul dvs. la furnizor.",
       "appVersion": "Versiune aplicație",
       "statuteChunks": "Secțiuni legale (Qdrant local)",
       "qdrantUnreachable": "Qdrant inaccesibil",

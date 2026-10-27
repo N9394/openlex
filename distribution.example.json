@@ -1,0 +1,7 @@
+{
+  "name": "Your firm or company",
+  "server": "https://downloads.example.com",
+  "accountUrl": "https://downloads.example.com/account",
+  "downloadUrl": "https://downloads.example.com/download",
+  "supportUrl": "https://example.com/support"
+}

@@ -44,7 +44,6 @@ function loadIfNeeded() {
     path.resolve(__dirname, '..', 'data', 'legal_concepts.json'),
     path.resolve(__dirname, 'data', 'legal_concepts.json'),
     '/lexvault/legal_concepts.json',
-    '/opt/legalclarity/data/legal_concepts.json',
   ]
   for (const p of candidates) {
     if (p && fs.existsSync(p)) {

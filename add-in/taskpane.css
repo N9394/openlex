@@ -754,3 +754,7 @@ input[type="checkbox"] { accent-color: var(--brass); width: 15px; height: 15px; 
 .skill-item span { color: var(--text-dim); font-size: 0.78rem; line-height: 1.3; }
 .skill-item.active, .skill-item:hover { background: var(--brass-tint); }
 .skill-chip { font-size: 0.8rem; padding: 3px 10px; }
+
+/* Firm rules (hooks): warnings under answers, withheld answers */
+.msg.warn { border: 1px solid rgba(232, 189, 138, 0.45); background: var(--brass-tint); color: var(--text); font-size: 0.85rem; }
+.msg.withheld { opacity: 0.85; font-style: italic; }

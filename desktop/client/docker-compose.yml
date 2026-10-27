@@ -11,15 +11,15 @@ services:
     depends_on:
       - server
     networks:
-      - legalclarity-network
+      - openlex-network
 
   server:
-    image: legalclarity-server:latest
+    image: openlex-server:latest
     ports:
       - "8000:8000"
     networks:
-      - legalclarity-network
+      - openlex-network
 
 networks:
-  legalclarity-network:
+  openlex-network:
     driver: bridge

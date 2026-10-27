@@ -8,7 +8,7 @@
 # Output:
 #   dist/lexvault-word-plugin-{mac,win}-<ver>.zip   payload
 #   dist/plugin-{mac,win}.json                      manifest (published)
-#   deployed to /opt/lexvault-packs/plugins/ on the server
+#   uploaded by the distributor to its update server
 #
 # Usage: scripts/build-update.sh [version]   (default: bump 0.1.0 → 0.1.1)
 set -euo pipefail
@@ -42,6 +42,13 @@ for PLATFORM in mac win; do
   # package.json, so applied payloads report the real version (prevents the
   # perpetual "update available" re-apply loop).
   echo "$VERSION" > "$STAGE/sidecar/src/.version"
+  # Updates swap only sidecar/src and add-in, so bundled skills/playbooks and the
+  # distributor's distribution.json travel inside src/.
+  mkdir -p "$STAGE/sidecar/src/bundled"
+  cp -R sidecar/skills "$STAGE/sidecar/src/bundled/skills"
+  cp -R sidecar/playbooks "$STAGE/sidecar/src/bundled/playbooks"
+  if [ -n "${OPENLEX_DISTRIBUTION:-}" ]; then cp "$OPENLEX_DISTRIBUTION" "$STAGE/sidecar/src/distribution.json"
+  else echo "  (no OPENLEX_DISTRIBUTION: community payload — installed plugins would lose their licence/update server)"; fi
   cp -R add-in/commands.html add-in/manifest.xml add-in/taskpane.css add-in/taskpane.html add-in/taskpane.js "$STAGE/add-in/"
   cp -R add-in/assets "$STAGE/add-in/assets"
   ( cd "$STAGE" && zip -qr "$ROOT/$ZIP" sidecar add-in -x '*.map' )
@@ -56,7 +63,7 @@ for PLATFORM in mac win; do
   "filename": "$(basename "$ZIP")",
   "sha256": "$SHA",
   "size_bytes": $SIZE,
-  "notes": "Automatic LexVault Word plugin update (sidecar + pane code)."
+  "notes": "OpenLex Word plugin update (engine + pane code)."
 }
 JSON
 done
@@ -72,11 +79,6 @@ print('sidecar/package.json → $VERSION')
 PY
 
 echo
-echo "== publishing to server =="
-scp -o BatchMode=yes dist/lexvault-word-plugin-mac-$VERSION.zip dist/lexvault-word-plugin-win-$VERSION.zip \
-  dist/plugin-mac.json dist/plugin-win.json \
-  root@${OPENLEX_DEPLOY_HOST:?set OPENLEX_DEPLOY_HOST}:/opt/lexvault-packs/plugins/
-ssh -o BatchMode=yes root@${OPENLEX_DEPLOY_HOST:?set OPENLEX_DEPLOY_HOST} "ls -lh /opt/lexvault-packs/plugins/ | tail -6"
-
+echo "== built: upload dist/lexvault-word-plugin-*-$VERSION.zip and dist/plugin-*.json to your update server (the distributor's publish step) =="
 echo
-echo "== done: v$CUR → v$VERSION published =="
+echo "== done: v$CUR → v$VERSION built =="

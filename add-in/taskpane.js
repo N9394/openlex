@@ -201,19 +201,24 @@
   // ── Skills: "/" autocomplete in the composer (firm + bundled SKILL.md) ──
   let skillCache = null
   let skillPick = 0
+  // "/" = skills, "@" = agent profiles (openlex.json), after an optional "@agent ".
+  let agentCache = null
   async function loadSkills() {
-    if (skillCache) return skillCache
+    if (skillCache && agentCache) return skillCache
     try { skillCache = (await (await fetch(SIDECAR + '/api/skills')).json()).skills.filter((s) => !s.error) } catch { skillCache = [] }
-    setTimeout(() => { skillCache = null }, 60000) // pick up new firm skills
+    try { agentCache = (await (await fetch(SIDECAR + '/api/agents')).json()).agents.filter((a) => !a.error).map((a) => ({ ...a, agent: true })) } catch { agentCache = [] }
+    setTimeout(() => { skillCache = null; agentCache = null }, 60000) // pick up new firm skills and profiles
     return skillCache
   }
+  const MENU_RE = /^(@[a-z0-9-]+\s+)?([/@])([a-z0-9-]*)$/
   function skillMatches() {
-    const m = $('#input').value.match(/^\/([a-z0-9-]*)$/)
+    const m = $('#input').value.match(MENU_RE)
     if (!m || !skillCache) return []
-    return skillCache.filter((s) => s.name.startsWith(m[1]) || s.title.toLowerCase().includes(m[1])).slice(0, 8)
+    const pool = m[2] === '@' ? (m[1] ? [] : agentCache || []) : skillCache
+    return pool.filter((s) => s.name.startsWith(m[3]) || String(s.title || '').toLowerCase().includes(m[3])).slice(0, 8)
   }
   async function updateSkillMenu() {
-    if (!/^\/[a-z0-9-]*$/.test($('#input').value)) return hideSkillMenu()
+    if (!MENU_RE.test($('#input').value)) return hideSkillMenu()
     await loadSkills()
     const list = skillMatches()
     let menu = $('#skillMenu')
@@ -231,16 +236,17 @@
       item.type = 'button'
       item.className = 'skill-item' + (i === skillPick ? ' active' : '')
       item.innerHTML = `<b></b><span></span>`
-      item.querySelector('b').textContent = '/' + s.name
+      item.querySelector('b').textContent = (s.agent ? '@' : '/') + s.name
       item.querySelector('span').textContent = s.description
-      item.addEventListener('mousedown', (e) => { e.preventDefault(); chooseSkill(s.name) })
+      item.addEventListener('mousedown', (e) => { e.preventDefault(); chooseSkill(s.name, s.agent) })
       menu.appendChild(item)
     })
   }
   function hideSkillMenu() { const m = $('#skillMenu'); if (m) m.remove(); skillPick = 0 }
-  function chooseSkill(name) {
+  function chooseSkill(name, isAgent) {
     const ta = $('#input')
-    ta.value = `/${name} `
+    const prefix = (ta.value.match(MENU_RE) || [])[1] || ''
+    ta.value = `${prefix}${isAgent ? '@' : '/'}${name} `
     hideSkillMenu()
     ta.focus()
   }
@@ -248,7 +254,7 @@
     if (!$('#skillMenu')) return false
     const list = skillMatches()
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); skillPick = (skillPick + (e.key === 'ArrowDown' ? 1 : list.length - 1)) % list.length; updateSkillMenu(); return true }
-    if ((e.key === 'Enter' || e.key === 'Tab') && list[skillPick]) { e.preventDefault(); chooseSkill(list[skillPick].name); return true }
+    if ((e.key === 'Enter' || e.key === 'Tab') && list[skillPick]) { e.preventDefault(); chooseSkill(list[skillPick].name, list[skillPick].agent); return true }
     if (e.key === 'Escape') { hideSkillMenu(); return true }
     return false
   }
@@ -648,6 +654,9 @@
       case 'skill':
         addMsg('step', `Skill: ${evt.title}`)
         break
+      case 'agent':
+        addMsg('step', `Agent: ${evt.title}`)
+        break
       case 'skill_suggestion':
         addSkillChip(evt)
         break
@@ -681,7 +690,8 @@
         // same first line; the green 📋 card was pure duplication.
         break
       case 'suggestion':
-        if (autopilot && evt.suggestion) {
+        // Flagged by a firm rule (hooks): always shown for review, never auto-applied.
+        if (autopilot && evt.suggestion && !(evt.suggestion.flags && evt.suggestion.flags.length)) {
           autopilotApply(evt.suggestion)
         } else {
           renderSuggestion(evt.suggestion, true)
@@ -706,6 +716,17 @@
         }
         $('#chat').scrollTop = $('#chat').scrollHeight
         break
+      case 'warning':
+        // Firm rule (hooks: before_answer / on_suggestion) — shown under the answer.
+        addMsg('warn', '⚠ ' + (evt.message || 'firm rule'))
+        break
+      case 'withheld': {
+        // A firm rule withheld the answer. If it was already streamed, replace it.
+        const m = getAgentMsg && getAgentMsg()
+        const note = 'Withheld by a firm rule: ' + (evt.message || '')
+        if (m) { m.textContent = note; m.classList.add('withheld') } else addMsg('warn', note)
+        break
+      }
       case 'done':
         dismissCompaction()
         clearLive()
@@ -1202,6 +1223,7 @@
       <div class="basis">${s.basis ? s.basis.jurisdiction + ' · ' + s.basis.source + ' · ' + s.basis.section : ''}</div>
       ${s.citationWarning ? `<div class="basis cite-warn">⚠ ${escHtml(s.citationWarning)}</div>` : ''}
       ${s.collapseWarning ? `<div class="basis cite-warn">⚠ ${escHtml(s.collapseWarning)} — review before applying</div>` : ''}
+      ${s.flags && s.flags.length ? s.flags.map((f) => `<div class="basis cite-warn">⚑ ${escHtml(f)}</div>`).join('') : ''}
       <div class="sug-actions">
         ${s.proposed_text ? '<button class="btn">Apply</button>' : ''}
         <button class="btn btn-ghost">Comment</button>
@@ -1254,6 +1276,7 @@
       ${loc ? `<div class="basis loc">${escHtml(loc + whole)}</div>` : ''}
       ${s.citationWarning ? `<div class="basis cite-warn">⚠ ${escHtml(s.citationWarning)}</div>` : ''}
       ${s.collapseWarning ? `<div class="basis cite-warn">⚠ ${escHtml(s.collapseWarning)} — review before applying</div>` : ''}
+      ${s.flags && s.flags.length ? s.flags.map((f) => `<div class="basis cite-warn">⚑ ${escHtml(f)}</div>`).join('') : ''}
       ${(s.clauseText || s.anchor) && s.proposed_text ? diffHtml(s.anchor.wholeParagraph ? (s.clauseText || s.anchor.text) : s.anchor.text, s.proposed_text) : `<div class="muted">${s.proposed_text || ''}</div>`}
       <div class="sug-actions">
         <button class="btn chat-approve">Approve</button>
@@ -2396,8 +2419,9 @@
     switch (lic.status) {
       case 'active': return statusCard('ok', 'Active', `Paid subscription · ${(lic.jurisdictions || []).length} jurisdiction(s) · expires ${new Date(lic.expiresAt).toLocaleDateString()}.`)
       case 'no_token': return statusCard('neutral', 'No license token', 'The plugin runs fully offline, but downloads and the subscription check need your login token.')
-      case 'invalid_token': return statusCard('bad', 'Token rejected', 'This token is not under a paid subscription.', '<a class="btn" href="https://lexvault.pinemarshlands.com/buy" target="_blank" rel="noopener">Get a subscription</a>')
-      case 'expired': return statusCard('bad', 'Subscription expired', 'Your subscription has lapsed. Renew to keep downloads and updates flowing.', '<a class="btn" href="https://lexvault.pinemarshlands.com/buy" target="_blank" rel="noopener">Renew</a>')
+      case 'community': return statusCard('ok', 'Community build', 'No licence needed. Use your own model keys or a local model; add law packs and models locally.')
+      case 'invalid_token': return statusCard('bad', 'Token rejected', 'This token is not under a paid subscription.', lic.accountUrl ? `<a class="btn" href="${escHtml(lic.accountUrl)}" target="_blank" rel="noopener">Get a subscription</a>` : '')
+      case 'expired': return statusCard('bad', 'Subscription expired', 'Your subscription has lapsed. Renew to keep downloads and updates flowing.', lic.accountUrl ? `<a class="btn" href="${escHtml(lic.accountUrl)}" target="_blank" rel="noopener">Renew</a>` : '')
       case 'offline': return statusCard('warn', 'License server unreachable', 'Could not reach the license server — a cached license may still work offline.')
       default: return statusCard('neutral', lic.status || 'Unknown', lic.error || '')
     }
@@ -2419,7 +2443,7 @@
       // STEP 1 — no token yet: paste it, then we verify the subscription.
       box.innerHTML = `
         ${licenseStatusCard(lic)}
-        <div class="muted" style="margin-bottom:0.5rem">Get your token at <b>lexvault.pinemarshlands.com/account</b>.</div>
+        <div class="muted" style="margin-bottom:0.5rem">Get your token from your distributor's account page.</div>
         <input type="text" id="tokenInput" placeholder="Paste your login token (lv_live_…)">
         <button class="btn btn-block" id="saveTokenBtn">Activate</button>
         <div id="setupProgress" class="muted" style="margin-top:0.5rem"></div>`

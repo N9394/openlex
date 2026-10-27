@@ -57,4 +57,12 @@ function checkWeb(host, call) {
   return decision.allowed ? null : `BLOCKED by data policy: ${decision.reason}. Web access needs "web" allowed in Settings → Data policy.`
 }
 
-module.exports = { assertPublicUrl, checkWeb, privateIp }
+/** Firm hooks at the before_web decision point (hooks.js). Returns null when allowed, else a message. */
+async function webHook(host, call, url) {
+  const hooks = require('../hooks')
+  if (!hooks.has('before_web')) return null
+  const r = await hooks.run('before_web', { host, call, url: url ? String(url) : null, matterId: policy.currentMatter() })
+  return r.decision === 'deny' ? `BLOCKED by firm rule: ${r.reason}` : null
+}
+
+module.exports = { assertPublicUrl, checkWeb, webHook, privateIp }

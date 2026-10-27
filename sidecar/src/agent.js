@@ -461,8 +461,9 @@ async function runAction(ctx, userMessage, onEvent, opts = {}) {
   // Active firm skill (Phase 7.2): its instructions ride in the system
   // prompt (survives compaction); an optional tool allow-list narrows
   // what the agent may call while the skill runs.
-  const skillBlock = opts.skill ? require('./skills').promptBlock(opts.skill) : ''
-  const skillTools = opts.skill ? require('./skills').allowedTools(opts.skill) : null
+  // Agent profile (agents.js): its instructions and tool allow-list combine with the skill's.
+  const skillBlock = require('./agents').promptBlock(opts.agent) + (opts.skill ? require('./skills').promptBlock(opts.skill) : '')
+  const skillTools = require('./agents').allowedTools(opts.agent, opts.skill)
   const sysCtx = (phase) => SYSTEM(docCtx(ctx, phase) + pre.block + skillBlock)
 
   // 1. PLAN — a single LLM call that decides the tool path (or answers directly)
@@ -572,7 +573,7 @@ async function runAction(ctx, userMessage, onEvent, opts = {}) {
           { role: 'system', content: sysCtx('analyzing') },
           { role: 'user', content: userMessage },
           ...toolHistory,
-          { role: 'user', content: `"${call.tool}" is not an available tool${skillTools ? ' for this skill' : ''}. Available: ${[...(skillTools || KNOWN_TOOLS)].join(', ')}. To write or apply changes, use propose_suggestions with the full replacement text in proposed_text — there is no separate write tool. Emit a valid tool call or answer in plain text.` },
+          { role: 'user', content: `"${call.tool}" is not an available tool${skillTools ? ' for this agent profile or skill' : ''}. Available: ${[...(skillTools || KNOWN_TOOLS)].join(', ')}. To write or apply changes, use propose_suggestions with the full replacement text in proposed_text — there is no separate write tool. Emit a valid tool call or answer in plain text.` },
         ], { maxTokens: AGENT.WRITE_MAX_TOKENS, phase: 'analyzing', thinking: false, emit })
         if (steer.reasoning.trim()) emit('reasoning', { text: showReasoning(steer.reasoning), steer: true })
         cursor = steer.content
@@ -622,7 +623,23 @@ async function runAction(ctx, userMessage, onEvent, opts = {}) {
     } else if (toolCache.has(cacheKey)) {
       output = toolCache.get(cacheKey)
     } else {
-      r = await dispatch(ctx, toolName, call.args || {})
+      const hooks = require('./hooks')
+      const gate = hooks.has('before_tool') ? await hooks.run('before_tool', { tool: toolName, args: call.args || {}, matterId: require('./policy').currentMatter() }) : { decision: 'allow' }
+      if (gate.decision === 'deny') {
+        r = { output: `BLOCKED by firm rule: ${gate.reason}. Do not retry this tool; continue with what you have or explain the limitation.` }
+        emit('step', { text: `blocked: ${toolName}` })
+      } else {
+        try {
+          r = await dispatch(ctx, toolName, call.args || {})
+        } catch (err) {
+          // A broken tool (no law packs, embeddings service down, network)
+          // must not end the run: the model gets the error and carries on.
+          console.warn(`[agent] tool ${toolName} failed:`, err.message)
+          const why = /ECONNREFUSED|ENOTFOUND|fetch failed/.test(String(err.message)) ? 'the service it needs is not available on this machine' : String(err.message).slice(0, 200)
+          r = { output: `ERROR: ${toolName} failed (${why}). Do not retry it; continue with the other tools or explain what could not be checked.` }
+        }
+        if (hooks.has('after_tool')) hooks.run('after_tool', { tool: toolName, args: call.args || {}, ok: !/^ERROR|BLOCKED/.test(String(r.output || '')), chars: String(r.output || '').length, matterId: require('./policy').currentMatter() }).catch(() => {})
+      }
       output = r.output
       // Handle delegate_task: spawn a fresh LLM call with focused context
       if (r.delegate) {

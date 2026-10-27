@@ -11,7 +11,7 @@
  *
  * Usage:
  *   await fetchModel({
- *     server: 'https://lexvault.pinemarshlands.com',
+ *     server: 'https://downloads.example.com',   // the distributor's server
  *     token: 'lv_live_…',
  *     variant: 'qwen3.5-4b-q4_k_m',
  *     destDir: PATHS.models + '/llm',

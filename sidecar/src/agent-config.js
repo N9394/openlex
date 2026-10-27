@@ -46,7 +46,8 @@ function save(partial) {
 
 /** Effective agent budget from the selected depth preset. */
 function agentBudget() {
-  const { depth } = load()
+  // An active agent profile (agents.js) may set its own depth.
+  const depth = require('./agents').current()?.depth || load().depth
   const p = DEPTH_PRESETS[depth]
   return { depth, ctx: p.ctx, hops: p.hops }
 }
@@ -64,7 +65,8 @@ function effectiveAgent() {
   const { depth, ctx, hops } = agentBudget()
   // Cloud providers: the RAM tier and local KV math don't apply — budget
   // against the provider's context window (user override wins).
-  const provider = require('./providers/settings').resolve()
+  // The model the routing map would use for planning (agent profile, rules, roles, active provider).
+  const provider = require('./routing').primary({ role: 'plan', matterId: require('./policy').currentMatter() })
   // Hosted models also get more tool hops and wall-clock per depth: the
   // local limits are sized for a 4B model on a laptop.
   if (provider.kind !== 'local') {

@@ -682,7 +682,7 @@
       "accountId": "Konto-ID",
       "tier": "Stufe",
       "subscribedJurisdictions": "Abonnierte Rechtsordnungen",
-      "noSubscriptions": "Keine aktiven Abonnements. Fügen Sie eine Rechtsordnung auf lexvault.pinemarshlands.com hinzu.",
+      "noSubscriptions": "Keine aktiven Abonnements. Fügen Sie eine Rechtsordnung in Ihrem Konto beim Anbieter hinzu.",
       "appVersion": "App-Version",
       "statuteChunks": "Gesetzesabschnitte (lokales Qdrant)",
       "qdrantUnreachable": "Qdrant nicht erreichbar",

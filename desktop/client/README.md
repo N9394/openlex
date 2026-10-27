@@ -34,40 +34,13 @@ npm run build
 npm run preview
 ```
 
-## Docker Deployment
+## Deploy
 
-### Option 1: With Docker Registry
-
-```bash
-# Set your registry
-export DOCKER_REGISTRY=docker.io/yourusername
-
-# Build and deploy
-./deploy.sh
-```
-
-### Option 2: Manual Transfer
+Build the image and run it next to the OpenLex server (the container serves on port 3000 and proxies `/api` to `openlex-server:8000` on the `openlex-network` Docker network, see `nginx.conf`):
 
 ```bash
-# Build image
-docker build -t lexvault-client:latest .
-
-# Save to file
-docker save lexvault-client:latest | gzip > lexvault-client.tar.gz
-
-# Transfer to server
-scp lexvault-client.tar.gz root@$OPENLEX_DEPLOY_HOST:/tmp/
-
-# On server: load and run
-ssh root@$OPENLEX_DEPLOY_HOST
-gunzip -c /tmp/lexvault-client.tar.gz | docker load
-docker stop legalclarity-client
-docker rm legalclarity-client
-docker run -d \
-  --name legalclarity-client \
-  --network legalclarity-network \
-  -p 3000:3000 \
-  lexvault-client:latest
+docker build -t openlex-client:latest .
+docker run -d --name openlex-client --network openlex-network -p 3000:3000 openlex-client:latest
 ```
 
 ## Design System

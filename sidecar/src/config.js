@@ -93,7 +93,9 @@ module.exports = {
   },
 
   // The one phone-home. Same endpoint the launcher uses.
-  LICENSE_URL: ENV.LEXVAULT_LICENSE_URL || 'https://lexvault.pinemarshlands.com/api/app/license',
+  // No built-in server: a distributor's distribution.json (distribution.js)
+  // or LEXVAULT_LICENSE_URL sets it; none = community build.
+  LICENSE_URL: ENV.LEXVAULT_LICENSE_URL || require('./distribution').load(DATA_DIR_RESOLVED)?.licenseUrl || null,
   LICENSE_PUBLIC_KEY_PATH: ENV.LEXVAULT_LICENSE_KEY_PATH || null,
   LICENSE_CHECK_INTERVAL_MS: 6 * 60 * 60 * 1000, // every 6h
   OFFLINE_GRACE_MS: 30 * 24 * 60 * 60 * 1000, // matches license-server OFFLINE_GRACE_DAYS=30

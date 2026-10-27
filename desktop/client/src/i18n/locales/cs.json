@@ -686,7 +686,7 @@
       "accountId": "ID účtu",
       "tier": "Úroveň",
       "subscribedJurisdictions": "Předplacené jurisdikce",
-      "noSubscriptions": "Žádná aktivní předplatná. Přidejte jurisdikci na lexvault.pinemarshlands.com.",
+      "noSubscriptions": "Žádná aktivní předplatná. Přidejte jurisdikci ve svém účtu u poskytovatele.",
       "appVersion": "Verze aplikace",
       "statuteChunks": "Části zákonů (lokální Qdrant)",
       "qdrantUnreachable": "Qdrant nedostupný",

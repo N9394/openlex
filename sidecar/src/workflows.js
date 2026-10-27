@@ -208,12 +208,12 @@ function datesInText(text) {
   return [...out]
 }
 
-async function askJson(messages, maxTokens) {
+async function askJson(messages, maxTokens, role = 'extract') {
   const { chat } = require('./llm')
-  const reply = await chat(messages, { maxTokens, temperature: 0 })
+  const reply = await chat(messages, { maxTokens, temperature: 0, role })
   try { return extractJson(reply) } catch {
     // One repair attempt: ask for the JSON only.
-    const again = await chat([...messages, { role: 'assistant', content: reply }, { role: 'user', content: 'Reply again with ONLY the JSON, no prose.' }], { maxTokens, temperature: 0 })
+    const again = await chat([...messages, { role: 'assistant', content: reply }, { role: 'user', content: 'Reply again with ONLY the JSON, no prose.' }], { maxTokens, temperature: 0, role })
     return extractJson(again)
   }
 }
@@ -236,7 +236,7 @@ function chronologyPrompt(docName, part, idx, total) {
 // ── runs ─────────────────────────────────────────────────────────────────
 // Starter playbooks shipped with OpenLex (sidecar/playbooks). A firm file
 // with the same name in the workspace playbooks/ folder takes precedence.
-const BUNDLED_PLAYBOOKS = path.join(__dirname, '..', 'playbooks')
+const BUNDLED_PLAYBOOKS = [path.join(__dirname, '..', 'playbooks'), path.join(__dirname, 'bundled', 'playbooks')].find((d) => fs.existsSync(d)) || path.join(__dirname, '..', 'playbooks')
 
 function bundledPlaybooks() {
   try { return fs.readdirSync(BUNDLED_PLAYBOOKS).filter((f) => f.endsWith('.json')).map((f) => f.slice(0, -5)) } catch { return [] }

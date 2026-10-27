@@ -89,7 +89,16 @@ try {
   }
 } catch {}
 
-const LICENSE_SERVER = process.env.LEXVAULT_LICENSE_SERVER || 'https://lexvault.pinemarshlands.com'
+// Licence / update / download server: none in the open-source code. A
+// distributor's build ships resources/distribution.json (see
+// sidecar/src/distribution.js); LEXVAULT_LICENSE_SERVER overrides it.
+const DISTRIBUTION = (() => {
+  for (const f of [process.env.OPENLEX_DISTRIBUTION, path.join(process.resourcesPath || '', 'distribution.json'), path.join(__dirname, '..', 'distribution.json')].filter(Boolean)) {
+    try { return JSON.parse(require('fs').readFileSync(f, 'utf8')) } catch { /* next */ }
+  }
+  return {}
+})()
+const LICENSE_SERVER = process.env.LEXVAULT_LICENSE_SERVER || (DISTRIBUTION.server ? String(DISTRIBUTION.server).replace(/\/+$/, '') : null)
 
 let supervisor = null
 let mainWindow = null
@@ -230,7 +239,7 @@ async function activateToken(token) {
         error: err.message,
         code: 'device_cap_reached',
         bound_devices: err.bound_devices,
-        manage_url: (process.env.LEXVAULT_LICENSE_SERVER || 'https://lexvault.pinemarshlands.com') + '/buy#devices',
+        manage_url: DISTRIBUTION.accountUrl || (LICENSE_SERVER ? LICENSE_SERVER + '/buy#devices' : null),
       }
     }
     return { ok: false, error: err.message || String(err) }
@@ -329,7 +338,7 @@ function focusMain() {
 }
 
 // Engine API paths the renderer may use (via IPC, never directly).
-const ENGINE_PATHS = /^\/api\/(status|providers(\/key|\/test)?|policy|matters(\/update|\/bind|\/policy)?|library(\/folders(\/remove)?|\/sync)?|mcp(\/servers(\/remove)?|\/reconnect)?|workflows\/(playbooks(\/draft)?|run|documents)|skills(\/get|\/suggest|\/draft|\/delete)?|plans(\/get|\/update|\/approve|\/decide|\/run)?|lists(\/get|\/sources|\/rename|\/delete|\/items(\/update|\/delete)?|\/seed|\/export)?|monitors(\/update|\/delete|\/check|\/alerts(\/read|\/file)?)?|clauses|grids(\/view|\/update|\/cell|\/delete|\/export|\/run)?|decide(\/config|\/key|\/test)?|web\/login)(\?.*)?$/
+const ENGINE_PATHS = /^\/api\/(status|providers(\/key|\/test)?|policy|matters(\/update|\/bind|\/policy)?|library(\/folders(\/remove)?|\/sync)?|mcp(\/servers(\/remove)?|\/reconnect)?|workflows\/(playbooks(\/draft)?|run|documents)|skills(\/get|\/suggest|\/draft|\/delete)?|plans(\/get|\/update|\/approve|\/decide|\/run)?|lists(\/get|\/sources|\/rename|\/delete|\/items(\/update|\/delete)?|\/seed|\/export)?|monitors(\/update|\/delete|\/check|\/alerts(\/read|\/file)?)?|agents|clauses|grids(\/view|\/update|\/cell|\/delete|\/export|\/run)?|decide(\/config|\/key|\/test)?|web\/login)(\?.*)?$/
 
 async function startEngine() {
   const { ensureEngine } = require('./engine')
@@ -992,7 +1001,8 @@ async function boot() {
   // token, downloads + SHA512-verifies the artifact, prompts to restart.
   // Bypasses electron-updater's publisher-signature gate (we have no cert).
   if (app.isPackaged && fs.existsSync(PATHS.token)) {
-    const feedBaseUrl = (process.env.LEXVAULT_LICENSE_SERVER || 'https://lexvault.pinemarshlands.com') + '/api/app/update'
+    if (!LICENSE_SERVER) return // community build: no update feed
+    const feedBaseUrl = LICENSE_SERVER + '/api/app/update'
     updater = new Updater({
       feedBaseUrl,
       getToken: () => {
@@ -1128,10 +1138,10 @@ async function boot() {
     // Self-heal: before reporting the failure, try our custom updater.
     // Rescues users from bad releases (like the Windows DLL-PATH bug that
     // blocked 0.1.1) without requiring them to manually reinstall.
-    if (app.isPackaged && fs.existsSync(PATHS.token)) {
+    if (app.isPackaged && LICENSE_SERVER && fs.existsSync(PATHS.token)) {
       try {
         const selfHealUpdater = new Updater({
-          feedBaseUrl: (process.env.LEXVAULT_LICENSE_SERVER || 'https://lexvault.pinemarshlands.com') + '/api/app/update',
+          feedBaseUrl: LICENSE_SERVER ? LICENSE_SERVER + '/api/app/update' : null,
           getToken: () => { try { return fs.readFileSync(PATHS.token, 'utf8').trim() } catch { return null } },
         })
         // Synchronous prompt path: show "checking" first, then awaitable check.
@@ -1187,7 +1197,7 @@ async function boot() {
       `Could not start local services.${actionable}\n` +
       (actionable ? '' : `${err.message}\n\n`) +
       (tail && !actionable ? `Last backend log lines:\n${tail}\n\n` : '') +
-      `If this keeps happening, reinstall from https://lexvault.pinemarshlands.com/download — your subscription, license, and downloaded models will all survive a reinstall.`)
+      `If this keeps happening, reinstall OpenLex${DISTRIBUTION.downloadUrl ? ` from ${DISTRIBUTION.downloadUrl}` : ''} — your subscription, license, and downloaded models will all survive a reinstall.`)
     app.quit()
     return
   }

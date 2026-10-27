@@ -81,7 +81,7 @@
     "publish": [
       {
         "provider": "generic",
-        "url": "https://lexvault.pinemarshlands.com/api/app/update/${os}",
+        "url": "${env.OPENLEX_UPDATE_FEED}/${os}",
         "channel": "latest",
         "useMultipleRangeRequest": false
       }

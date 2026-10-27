@@ -89,6 +89,7 @@ function verifySignature(signedLicense, publicKeyPem) {
 
 function phoneHome(token) {
   return new Promise((resolve, reject) => {
+    if (!LICENSE_URL) return reject(new Error('community build: no licence server configured'))
     const u = new URL(LICENSE_URL)
     const req = https.request(
       { hostname: u.hostname, port: u.port || 443, path: u.pathname, method: 'GET',
@@ -135,6 +136,11 @@ class LicenseWatchdog {
   }
 
   async check() {
+    if (!LICENSE_URL) {
+      // Community build (no distribution.json): nothing to check, nothing locked.
+      this.state = { ...this.state, status: 'community', error: null }
+      return this.state
+    }
     const token = loadToken()
     const key = loadPublicKey()
     if (!token) {

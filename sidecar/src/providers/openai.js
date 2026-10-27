@@ -42,6 +42,10 @@ function buildBody(p, messages, opts, stream) {
   if (p.kind !== 'azure' && p.model) body.model = p.model
   body[p.maxTokensField || 'max_tokens'] = opts.maxTokens || 1024
   if (opts.temperature !== undefined && !opts._noTemperature) body.temperature = opts.temperature
+  // OpenRouter routes to reasoning models that otherwise spend the whole
+  // token budget thinking and return no content. OpenLex budgets its own
+  // thinking, so hosted reasoning is off unless a call asks for it.
+  if (p.id === 'openrouter' && !opts._noReasoningParam) body.reasoning = { effort: opts.thinking === true ? 'low' : 'none' }
   if (opts.nativeTools?.tools.length) {
     body.tools = native.forOpenAI(opts.nativeTools.tools)
     body.tool_choice = 'auto'
@@ -49,8 +53,11 @@ function buildBody(p, messages, opts, stream) {
   return body
 }
 
-// Some models (OpenAI reasoning models) reject temperature; retry once without.
+// Some models (OpenAI reasoning models) reject temperature; some reject a
+// reasoning setting. Retry once without the parameter they name.
 const isTemperatureError = (err) => err.status === 400 && /temperature/i.test(err.body || '')
+const isReasoningError = (err) => err.status === 400 && /reasoning/i.test(err.body || '')
+const retryOpts = (err, opts) => (isTemperatureError(err) ? { ...opts, _noTemperature: true } : isReasoningError(err) ? { ...opts, _noReasoningParam: true } : null)
 
 async function post(p, key, body, opts) {
   const res = await fetch(endpoint(p), {
@@ -69,8 +76,9 @@ async function complete(p, key, messages, opts = {}) {
   try {
     res = await post(p, key, buildBody(p, messages, opts, false), opts)
   } catch (err) {
-    if (!isTemperatureError(err)) throw err
-    res = await post(p, key, buildBody(p, messages, { ...opts, _noTemperature: true }, false), opts)
+    const again = retryOpts(err, opts)
+    if (!again) throw err
+    res = await post(p, key, buildBody(p, messages, again, false), opts)
   }
   const json = await res.json()
   const msg = json.choices?.[0]?.message || {}
@@ -89,8 +97,9 @@ async function stream(p, key, messages, opts = {}) {
   try {
     res = await post(p, key, buildBody(p, messages, opts, true), opts)
   } catch (err) {
-    if (!isTemperatureError(err)) throw err
-    res = await post(p, key, buildBody(p, messages, { ...opts, _noTemperature: true }, true), opts)
+    const again = retryOpts(err, opts)
+    if (!again) throw err
+    res = await post(p, key, buildBody(p, messages, again, true), opts)
   }
   let content = ''
   let reasoning = ''

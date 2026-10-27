@@ -6,7 +6,7 @@ Local agent engine for the Word add-in. Airgapped by construction:
 - embeddings: App service :11435 → local llama.cpp bge-m3 (dense) → in-process ONNX (P1)
 - the ONLY outbound call: license/subscription check (license.js)
 
-See `../SPEC.md` for the full architecture.
+See `../docs/LOCAL_API.md` and `../docs/HARNESS.md` for the architecture.
 
 ## Run (dev)
 
@@ -60,8 +60,8 @@ Check-only at boot + every 6h. Download/apply are user-triggered from the
 pane (Settings → Update) with SSE progress; apply backs up the current
 code, swaps files, restarts the sidecar. Payload extraction via bsdtar
 (ships with macOS and Windows 10+). Published via
-`scripts/build-update.sh` (bumps version, zips, sha256, deploys manifest +
-payload to `/opt/lexvault-packs/plugins/`).
+`scripts/build-update.sh` (bumps version, zips, sha256, writes the manifest;
+the distributor uploads them to its update server).
 
 Verified: no-token short-circuit (never phones home), manifest poll,
 version compare, sha256-gated download with resume, extract + swap

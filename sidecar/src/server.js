@@ -76,8 +76,8 @@ if (process.platform === 'darwin') sweepOrphans()
 ensureQdrant().then((s) => { qdrantState = s; console.log('[sidecar] qdrant:', s.reason) })
 // Only warm the local engine when it's the active provider — a firm on its
 // own cloud key shouldn't pay ~3 GB of RAM for an idle llama-server.
-if (activeProvider().kind === 'local') ensureLlama().then((s) => { llamaState = s; console.log('[sidecar] llama:', s.reason) })
-else console.log(`[sidecar] model provider: ${activeProvider().id} (${activeProvider().model || 'default'}) — local engine not started`)
+if (require('./routing').usesLocal()) ensureLlama().then((s) => { llamaState = s; console.log('[sidecar] llama:', s.reason) })
+else console.log(`[sidecar] model provider: ${activeProvider().id} (${activeProvider().model || 'default'}) — no route uses the local model, local engine not started`)
 
 process.on('SIGINT', shutdown)
 process.on('SIGTERM', shutdown)
@@ -199,7 +199,7 @@ function matterIdFor(body, entry) {
 
 /** Local engine only matters when the active provider is local. */
 async function engineReady() {
-  if (activeProvider().kind !== 'local') return { ok: true, reason: `cloud provider ${activeProvider().id}` }
+  if (!require('./routing').usesLocal()) return { ok: true, reason: `cloud provider ${activeProvider().id}` }
   try { llamaState = await ensureLlama() } catch { llamaState = { ok: false, reason: 'llama-server failed to start' } }
   return llamaState
 }
@@ -414,10 +414,38 @@ async function handle(req, res) {
           onProgress: (ev) => sendSse(res, { type: 'progress', ...ev }),
         }))
         sendSse(res, { type: 'done', files: r.files, stats: r.stats, count: (r.findings || r.events || r.changes || r.flags || []).length })
+        require('./hooks').run('after_workflow', { workflow: body.type, files: r.files, stats: r.stats, matterId }).catch(() => {})
       } catch (err) {
         sendSse(res, { type: 'error', message: err.message })
       }
       return res.end()
+    }
+
+    if (req.method === 'GET' && p === '/api/agents') {
+      require('./workspace').setBase(require('./agent-config').load().workspace)
+      return sendJson(res, 200, { agents: require('./agents').list() })
+    }
+    // ── Harness map (routes, hooks, agents, features — layered config) ───
+    if (p === '/api/harness' || p.startsWith('/api/harness/')) {
+      const harness = require('./harness')
+      const routing = require('./routing')
+      require('./workspace').setBase(require('./agent-config').load().workspace)
+      try {
+        if (req.method === 'GET' && p === '/api/harness') {
+          const matterId = url.searchParams.get('matterId') || null
+          const agentName = url.searchParams.get('agent') || null
+          const cfg = harness.load()
+          return sendJson(res, 200, { config: cfg, userLayer: harness.layers().user.data || {}, errors: harness.errors(), problems: [...routing.validate(cfg.routes), ...require('./hooks').validate(cfg.hooks), ...require('./agents').validate(cfg.agents)], agents: require('./agents').list(), routes: routing.explain({ matterId, agent: agentName }), roles: routing.ROLES, providers: Object.entries(require('./providers/catalog').PROVIDERS).map(([id, x]) => ({ id, label: x.label, local: !!x.local })), hookEvents: require('./hooks').EVENTS, files: { firm: harness.layers().firm.path, user: harness.USER_PATH } })
+        }
+        if (req.method === 'POST' && p === '/api/harness/section') {
+          const body = await readBody(req)
+          if (body.value && ['routes', 'hooks', 'agents'].includes(body.section)) { const problems = body.section === 'routes' ? routing.validate(body.value) : body.section === 'hooks' ? require('./hooks').validate(body.value) : require('./agents').validate(body.value); if (problems.length) return sendJson(res, 400, { error: problems.join('; '), problems }) }
+          return sendJson(res, 200, { config: harness.setUserSection(body.section, body.value ?? null) })
+        }
+        return sendJson(res, 404, { error: 'not found' })
+      } catch (err) {
+        return sendJson(res, 400, { error: err.message })
+      }
     }
 
     // ── Lists (matter checklists and trackers, audited) ──────────────────
@@ -508,6 +536,7 @@ async function handle(req, res) {
           try {
             const r = await policy.withMatter(plan.matterId, () => planMod.run(body.id, { signal: ac.signal, onProgress: (ev) => sendSse(res, { type: 'progress', ...ev }) }))
             sendSse(res, { type: 'done', status: r.status, report: r.report || null, waiting: r.steps.find((x) => x.status === 'waiting') || null })
+            if (r.status === 'done' || r.status === 'failed') require('./hooks').run('after_workflow', { workflow: 'plan', files: [r.report, ...r.steps.flatMap((x) => x.result?.files || [])].filter(Boolean), stats: { status: r.status, steps: r.steps.length }, matterId: plan.matterId }).catch(() => {})
           } catch (err) {
             sendSse(res, { type: 'error', message: err.message })
           }
@@ -627,6 +656,7 @@ async function handle(req, res) {
               onProgress: (ev) => sendSse(res, { type: 'progress', ...ev }),
             }))
             sendSse(res, { type: 'done', stats: r.stats })
+            require('./hooks').run('after_workflow', { workflow: 'grid', files: [], stats: r.stats, matterId: g.matterId }).catch(() => {})
           } catch (err) {
             sendSse(res, { type: 'error', message: err.message })
           }
@@ -898,7 +928,9 @@ async function handle(req, res) {
 
     if (req.method === 'GET' && p === '/api/license/status') {
       const st = watchdog.state
-      return sendJson(res, 200, st.status === 'unknown' ? { status: 'pending', ...st } : st)
+      const dist = require('./distribution').load(config.DATA_DIR)
+      const links = { distribution: dist?.name || null, accountUrl: dist?.accountUrl || null, downloadUrl: dist?.downloadUrl || null, supportUrl: dist?.supportUrl || null }
+      return sendJson(res, 200, st.status === 'unknown' ? { status: 'pending', ...st, ...links } : { ...st, ...links })
     }
 
     if (req.method === 'GET' && p === '/api/jurisdictions') {
@@ -1024,14 +1056,24 @@ async function handle(req, res) {
       // Firm skills (Phase 7.2): "/name …" or body.skill runs the agent with
       // that skill; otherwise suggest a matching one (the pane shows a chip).
       const skillsMod = require('./skills')
+      const agentsMod = require('./agents')
       let skill = null
+      let agent = null
       try {
+        // "@agent" first, then "/skill": "@drafter /rebalance-clause make §7 fairer".
+        if (body.agent) agent = agentsMod.get(body.agent)
+        else {
+          const ai = agentsMod.parseInvocation(body.message)
+          if (ai) { agent = ai.agent; body.message = ai.message }
+          else { const mt = matterIdFor(body, entry); const dm = mt ? require('./matters').get(mt)?.agent : null; if (dm) agent = agentsMod.get(dm) }
+        }
         if (body.skill) skill = skillsMod.get(body.skill)
         else {
           const inv = skillsMod.parseInvocation(body.message)
           if (inv) { skill = inv.skill; body.message = inv.message || `Apply the "${inv.skill.title}" skill to this document.` }
         }
       } catch (err) { sendSse(res, { type: 'error', message: err.message }); return res.end() }
+      if (agent && agent.name !== 'associate') sendSse(res, { type: 'agent', name: agent.name, title: agent.title })
       if (skill) sendSse(res, { type: 'skill', name: skill.name, title: skill.title })
       else if (body.suggestSkill !== false) {
         const hint = await policy.withMatter(matterIdFor(body, entry), () => skillsMod.suggest(body.message).catch(() => null))
@@ -1042,14 +1084,30 @@ async function handle(req, res) {
       const ac = new AbortController()
       res.on('close', () => ac.abort())
       try {
-        const r = await policy.withMatter(matterIdFor(body, entry), () => runAction(context, body.message, (e) => sendSse(res, e), { signal: ac.signal, skill }))
+        const r = await policy.withMatter(matterIdFor(body, entry), () => agentsMod.run(agent, () => runAction(context, body.message, (e) => sendSse(res, e), { signal: ac.signal, skill, agent })))
         // Conversation memory: persist the exchange (best-effort; the
         // model's streamed prose already went out token-by-token).
         session.append(body.message, r.text)
-        // streamed=true → the write phase already streamed the prose token
-        // by token; skip the duplicate final event.
-        if (!r.streamed) sendSse(res, { type: 'text', text: r.text + '\n' })
-        for (const sug of r.suggestions) sendSse(res, { type: 'suggestion', suggestion: sug })
+        // Firm hooks at the answer (hooks.js): warn → note; deny → withheld.
+        // A streamed answer is already on screen: the pane marks it withheld.
+        const hooks = require('./hooks')
+        const mid = matterIdFor(body, entry)
+        const gate = hooks.has('before_answer') && r.text ? await hooks.run('before_answer', { text: r.text, matterId: mid }) : { decision: 'allow', warnings: [] }
+        if (gate.decision === 'deny') sendSse(res, { type: 'withheld', message: gate.reason })
+        else {
+          // streamed=true → the write phase already streamed the prose token
+          // by token; skip the duplicate final event.
+          if (!r.streamed) sendSse(res, { type: 'text', text: r.text + '\n' })
+          for (const w of gate.warnings) sendSse(res, { type: 'warning', message: w })
+        }
+        for (const sug of r.suggestions) {
+          if (hooks.has('on_suggestion')) {
+            const g = await hooks.run('on_suggestion', { text: sug.proposed_text || '', summary: sug.summary || '', severity: sug.severity, matterId: mid })
+            if (g.decision === 'deny') { sendSse(res, { type: 'warning', message: `A suggestion was removed by a firm rule: ${g.reason}` }); continue }
+            if (g.flags.length || g.warnings.length) sug.flags = [...g.flags, ...g.warnings]
+          }
+          sendSse(res, { type: 'suggestion', suggestion: sug })
+        }
         sendSse(res, { type: 'done' })
       } catch (err) {
         sendSse(res, { type: 'error', message: err.message })

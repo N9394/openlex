@@ -85,7 +85,7 @@ async function judgeSuggestions(ctx, suggestions, finalText) {
     const raw = await chat([
       { role: 'system', content: JUDGE_PROMPT },
       { role: 'user', content: JSON.stringify(payload) },
-    ], { maxTokens: 1200 })
+    ], { maxTokens: 1200, role: 'judge' })
 
     const verdicts = JSON.parse(raw.replace(/^```(json)?/i, '').replace(/```$/, '').trim())
     if (!Array.isArray(verdicts)) throw new Error('judge: expected array')

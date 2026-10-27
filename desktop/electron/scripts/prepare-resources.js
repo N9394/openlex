@@ -166,6 +166,12 @@ async function main() {
     copyDir(path.join(SIDECAR, 'src'), path.join(ENGINE, 'src'))
     copyDir(path.join(SIDECAR, 'playbooks'), path.join(ENGINE, 'playbooks'))
     copyDir(path.join(SIDECAR, 'skills'), path.join(ENGINE, 'skills'))
+    // A distributor's build: their distribution.json (licence/update server)
+    // comes from a private path, never from the repo.
+    if (process.env.OPENLEX_DISTRIBUTION) {
+      fs.copyFileSync(process.env.OPENLEX_DISTRIBUTION, path.join(ENGINE, 'distribution.json'))
+      fs.copyFileSync(process.env.OPENLEX_DISTRIBUTION, path.join(path.dirname(ENGINE), 'distribution.json'))
+    }
     copyDir(path.join(SIDECAR, 'bin'), path.join(ENGINE, 'bin'), { filter: (n) => n === 'openlex.js' })
     for (const f of ['package.json', 'package-lock.json']) fs.copyFileSync(path.join(SIDECAR, f), path.join(ENGINE, f))
     copyDir(path.resolve(ROOT, '..', '..', 'add-in'), path.join(ENGINE, 'add-in'), { filter: (n) => n !== 'node_modules' })

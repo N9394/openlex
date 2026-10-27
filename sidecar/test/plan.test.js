@@ -133,3 +133,10 @@ test('lawyer edits are re-validated', () => {
   assert.strictEqual(steps[0].args.file, path.join(folder, 'nda-acme.txt'), 'document names resolve to the matter file')
   assert.match(notes[0], /needs a question/)
 })
+
+test('an invented skill on a research step is dropped, the step stays', () => {
+  const { steps, notes } = plan.cleanSteps([{ kind: 'research', args: { question: 'Is a penalty without proof of damage enforceable?', skill: 'austrian-contract-law' } }])
+  assert.strictEqual(steps.length, 1)
+  assert.strictEqual(steps[0].args.skill, undefined)
+  assert.match(notes[0], /unknown skill "austrian-contract-law" dropped/)
+})

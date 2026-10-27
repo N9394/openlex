@@ -682,7 +682,7 @@
       "accountId": "Account ID",
       "tier": "Tier",
       "subscribedJurisdictions": "Subscribed jurisdictions",
-      "noSubscriptions": "No active subscriptions. Add a jurisdiction at lexvault.pinemarshlands.com.",
+      "noSubscriptions": "No active subscriptions. Add a jurisdiction in your account with your provider.",
       "appVersion": "App version",
       "statuteChunks": "Statute chunks (local Qdrant)",
       "qdrantUnreachable": "Qdrant unreachable",

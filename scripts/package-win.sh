@@ -60,6 +60,8 @@ echo "… staging sidecar (win32-x64 deps)"
 cp -R sidecar/src "$STAGE/sidecar/src"
 cp -R sidecar/playbooks "$STAGE/sidecar/playbooks"
 cp -R sidecar/skills "$STAGE/sidecar/skills"
+# A distributor's licence/update server comes from a private file, never the repo.
+[ -n "${OPENLEX_DISTRIBUTION:-}" ] && cp "$OPENLEX_DISTRIBUTION" "$STAGE/sidecar/distribution.json"
 cp sidecar/package.json sidecar/package-lock.json "$STAGE/sidecar/"
 if ! ( cd "$STAGE/sidecar" && npm install --platform=win32 --arch=x64 --omit=dev --no-audit --no-fund >/dev/null 2>&1 ); then
   echo "  npm install (win32-x64) failed — retrying with visible output"
