@@ -136,6 +136,16 @@ A skill is a `SKILL.md` file (frontmatter `name`, `title`, `description`, `trigg
 | POST | `/api/workflows/playbooks/draft` | `{ files?, matterId?, title, focus? }` | Review checklist from the firm's precedents; a check's firm `standard` is kept only with a verbatim quote from them. |
 | POST | `/api/workflows/playbooks` | `{ name, playbook }` | Save a playbook to the workspace `playbooks/` folder. |
 
+### Data sources
+The firm's databases and subscriptions as searchable sources (see [SOURCES.md](SOURCES.md)).
+| Method | Path | Body | What |
+|---|---|---|---|
+| GET | `/api/sources` | | Configured sources (type, kind, local/remote, problems) and presets. |
+| POST | `/api/sources/search` | `{ query, kind?, jurisdiction?, sources?, matterId? }` | Search allowed sources in parallel → `{ results, searched, skipped }`. |
+| POST | `/api/sources/test` | `{ name, query? }` | One quick query. |
+| POST | `/api/sources/add`, `/api/sources/remove` | `{ name, source? }`, `{ name }` | Add a preset or definition to your layer; remove it. |
+| POST | `/api/sources/key` | `{ name, key }` | Store the source's key in the OS keychain (`null` removes it). |
+
 ### Review grid
 Rows are documents, columns are questions, and every cell is an answer with a verbatim quote from its document.
 | Method | Path | Body / query | What |

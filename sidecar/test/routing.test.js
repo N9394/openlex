@@ -117,7 +117,7 @@ test('firm layer: defaults, merge with the user, and locks', () => {
   writeUser({ routes: { roles: { write: 'openai' } } })
   let cfg = harness.load()
   assert.deepStrictEqual(cfg.routes.roles, { judge: 'custom', write: 'openai' })
-  assert.strictEqual(cfg.sources.routes, 'firm+user')
+  assert.strictEqual(cfg.origins.routes, 'firm+user')
   assert.strictEqual(harness.feature('browser'), false)
   assert.strictEqual(harness.feature('monitors'), true)
   ws.writeFile('openlex.json', JSON.stringify({ lock: ['routes'], routes: { roles: { judge: 'custom' } } }))
