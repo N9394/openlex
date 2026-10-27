@@ -19,7 +19,7 @@
  *   openlex playbook draft FILE… --title T [--focus words] [--save NAME]
  *   openlex monitors [add eurlex|ris "words" | add rss|page URL] [--topics a,b] [--every H] | check [ID] | alerts
  *   openlex lists [show ID | new TITLE | add ID "item" [--due YYYY-MM-DD] [--owner X] | done ID ITEM | export ID]
- *   openlex map [--matter ID]          which model handles each role, what is checked where
+ *   openlex map [--matter ID] [--agent NAME] | map set routes|hooks|agents|features FILE.json | --clear
  *   openlex agents                     agent profiles (use one with "@name …" in ask)
  *   openlex plan "goal" --matter ID | plan list | plan show ID | plan run ID (approves) | plan decide ID STEP continue|stop [--note text]
  *   openlex serve                      run the engine in the foreground
@@ -44,6 +44,7 @@ function parseArgs(argv) {
     if (a === '--no-rate') out.rate = false
     else if (a === '--json') out.json = true
     else if (a === '--force') out.force = true
+    else if (a === '--clear') out.clear = true
     else if (a === '--save' && (i + 1 >= argv.length || argv[i + 1].startsWith('--'))) out.save = true
     else if (a.startsWith('--')) out[a.slice(2)] = argv[++i]
     else out._.push(a)
@@ -314,12 +315,22 @@ async function main() {
       return
     }
     case 'map': {
-      const r = await request('GET', `/api/harness${a.matter ? `?matterId=${encodeURIComponent(a.matter)}` : ''}`)
+      if (a._[0] === 'set') {
+        const [, section, file] = a._
+        if (!section || (!file && !a.clear)) throw new Error('usage: openlex map set routes|hooks|agents|features FILE.json   (or --clear)')
+        const value = a.clear ? null : JSON.parse(fs.readFileSync(file, 'utf8'))
+        await request('POST', '/api/harness/section', { section, value })
+        return console.log(a.clear ? `cleared ${section} from your layer` : `saved ${section} to your layer (validated)`)
+      }
+      const q = new URLSearchParams({ ...(a.matter ? { matterId: a.matter } : {}), ...(a.agent ? { agent: a.agent } : {}) })
+      const r = await request('GET', `/api/harness${q.toString() ? `?${q}` : ''}`)
       if (a.json) return console.log(JSON.stringify(r, null, 2))
       console.log(`config: firm ${r.files.firm || '—'} · user ${r.files.user}${r.config.locked.length ? ` · firm locks: ${r.config.locked.join(', ')}` : ''}`)
       for (const e of [...r.errors, ...r.problems]) console.log(`  ! ${e}`)
       console.log('\nROUTES (tried in order; ✗ = skipped by the data policy)')
       for (const role of r.routes) console.log(`  ${role.role.padEnd(10)} ${role.candidates.map((c) => `${c.allowed ? '' : '✗'}${c.provider}${c.model ? `:${c.model}` : ''} (${c.reason})`).join(' → ')}`)
+      const blocked = [...new Map(r.routes.flatMap((x) => x.candidates).filter((c) => c.blocked).map((c) => [c.provider, c.blocked])).entries()]
+      for (const [p, why] of blocked) console.log(`  ✗ ${p}: ${why}`)
       console.log(`\nAGENTS  ${(r.agents || []).map((x) => `@${x.name}${x.error ? ' (invalid)' : ''}`).join(' · ')}`)
       const hk = Object.entries(r.config.hooks || {}).filter(([, v]) => (v || []).length)
       console.log(`HOOKS   ${hk.length ? hk.map(([k, v]) => `${k} ×${v.length}`).join(' · ') : 'none'}`)

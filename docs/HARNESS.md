@@ -153,6 +153,11 @@ Built in: `@associate` (the default), `@researcher` (statute and EU law memo, no
 
 `openlex agents` lists them; `openlex map` shows the effective map including profiles and hooks.
 
-## The map in the desktop app
+## Seeing and changing the map
 
-**Harness map** (sidebar) draws the pipeline (request → plan → tools → analyze → write → judge → answer, plus workflows, translation, monitors and the skill builder). Each node shows the model it would use first under the selected matter's data policy and how many firm rules sit there. Click a node to see every candidate in order (blocked ones struck through, with the reason) and to route that role to another provider. Below, each section of *your* layer can be edited as JSON; it is validated before saving, and sections the firm locked are read-only.
+The map is part of the open-source engine and is read and changed as files, from the command line or over the local API; the apps don't carry a settings screen for it.
+
+- `openlex map [--matter ID] [--agent NAME]` prints, per role, the models tried in order (struck ones are skipped by the matter's data policy, with the reason), the agent profiles, the hooks per decision point, the features, and any problems in the files.
+- `openlex map set <section> <file.json>` validates a section and writes it to **your** layer (`~/.lexvault/openlex.json`); `openlex map set <section> --clear` removes it. Sections the firm locked are refused.
+- The firm layer is the plain file `<workspace>/openlex.json`; edit and version it like playbooks and skills.
+- API: `GET /api/harness?matterId=&agent=` (effective map, candidates, your raw layer, problems) and `POST /api/harness/section { section, value }`.
