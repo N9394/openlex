@@ -2439,6 +2439,15 @@
       `${p.code} · v${p.version || '?'} · ${p.chunk_count ? Number(p.chunk_count).toLocaleString() + ' chunks' : ''}${p.ingested_at ? ' · ' + String(p.ingested_at).slice(0, 10) : ''}`
     ).join('<br>') || 'none'
 
+    if (lic && lic.status === 'community') {
+      // Community build: no account, no token, nothing to activate.
+      box.innerHTML = `
+        ${licenseStatusCard(lic)}
+        <div class="muted" style="margin-top:0.4rem">model: <b>${st.model ? escHtml(st.model) : 'none local — pick a provider under Model'}</b></div>
+        <div class="muted" style="line-height:1.5">packs:<br>${packs}</div>`
+      return
+    }
+
     if (!st.token) {
       // STEP 1 — no token yet: paste it, then we verify the subscription.
       box.innerHTML = `

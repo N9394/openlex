@@ -49,9 +49,13 @@ const PORTS = {
 }
 
 class Supervisor {
-  constructor({ paths, license }) {
+  // modelPath: the GGUF main.js settled on; null = no local model (community
+  // mode without a download — own API key / custom endpoint only). Omitted =
+  // the tier's model from hardware.json.
+  constructor({ paths, license, modelPath }) {
     this.paths = paths
     this.license = license
+    this.modelPath = modelPath
     this.children = []
     this.backendUrl = `http://127.0.0.1:${PORTS.backend}`
   }
@@ -93,7 +97,7 @@ class Supervisor {
     // the model is hot by the time the user types a query. Fire-and-forget —
     // failures (e.g. no Vulkan device) fall back to CPU and surface in the
     // Dependencies tab; no need to gate boot on this.
-    setTimeout(() => {
+    if (this._llmModelPath) setTimeout(() => {
       this._ensureLLMRunning().catch(err => {
         console.warn(`[llm-prewarm] background spawn failed: ${err.message}`)
       })
@@ -273,10 +277,12 @@ log_level: WARN
     if (!fs.existsSync(binary)) {
       throw new Error(`llama.cpp server binary missing at ${binary}.`)
     }
-    const modelPath = path.join(this.paths.models, 'llm', this._readHardware().model_filename)
-    if (!fs.existsSync(modelPath)) {
+    const modelPath = this.modelPath !== undefined ? this.modelPath : path.join(this.paths.models, 'llm', this._readHardware().model_filename)
+    if (modelPath && !fs.existsSync(modelPath)) {
       throw new Error(`LLM model missing at ${modelPath}. Boot should have downloaded it.`)
     }
+    // No local model: the proxy still runs so cloud / custom providers work
+    // through the engine; local requests get a clear error (_ensureLLMRunning).
 
     this._llmInternalPort = PORTS.llm + 100
     // 4 minutes idle before unload. Was 10 min, but on machines with 16-24 GB
@@ -556,6 +562,9 @@ log_level: WARN
   }
 
   async _ensureLLMRunning() {
+    if (!this._llmModelPath) {
+      throw new Error(`No local model installed. Choose a provider with your own API key (or a custom llama-server / Ollama endpoint) in the model settings, or put a .gguf file in ${path.join(this.paths.models, 'llm')} and restart OpenLex.`)
+    }
     if (this._llmChild && !this._llmChild.killed) return
     if (this._llmReadyPromise) return this._llmReadyPromise
 
@@ -850,7 +859,8 @@ log_level: WARN
         NODE_ENV: 'production',
         PORT: String(PORTS.backend),
         LEXVAULT_LOCAL_MODE: '1',
-        LEXVAULT_LICENSE_PATH: this.paths.license,
+        // Community mode: no licence file → the backend uses its local user.
+        LEXVAULT_LICENSE_PATH: this.license?.community ? '' : this.paths.license,
         DATABASE_URL: dbFileUrl,
         LLM_PROVIDER: 'ollama',
         OLLAMA_BASE_URL: `http://127.0.0.1:${PORTS.llm}`,
