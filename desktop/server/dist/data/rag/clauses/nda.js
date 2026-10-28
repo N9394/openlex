@@ -1,0 +1,97 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.NDA_CLAUSES = void 0;
+exports.NDA_CLAUSES = [
+    {
+        id: 'nda-def-confidential-us',
+        name: 'Definition of Confidential Information (US)',
+        category: 'confidentiality',
+        documentTypes: ['nda', 'nda-mutual', 'nda-unilateral'],
+        jurisdiction: ['US'],
+        language: 'en',
+        content: `"Confidential Information" means any and all non-public information disclosed by the Disclosing Party to the Receiving Party, including but not limited to: (a) trade secrets, inventions, ideas, processes, formulas, source code, data, programs, know-how, improvements, discoveries, developments, designs, and techniques; (b) information regarding plans for research, development, new products, marketing, business plans, budgets, financial statements, licenses, prices, costs, suppliers, and customers; and (c) information regarding the skills and compensation of employees and contractors of the Disclosing Party.`,
+        variations: [
+            {
+                name: 'Broad (All Information)',
+                content: `"Confidential Information" means any and all information disclosed by either party, whether in writing, orally, electronically, or by any other means, regardless of whether marked as "confidential."`,
+            },
+            {
+                name: 'Narrow (Marked Only)',
+                content: `"Confidential Information" means only information that: (a) is disclosed in writing and clearly marked "Confidential"; or (b) if disclosed orally, is identified as confidential at disclosure and confirmed in writing within thirty (30) days.`,
+            },
+        ],
+    },
+    {
+        id: 'nda-def-confidential-de',
+        name: 'Definition Vertrauliche Informationen (DE)',
+        category: 'confidentiality',
+        documentTypes: ['nda', 'geheimhaltungsvereinbarung'],
+        jurisdiction: ['DE', 'AT', 'CH'],
+        language: 'de',
+        content: `„Vertrauliche Informationen" bezeichnet alle nicht öffentlichen Informationen, die von der offenlegenden Partei an die empfangende Partei weitergegeben werden, einschließlich, aber nicht beschränkt auf: (a) Geschäftsgeheimnisse, Erfindungen, Verfahren, Formeln, Daten, Know-how und technische Entwicklungen; (b) Informationen über Geschäftspläne, Budgets, Finanzberichte, Kunden und Lieferanten; und (c) Informationen über Mitarbeiter und Vergütungen.`,
+    },
+    {
+        id: 'nda-exclusions-us',
+        name: 'Exclusions from Confidentiality (US)',
+        category: 'confidentiality',
+        documentTypes: ['nda', 'nda-mutual', 'nda-unilateral'],
+        jurisdiction: ['US', 'UK', 'CA', 'AU'],
+        language: 'en',
+        content: `Confidential Information does not include information that: (a) is or becomes publicly available without breach of this Agreement; (b) was known to the Receiving Party prior to disclosure, as evidenced by written records; (c) is rightfully received from a third party without restriction; (d) is independently developed without use of or reference to the Confidential Information; or (e) is required to be disclosed by law or court order, provided the Receiving Party gives prompt notice and cooperates in seeking protective treatment.`,
+    },
+    {
+        id: 'nda-exclusions-de',
+        name: 'Ausnahmen von der Vertraulichkeit (DE)',
+        category: 'confidentiality',
+        documentTypes: ['nda', 'geheimhaltungsvereinbarung'],
+        jurisdiction: ['DE', 'AT', 'CH'],
+        language: 'de',
+        content: `Vertrauliche Informationen umfassen nicht: (a) Informationen, die ohne Verletzung dieser Vereinbarung öffentlich bekannt sind oder werden; (b) Informationen, die der empfangenden Partei vor Offenlegung nachweislich bekannt waren; (c) Informationen, die von einem Dritten ohne Geheimhaltungsverpflichtung erhalten wurden; (d) Informationen, die unabhängig entwickelt wurden; oder (e) Informationen, deren Offenlegung gesetzlich oder gerichtlich angeordnet wird.`,
+    },
+    {
+        id: 'nda-obligations-us',
+        name: 'Confidentiality Obligations (US)',
+        category: 'confidentiality',
+        documentTypes: ['nda', 'nda-mutual', 'nda-unilateral'],
+        jurisdiction: ['US', 'UK', 'CA', 'AU'],
+        language: 'en',
+        content: `The Receiving Party agrees to: (a) hold the Confidential Information in strict confidence; (b) not disclose the Confidential Information to any third parties without prior written consent; (c) use the Confidential Information solely for the Purpose; (d) protect the Confidential Information using the same degree of care as its own confidential information, but no less than reasonable care; and (e) limit access to those employees and contractors who need to know and are bound by confidentiality obligations at least as protective as these.`,
+    },
+    {
+        id: 'nda-term-us',
+        name: 'Term and Survival (US)',
+        category: 'termination',
+        documentTypes: ['nda', 'nda-mutual', 'nda-unilateral'],
+        jurisdiction: ['US', 'UK', 'CA', 'AU'],
+        language: 'en',
+        content: `This Agreement shall remain in effect for [TERM] years from the Effective Date. Either party may terminate this Agreement upon [NOTICE_PERIOD] days written notice. The confidentiality obligations shall survive termination for [SURVIVAL_PERIOD] years, or for as long as the Confidential Information remains a trade secret under applicable law, whichever is longer.`,
+    },
+    {
+        id: 'nda-return-materials-us',
+        name: 'Return of Materials (US)',
+        category: 'termination',
+        documentTypes: ['nda', 'nda-mutual', 'nda-unilateral'],
+        jurisdiction: ['US', 'UK', 'CA', 'AU'],
+        language: 'en',
+        content: `Upon termination of this Agreement or upon request by the Disclosing Party, the Receiving Party shall promptly: (a) return all materials containing Confidential Information; or (b) destroy such materials and certify in writing that destruction is complete. Notwithstanding the foregoing, the Receiving Party may retain copies as required by law or internal compliance policies, subject to continuing confidentiality obligations.`,
+    },
+    {
+        id: 'nda-no-license-us',
+        name: 'No License Granted (US)',
+        category: 'intellectual-property',
+        documentTypes: ['nda', 'nda-mutual', 'nda-unilateral'],
+        jurisdiction: ['US', 'UK', 'CA', 'AU'],
+        language: 'en',
+        content: `Nothing in this Agreement grants the Receiving Party any license or rights in or to the Confidential Information, except the limited right to use such information for the Purpose. All Confidential Information remains the property of the Disclosing Party. No patent, copyright, trademark, or other intellectual property rights are transferred or licensed hereunder.`,
+    },
+    {
+        id: 'nda-remedies-us',
+        name: 'Remedies and Injunctive Relief (US)',
+        category: 'dispute-resolution',
+        documentTypes: ['nda', 'nda-mutual', 'nda-unilateral'],
+        jurisdiction: ['US'],
+        language: 'en',
+        content: `The parties acknowledge that any breach of this Agreement may cause irreparable harm for which monetary damages would be inadequate. Accordingly, the Disclosing Party shall be entitled to seek injunctive or other equitable relief without the necessity of proving actual damages or posting a bond. Such relief shall be in addition to, and not in lieu of, any other remedies available at law or in equity.`,
+    },
+];
+//# sourceMappingURL=nda.js.map

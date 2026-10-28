@@ -24,11 +24,11 @@ const path = require('path')
 const { execSync } = require('child_process')
 
 const ROOT = path.resolve(__dirname, '..')
-// OpenLex repo layout: desktop/{electron,client,server-fixes}. The compiled
-// Express backend (server/dist + prisma + node_modules) is not in the repo;
-// point OPENLEX_SERVER_DIR at it (defaults to the legacy product/server).
+// OpenLex repo layout: desktop/{electron,client,server,server-fixes}. The
+// backend ships as compiled JavaScript in desktop/server (dist + prisma);
+// run `npm ci` there once. OPENLEX_SERVER_DIR points elsewhere if needed.
 const DESKTOP = path.resolve(ROOT, '..')
-const SERVER_SRC = process.env.OPENLEX_SERVER_DIR || path.resolve(ROOT, '..', '..', '..', 'product', 'server')
+const SERVER_SRC = process.env.OPENLEX_SERVER_DIR || path.resolve(ROOT, '..', 'server') // desktop/server in this repo
 const CLIENT_SRC = path.join(DESKTOP, 'client')
 const FIXES_DIR = path.join(DESKTOP, 'server-fixes')
 
