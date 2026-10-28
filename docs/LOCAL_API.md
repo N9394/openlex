@@ -43,9 +43,29 @@ Long-running routes answer with Server-Sent Events: `Content-Type: text/event-st
 ### Asking and drafting
 | Method | Path | Body / query | What |
 |---|---|---|---|
-| POST | `/api/chat` | `{ message, text?, docId, matterId? }` | Runs the agent on a document (`text`) or a free question. SSE events: `step`, `reasoning`, `law` (sources found), `text` (answer, possibly streamed in pieces), `suggestion` (a proposed change: `{ type, severity, summary, anchor, proposed_text, basis }`), `scorecard`, `done`. |
+| POST | `/api/chat` | `{ message, text?, docId, matterId?, interactive?, allow?, yes? }` | Runs the agent on a document (`text`) or a free question. SSE events: `step`, `reasoning`, `law` (sources found), `text` (answer, possibly streamed in pieces), `suggestion` (a proposed change: `{ type, severity, summary, anchor, proposed_text, basis }`), `scorecard`, `permission` / `permission_result` (see *Permissions*), `done`. |
 | POST | `/api/session/clear` | `{ docId }` | Forgets the conversation for a document. |
 | GET | `/api/law/section` | `?id=` | Full text of a law chunk from the local packs. |
+
+### Permissions
+Before each tool call the engine decides: allow, ask the lawyer, or refuse (rules in `openlex.json` → `permissions`, see [HARNESS.md](HARNESS.md)). When it must ask, the running stream (`/api/chat`, `/api/plans/run`) carries
+
+```json
+{ "type": "permission", "id": "perm_3f…", "tool": "write_file", "title": "OpenLex wants to save a file",
+  "summary": "Save obligations.csv in Acme/", "detail": { "path": "Acme/obligations.csv", "content": "party,… (412 characters)" },
+  "risk": "writes a file", "matterId": "m_8f2c", "choices": ["once", "always_matter", "always", "deny"],
+  "always": "write_file", "firmRule": false }
+```
+
+and the run waits until someone answers. `risk` is one of `writes a file`, `runs a command`, `sends data to the web`, `uses a connector`, `changes your calendar`. `always` is the rule an "Always allow" answer would save. When the request is settled the stream carries `{ "type": "permission_result", "id", "decision", "by": "lawyer"|"timeout"|"disconnect" }`.
+
+Only a caller that sends `interactive: true` is asked. Everyone else (scripts, `--json`, the MCP server, monitors) gets **deny** for anything that would be asked, unless a rule allows it or the request pre-approves it: `allow: ["write_file:Acme/**"]` (patterns, this run only) or `yes: true` (every ask, this run only). Deny rules always win. No answer within 5 minutes or a closed connection = deny.
+
+| Method | Path | Body | What |
+|---|---|---|---|
+| POST | `/api/permissions/answer` | `{ id, decision: "once"\|"deny"\|"always"\|"always_matter" }` | Answers a waiting request. `always*` also saves the rule (`saved` in the reply). 404 when it was already settled. |
+| GET | `/api/permissions` | | The firm's and your rules, whether the firm locked them, the built-in defaults, and requests waiting for an answer. |
+| POST | `/api/permissions/rules` | `{ action: "allow"\|"ask"\|"deny"\|"remove", pattern, matterId? }` | Edits your layer (per matter: `allow` and `remove` only). Publishes `permissions-changed` on the hub. |
 
 ### Matters
 | Method | Path | Body / query | What |
@@ -180,7 +200,7 @@ Any endpoint that speaks the System One API (`POST {url}/v1/systemone`): a local
 | Method | Path | What |
 |---|---|---|
 | GET | `/api/hub/info` | Who is connected. |
-| GET | `/api/hub/events?from=myapp` | SSE stream of hub events: `insert-text`, `open-in-app`, `provider-changed`, `policy-changed`, `matter-changed`. |
+| GET | `/api/hub/events?from=myapp` | SSE stream of hub events: `insert-text`, `open-in-app`, `provider-changed` (also after a key is saved), `policy-changed`, `matter-changed`, `permissions-changed`. Events name the front end that caused them (`from`: `word`, `tui`, `cli`, or the `X-OpenLex-Client` header), so a change made in the terminal reaches Word and the other way round. |
 | POST | `/api/hub/events` | `{ type, data }`. Publish an event, for example `{ "type": "insert-text", "data": { "text": "…" } }` puts text at the cursor in Word. |
 
 ### Workspace and packs
@@ -198,6 +218,7 @@ Every `LEXVAULT_*` variable can also be given as `OPENLEX_*`, for example `OPENL
 |---|---|
 | `LEXVAULT_DATA_DIR` | Data folder (default `~/.lexvault`). |
 | `OPENLEX_WORKSPACE` | Default workspace folder (default `~/LexVault`). The Settings choice still wins. |
+| `OPENLEX_PERMISSION_TIMEOUT_MS` | How long a permission request waits for the lawyer before it counts as "no" (default 300000, 5 minutes). |
 | `LEXVAULT_SIDECAR_PORT` | Port (default 18001). |
 | `OPENLEX_KEY_<PROVIDER>` | API key override, for example `OPENLEX_KEY_ANTHROPIC`. |
 | `OPENLEX_TRUSTED_ORIGINS` | Extra allowed `Origin`s, comma-separated. |

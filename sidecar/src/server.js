@@ -219,6 +219,27 @@ function sendSse(res, event) {
   res.write(`data: ${JSON.stringify(event)}\n\n`)
 }
 
+/** Who sent a request, for hub events (the pane is same-origin; local programs name themselves). */
+function clientOf(req) {
+  if (req.headers['sec-fetch-site'] === 'same-origin') return 'word'
+  return String(req.headers['x-openlex-client'] || 'local').replace(/[^\w-]/g, '').slice(0, 20) || 'local'
+}
+
+/**
+ * Permission session for a streamed run (permissions.js). Only a front end
+ * that says it can answer (`interactive: true`) is asked; for everyone else
+ * an "ask" is a deny. `allow` (patterns) and `yes` pre-approve asks for this
+ * run only (CLI --allow / --yes); deny rules still win.
+ */
+function permissionSession(body, res, signal) {
+  return {
+    ask: body.interactive === true ? (e) => sendSse(res, e) : null,
+    signal,
+    allow: Array.isArray(body.allow) ? body.allow.filter((x) => typeof x === 'string').slice(0, 50) : [],
+    yes: body.yes === true,
+  }
+}
+
 function readBody(req, limitMb = 5) {
   return new Promise((resolve, reject) => {
     const chunks = []
@@ -460,6 +481,30 @@ async function handle(req, res) {
         return sendJson(res, 400, { error: err.message })
       }
     }
+    // ── Permissions: what the agent may do without asking ───────────────
+    if (p === '/api/permissions' || p.startsWith('/api/permissions/')) {
+      const perms = require('./permissions')
+      require('./workspace').setBase(require('./agent-config').load().workspace)
+      try {
+        if (req.method === 'GET' && p === '/api/permissions') return sendJson(res, 200, perms.describe())
+        if (req.method !== 'POST') return sendJson(res, 404, { error: 'not found' })
+        const body = await readBody(req)
+        if (p === '/api/permissions/answer') {
+          const r = perms.answer(body.id, body.decision)
+          return sendJson(res, r.ok ? 200 : 404, r)
+        }
+        if (p === '/api/permissions/rules') {
+          const matterId = body.matterId || null
+          if (body.action === 'remove') return sendJson(res, 200, { removed: perms.removeRule(body.pattern, { matterId }), ...perms.describe() })
+          perms.addRule(body.action, body.pattern, { matterId })
+          return sendJson(res, 200, perms.describe())
+        }
+        return sendJson(res, 404, { error: 'not found' })
+      } catch (err) {
+        return sendJson(res, 400, { error: err.message })
+      }
+    }
+
     // ── Harness map (routes, hooks, agents, features — layered config) ───
     if (p === '/api/harness' || p.startsWith('/api/harness/')) {
       const harness = require('./harness')
@@ -470,12 +515,14 @@ async function handle(req, res) {
           const matterId = url.searchParams.get('matterId') || null
           const agentName = url.searchParams.get('agent') || null
           const cfg = harness.load()
-          return sendJson(res, 200, { config: cfg, userLayer: harness.layers().user.data || {}, errors: harness.errors(), problems: [...routing.validate(cfg.routes), ...require('./hooks').validate(cfg.hooks), ...require('./agents').validate(cfg.agents), ...require('./sources').validate(cfg.sources), ...require('./models').validate(cfg.models), ...require('./prompts').validate(cfg.prompts)], agents: require('./agents').list(), routes: routing.explain({ matterId, agent: agentName }), roles: routing.ROLES, providers: Object.entries(require('./providers/catalog').PROVIDERS).map(([id, x]) => ({ id, label: x.label, local: !!x.local })), hookEvents: require('./hooks').EVENTS, files: { firm: harness.layers().firm.path, user: harness.USER_PATH } })
+          return sendJson(res, 200, { config: cfg, userLayer: harness.layers().user.data || {}, errors: harness.errors(), problems: [...routing.validate(cfg.routes), ...require('./hooks').validate(cfg.hooks), ...require('./agents').validate(cfg.agents), ...require('./sources').validate(cfg.sources), ...require('./models').validate(cfg.models), ...require('./prompts').validate(cfg.prompts), ...require('./permissions').validate(cfg.permissions)], agents: require('./agents').list(), routes: routing.explain({ matterId, agent: agentName }), roles: routing.ROLES, providers: Object.entries(require('./providers/catalog').PROVIDERS).map(([id, x]) => ({ id, label: x.label, local: !!x.local })), hookEvents: require('./hooks').EVENTS, files: { firm: harness.layers().firm.path, user: harness.USER_PATH } })
         }
         if (req.method === 'POST' && p === '/api/harness/section') {
           const body = await readBody(req)
-          if (body.value && ['routes', 'hooks', 'agents', 'sources', 'models', 'prompts'].includes(body.section)) { const problems = body.section === 'routes' ? routing.validate(body.value) : body.section === 'hooks' ? require('./hooks').validate(body.value) : body.section === 'sources' ? require('./sources').validate(body.value) : body.section === 'models' ? require('./models').validate(body.value) : body.section === 'prompts' ? require('./prompts').validate(body.value) : require('./agents').validate(body.value); if (problems.length) return sendJson(res, 400, { error: problems.join('; '), problems }) }
-          return sendJson(res, 200, { config: harness.setUserSection(body.section, body.value ?? null) })
+          if (body.value && ['routes', 'hooks', 'agents', 'sources', 'models', 'prompts', 'permissions'].includes(body.section)) { const problems = body.section === 'routes' ? routing.validate(body.value) : body.section === 'hooks' ? require('./hooks').validate(body.value) : body.section === 'sources' ? require('./sources').validate(body.value) : body.section === 'models' ? require('./models').validate(body.value) : body.section === 'prompts' ? require('./prompts').validate(body.value) : body.section === 'permissions' ? require('./permissions').validate(body.value) : require('./agents').validate(body.value); if (problems.length) return sendJson(res, 400, { error: problems.join('; '), problems }) }
+          const saved = harness.setUserSection(body.section, body.value ?? null)
+          if (body.section === 'permissions') hub.publish('permissions-changed', {}, clientOf(req))
+          return sendJson(res, 200, { config: saved })
         }
         return sendJson(res, 404, { error: 'not found' })
       } catch (err) {
@@ -569,7 +616,7 @@ async function handle(req, res) {
           const ac = new AbortController()
           res.on('close', () => ac.abort())
           try {
-            const r = await policy.withMatter(plan.matterId, () => planMod.run(body.id, { signal: ac.signal, onProgress: (ev) => sendSse(res, { type: 'progress', ...ev }) }))
+            const r = await require('./permissions').session(permissionSession(body, res, ac.signal), () => policy.withMatter(plan.matterId, () => planMod.run(body.id, { signal: ac.signal, onProgress: (ev) => sendSse(res, { type: 'progress', ...ev }) })))
             sendSse(res, { type: 'done', status: r.status, report: r.report || null, waiting: r.steps.find((x) => x.status === 'waiting') || null })
             if (r.status === 'done' || r.status === 'failed') require('./hooks').run('after_workflow', { workflow: 'plan', files: [r.report, ...r.steps.flatMap((x) => x.result?.files || [])].filter(Boolean), stats: { status: r.status, steps: r.steps.length }, matterId: plan.matterId }).catch(() => {})
           } catch (err) {
@@ -759,7 +806,7 @@ async function handle(req, res) {
           policy.setRule(body.id, body.rule)
           out = matters.get(body.id)
         } else return sendJson(res, 404, { error: 'not found' })
-        hub.publish('matter-changed', { matterId: out?.id || null }, 'word')
+        hub.publish('matter-changed', { matterId: out?.id || null }, clientOf(req))
         return sendJson(res, 200, { ok: true, matter: out })
       } catch (err) {
         return sendJson(res, 400, { error: err.message })
@@ -794,7 +841,7 @@ async function handle(req, res) {
           if (!d.model && d.defaultModel) providerSettings.update({ provider: body.active, overrides: { model: d.defaultModel } })
           providerSettings.update({ active: body.active })
         }
-        hub.publish('provider-changed', {}, 'word')
+        hub.publish('provider-changed', {}, clientOf(req))
         return sendJson(res, 200, { ok: true, ...providerSettings.load() })
       } catch (err) {
         return sendJson(res, 400, { error: err.message })
@@ -807,6 +854,7 @@ async function handle(req, res) {
         if (!PROVIDERS[body.provider]) throw new Error(`unknown provider: ${body.provider}`)
         if (body.key === null || body.key === '') await secrets.deleteKey(body.provider)
         else await secrets.setKey(body.provider, body.key)
+        hub.publish('provider-changed', { provider: body.provider }, clientOf(req))
         return sendJson(res, 200, { ok: true, provider: body.provider, hasKey: await secrets.hasKey(body.provider) })
       } catch (err) {
         return sendJson(res, 400, { error: err.message })
@@ -832,7 +880,7 @@ async function handle(req, res) {
       const body = await readBody(req)
       try {
         const saved = policy.setRule(body.matterId || null, body.rule)
-        hub.publish('policy-changed', {}, 'word')
+        hub.publish('policy-changed', {}, clientOf(req))
         return sendJson(res, 200, { ok: true, ...saved })
       } catch (err) {
         return sendJson(res, 400, { error: err.message })
@@ -1119,7 +1167,9 @@ async function handle(req, res) {
       const ac = new AbortController()
       res.on('close', () => ac.abort())
       try {
-        const r = await policy.withMatter(matterIdFor(body, entry), () => agentsMod.run(agent, () => runAction(context, body.message, (e) => sendSse(res, e), { signal: ac.signal, skill, agent })))
+        // Permissions: an interactive front end answers "may OpenLex …?"
+        // questions on this stream; anything else fails closed (deny).
+        const r = await require('./permissions').session(permissionSession(body, res, ac.signal), () => policy.withMatter(matterIdFor(body, entry), () => agentsMod.run(agent, () => runAction(context, body.message, (e) => sendSse(res, e), { signal: ac.signal, skill, agent }))))
         // Conversation memory: persist the exchange (best-effort; the
         // model's streamed prose already went out token-by-token).
         session.append(body.message, r.text)

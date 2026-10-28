@@ -758,3 +758,14 @@ input[type="checkbox"] { accent-color: var(--brass); width: 15px; height: 15px; 
 /* Firm rules (hooks): warnings under answers, withheld answers */
 .msg.warn { border: 1px solid rgba(232, 189, 138, 0.45); background: var(--brass-tint); color: var(--text); font-size: 0.85rem; }
 .msg.withheld { opacity: 0.85; font-style: italic; }
+
+/* Permission card: "OpenLex wants to save a file" — answered in the pane. */
+.msg.permission { align-self: stretch; border: 1px solid var(--brass); border-radius: 10px; padding: 0.6rem 0.7rem; background: var(--brass-tint); display: flex; flex-direction: column; gap: 0.25rem; }
+.msg.permission .perm-title { font-weight: 600; color: var(--brass-strong); }
+.msg.permission .perm-summary { color: var(--text); }
+.msg.permission .perm-detail { color: var(--text-faint); font-size: 0.78rem; word-break: break-all; }
+.msg.permission .perm-risk { color: var(--text-faint); font-size: 0.78rem; }
+.msg.permission .perm-actions { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.35rem; }
+.msg.permission .perm-actions .btn { font-size: 0.8rem; padding: 3px 10px; }
+.msg.permission .perm-outcome { font-size: 0.8rem; font-style: italic; color: var(--text-faint); }
+.msg.permission.settled { border-color: var(--hairline-strong); background: transparent; }

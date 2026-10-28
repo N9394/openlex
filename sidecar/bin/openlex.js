@@ -12,7 +12,8 @@
  *   openlex key PROVIDER [--remove]    store an API key in the OS keychain (typed hidden, or piped in)
  *   openlex test [PROVIDER]            one tiny call to check the model works (the data policy applies)
  *   openlex policy [--matter ID] | policy local-only | policy allow P1,P2 [--regions eu] [--redact]   where client data may go
- *   openlex ask "Is the liability cap enforceable?" [--file contract.docx] [--matter ID]
+ *   openlex ask "Is the liability cap enforceable?" [--file contract.docx] [--matter ID] [--allow TOOL[,PATTERN…]] [--yes]
+ *   openlex permissions [list | allow PATTERN [--matter ID] | ask PATTERN | deny PATTERN | remove PATTERN [--matter ID]]   what OpenLex may do without asking
  *   openlex review   [--matter ID] [--playbook NAME] [--folder DIR]
  *   openlex chronology [--matter ID] [--folder DIR]
  *   openlex translate FILE --to en [--glossary NAME] [--matter ID]
@@ -25,7 +26,7 @@
  *   openlex playbook draft FILE… --title T [--focus words] [--save NAME]
  *   openlex monitors [add eurlex|ris "words" | add rss|page URL] [--topics a,b] [--every H] | check [ID] | alerts
  *   openlex lists [show ID | new TITLE | add ID "item" [--due YYYY-MM-DD] [--owner X] | done ID ITEM | export ID]
- *   openlex map [--matter ID] [--agent NAME] | map set routes|hooks|agents|features|sources|models|prompts FILE.json | --clear
+ *   openlex map [--matter ID] [--agent NAME] | map set routes|hooks|agents|features|sources|models|prompts|permissions FILE.json | --clear
  *   openlex agents                     agent profiles (use one with "@name …" in ask)
  *   openlex models [MODEL] [--local]   model profiles, and which one each role's model gets
  *   openlex prompts ["message"] [--after TOOL]   which instruction blocks and tools each step would get (the prompt roadmap)
@@ -49,7 +50,8 @@ function parseArgs(argv) {
     else if (a === '--json') out.json = true
     else if (a === '--force') out.force = true
     else if (a === '--clear') out.clear = true
-    else if (['--local', '--remove', '--redact', '--privileged', '--off'].includes(a)) out[a.slice(2)] = true
+    else if (['--local', '--remove', '--redact', '--privileged', '--off', '--yes'].includes(a)) out[a.slice(2)] = true
+    else if (a === '--allow') out.allow = [...(out.allow || []), ...String(argv[++i] || '').split(',').map((x) => x.trim()).filter(Boolean)]
     else if (a === '--save' && (i + 1 >= argv.length || argv[i + 1].startsWith('--'))) out.save = true
     else if (a.startsWith('--')) out[a.slice(2)] = argv[++i]
     else out._.push(a)
@@ -100,6 +102,39 @@ async function runWorkflow(type, body, opts) {
     console.log(Object.entries(result.stats || {}).filter(([, v]) => typeof v !== 'object').map(([k, v]) => `${k}: ${v}`).join(' · '))
     for (const f of result.files || []) console.log(f)
   }
+}
+
+/**
+ * "OpenLex wants to …" in a terminal: one line, [y]es once / [a]lways / [n]o.
+ * Enter alone = yes once; anything unclear = no.
+ */
+async function askPermission(ev) {
+  const readline = require('readline')
+  const always = ev.choices.includes('always_matter') ? 'always_matter' : ev.choices.includes('always') ? 'always' : null
+  const keys = `[y]es once${always ? ` / [a]lways${always === 'always_matter' ? ' (this matter)' : ''}` : ''} / [n]o`
+  const detail = ev.tool === 'run_bash' ? '' : Object.entries(ev.detail || {}).filter(([k]) => k !== 'content').map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`).join(' · ')
+  process.stderr.write(`\n${ev.title} (${ev.risk})\n  ${ev.summary}${detail ? `\n  ${detail.slice(0, 200)}` : ''}${ev.firmRule ? '\n  (your firm asks for confirmation here)' : ''}\n`)
+  const rl = readline.createInterface({ input: process.stdin, output: process.stderr })
+  const reply = await new Promise((resolve) => rl.question(`  Allow? ${keys}: `, (x) => { rl.close(); resolve(String(x).trim().toLowerCase()) }))
+  const decision = reply === '' || reply === 'y' || reply === 'yes' ? 'once' : (reply === 'a' || reply === 'always') && always ? always : 'deny'
+  const r = await request('POST', '/api/permissions/answer', { id: ev.id, decision }).catch((err) => ({ ok: false, error: err.message }))
+  if (!r.ok) process.stderr.write(`  (too late: ${r.error})\n`)
+  else process.stderr.write(decision === 'deny' ? '  not allowed\n' : `  allowed${r.saved ? ` — saved: ${r.saved}` : ''}\n`)
+}
+
+function printPermissions(r) {
+  const line = (label, list) => console.log(`  ${label.padEnd(7)} ${list.length ? list.join(', ') : '—'}`)
+  console.log(`YOUR RULES${r.locked ? ' (locked by the firm — ignored)' : ''}`)
+  line('allow', r.user.allow); line('ask', r.user.ask); line('deny', r.user.deny)
+  for (const [id, m] of Object.entries(r.user.matters || {})) line(id, (m.allow || []).map((x) => `allow ${x}`))
+  if ([...r.firm.allow, ...r.firm.ask, ...r.firm.deny].length) {
+    console.log('FIRM RULES (deny wins over any allow)')
+    line('allow', r.firm.allow); line('ask', r.firm.ask); line('deny', r.firm.deny)
+  }
+  console.log('DEFAULTS (when no rule matches)')
+  console.log(`  allow   ${r.defaults.filter((d) => d.decision === 'allow').map((d) => d.tool).join(', ')}`)
+  console.log(`  ask     ${r.defaults.filter((d) => d.decision !== 'allow').map((d) => d.tool).join(', ')}, connector tools (mcp:*), anything unknown`)
+  console.log('\nopenlex permissions allow|ask|deny PATTERN · remove PATTERN · patterns: write_file, write_file:Acme/**, web_fetch:*.europa.eu, run_bash:git *, mcp:dms:*')
 }
 
 const USAGE = (() => { const lines = fs.readFileSync(__filename, 'utf8').split('\n'); const end = lines.findIndex((l) => l.includes('Finds the engine')) - 1; return lines.slice(3, end).map((l) => l.replace(/^ \* ?/, '')).join('\n') })()
@@ -199,9 +234,13 @@ async function main() {
       const text = a.file ? await readFileText(a.file) : ''
       const docId = `cli:${a.file ? path.resolve(a.file) : 'scratch'}`
       let wroteText = false
-      await request('POST', '/api/chat', { message, text, docId, matterId: a.matter }, {
+      // Only a person at a terminal can answer "may OpenLex …?"; scripts
+      // (--json, pipes) fail closed unless --allow / --yes say otherwise.
+      const interactive = !a.json && !!process.stdin.isTTY && !!process.stderr.isTTY
+      await request('POST', '/api/chat', { message, text, docId, matterId: a.matter, interactive, ...(a.allow ? { allow: a.allow } : {}), ...(a.yes ? { yes: true } : {}) }, {
         onEvent: (ev) => {
           if (a.json) { console.log(JSON.stringify(ev)); return }
+          if (ev.type === 'permission') { askPermission(ev).catch((err) => console.error(`error: ${err.message}`)); return }
           if (ev.type === 'text') { process.stdout.write(ev.text); wroteText = true }
           else if (ev.type === 'step') process.stderr.write(`  · ${ev.text}\n`)
           else if (ev.type === 'law') for (const s of ev.sources || []) process.stderr.write(`  § ${s.source_name || s.title}\n`)
@@ -433,10 +472,24 @@ async function main() {
       for (const pr of r.profiles) console.log(`  ${pr.name.padEnd(18)} ${String(pr.kind).padEnd(6)} ${pr.thinking.padEnd(6)} ${pr.tools.padEnd(6)} ${(pr.match || []).join(' | ')}${pr.origin !== 'built-in' ? `  [${pr.origin}]` : ''}`)
       return
     }
+    case 'permissions': {
+      const [sub, pattern] = a._
+      if (['allow', 'ask', 'deny', 'remove'].includes(sub)) {
+        if (!pattern) throw new Error(`usage: openlex permissions ${sub} PATTERN${sub === 'allow' || sub === 'remove' ? ' [--matter ID]' : ''}   (e.g. write_file, web_fetch:eur-lex.europa.eu, mcp:dms:*)`)
+        const r = await request('POST', '/api/permissions/rules', { action: sub, pattern, matterId: a.matter })
+        if (sub === 'remove') return console.log(r.removed ? `removed ${pattern}${a.matter ? ` (matter ${a.matter})` : ''}` : `${pattern} was not one of your rules${r.firm && [...r.firm.allow, ...r.firm.ask, ...r.firm.deny].includes(pattern) ? ' (it is a firm rule: ask your administrator)' : ''}`)
+        return console.log(`${sub === 'allow' ? 'allowed without asking' : sub === 'deny' ? 'never allowed' : 'always asked'}: ${pattern}${a.matter ? ` (matter ${a.matter} only)` : ''}`)
+      }
+      if (sub && sub !== 'list') throw new Error('usage: openlex permissions [list | allow PATTERN [--matter ID] | ask PATTERN | deny PATTERN | remove PATTERN [--matter ID]]')
+      const r = await request('GET', '/api/permissions')
+      if (a.json) return console.log(JSON.stringify(r, null, 2))
+      printPermissions(r)
+      return
+    }
     case 'map': {
       if (a._[0] === 'set') {
         const [, section, file] = a._
-        if (!section || (!file && !a.clear)) throw new Error('usage: openlex map set routes|hooks|agents|features|sources|models|prompts FILE.json   (or --clear)')
+        if (!section || (!file && !a.clear)) throw new Error('usage: openlex map set routes|hooks|agents|features|sources|models|prompts|permissions FILE.json   (or --clear)')
         const value = a.clear ? null : JSON.parse(fs.readFileSync(file, 'utf8'))
         await request('POST', '/api/harness/section', { section, value })
         return console.log(a.clear ? `cleared ${section} from your layer` : `saved ${section} to your layer (validated)`)
@@ -453,6 +506,9 @@ async function main() {
       console.log(`\nAGENTS  ${(r.agents || []).map((x) => `@${x.name}${x.error ? ' (invalid)' : ''}`).join(' · ')}`)
       const hk = Object.entries(r.config.hooks || {}).filter(([, v]) => (v || []).length)
       console.log(`HOOKS   ${hk.length ? hk.map(([k, v]) => `${k} ×${v.length}`).join(' · ') : 'none'}`)
+      const pm = r.config.permissions || {}
+      const pmMatters = Object.keys(pm.matters || {}).length
+      console.log(`PERMISSIONS  allow ${(pm.allow || []).join(', ') || '—'} · ask ${(pm.ask || []).join(', ') || '—'} · deny ${(pm.deny || []).join(', ') || '—'}${pmMatters ? ` · ${pmMatters} matter${pmMatters === 1 ? '' : 's'} with own rules` : ''}  (openlex permissions)`)
       const f = r.config.features
       console.log(`\nFEATURES  ${Object.entries(f).map(([k, v]) => `${k}${v === false ? ' off' : ''}`).join(' · ')}`)
       return

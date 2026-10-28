@@ -161,6 +161,60 @@ Every event also carries `matterId`. Three hook types:
 
 Every deny, warn and flag is written to the audit log (decision point, hook number, action), never the content. Hooks run in order; the first deny wins.
 
+## `permissions`: what the agent may do without asking
+
+Before the agent runs any tool, OpenLex decides whether it may: right away, only after the lawyer says yes, or never. Reading is free; anything that writes, runs, sends data out or uses a connector asks first.
+
+```json
+"permissions": {
+  "allow": ["write_file", "web_fetch:eur-lex.europa.eu", "mcp:dms:*"],
+  "ask":   ["search_ris"],
+  "deny":  ["run_bash"],
+  "matters": { "m_8f2c": { "allow": ["write_file:Acme/**"] } }
+}
+```
+
+**Order: deny wins.** For each tool call:
+
+1. a `deny` rule (firm or user) matches → refused, nobody is asked;
+2. a firm `ask` rule matches → asked, and "Always allow" is not offered (the firm wants a yes every time);
+3. an `allow` rule matches (firm, user, or this matter's `matters.<id>.allow`) → allowed;
+4. a user `ask` rule matches → asked;
+5. otherwise the built-in default below.
+
+Both layers are read separately: a user's own `allow` never removes a firm `deny`. The firm can `"lock": ["permissions"]`; then only the firm's rules count, including per-matter answers, and the apps stop offering "Always allow".
+
+**Patterns.** A tool name (`*` and `?` work: `export_*`), optionally followed by `:` and what the call touches:
+
+| Tool | After the `:` | Example |
+|---|---|---|
+| File tools (`write_file`, `append_file`, `read_file`, `list_directory`, `export_document`, …) | Path in the workspace; `*` stays inside a folder, `**` crosses folders | `write_file:Acme/**` |
+| Web tools (`web_fetch`, `web_save`, `download_to_matter`) | Host; `*.europa.eu` includes `europa.eu` | `web_fetch:*.europa.eu` |
+| `run_bash` | The command; `git *` also covers a bare `git` | `run_bash:git *` |
+| `search_sources` | Source names, comma-separated | `search_sources:beck,juris` |
+| Connector tools | `mcp:server:tool`; `mcp:*` is every connector | `mcp:dms:*` |
+
+**Built-in defaults.**
+
+| Default | Tools | Why |
+|---|---|---|
+| allow | `get_document_map`, `get_range_text`, `get_clause_analysis`, `remember`, `recall`, `risk_scorecard`, `run_playbook` | Reading the open document and the agent's own notes. |
+| allow | `propose_suggestions` | Each proposed change is a card the lawyer accepts or rejects. |
+| allow | `search_law`, `get_law_section`, `search_ris`, `search_eurlex`, `get_eu_law` | The law: local packs and the official sources, read-only. Their web access still follows the data policy. |
+| allow | `search_firm_library`, `find_clause` | The firm's own knowledge, indexed on this computer. |
+| allow | `read_file`, `list_directory`, `search_local_files`, `search_docs` | Reading the workspace folder (never outside it). |
+| allow | `get_tool_schemas`, `tool_picker`, `compress_context`, `delegate_task` | Housekeeping. `delegate_task` is a fresh model call without tools. |
+| allow / ask | `search_sources` | Allowed when every source searched is on this computer or the firm network; asked when the query goes outside. |
+| ask | `write_file`, `append_file`, `export_document` | Writes a file. |
+| ask | `sync_calendar` | Changes the lawyer's calendar. |
+| ask | `run_bash` | Runs a command (also needs `features.shell`, off by default). |
+| ask | `web_fetch`, `web_save`, `download_to_matter` | Opens the web with the lawyer's saved logins. |
+| ask | every connector tool (`mcp__…`), any tool not listed | Unknown effects. |
+
+**Asking.** The front end that started the run gets a `permission` event and the engine waits for the answer: *Allow once*, *Always allow (this matter)*, *Always allow*, or *Don't allow*. "Always" answers are saved to your layer (`permissions.allow`, or `permissions.matters.<id>.allow` for one matter), as narrow as is still useful: the host for web tools, `server:tool` for connectors, the program for commands, the tool for file writes. No answer within 5 minutes (`OPENLEX_PERMISSION_TIMEOUT_MS`), a closed window, or a caller that cannot answer (a script, `openlex ask --json` or piped, the MCP server, scheduled monitors) means **no**. A refused call reaches the model as a tool error ("The lawyer declined: …"), so the agent continues and says what it could not do. Every decision is audited (tool, decision, who decided; never arguments or content).
+
+Change the rules with `openlex permissions allow|ask|deny PATTERN [--matter ID]`, `openlex permissions remove PATTERN`, the terminal app (Settings → *What OpenLex may do without asking*, or `/permissions` in a chat), or `openlex map set permissions FILE.json`.
+
 ## `agents`: named profiles
 
 A profile is a way of working: extra instructions, the tools it may use, its own model routes and a depth budget. Use one with `@name` at the start of a message (Word, CLI) or, without the "@" (hard to type on German and Austrian keyboards), `as researcher: …` (also `als …:`, matched against the profile name or title), `agent` in `/api/chat`, or set it as a matter's default (`matter.agent`). Profiles combine with skills: `@drafter /rebalance-clause make §7 fairer`.
@@ -195,7 +249,7 @@ Built in: `@associate` (the default), `@researcher` (statute and EU law memo, no
 
 The map is part of the open-source engine and is read and changed as files, from the command line or over the local API; the apps don't carry a settings screen for it.
 
-- `openlex map [--matter ID] [--agent NAME]` prints, per role, the models tried in order (struck ones are skipped by the matter's data policy, with the reason), the agent profiles, the hooks per decision point, the features, and any problems in the files.
+- `openlex map [--matter ID] [--agent NAME]` prints, per role, the models tried in order (struck ones are skipped by the matter's data policy, with the reason), the agent profiles, the hooks per decision point, the permission rules, the features, and any problems in the files.
 - `openlex map set <section> <file.json>` validates a section and writes it to **your** layer (`~/.lexvault/openlex.json`); `openlex map set <section> --clear` removes it. Sections the firm locked are refused.
 - The firm layer is the plain file `<workspace>/openlex.json`; edit and version it like playbooks and skills.
 - API: `GET /api/harness?matterId=&agent=` (effective map, candidates, your raw layer, problems) and `POST /api/harness/section { section, value }`.

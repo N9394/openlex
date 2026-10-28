@@ -17,6 +17,7 @@
  *   sources  the firm's own data and subscriptions as searchable sources (sources.js)
  *   models   model profiles: thinking, tool protocol, temperature, context, extra instructions (models.js)
  *   prompts  the prompt roadmap: change or add instruction blocks and when they are injected (prompts.js)
+ *   permissions  what the agent may do without asking: allow / ask / deny patterns (permissions.js)
  *
  * Files are re-read when they change (mtime), so edits apply without a
  * restart. Invalid JSON never takes the engine down: that layer is
@@ -28,7 +29,7 @@ const path = require('path')
 const { DATA_DIR } = require('./config')
 
 const USER_PATH = path.join(DATA_DIR, 'openlex.json')
-const SECTIONS = ['routes', 'hooks', 'agents', 'features', 'sources', 'models', 'prompts']
+const SECTIONS = ['routes', 'hooks', 'agents', 'features', 'sources', 'models', 'prompts', 'permissions']
 
 const DEFAULTS = {
   routes: { roles: {}, rules: [], fallback: [] },
@@ -37,6 +38,7 @@ const DEFAULTS = {
   sources: {},
   models: {},
   prompts: {},
+  permissions: { allow: [], ask: [], deny: [] },
   features: { monitors: true, browser: true, skillSuggestions: true, grid: true, plans: true, lists: true },
 }
 
@@ -63,9 +65,22 @@ function readLayer(file) {
   return entry
 }
 
-/** Merge one section: objects merge by key (one level deep), arrays and scalars replace. */
-function mergeSection(base, over) {
+/**
+ * Merge one section: objects merge by key (one level deep), arrays and
+ * scalars replace. Permissions add up instead: the firm's deny list must
+ * survive a user's own rules (permissions.js decides layer by layer; this
+ * merged view is what the map shows).
+ */
+function mergeSection(base, over, section) {
   if (over === undefined) return base
+  if (section === 'permissions' && over && typeof over === 'object' && !Array.isArray(over)) {
+    const out = { ...base }
+    for (const k of ['allow', 'ask', 'deny']) out[k] = [...new Set([...(Array.isArray(base?.[k]) ? base[k] : []), ...(Array.isArray(over[k]) ? over[k] : [])])]
+    const matters = { ...(base?.matters || {}) }
+    for (const [id, m] of Object.entries(over.matters && typeof over.matters === 'object' ? over.matters : {})) matters[id] = { allow: [...new Set([...(matters[id]?.allow || []), ...(Array.isArray(m?.allow) ? m.allow : [])])] }
+    if (Object.keys(matters).length) out.matters = matters
+    return out
+  }
   if (!base || typeof base !== 'object' || Array.isArray(base) || !over || typeof over !== 'object' || Array.isArray(over)) return over
   const out = { ...base }
   for (const [k, v] of Object.entries(over)) {
@@ -86,8 +101,8 @@ function load() {
   for (const s of SECTIONS) {
     let v = DEFAULTS[s]
     let src = 'default'
-    if (firm.data && firm.data[s] !== undefined) { v = mergeSection(v, firm.data[s]); src = 'firm' }
-    if (user.data && user.data[s] !== undefined && !locked.includes(s)) { v = mergeSection(v, user.data[s]); src = src === 'firm' ? 'firm+user' : 'user' }
+    if (firm.data && firm.data[s] !== undefined) { v = mergeSection(v, firm.data[s], s); src = 'firm' }
+    if (user.data && user.data[s] !== undefined && !locked.includes(s)) { v = mergeSection(v, user.data[s], s); src = src === 'firm' ? 'firm+user' : 'user' }
     out[s] = v
     out.origins[s] = src
   }

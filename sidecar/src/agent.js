@@ -619,9 +619,15 @@ async function runAction(ctx, userMessage, onEvent, opts = {}) {
     } else {
       const hooks = require('./hooks')
       const gate = hooks.has('before_tool') ? await hooks.run('before_tool', { tool: toolName, args: call.args || {}, matterId: require('./policy').currentMatter() }) : { decision: 'allow' }
+      // Permission gate (permissions.js): deny rules → allow rules →
+      // defaults; "ask" waits for the lawyer's answer in the front end.
+      const perm = gate.decision === 'deny' ? null : await require('./permissions').authorize({ tool: toolName, args: call.args || {}, matterId: require('./policy').currentMatter() })
       if (gate.decision === 'deny') {
         r = { output: `BLOCKED by firm rule: ${gate.reason}. Do not retry this tool; continue with what you have or explain the limitation.` }
         emit('step', { text: `blocked: ${toolName}` })
+      } else if (!perm.allowed) {
+        r = { output: perm.output }
+        emit('step', { text: `${['rule', 'non-interactive'].includes(perm.by) ? 'not allowed' : 'declined'}: ${toolName}` })
       } else {
         try {
           r = await dispatch(ctx, toolName, call.args || {})
