@@ -102,24 +102,32 @@ const TOOLS = {
     input: { topic: 'string' },
   },
   write_file: {
-    description: 'Create/overwrite a file in the LexVault workspace (e.g. obligations.csv, deadlines.ics). Paths are workspace-relative or per-matter subfolders; NOTHING outside the workspace is writable.',
+    description: 'Create/overwrite a file (e.g. obligations.csv, deadlines.ics) in the working folder (relative paths) or a matter folder of the workspace. The lawyer is asked first; nothing outside those places is writable.',
     input: { path: 'string', content: 'string' },
   },
   append_file: {
-    description: 'Append content to an existing workspace file.',
+    description: 'Append content to an existing file in the working folder or the workspace (the lawyer is asked first).',
     input: { path: 'string', content: 'string' },
   },
   read_file: {
-    description: 'Read a workspace file (first 4000 chars).',
-    input: { path: 'string' },
+    description: 'Read a file of the working folder (relative paths) or the workspace: Word (.docx), PDF, text, Markdown, CSV. Returns up to 8000 characters; pass start to read on.',
+    input: { path: 'string', start: 'number (optional — character to start from)' },
   },
   list_directory: {
-    description: 'List files in the workspace (or a subfolder).',
+    description: 'List the files of the working folder (or the workspace without one), or of a subfolder.',
     input: { path: 'string (optional)' },
   },
   search_local_files: {
-    description: 'Word-match search across workspace files. Returns file + line matches.',
+    description: 'Word-match search across the files of the working folder (or the workspace), Word and PDF included. Returns file + line matches.',
     input: { query: 'string', directory: 'string (optional)' },
+  },
+  delete_file: {
+    description: 'Delete one file in the working folder or the workspace. The lawyer is asked every time; a copy is kept so it can be restored. Only when the lawyer asked for it.',
+    input: { path: 'string' },
+  },
+  rename_file: {
+    description: 'Rename or move one file within the working folder or the workspace (never overwrites). The lawyer is asked first.',
+    input: { path: 'string', to: 'string (new name, or a path)' },
   },
   export_document: {
     description: 'Deterministic export of the current document (inventory, obligations, deadlines) into the workspace: format csv|xml|json|md|dat|ics|pdf, into a matter subfolder. Use when the user asks for checklists, exports, discovery lists, calendar files, or a PDF worklist.',
@@ -446,38 +454,41 @@ async function dispatch({ doc, memory, search, embeddings, packStore }, rawName,
       return { output: facts.length ? 'FACTS:\n' + facts.map((f) => `- ${f.entity}: ${f.claim}${f.section ? ` (§${f.section})` : ''}`).join('\n') : 'no stored facts.' }
     }
 
+    // File tools (folder.js): the working folder of this request, or the
+    // workspace without one. The agent may never change the firm's rules
+    // or its own history: a manipulated document must not be able to
+    // rewrite openlex.json, skills or playbooks through the agent.
     case 'write_file':
     case 'append_file': {
-      const ws = require('./workspace')
+      const fo = require('./folder')
       try {
-        // The agent may never change the firm's rules or its own history:
-        // a manipulated document must not be able to rewrite openlex.json,
-        // skills or playbooks through the agent.
-        const rel = require('path').relative(ws.base(), ws.resolve(args.path)).replace(/\\/g, '/')
-        if (/^(\.openlex(\/|$)|openlex\.json$|skills(\/|$)|playbooks(\/|$))/i.test(rel)) return { output: `ERROR: ${rel} is protected (firm configuration). Save your output in a matter folder instead.` }
-        const p = name === 'write_file' ? ws.writeFile(args.path, args.content) : ws.appendFile(args.path, args.content)
-        return { output: `written: ${p}` }
+        const loc = fo.write(args.path, args.content, { append: name === 'append_file' })
+        return { output: `${name === 'write_file' ? 'written' : 'appended'}: ${loc.abs}` }
       } catch (e) {
-        return { output: `ERROR: ${e.message}` }
+        return { output: `ERROR: ${e.message}${/configuration/.test(e.message) ? '. Save your output in a matter folder instead.' : ''}` }
       }
     }
 
     case 'read_file': {
-      const ws = require('./workspace')
+      const fo = require('./folder')
       try {
-        const c = ws.readFile(args.path)
-        return { output: c === null ? `ERROR: not found in workspace: ${args.path}` : c }
+        const r = await fo.read(args.path, { start: args.start })
+        if (!r.text.trim()) return { output: `${r.loc.rel || args.path}: no readable text (perhaps a scanned document).` }
+        return { output: r.text + (r.more !== null ? `\n…(${r.total} characters in total — read on with start: ${r.more})` : '') }
       } catch (e) {
         return { output: `ERROR: ${e.message}` }
       }
     }
 
     case 'list_directory': {
-      const ws = require('./workspace')
+      const fo = require('./folder')
       try {
-        const files = ws.listFiles(args.path || '')
-        if (!files.length) return { output: 'workspace is empty (or folder not found)' }
-        return { output: 'WORKSPACE FILES:\n' + files.map((f) => `${f.path} (${f.size} B)`).join('\n') }
+        const r = fo.list(args.path || '')
+        const where = r.loc.area === 'folder' ? 'the working folder' : 'the workspace'
+        if (!r.files.length) return { output: `${r.loc.rel ? `${r.loc.rel} in ${where}` : where} has no files${r.truncated ? ' that could be listed (the folder is very large)' : ''}` }
+        const head = r.loc.area === 'folder' ? `FILES IN THE WORKING FOLDER${r.loc.rel ? ` (${r.loc.rel})` : ''}` : 'WORKSPACE FILES'
+        const cap = r.truncated ? `\n…only the first ${r.files.length} files are shown (the folder is large). List a subfolder or search to find more.` : ''
+        return { output: `${head}:\n` + r.files.map((f) => `${f.path} (${f.size} B)`).join('\n') + cap }
       } catch (e) {
         return { output: `ERROR: ${e.message}` }
       }
@@ -485,10 +496,36 @@ async function dispatch({ doc, memory, search, embeddings, packStore }, rawName,
 
     case 'search_local_files':
     case 'search_docs': {
-      const ws = require('./workspace')
-      const hits = ws.search(args.query, args.directory)
-      if (!hits.length) return { output: `NO MATCHES for "${args.query}" in the workspace` }
-      return { output: `MATCHES for "${args.query}":\n` + hits.map((h) => `${h.file}:${h.line}  ${h.text}`).join('\n') }
+      const fo = require('./folder')
+      try {
+        const r = await fo.search(args.query, args.directory)
+        const where = r.loc.area === 'folder' ? 'the working folder' : 'the workspace'
+        const cap = r.truncated ? `\n…the search stopped early (the folder is large or there are many matches). Search a subfolder or use more specific words.` : ''
+        if (!r.hits.length) return { output: `NO MATCHES for "${args.query}" in ${where}${cap}` }
+        return { output: `MATCHES for "${args.query}":\n` + r.hits.map((h) => `${h.file}:${h.line}  ${h.text}`).join('\n') + cap }
+      } catch (e) {
+        return { output: `ERROR: ${e.message}` }
+      }
+    }
+
+    case 'delete_file': {
+      const fo = require('./folder')
+      try {
+        const r = fo.remove(args.path)
+        return { output: `deleted: ${r.loc.abs} (a copy is kept in OpenLex's history and can be restored)` }
+      } catch (e) {
+        return { output: `ERROR: ${e.message}` }
+      }
+    }
+
+    case 'rename_file': {
+      const fo = require('./folder')
+      try {
+        const r = fo.rename(args.path, args.to)
+        return { output: `renamed: ${r.from.abs} → ${r.to.abs}` }
+      } catch (e) {
+        return { output: `ERROR: ${e.message}` }
+      }
     }
 
     case 'export_document': {

@@ -240,6 +240,19 @@ function permissionSession(body, res, signal) {
   }
 }
 
+/**
+ * The working folder of a request (body.folder, folder.js): checked, or an
+ * Error with a plain sentence. The whole home folder or the whole computer
+ * needs body.folderConfirmed (the front end asked the lawyer). No folder → null.
+ */
+function folderFor(body) {
+  if (body.folder === undefined || body.folder === null || body.folder === '') return null
+  const c = require('./folder').check(body.folder)
+  if (!c.ok) throw new Error(c.error)
+  if (c.broad && body.folderConfirmed !== true) throw new Error(`${c.broad === 'home' ? 'That is your whole home folder' : 'That is the whole computer'} (${c.short}). Choose the folder of one client or matter, or confirm it (folderConfirmed).`)
+  return c.path
+}
+
 function readBody(req, limitMb = 5) {
   return new Promise((resolve, reject) => {
     const chunks = []
@@ -422,6 +435,8 @@ async function handle(req, res) {
       const run = { review: wf.runReview, chronology: wf.runChronology, translate: docs.runTranslate, compare: docs.runCompare }[body.type]
       if (!run) return sendJson(res, 400, { error: 'type must be review, chronology, translate or compare' })
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' })
+      let folderDir
+      try { folderDir = folderFor(body) } catch (err) { sendSse(res, { type: 'error', message: err.message }); return res.end() }
       const ready = await engineReady()
       if (!ready?.ok) { sendSse(res, { type: 'error', message: `model unavailable: ${ready.reason}` }); return res.end() }
       const ac = new AbortController()
@@ -432,11 +447,11 @@ async function handle(req, res) {
       const rec = require('./activity').start({ matterId, kind: body.type, asked: [body.playbook, body.target].filter(Boolean).join(' · '), client: clientOf(req), files: [body.file, body.fileA, body.fileB].filter(Boolean) })
       const out = (e) => { rec.see(e); sendSse(res, e) }
       try {
-        const r = await policy.observeModels((m) => out({ type: 'model', ...m }), () => policy.withMatter(matterId, () => run({
-          matterId, folder: body.folder, playbook: body.playbook, signal: ac.signal,
+        const r = await require('./folder').run(folderDir, () => policy.observeModels((m) => out({ type: 'model', ...m }), () => policy.withMatter(matterId, () => run({
+          matterId, folder: folderDir || undefined, playbook: body.playbook, signal: ac.signal,
           file: body.file, target: body.target, glossary: body.glossary, fileA: body.fileA, fileB: body.fileB, rate: body.rate !== false,
           onProgress: (ev) => out({ type: 'progress', ...ev }),
-        })))
+        }))))
         out({ type: 'done', files: r.files, stats: r.stats, count: (r.findings || r.events || r.changes || r.flags || []).length })
         rec.finish({ aborted: ac.signal.aborted, files: r.files || [] })
         require('./hooks').run('after_workflow', { workflow: body.type, files: r.files, stats: r.stats, matterId }).catch(() => {})
@@ -616,6 +631,8 @@ async function handle(req, res) {
         if (p === '/api/plans/run') {
           const plan = planMod.get(body.id)
           res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' })
+          let folderDir
+          try { folderDir = folderFor(body) } catch (err) { sendSse(res, { type: 'error', message: err.message }); return res.end() }
           const ready = await engineReady()
           if (!ready?.ok) { sendSse(res, { type: 'error', message: `model unavailable: ${ready.reason}` }); return res.end() }
           const ac = new AbortController()
@@ -623,7 +640,7 @@ async function handle(req, res) {
           const rec = require('./activity').start({ matterId: plan.matterId, kind: 'plan', asked: plan.goal || '', client: clientOf(req) })
           const out = (e) => { rec.see(e); sendSse(res, e) }
           try {
-            const r = await require('./permissions').session(permissionSession(body, res, ac.signal), () => policy.observeModels((m) => out({ type: 'model', ...m }), () => policy.withMatter(plan.matterId, () => planMod.run(body.id, { signal: ac.signal, onProgress: (ev) => out({ type: 'progress', ...ev }) }))))
+            const r = await require('./folder').run(folderDir, () => require('./permissions').session(permissionSession(body, res, ac.signal), () => policy.observeModels((m) => out({ type: 'model', ...m }), () => policy.withMatter(plan.matterId, () => planMod.run(body.id, { signal: ac.signal, onProgress: (ev) => out({ type: 'progress', ...ev }) })))))
             out({ type: 'done', status: r.status, report: r.report || null, waiting: r.steps.find((x) => x.status === 'waiting') || null })
             rec.finish({ aborted: ac.signal.aborted, files: [r.report, ...r.steps.flatMap((x) => x.result?.files || [])] })
             if (r.status === 'done' || r.status === 'failed') require('./hooks').run('after_workflow', { workflow: 'plan', files: [r.report, ...r.steps.flatMap((x) => x.result?.files || [])].filter(Boolean), stats: { status: r.status, steps: r.steps.length }, matterId: plan.matterId }).catch(() => {})
@@ -737,6 +754,8 @@ async function handle(req, res) {
         if (p === '/api/grids/run') {
           const g = grid.get(body.id)
           res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' })
+          let folderDir
+          try { folderDir = folderFor(body) } catch (err) { sendSse(res, { type: 'error', message: err.message }); return res.end() }
           const ready = await engineReady()
           if (!ready?.ok) { sendSse(res, { type: 'error', message: `model unavailable: ${ready.reason}` }); return res.end() }
           const ac = new AbortController()
@@ -744,10 +763,10 @@ async function handle(req, res) {
           const rec = require('./activity').start({ matterId: g.matterId, kind: 'grid', asked: g.title || '', client: clientOf(req) })
           const out = (e) => { rec.see(e); sendSse(res, e) }
           try {
-            const r = await policy.observeModels((m) => out({ type: 'model', ...m }), () => policy.withMatter(g.matterId, () => grid.run(body.id, {
+            const r = await require('./folder').run(folderDir, () => policy.observeModels((m) => out({ type: 'model', ...m }), () => policy.withMatter(g.matterId, () => grid.run(body.id, {
               documents: body.documents, columns: body.columns, force: !!body.force, signal: ac.signal,
               onProgress: (ev) => out({ type: 'progress', ...ev }),
-            })))
+            }))))
             out({ type: 'done', stats: r.stats })
             rec.finish({ aborted: ac.signal.aborted })
             require('./hooks').run('after_workflow', { workflow: 'grid', files: [], stats: r.stats, matterId: g.matterId }).catch(() => {})
@@ -1137,6 +1156,9 @@ async function handle(req, res) {
       if (!entry.memory) entry.memory = new (require('./memory').DocMemory)(entry.doc.docId)
 
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' })
+      // The working folder (folder.js): checked before anything runs.
+      let folderDir
+      try { folderDir = folderFor(body) } catch (err) { sendSse(res, { type: 'error', message: err.message }); return res.end() }
       // Llama may have died since startup (crash, model reload, tunnel
       // flap) — the chat path must recover instead of surfacing raw
       // ECONNREFUSED. ensureLlama probes (fast when a server is up) and
@@ -1189,7 +1211,7 @@ async function handle(req, res) {
       try {
         // Permissions: an interactive front end answers "may OpenLex …?"
         // questions on this stream; anything else fails closed (deny).
-        const r = await require('./permissions').session(permissionSession(body, res, ac.signal), () => policy.observeModels((m) => out({ type: 'model', ...m }), () => policy.withMatter(matterIdFor(body, entry), () => agentsMod.run(agent, () => runAction(context, body.message, out, { signal: ac.signal, skill, agent })))))
+        const r = await require('./folder').run(folderDir, () => require('./permissions').session(permissionSession(body, res, ac.signal), () => policy.observeModels((m) => out({ type: 'model', ...m }), () => policy.withMatter(matterIdFor(body, entry), () => agentsMod.run(agent, () => runAction(context, body.message, out, { signal: ac.signal, skill, agent }))))))
         // Conversation memory: persist the exchange (best-effort; the
         // model's streamed prose already went out token-by-token).
         session.append(body.message, r.text)
@@ -1228,6 +1250,15 @@ async function handle(req, res) {
       const { load } = require('./agent-config')
       ws.setBase(load().workspace)
       return sendJson(res, 200, { base: ws.base(), files: ws.listFiles('') })
+    }
+    // A working folder before it is used (folder.js): can it be one, is it
+    // the whole home folder, how many documents are in it.
+    if (req.method === 'GET' && p === '/api/folder') {
+      const fo = require('./folder')
+      const c = fo.check(url.searchParams.get('path') || '')
+      if (!c.ok) return sendJson(res, 200, { ok: false, error: c.error, ...(c.short ? { short: c.short } : {}) })
+      const docs = c.broad ? { count: null, truncated: true } : fo.documents(c.path)
+      return sendJson(res, 200, { ok: true, path: c.path, short: c.short, broad: c.broad, documents: docs.count, truncated: docs.truncated })
     }
     if (req.method === 'POST' && p === '/api/workspace/reveal') {
       const body = await readBody(req).catch(() => ({}))

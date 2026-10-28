@@ -68,31 +68,49 @@ function resolve(...parts) {
 const HISTORY_DIR = '.openlex/history'
 const HISTORY_KEEP = 20
 
-function keepVersion(p) {
-  try {
-    if (!fs.existsSync(p) || !fs.statSync(p).isFile()) return
-    const rel = path.relative(baseDir, p)
-    if (rel.startsWith('.openlex')) return
-    const dir = path.join(baseDir, HISTORY_DIR, rel)
-    fs.mkdirSync(dir, { recursive: true })
-    fs.copyFileSync(p, path.join(dir, new Date().toISOString().replace(/[:.]/g, '-')))
-    const versions = fs.readdirSync(dir).sort()
-    for (const old of versions.slice(0, Math.max(0, versions.length - HISTORY_KEEP))) fs.unlinkSync(path.join(dir, old))
-  } catch (err) { console.warn('[workspace] could not keep previous version:', err.message) }
+/**
+ * Where earlier versions of a file are kept: workspace files under their
+ * own path, files of a working folder (folder.js) under _folders/ + their
+ * full path — always inside the workspace, never in the client's folder.
+ */
+function historyDirFor(p) {
+  const abs = path.resolve(p)
+  const rel = path.relative(baseDir, abs)
+  if (rel && !rel.startsWith('..') && !path.isAbsolute(rel)) return path.join(baseDir, HISTORY_DIR, rel)
+  const parsed = path.parse(abs)
+  const drive = parsed.root.replace(/[:\\/]/g, '')
+  return path.join(baseDir, HISTORY_DIR, '_folders', ...(drive ? [drive] : []), abs.slice(parsed.root.length))
 }
 
-/** Earlier versions of a workspace file, newest first. */
+/** Keep a copy of p before it changes. Returns the copy's path (null: nothing to keep, or it failed). */
+function keepVersion(p) {
+  try {
+    if (!fs.existsSync(p) || !fs.statSync(p).isFile()) return null
+    const rel = path.relative(baseDir, p)
+    if (rel.startsWith('.openlex')) return null
+    const dir = historyDirFor(p)
+    fs.mkdirSync(dir, { recursive: true })
+    const copy = path.join(dir, new Date().toISOString().replace(/[:.]/g, '-'))
+    fs.copyFileSync(p, copy)
+    const versions = fs.readdirSync(dir).sort()
+    for (const old of versions.slice(0, Math.max(0, versions.length - HISTORY_KEEP))) fs.unlinkSync(path.join(dir, old))
+    return copy
+  } catch (err) { console.warn('[workspace] could not keep previous version:', err.message); return null }
+}
+
+/** Earlier versions of a file, newest first (an absolute path may name a file of a working folder). */
 function versions(relPath) {
-  const dir = path.join(baseDir, HISTORY_DIR, path.relative(baseDir, resolve(relPath)))
+  const dir = historyDirFor(path.isAbsolute(String(relPath)) ? String(relPath) : resolve(relPath))
   try { return fs.readdirSync(dir).sort().reverse().map((v) => ({ version: v, path: path.join(dir, v) })) } catch { return [] }
 }
 
-/** Put an earlier version back (the current one is kept as a version first). */
+/** Put an earlier version back (the current one is kept as a version first); also brings back a deleted file. */
 function restoreVersion(relPath, version) {
-  const p = resolve(relPath)
+  const p = path.isAbsolute(String(relPath)) ? require('./folder').locate(relPath, { write: true }).abs : resolve(relPath)
   const v = versions(relPath).find((x) => x.version === version) || versions(relPath)[0]
   if (!v) throw new Error(`no earlier version of ${relPath}`)
   keepVersion(p)
+  fs.mkdirSync(path.dirname(p), { recursive: true })
   fs.copyFileSync(v.path, p)
   return { restored: v.version, path: p }
 }
@@ -323,4 +341,4 @@ function runBash(command, maxChars = 8000, timeoutMs = 10000) {
   })
 }
 
-module.exports = { setBase, base, resolve, realBase, matterFolder, writeFile, writeFileBinary, appendFile, readFile, listFiles, search, runBash, checkCommand, sandboxFor, versions, restoreVersion, DEFAULT_BASE }
+module.exports = { setBase, base, resolve, realBase, matterFolder, keepVersion, historyDirFor, writeFile, writeFileBinary, appendFile, readFile, listFiles, search, runBash, checkCommand, sandboxFor, versions, restoreVersion, DEFAULT_BASE }

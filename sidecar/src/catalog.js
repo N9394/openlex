@@ -29,8 +29,12 @@ const CATALOG = [
   { name: 'delegate_task', desc: 'Spawn focused analysis in fresh context' },
   { name: 'tool_picker', desc: 'Get relevant tool names for a task' },
   { name: 'compress_context', desc: 'Compress bloated context' },
-  { name: 'write_file', desc: 'Create/overwrite workspace file' },
-  { name: 'read_file', desc: 'Read workspace file' },
+  { name: 'write_file', desc: 'Save a file in the working folder or a matter folder (asks the lawyer)' },
+  { name: 'read_file', desc: 'Read a file of the working folder or workspace (Word, PDF, text)' },
+  { name: 'list_directory', desc: 'List the files of the working folder or workspace' },
+  { name: 'search_local_files', desc: 'Search the files of the working folder or workspace' },
+  { name: 'rename_file', desc: 'Rename or move a file (asks the lawyer)' },
+  { name: 'delete_file', desc: 'Delete a file, a copy is kept (asks the lawyer every time)' },
   { name: 'export_document', desc: 'Export document to CSV/XML/JSON/MD/PDF' },
   { name: 'run_playbook', desc: 'Run review playbook from workspace' },
 ]
@@ -119,11 +123,27 @@ const SCHEMAS = {
   },
   write_file: {
     input: { path: 'string', content: 'string' },
-    description: 'Create/overwrite a file in the LexVault workspace.',
+    description: 'Create/overwrite a file in the working folder (relative paths) or a matter folder. The lawyer is asked first.',
   },
   read_file: {
+    input: { path: 'string', start: 'number (optional)' },
+    description: 'Read a file of the working folder or the workspace: Word, PDF, text (8000 characters; start reads on).',
+  },
+  list_directory: {
+    input: { path: 'string (optional)' },
+    description: 'List the files of the working folder (or the workspace), or of a subfolder.',
+  },
+  search_local_files: {
+    input: { query: 'string', directory: 'string (optional)' },
+    description: 'Word search across the files of the working folder (or the workspace), Word and PDF included.',
+  },
+  delete_file: {
     input: { path: 'string' },
-    description: 'Read a workspace file (first 4000 chars).',
+    description: 'Delete one file; the lawyer is asked every time and a copy is kept.',
+  },
+  rename_file: {
+    input: { path: 'string', to: 'string' },
+    description: 'Rename or move one file (never overwrites); the lawyer is asked first.',
   },
   export_document: {
     input: { format: 'string (csv|xml|json|md|pdf)', matter: 'string' },

@@ -36,7 +36,7 @@ const INTENTS = {
   suggest: /suggest|analy|risk|favor|favou|flag|review|check/i,
   firm: /precedent|template|our (standard|usual|own)|we usually|firm'?s|like in the|earlier (deal|matter|work)|playbook|clause bank|house style/i,
   research: /current(ly)?|in force|latest|amend|recent|EU\b|EU-|directive|regulation|GDPR|DSGVO|RIS\b|EUR-?Lex|website|web|online|internet|https?:\/\//i,
-  files: /\bfile|export|save|csv|excel|xlsx|spreadsheet|checklist|calendar|ics\b|deadline list|folder|download/i,
+  files: /\bfile|export|save|csv|excel|xlsx|spreadsheet|checklist|calendar|ics\b|deadline list|folder|download|rename|delete|move/i,
 }
 function intentsOf(message) {
   const m = String(message || '')
@@ -79,7 +79,8 @@ const TOOL_GROUPS = {
   core: ['get_document_map', 'get_range_text', 'get_clause_analysis', 'search_law', 'get_law_section', 'remember', 'recall', 'propose_suggestions', 'get_tool_schemas'],
   firm: ['search_firm_library', 'find_clause', 'search_sources', 'run_playbook', 'read_file', 'list_directory'],
   research: ['search_ris', 'search_eurlex', 'get_eu_law', 'web_fetch', 'web_save', 'download_to_matter'],
-  files: ['write_file', 'append_file', 'read_file', 'list_directory', 'search_local_files', 'export_document', 'sync_calendar'],
+  files: ['write_file', 'append_file', 'read_file', 'list_directory', 'search_local_files', 'rename_file', 'delete_file', 'export_document', 'sync_calendar'],
+  folder: ['read_file', 'list_directory', 'search_local_files'],
   suggest: ['risk_scorecard', 'delegate_task'],
   rewrite: ['search_firm_library', 'find_clause'],
 }
@@ -94,6 +95,8 @@ function stageTools({ intents = new Set(), unlocked = new Set(), allowed = null,
   const ok = (n) => !allowed || allowed.has(n) || n === 'get_tool_schemas'
   if (!staged) return { offered: every.filter(ok), deferred: [] }
   const want = new Set(TOOL_GROUPS.core)
+  // Working in a folder: reading its files is always at hand.
+  if (require('./folder').current()) for (const n of TOOL_GROUPS.folder) want.add(n)
   for (const i of intents) for (const n of TOOL_GROUPS[i] || []) want.add(n)
   for (const n of unlocked) want.add(n)
   // A skill or profile that names tools wants them at hand.
@@ -153,6 +156,14 @@ function fires(b, t) {
   return true
 }
 
+/** The working folder of this request (folder.js), for the model. */
+function folderNote() {
+  const fo = require('./folder')
+  const cur = fo.current()
+  if (!cur) return ''
+  return `WORKING FOLDER\nThe lawyer is working in the folder ${fo.tilde(cur.root)}. read_file, list_directory and search_local_files work there; relative paths start in it. Saving, adding to, renaming or deleting a file there asks the lawyer first. Files outside this folder and the matter folders cannot be reached: do not try.`
+}
+
 /**
  * The system prompt for one call.
  * @param {object} t  { phase, message, intents?, afterTool?, docFull?, all? (profile prompts:"all"),
@@ -173,6 +184,7 @@ function build(t) {
     t.profile || '',
     t.toolIndex || '',
     t.context || '',
+    folderNote(),
     turnRules.length ? `FOR THIS STEP\n${turnRules.map((b) => b.text).join('\n')}` : '',
     turnText.map((b) => b.text).join('\n\n'),
   ].filter((s) => s && s.trim())
