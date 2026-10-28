@@ -42,11 +42,15 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+// The desktop App has no accounts (identity is the license or the local
+// community user), so its sign-in / sign-up routes go straight to the app.
+const isElectron = typeof window !== 'undefined' && !!(window as any).lexvault?.isElectron
+
 function App() {
   return (
     <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route path="/signup" element={<Signup />} />
+      <Route path="/login" element={isElectron ? <Navigate to="/dashboard" replace /> : <Login />} />
+      <Route path="/signup" element={isElectron ? <Navigate to="/dashboard" replace /> : <Signup />} />
       <Route path="/forgot-password" element={<ResetPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/invite/:invitationId" element={<AcceptInvite />} />

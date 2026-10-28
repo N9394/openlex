@@ -64,8 +64,13 @@ export default function Settings() {
 
   // License (Electron App only — null on web)
   const [licenseInfo, setLicenseInfo] = useState<{
-    account_id: string; email: string; tier: string; entitlements: string[]; language_pref?: string
+    account_id: string | null; email: string | null; tier: string; entitlements: string[]; language_pref?: string
+    community?: boolean; canActivate?: boolean
   } | null>(null)
+  // Optional token activation (community mode, distribution builds only)
+  const [activationInput, setActivationInput] = useState('')
+  const [activationMsg, setActivationMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [activating, setActivating] = useState(false)
   const [appInfo, setAppInfo] = useState<{
     version: string; platform: string; arch: string;
     qdrant: { reachable: boolean; collectionExists?: boolean; totalChunks: number; perJurisdiction?: Record<string, number>; error?: string }
@@ -530,14 +535,69 @@ export default function Settings() {
           {/* License Tab — Electron App only */}
           {activeTab === 'license' && isElectron && (
             <div className="card space-y-6">
-              <div>
-                <h2 className="font-serif text-xl text-parchment">Your OpenLex License</h2>
-                <p className="text-antique text-sm mt-1">
-                  This information lives on your machine. It never travels back to OpenLex servers
-                  except when you renew or change your subscription.
-                </p>
-              </div>
+              {licenseInfo?.community ? (
+                <div>
+                  <h2 className="font-serif text-xl text-parchment">Community edition</h2>
+                  <p className="text-antique text-sm mt-1">
+                    OpenLex works fully without an account or sign-in. Use your own model (an API key,
+                    a local .gguf file, or your llama-server / Ollama endpoint) and law packs you add locally.
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <h2 className="font-serif text-xl text-parchment">Your OpenLex License</h2>
+                  <p className="text-antique text-sm mt-1">
+                    This information lives on your machine. It never travels back to OpenLex servers
+                    except when you renew or change your subscription.
+                  </p>
+                </div>
+              )}
 
+              {licenseInfo?.community && licenseInfo.canActivate && (
+                <div>
+                  <label className="block text-cream text-sm mb-2">Activate a license (optional)</label>
+                  <p className="text-antique text-xs mb-2">
+                    Only needed for your distributor's model and law-pack downloads and updates.
+                    OpenLex restarts after activation.
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={activationInput}
+                      onChange={(e) => setActivationInput(e.target.value)}
+                      placeholder="lv_live_…"
+                      className="input flex-1 font-mono text-xs"
+                    />
+                    <button
+                      disabled={activating || !activationInput.trim()}
+                      onClick={async () => {
+                        setActivating(true)
+                        setActivationMsg(null)
+                        try {
+                          const r = await (window as any).lexvault.activateToken(activationInput.trim())
+                          setActivationMsg(r?.ok
+                            ? { type: 'success', text: 'Activated — restarting OpenLex…' }
+                            : { type: 'error', text: r?.error || 'Activation failed' })
+                        } catch (e) {
+                          setActivationMsg({ type: 'error', text: e instanceof Error ? e.message : 'Activation failed' })
+                        } finally {
+                          setActivating(false)
+                        }
+                      }}
+                      className="btn-secondary flex items-center gap-2"
+                    >
+                      <Key size={16} /> Activate
+                    </button>
+                  </div>
+                  {activationMsg && (
+                    <p className={`text-xs mt-2 ${activationMsg.type === 'success' ? 'text-green-400' : 'text-red-400'}`}>
+                      {activationMsg.text}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {!licenseInfo?.community && <>
               <div>
                 <label className="block text-cream text-sm mb-2">{t('settings.app.accountEmail')}</label>
                 <input
@@ -583,6 +643,7 @@ export default function Settings() {
                   </p>
                 )}
               </div>
+              </>}
 
               <div className="pt-6 border-t border-tobacco grid grid-cols-2 gap-4">
                 <div>
@@ -611,7 +672,7 @@ export default function Settings() {
                 </div>
               </div>
 
-              <div className="pt-6 border-t border-tobacco">
+              {!licenseInfo?.community && <div className="pt-6 border-t border-tobacco">
                 <label className="block text-cream text-sm mb-2">{t('settings.app.activationToken')}</label>
                 <p className="text-antique text-xs mb-2">
                   {t('settings.app.activationTokenDesc')}
@@ -645,7 +706,7 @@ export default function Settings() {
                     {tokenCopied ? 'Copied' : 'Reveal & copy'}
                   </button>
                 </div>
-              </div>
+              </div>}
             </div>
           )}
 

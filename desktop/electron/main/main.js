@@ -1,9 +1,10 @@
 /**
  * LexVault App — Electron main process.
  *
- * The product side of the Steam analogy. The Launcher writes a signed license
- * into userData and starts this binary; this file:
- *  1. Reads + verifies the license (Ed25519)
+ * Runs without an account. A distribution build may add a signed license
+ * (pasted token, Settings → License); without one the App boots in
+ * community mode. This file:
+ *  1. Reads + verifies the license (Ed25519), else community mode
  *  2. Resolves runtime paths (sidecars, models, server, client)
  *  3. Spawns the Qdrant + embeddings + LLM sidecars and waits for them
  *  4. Spawns the Express backend with env wiring it to the local sidecars
@@ -37,11 +38,10 @@ let _modelFetchState = { state: 'unknown' }
 let _bootHardware = null
 let _bootModelPath = null
 
-// Push boot stage events to the first-run window so the user sees
-// "Downloading model 23%" instead of a black screen for 10 minutes.
+// Boot stage events (model download %, service startup) for any open window.
 function emitBoot(stage, detail) {
-  if (firstRunWindow && !firstRunWindow.isDestroyed()) {
-    try { firstRunWindow.webContents.send('lexvault:boot-stage', { stage, ...(detail || {}) }) } catch {}
+  for (const w of BrowserWindow.getAllWindows()) {
+    try { w.webContents.send('lexvault:boot-stage', { stage, ...(detail || {}) }) } catch {}
   }
 }
 
@@ -148,16 +148,24 @@ function verifyLicense(signed) {
   }
 }
 
-// --- First-run token-paste flow ---------------------------------------------
+// --- Optional token activation ----------------------------------------------
 //
 // Three boot states:
 //   1. Valid license.json on disk      → boot normally
 //   2. token.txt but no license.json   → fetch license from server, write, boot
-//   3. Neither                         → open first-run window, paste token, fetch
+//   3. Neither                         → community mode (no account, no sign-in)
 //
-// The user's account page on the sales site mints `lv_live_…` tokens. The user
-// pastes one on first launch; the App calls /api/app/license to download the
-// signed envelope, writes license.json, and boots from that point on.
+// A distribution's account page mints `lv_live_…` tokens. Pasting one in
+// Settings → License calls /api/app/license for the signed envelope, writes
+// license.json and relaunches. It is only needed for the distributor's model
+// / pack downloads and updates; nothing in the App is gated on it.
+
+// Licence-shaped identity for community mode. Pack sync, licence polling and
+// token downloads are skipped; models are the user's own (API key, local
+// GGUF, llama-server / Ollama).
+const COMMUNITY_LICENSE = Object.freeze({ account_id: null, email: null, tier: 'community', entitlements: [], community: true })
+
+const NO_DOWNLOAD_SERVER = 'This OpenLex build has no download server. Use your own model: an API key or a custom llama-server / Ollama endpoint in the model settings, or put a .gguf file in '
 
 const TOKEN_PATTERN = /^lv_live_[0-9a-f]{40}$/i
 
@@ -213,6 +221,7 @@ async function fetchLicenseFromServer(token) {
 }
 
 async function activateToken(token) {
+  if (!LICENSE_SERVER) return { ok: false, error: 'This build has no licence server; OpenLex works without an account.' }
   if (!TOKEN_PATTERN.test(token)) {
     return { ok: false, error: 'Invalid token format. Expected lv_live_ followed by 40 hex characters.' }
   }
@@ -246,60 +255,6 @@ async function activateToken(token) {
   }
 }
 
-let firstRunWindow = null
-
-async function showFirstRun() {
-  return new Promise((resolve) => {
-    firstRunWindow = new BrowserWindow({
-      width: 540,
-      height: 620,
-      resizable: false,
-      backgroundColor: '#1a1510',
-      title: 'OpenLex — Activate',
-      autoHideMenuBar: true,
-      webPreferences: {
-        preload: path.join(__dirname, 'preload.js'),
-        contextIsolation: true,
-        nodeIntegration: false,
-      },
-    })
-    firstRunWindow.loadFile(path.join(PATHS.resources, 'first-run.html'))
-
-    // The renderer calls window.lexvault.activateToken; we register the handler
-    // once here. On success we resolve with the license payload and close.
-    const handler = async (_e, token) => {
-      const result = await activateToken(token)
-      if (result.ok) {
-        // Don't close firstRunWindow yet — boot still has to detect hardware,
-        // download a 5.7 GB model, start sidecars. Keep the window visible
-        // and stream progress to it so the user doesn't stare at a black
-        // screen for 5-15 minutes wondering if the App froze. main.js will
-        // close it just before opening the main window.
-        ipcMain.removeHandler('lexvault:activateToken')
-        resolve(result.license)
-      }
-      return result
-    }
-    ipcMain.removeHandler('lexvault:activateToken')
-    ipcMain.handle('lexvault:activateToken', handler)
-
-    // Also expose openExternal so the "I don't have one yet" button can launch
-    // the buy page in the user's default browser. registerIpc() also registers
-    // this handler later, but at that point it'll re-register without harm.
-    ipcMain.removeHandler('lexvault:openExternal')
-    ipcMain.handle('lexvault:openExternal', (_e, url) => shell.openExternal(url))
-
-    firstRunWindow.on('closed', () => {
-      firstRunWindow = null
-      // If the user closed the window without activating, resolve(null) so
-      // the outer Promise unblocks and boot() can app.quit() cleanly.
-      // Promise resolution is idempotent so this is a no-op on the success
-      // path (handler already resolved with the license payload).
-      resolve(null)
-    })
-  })
-}
-
 async function obtainLicense() {
   // State 1 — valid license.json
   const fromDisk = readLicense()
@@ -316,12 +271,13 @@ async function obtainLicense() {
       console.warn('[boot] refreshed license has invalid signature')
     } catch (err) {
       console.warn('[boot] license refresh failed:', err.message)
-      // Fall through to first-run; user may need to paste a new token
+      // Fall through to community mode; Settings → License can re-activate
     }
   }
 
-  // State 3 — first run, no license, no token
-  return await showFirstRun()
+  // State 3 — no license, no token: community mode, no sign-in
+  console.log('[boot] no license — community mode')
+  return COMMUNITY_LICENSE
 }
 
 // --- Hub: offline link with the Word plugin ----------------------------------
@@ -478,15 +434,22 @@ function registerIpc(license) {
       language_pref: license.language_pref || 'auto',
       entitlements: (license.entitlements || []).map(e => e.code).filter(Boolean),
       activation_token,
+      community: !!license.community,
+      // Token activation is offered only when the build has a licence server.
+      canActivate: !!LICENSE_SERVER,
       backendUrl,
       isDev,
     }
   })
   ipcMain.handle('lexvault:openExternal', (_e, url) => shell.openExternal(url))
-  ipcMain.handle('lexvault:reloadEntitlements', async () => {
-    const fresh = readLicense()
-    if (!fresh) throw new Error('no valid license')
-    return fresh
+  ipcMain.handle('lexvault:reloadEntitlements', async () => readLicense() || COMMUNITY_LICENSE)
+
+  // Opt-in activation from Settings → License. On success the App relaunches
+  // so the licence (downloads, pack sync, updates) applies from boot.
+  ipcMain.handle('lexvault:activateToken', async (_e, token) => {
+    const result = await activateToken(String(token || '').trim())
+    if (result.ok) setTimeout(() => { app.relaunch(); app.quit() }, 1500)
+    return result
   })
 
   // Desktop notification helpers. Notifications fire only when (a) the user
@@ -770,7 +733,7 @@ function registerIpc(license) {
     if (fs.existsSync(partPath)) fs.unlinkSync(partPath)
 
     const token = fs.existsSync(PATHS.token) ? fs.readFileSync(PATHS.token, 'utf8').trim() : null
-    if (!token) throw new Error('no activation token on disk')
+    if (!token || !LICENSE_SERVER) throw new Error(LICENSE_SERVER ? 'Model downloads need an activation token (Settings → License).' : NO_DOWNLOAD_SERVER + modelDir)
     _modelFetchState = { state: 'downloading', filename: hw.model_filename, downloaded: 0, total: hw.model_size_bytes, pct: 0 }
     await fetchModel({
       server: LICENSE_SERVER,
@@ -793,7 +756,7 @@ function registerIpc(license) {
   // Used by the Dependencies tab "Download" button per entitled jur.
   ipcMain.handle('lexvault:downloadPack', async (_e, code) => {
     const token = fs.existsSync(PATHS.token) ? fs.readFileSync(PATHS.token, 'utf8').trim() : null
-    if (!token) throw new Error('no activation token on disk')
+    if (!token || !LICENSE_SERVER) throw new Error(LICENSE_SERVER ? 'Pack downloads need an activation token (Settings → License).' : 'This OpenLex build has no download server. Add law packs locally.')
     const pubKeyPath = path.join(PATHS.resources, 'public_key.pem')
     const publicKeyPem = fs.existsSync(pubKeyPath) ? fs.readFileSync(pubKeyPath, 'utf8') : null
     return syncPacks({
@@ -989,19 +952,16 @@ async function boot() {
   } catch (err) { console.warn('[boot] pack archive sweep failed:', err.message) }
 
   const license = await obtainLicense()
-  if (!license) {
-    // First-run window closed without activating → quit cleanly, no error dialog
-    app.quit()
-    return
-  }
-
   registerIpc(license)
+  // Licence-server traffic (model download, pack sync, revalidation) only
+  // with a real licence and a server; community mode never phones home.
+  const licensed = !license.community && !!LICENSE_SERVER
 
   // Custom mini-updater. Polls the license-server feed with the user's bearer
   // token, downloads + SHA512-verifies the artifact, prompts to restart.
   // Bypasses electron-updater's publisher-signature gate (we have no cert).
-  if (app.isPackaged && fs.existsSync(PATHS.token)) {
-    if (!LICENSE_SERVER) return // community build: no update feed
+  // Community builds have no update feed.
+  if (app.isPackaged && LICENSE_SERVER && fs.existsSync(PATHS.token)) {
     const feedBaseUrl = LICENSE_SERVER + '/api/app/update'
     updater = new Updater({
       feedBaseUrl,
@@ -1065,50 +1025,59 @@ async function boot() {
     // cases: (1) file is missing, (2) registry bumped model_size_bytes,
     // (3) old install has a different filename (different model variant).
     const token = fs.existsSync(PATHS.token) ? fs.readFileSync(PATHS.token, 'utf8').trim() : null
-    if (!token) {
-      throw new Error('Model is not yet downloaded and no API token is available. Paste your license token in Settings on first run.')
-    }
-    console.log(`[boot] validating model ${hw.model_filename} (expected ${hw.model_size_bytes} bytes)`)
-    _modelFetchState = { state: 'downloading', filename: hw.model_filename, downloaded: 0, total: hw.model_size_bytes, pct: 0 }
-    let last = 0
-    const result = await fetchModel({
-      server: LICENSE_SERVER,
-      token,
-      variant: hw.model,
-      destDir: modelDir,
-      filename: hw.model_filename,
-      expectedBytes: hw.model_size_bytes,
-      // Skip hash check on boot for speed (10s sha256 on 5.7 GB hurts).
-      // Manual "Refetch" passes the hash and full-validates.
-      expectedSha256: null,
-      onProgress: ({ downloaded, total }) => {
-        const pct = total ? Math.round(downloaded / total * 100) : 0
-        _modelFetchState = { state: 'downloading', filename: hw.model_filename, downloaded, total, pct }
-        if (pct - last >= 5) { console.log(`[boot] model download ${pct}%`); last = pct }
-        emitBoot('model-downloading', { pct, downloaded, total, filename: hw.model_filename })
-      },
-    })
-    if (result.skipped) {
-      console.log(`[boot] model OK (${result.reason})`)
+    if (!licensed || !token) {
+      // Community mode: no download. Use the tier's model if present, else
+      // any .gguf the user put in models/llm, else no local model — the App
+      // still runs on the user's own API key or llama-server / Ollama.
+      let own = null
+      try { own = fs.readdirSync(modelDir).filter(f => f.endsWith('.gguf')).sort()[0] || null } catch {}
+      _bootModelPath = fs.existsSync(modelPath) ? modelPath : own ? path.join(modelDir, own) : null
+      _modelFetchState = _bootModelPath ? { state: 'done', filename: path.basename(_bootModelPath) } : { state: 'none' }
+      console.log(`[boot] community mode — local model: ${_bootModelPath || `none (API key / custom endpoint, or a .gguf in ${modelDir})`}`)
+      emitBoot('model-ready')
     } else {
-      console.log(`[boot] model downloaded fresh`)
-    }
-    _modelFetchState = { state: 'done', filename: hw.model_filename, downloaded: hw.model_size_bytes, total: hw.model_size_bytes, pct: 100 }
-    emitBoot('model-ready')
-
-    // Garbage-collect any orphan GGUFs from previous installs (old tier
-    // variants, stale .part files). Keeps userData clean.
-    try {
-      for (const f of fs.readdirSync(modelDir)) {
-        const full = path.join(modelDir, f)
-        if (full === modelPath) continue
-        if (f.endsWith('.gguf') || f.endsWith('.gguf.part')) {
-          console.log(`[boot] removing orphan model file ${f}`)
-          fs.unlinkSync(full)
-        }
+      console.log(`[boot] validating model ${hw.model_filename} (expected ${hw.model_size_bytes} bytes)`)
+      _modelFetchState = { state: 'downloading', filename: hw.model_filename, downloaded: 0, total: hw.model_size_bytes, pct: 0 }
+      let last = 0
+      const result = await fetchModel({
+        server: LICENSE_SERVER,
+        token,
+        variant: hw.model,
+        destDir: modelDir,
+        filename: hw.model_filename,
+        expectedBytes: hw.model_size_bytes,
+        // Skip hash check on boot for speed (10s sha256 on 5.7 GB hurts).
+        // Manual "Refetch" passes the hash and full-validates.
+        expectedSha256: null,
+        onProgress: ({ downloaded, total }) => {
+          const pct = total ? Math.round(downloaded / total * 100) : 0
+          _modelFetchState = { state: 'downloading', filename: hw.model_filename, downloaded, total, pct }
+          if (pct - last >= 5) { console.log(`[boot] model download ${pct}%`); last = pct }
+          emitBoot('model-downloading', { pct, downloaded, total, filename: hw.model_filename })
+        },
+      })
+      if (result.skipped) {
+        console.log(`[boot] model OK (${result.reason})`)
+      } else {
+        console.log(`[boot] model downloaded fresh`)
       }
-    } catch (gcErr) {
-      console.warn('[boot] orphan GC failed:', gcErr.message)
+      _modelFetchState = { state: 'done', filename: hw.model_filename, downloaded: hw.model_size_bytes, total: hw.model_size_bytes, pct: 100 }
+      emitBoot('model-ready')
+
+      // Garbage-collect any orphan GGUFs from previous installs (old tier
+      // variants, stale .part files). Keeps userData clean.
+      try {
+        for (const f of fs.readdirSync(modelDir)) {
+          const full = path.join(modelDir, f)
+          if (full === modelPath) continue
+          if (f.endsWith('.gguf') || f.endsWith('.gguf.part')) {
+            console.log(`[boot] removing orphan model file ${f}`)
+            fs.unlinkSync(full)
+          }
+        }
+      } catch (gcErr) {
+        console.warn('[boot] orphan GC failed:', gcErr.message)
+      }
     }
   } catch (err) {
     console.error('[boot] hardware detect / model fetch failed:', err)
@@ -1117,7 +1086,7 @@ async function boot() {
     return
   }
 
-  supervisor = new Supervisor({ paths: PATHS, license })
+  supervisor = new Supervisor({ paths: PATHS, license, modelPath: _bootModelPath })
   try {
     emitBoot('starting-services')
     await supervisor.start((evt) => {
@@ -1129,7 +1098,6 @@ async function boot() {
     emitBoot('ready')
     // Brief pause so the user sees the "Ready" state, then transition to main window
     await new Promise(r => setTimeout(r, 600))
-    if (firstRunWindow && !firstRunWindow.isDestroyed()) firstRunWindow.close()
     await createWindow()
     await startEngine()
     startHub()
@@ -1206,6 +1174,10 @@ async function boot() {
   // and ingest entitled jurisdiction packs without blocking the UI. Status
   // events forward to the renderer over an IPC channel so a Settings panel
   // can surface progress.
+  if (!licensed) {
+    console.log('[boot] community mode — no pack sync, no licence polling')
+    return
+  }
   ;(async () => {
     try {
       const token = fs.existsSync(PATHS.token) ? fs.readFileSync(PATHS.token, 'utf8').trim() : null
@@ -1296,9 +1268,9 @@ async function boot() {
         try { fs.unlinkSync(PATHS.license) } catch {}
         try { fs.unlinkSync(PATHS.token) } catch {}
         dialog.showErrorBox('OpenLex — access revoked',
-          'This machine was deauthorized from your LexVault account. ' +
-          'The App will close now. To use LexVault here again, ' +
-          'open it and paste your activation token to reactivate.')
+          'This machine was deauthorized from your account. ' +
+          'OpenLex will close now and start in community mode next time; ' +
+          'paste your activation token in Settings → License to reactivate.')
         app.quit()
       } else if (err.code === 'device_cap_reached') {
         // A different device claimed our slot. Same outcome.
@@ -1327,8 +1299,6 @@ if (!app.requestSingleInstanceLock()) {
     if (mainWindow && !mainWindow.isDestroyed()) {
       if (mainWindow.isMinimized()) mainWindow.restore()
       mainWindow.show(); mainWindow.focus()
-    } else if (firstRunWindow && !firstRunWindow.isDestroyed()) {
-      firstRunWindow.show(); firstRunWindow.focus()
     }
   })
   app.whenReady().then(boot)
