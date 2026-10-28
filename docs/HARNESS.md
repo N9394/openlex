@@ -112,6 +112,10 @@ Switch whole features on or off for everyone (firm layer) or yourself:
 { "features": { "browser": false, "monitors": true, "skillSuggestions": true } }
 ```
 
+`shell` (the agent's `run_bash` tool) is **off by default**. When a firm turns it on, it is still limited to read/organise commands (`ls`, `find`, `grep`, `cat`, `head`, `tail`, `wc`, `sort`, `diff`, `stat`, `tree`, `du`, `mkdir`, `cp`/`mv` without overwriting, read-only `git`). Nothing that runs code, reaches the network or deletes is ever available. Every path must stay inside the workspace (symlinks resolved). Commands get no environment secrets and run inside the OS sandbox (macOS Seatbelt, Linux bubblewrap): writes only in the workspace, no reads in the home folder, no network. Without an OS sandbox it stays off unless `"shellWithoutSandbox": true`.
+
+The agent's file tools never write `openlex.json`, `skills/`, `playbooks/` or `.openlex/`, and every overwrite keeps the previous version in `.openlex/history/` (20 per file).
+
 ## `hooks`: firm rules at each decision point
 
 | Decision point | Fires | Carries | What a hook can do |
