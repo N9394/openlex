@@ -17,6 +17,10 @@ An open, local-first harness for legal work. It runs inside Microsoft Word and a
 - **Web, carefully:** official sources first (RIS for Austrian federal law, EUR-Lex data for EU law), plus a browser that uses the lawyer's own sign-ins. OpenLex never sees passwords, and every saved page keeps its provenance.
 - **One hub, offline:** the Word add-in and the desktop app share one local engine: the same matters, settings and model, with handoff between them. No network is needed.
 
+## Guides
+
+Start with [Getting started](docs/guides/getting-started.md). All guides: [docs/guides](docs/guides/README.md) (choose your AI, client data rules, Word add-in, desktop app, firm setup, troubleshooting).
+
 ## Layout
 
 | Path | What |
