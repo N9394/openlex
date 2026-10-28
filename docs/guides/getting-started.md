@@ -59,6 +59,7 @@ Every answer cites its sources: the statute section, or a verbatim quote from yo
 
 ## Next
 
+- [Your matters](matters.md): analyse a whole document (`openlex analyse contract.docx`), see a matter at a glance, find things again
 - [Choose your AI](choose-your-ai.md): local, your own key, or your firm's cloud
 - [Client data rules](client-data-rules.md): per matter, privileged matters, EU only, hiding names
 - [Word add-in](word-add-in.md) · [Desktop app](desktop-app.md)

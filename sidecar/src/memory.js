@@ -10,16 +10,18 @@
 
 const fs = require('fs')
 const path = require('path')
-const os = require('os')
 
 let sqlite = null
 try { sqlite = require('better-sqlite3') } catch { /* fall back to JSON */ }
 
-const DATA_DIR = path.join(os.homedir(), '.lexvault', 'memory')
+// <data dir>/memory (~/.lexvault/memory unless LEXVAULT_DATA_DIR says otherwise).
+const DATA_DIR = path.join(require('./config').DATA_DIR, 'memory')
 fs.mkdirSync(DATA_DIR, { recursive: true })
 
+const safeId = (docId) => String(docId || 'default').replace(/[^a-zA-Z0-9_-]/g, '_')
+
 function dbFor(docId) {
-  const safe = String(docId || 'default').replace(/[^a-zA-Z0-9_-]/g, '_')
+  const safe = safeId(docId)
   if (sqlite) {
     const db = sqlite(path.join(DATA_DIR, `${safe}.sqlite`))
     db.exec(`
@@ -99,4 +101,29 @@ class DocMemory {
   }
 }
 
-module.exports = { DocMemory, DATA_DIR }
+/**
+ * The stored facts of one document, read-only, with when they were noted:
+ * [{ entity, claim, section, at }]. Never creates a store (the matter
+ * overview reads every linked document; most have none).
+ */
+function factsFor(docId) {
+  const safe = safeId(docId)
+  const sqlFile = path.join(DATA_DIR, `${safe}.sqlite`)
+  const jsonFile = path.join(DATA_DIR, `${safe}.json`)
+  try {
+    if (sqlite && fs.existsSync(sqlFile)) {
+      const db = sqlite(sqlFile, { readonly: true })
+      try {
+        return db.prepare('SELECT entity, claim, section, created_at FROM facts ORDER BY id').all()
+          .map((f) => ({ entity: f.entity, claim: f.claim, section: f.section, at: f.created_at ? `${String(f.created_at).replace(' ', 'T')}Z` : null }))
+      } finally { db.close() }
+    }
+    if (fs.existsSync(jsonFile)) {
+      const state = JSON.parse(fs.readFileSync(jsonFile, 'utf8'))
+      return (state.facts || []).map((f) => ({ entity: f.entity, claim: f.claim, section: f.section, at: f.created_at || null }))
+    }
+  } catch { /* unreadable store: no facts */ }
+  return []
+}
+
+module.exports = { DocMemory, factsFor, DATA_DIR }

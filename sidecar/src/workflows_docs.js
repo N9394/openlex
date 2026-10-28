@@ -322,4 +322,4 @@ async function runCompare({ matterId, fileA, fileB, rate = true, onProgress, sig
   return { files, changes: rows, stats: { paragraphsA: pa.length, paragraphsB: pb.length, changes: hs.length, ...counts, ...(rateError ? { rateError } : {}) } }
 }
 
-module.exports = { parseTranslations, runTranslate, runCompare, numbersIn, sameNumbers, glossaryMisses, diff, hunks, wordRuns, paragraphs, LANGS }
+module.exports = { parseTranslations, runTranslate, runCompare, resolveDoc, numbersIn, sameNumbers, glossaryMisses, diff, hunks, wordRuns, paragraphs, LANGS }

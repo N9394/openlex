@@ -18,7 +18,10 @@
  *   openlex chronology [--matter ID] [--folder DIR]
  *   openlex translate FILE --to en [--glossary NAME] [--matter ID]
  *   openlex compare OLD NEW [--matter ID] [--no-rate]
+ *   openlex analyse FILE… [--matter ID]  risks, deadlines, obligations, key terms — quotes checked; report saved in the matter folder
  *   openlex matters [new "Title" [--client X] [--privileged] | privileged ID [--off]]   privileged = never leaves this computer
+ *   openlex matters show ID | export ID [--format docx|pdf|md]   the matter at a glance, or as a "matter memo" file
+ *   openlex recall "liability cap" --matter ID [--summary]   search everything stored for the matter
  *   openlex clauses [--type liability] [--query words] [--matter ID]
  *   openlex grid list | new TITLE --columns cols.json [--matter ID] | run ID [--force] | show ID | export ID
  *   openlex decide "text" --question "Is …?" | --questions q.json [--file doc] [--matter ID]
@@ -50,7 +53,7 @@ function parseArgs(argv) {
     else if (a === '--json') out.json = true
     else if (a === '--force') out.force = true
     else if (a === '--clear') out.clear = true
-    else if (['--local', '--remove', '--redact', '--privileged', '--off', '--yes'].includes(a)) out[a.slice(2)] = true
+    else if (['--local', '--remove', '--redact', '--privileged', '--off', '--yes', '--summary'].includes(a)) out[a.slice(2)] = true
     else if (a === '--allow') out.allow = [...(out.allow || []), ...String(argv[++i] || '').split(',').map((x) => x.trim()).filter(Boolean)]
     else if (a === '--save' && (i + 1 >= argv.length || argv[i + 1].startsWith('--'))) out.save = true
     else if (a.startsWith('--')) out[a.slice(2)] = argv[++i]
@@ -99,7 +102,8 @@ async function runWorkflow(type, body, opts) {
     },
   })
   if (result && !opts.json) {
-    console.log(Object.entries(result.stats || {}).filter(([, v]) => typeof v !== 'object').map(([k, v]) => `${k}: ${v}`).join(' · '))
+    if (result.summary) console.log(`${result.summary}\n`)
+    else console.log(Object.entries(result.stats || {}).filter(([, v]) => typeof v !== 'object').map(([k, v]) => `${k}: ${v}`).join(' · '))
     for (const f of result.files || []) console.log(f)
   }
 }
@@ -260,8 +264,28 @@ async function main() {
     case 'compare':
       if (a._.length < 2) throw new Error('usage: openlex compare OLD NEW')
       return runWorkflow('compare', { matterId: a.matter, fileA: path.resolve(a._[0]), fileB: path.resolve(a._[1]), rate: a.rate !== false }, a)
+    case 'analyse':
+    case 'analyze':
+      if (!a._.length) throw new Error('usage: openlex analyse FILE… [--matter ID]')
+      return runWorkflow('analyse', { matterId: a.matter, files: a._.map((f) => path.resolve(f)) }, a)
+    case 'recall': {
+      if (!a._[0] || !a.matter) throw new Error('usage: openlex recall "words" --matter ID [--summary]')
+      const q = new URLSearchParams({ id: a.matter, q: a._.join(' '), format: 'text', ...(a.summary ? { summary: '1' } : {}), ...(a.limit ? { limit: a.limit } : {}) })
+      const r = await request('GET', `/api/matters/recall?${q}`)
+      return console.log(a.json ? JSON.stringify(r, null, 2) : r.text)
+    }
     case 'matters': {
       const [sub, arg] = a._
+      if (sub === 'show') {
+        if (!arg) throw new Error('usage: openlex matters show ID')
+        const r = await request('GET', `/api/matters/overview?${new URLSearchParams({ id: arg, format: 'text' })}`)
+        return console.log(a.json ? JSON.stringify(r, null, 2) : r.text)
+      }
+      if (sub === 'export') {
+        if (!arg) throw new Error('usage: openlex matters export ID [--format docx|pdf|md]')
+        const r = await request('POST', '/api/matters/overview/export', { id: arg, format: a.format || 'docx' })
+        return console.log(a.json ? JSON.stringify(r, null, 2) : r.file)
+      }
       if (sub === 'new') {
         if (!arg) throw new Error('usage: openlex matters new "Title" [--client X] [--privileged]')
         const r = await request('POST', '/api/matters', { title: arg, client: a.client, number: a.number, privileged: !!a.privileged })

@@ -33,6 +33,7 @@ const CATALOG = [
   { name: 'read_file', desc: 'Read workspace file' },
   { name: 'export_document', desc: 'Export document to CSV/XML/JSON/MD/PDF' },
   { name: 'run_playbook', desc: 'Run review playbook from workspace' },
+  { name: 'analyse_document', desc: 'Full verified analysis of a document (risks, deadlines, obligations) saved to the matter' },
 ]
 
 // Full tool schemas — loaded on demand via get_tool_schemas
@@ -132,6 +133,10 @@ const SCHEMAS = {
   run_playbook: {
     input: { name: 'string' },
     description: 'Run a review playbook from workspace playbooks/ folder.',
+  },
+  analyse_document: {
+    input: { file: 'string (optional — a document in the matter folders; default: the open document)' },
+    description: 'Full analysis: summary, key terms, deadlines, obligations, risks with fixes, clauses — quotes verified; saves .md/.docx/.json in the matter folder.',
   },
 }
 
