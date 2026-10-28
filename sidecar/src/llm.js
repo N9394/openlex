@@ -60,7 +60,11 @@ async function routed(kind, messages, opts, runLocal, runCloud) {
         const h = await hooks.run('before_model', { role, provider: c.provider.id, model: c.provider.model || null, local: !!c.provider.local, chars: chars(messages), matterId: policy.currentMatter(), privileged: routing.context({ matterId: policy.currentMatter() }).privileged })
         if (h.decision === 'deny') { const e = new Error(`Blocked by firm rule: ${h.reason}`); e.code = 'HOOK_BLOCKED'; throw e }
       }
-      if (c.provider.kind === 'local') { auditLocal(kind, opts.role || opts.phase, c.reason); return await runLocal(optsOut) }
+      if (c.provider.kind === 'local') {
+        auditLocal(kind, opts.role || opts.phase, c.reason)
+        reportModel({ provider: 'local', label: c.provider.label || 'this computer', model: c.provider.model || null, local: true, region: null, redacted: false }, opts)
+        return await runLocal(optsOut)
+      }
       return await runCloud(c.provider, optsOut, c.reason)
     } catch (err) {
       if (!firstErr || (firstErr.code === 'POLICY_BLOCKED' && err.code !== 'POLICY_BLOCKED')) firstErr = err
@@ -106,6 +110,7 @@ async function cloudCall(kind, messages, opts, run, provider, routeReason) {
   const red = require('./redact').forMatter(matter)
   const messagesOut = red ? red.redactMessages(out.messages) : out.messages
   const restorer = red && opts.onContent ? red.streamRestorer(opts.onContent) : null
+  reportModel({ provider: p.id, label: p.label || p.id, model: p.model || null, local: !!p.local, region: p.region || null, redacted: !!red }, opts)
   // Native tool calling (hosted models): agent phases get real tool
   // definitions. Not on calls that stream prose to the pane — a hosted
   // model's "Let me check…" preamble before a tool call would leak into
@@ -137,6 +142,12 @@ async function cloudCall(kind, messages, opts, run, provider, routeReason) {
     policy.audit({ provider: p.id, model: p.model || null, matter, call: kind, decision: 'allowed', ok: false, ms: Date.now() - t0, inChars: chars(out.messages), error: String(err.message).slice(0, 200) })
     throw err
   }
+}
+
+/** Tell the request's observer (policy.observeModels) where this call goes — metadata only. */
+function reportModel(info, opts = {}) {
+  const role = opts.role || routing.PHASE_ROLE[opts.phase] || opts.phase || null
+  policy.reportModel({ ...info, ...(role ? { role } : {}) })
 }
 
 function auditLocal(kind, role, routeReason) {
@@ -174,7 +185,12 @@ async function chatWithReasoning(messages, opts = {}) {
 /** Streaming chat → async iterator of text chunks. */
 async function* chatStream(messages, opts = {}) {
   const first = routing.primary({ role: opts.role, phase: opts.phase, matterId: policy.currentMatter(), chars: chars(messages) })
-  if (first.kind === 'local') { auditLocal('chatStream', opts.role || opts.phase, 'primary'); yield* local.chatStream(messages, opts); return }
+  if (first.kind === 'local') {
+    auditLocal('chatStream', opts.role || opts.phase, 'primary')
+    reportModel({ provider: 'local', label: first.label || 'this computer', model: first.model || null, local: true, region: null, redacted: false }, opts)
+    yield* local.chatStream(messages, opts)
+    return
+  }
   const queue = []
   let done = false
   let failure = null
