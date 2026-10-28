@@ -70,6 +70,10 @@ The engine tries them in that order. **The data policy always has the last word*
 
 With no `routes` section, every call goes to the active provider, as before.
 
+## `sources`
+
+The firm's own databases, DMS, folders and the legal databases it subscribes to, as searchable sources for the agent (`http`, `mcp`, `folder` adapters, no code). See [SOURCES.md](SOURCES.md).
+
 ## `features`
 
 Switch whole features on or off for everyone (firm layer) or yourself:

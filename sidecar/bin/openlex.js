@@ -21,6 +21,7 @@
  *   openlex lists [show ID | new TITLE | add ID "item" [--due YYYY-MM-DD] [--owner X] | done ID ITEM | export ID]
  *   openlex map [--matter ID] [--agent NAME] | map set routes|hooks|agents|features FILE.json | --clear
  *   openlex agents                     agent profiles (use one with "@name …" in ask)
+ *   openlex sources [add PRESET|NAME --file def.json | remove NAME | key NAME KEY | test NAME | search "q" [--kind k]]
  *   openlex plan "goal" --matter ID | plan list | plan show ID | plan run ID (approves) | plan decide ID STEP continue|stop [--note text]
  *   openlex serve                      run the engine in the foreground
  *
@@ -311,6 +312,29 @@ async function main() {
       if (sub === 'done') { await request('POST', '/api/lists/items/update', { id, itemId: rest[0], patch: { status: 'done' } }); return console.log('done') }
       if (sub === 'export') { const r = await request('POST', '/api/lists/export', { id }); for (const f of r.files) console.log(f); return }
       throw new Error(`unknown lists command: ${sub}`)
+    }
+    case 'sources': {
+      const [sub, name, val] = a._
+      if (!sub) {
+        const r = await request('GET', '/api/sources')
+        if (a.json) return console.log(JSON.stringify(r, null, 2))
+        for (const s of r.sources) console.log(`${s.name.padEnd(18)} ${s.type.padEnd(7)} ${s.kind.padEnd(11)} ${s.local === null ? 'INVALID' : s.local ? 'local ' : 'remote'}  ${s.error || s.title}`)
+        if (!r.sources.length) console.log('no sources configured')
+        console.log(`presets: ${r.presets.join(', ')}  (openlex sources add <preset>)`)
+        return
+      }
+      if (sub === 'add') { const r = await request('POST', '/api/sources/add', { name, source: a.file ? JSON.parse(fs.readFileSync(a.file, 'utf8')) : undefined }); return console.log(`added ${r.source.name} (${r.source.type}, ${r.source.kind}) to your layer — remote sources also need "source:${name}" allowed in the data policy`) }
+      if (sub === 'remove') { await request('POST', '/api/sources/remove', { name }); return console.log(`removed ${name}`) }
+      if (sub === 'key') { await request('POST', '/api/sources/key', { name, key: val || null }); return console.log(val ? `key for ${name} stored in the OS keychain` : `key for ${name} removed`) }
+      if (sub === 'test') { const r = await request('POST', '/api/sources/test', { name, query: val, matterId: a.matter }); return console.log(r.ok ? `ok: ${r.results} results${r.sample ? ` — ${r.sample.title}` : ''}` : `failed: ${r.error}`) }
+      if (sub === 'search') {
+        const r = await request('POST', '/api/sources/search', { query: [name, val].filter(Boolean).join(' '), kind: a.kind, jurisdiction: a.jurisdiction, matterId: a.matter })
+        if (a.json) return console.log(JSON.stringify(r, null, 2))
+        r.results.forEach((x, i) => console.log(`[${i + 1}] ${x.source} · ${x.title}${x.citation ? ` — ${x.citation}` : ''}\n    ${x.text.slice(0, 200)}${x.url ? `\n    ${x.url}` : ''}`))
+        for (const s of r.skipped) console.log(`not searched: ${s.source} — ${s.reason}`)
+        return
+      }
+      throw new Error(`unknown sources command: ${sub}`)
     }
     case 'agents': {
       const r = await request('GET', '/api/agents')
