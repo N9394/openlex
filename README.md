@@ -32,20 +32,6 @@ openlex serve
 - **Customisable at every turn:** one `openlex.json` (firm layer, user layer, firm locks) for model routing per task, firm rules at each decision point (hooks), agent profiles (`@researcher`, `@drafter` …) and features. Skills and playbooks are plain files.
 - **Safe by construction:** the agent cannot run code or reach the network from a shell (the shell tool is off by default and sandboxed when a firm turns it on), cannot leave the workspace or change the firm's rules, and every overwrite keeps the previous version.
 
-## Install the terminal app and CLI
-
-Needs [Node.js](https://nodejs.org) 20 or newer. No admin rights; the installer verifies the release checksum and writes only to `~/.openlex`.
-
-```bash
-curl -fsSL https://openlex.pinemarshlands.com/install | bash          # macOS, Linux
-```
-
-```powershell
-irm https://openlex.pinemarshlands.com/install.ps1 | iex             # Windows (PowerShell)
-```
-
-On Windows the installer puts `openlex.cmd` into `%USERPROFILE%\.openlex\bin` and adds that folder to your user PATH; no Node yet → `winget install OpenJS.NodeJS.LTS`. Use Windows Terminal for the full-screen app. A specific version: `OPENLEX_VERSION=0.2.0` (Windows: `$env:OPENLEX_VERSION = '0.2.0'`) before the line. Running the line again upgrades. Uninstall: delete `~/.openlex` (Windows: `Remove-Item -Recurse -Force "$env:USERPROFILE\.openlex"` and remove its `bin` folder from your user PATH); your matters in `~/.lexvault` are kept.
-
 ## Terminal app
 
 Type `openlex` (no arguments) in a terminal and a full-screen app opens: no commands to learn. It starts OpenLex in the background if needed, walks you through choosing where the AI runs and where client data may go, and then shows your matters. In a matter you can ask questions (answers come with the sources found and proposed changes), add documents by dragging them into the window, and run the larger tasks: checklist review, chronology, translation, comparing two versions, a review grid, or a plan you approve step by step. The bar at the bottom always shows the matter, the AI model and where client data may go. Arrow keys and Enter to choose, Esc to go back, `?` for help. See [docs/guides/terminal-app.md](docs/guides/terminal-app.md).
@@ -54,10 +40,12 @@ Type `openlex` (no arguments) in a terminal and a full-screen app opens: no comm
 
 | | |
 |---|---|
-| Script (macOS, Linux, WSL) | `curl -fsSL https://openlex.pinemarshlands.com/install \| bash` installs into `~/.openlex`, checks the release checksum and links `openlex` into `~/.local/bin`. |
+| Script (macOS, Linux) | `curl -fsSL https://openlex.pinemarshlands.com/install \| bash` installs into `~/.openlex`, checks the release checksum and links `openlex` into `~/.local/bin`. |
+| Script (Windows) | `irm https://openlex.pinemarshlands.com/install.ps1 \| iex` in PowerShell, no admin: installs into `%USERPROFILE%\.openlex`, verifies the checksum and adds `openlex.cmd` to your user PATH. No Node yet: `winget install OpenJS.NodeJS.LTS`. Use Windows Terminal for the full-screen app. |
 | Homebrew | `brew install n9394/openlex/openlex` |
 | Manual | Download `openlex-<version>.tar.gz` from [Releases](https://github.com/N9394/openlex/releases), unpack, run `./openlex`. |
 | From source | `cd sidecar && npm install && npm link` |
+A specific version: `OPENLEX_VERSION=0.2.0` (Windows: `$env:OPENLEX_VERSION = '0.2.0'`) before the line. Running it again upgrades. Uninstall: delete `~/.openlex` (Windows: `%USERPROFILE%\.openlex`, and remove its `bin` folder from your user PATH); your matters and keys in `~/.lexvault` stay.
 
 All need Node.js 20 or newer. Models are not included: add a cloud key, or run a local model (`brew install llama.cpp`; OpenLex finds `llama-server` on `PATH`) with a GGUF in `~/.lexvault/models/`.
 
