@@ -203,7 +203,7 @@ export function dataLine(models = [], online = [], { running = false, unreported
   if (web.length) parts.push(`${cloud.length ? 'Also looked' : 'Looked'} up online: ${web.join(', ')} (only search words or web addresses)`)
   // An older engine does not report its AI calls: say what the rule allows instead of guessing.
   if (!parts.length && !models.length && unreported) return { text: unreported, left: true }
-  if (!parts.length) return { text: running && !models.length ? 'Nothing has left this computer so far' : 'Stayed on this computer', left: false }
+  if (!parts.length) return { text: running ? 'Nothing has left this computer so far' : 'Stayed on this computer', left: false }
   return { text: `${cloud.length ? '' : 'Your documents stayed on this computer. '}${parts.join('. ')}`, left: true }
 }
 
@@ -323,6 +323,20 @@ export function dataSegs(line) {
     : [{ t: `${sym.ok} `, color: color.ok, bold: true }, { t: line.text }]
 }
 
+/** The data line wrapped to the width — never cut off: it must not be missed. */
+export function dataRows(line, width = 78) {
+  const words = line.text.split(' ')
+  const rows = []
+  let cur = ''
+  for (const w of words) {
+    if (cur && (cur + ' ' + w).length > width - 2) { rows.push(cur); cur = w } else cur = cur ? `${cur} ${w}` : w
+  }
+  if (cur) rows.push(cur)
+  return rows.map((t, i) => (line.left
+    ? [{ t: i ? '  ' : '! ', color: color.warn, bold: true }, { t, color: color.warn, bold: true }]
+    : [{ t: i ? '  ' : `${sym.ok} `, color: color.ok, bold: true }, { t }]))
+}
+
 /**
  * The live panel for one question: header, numbered steps (the last
  * `maxSteps`), what comes next, where the data went, how to stop.
@@ -342,17 +356,17 @@ export function activityLines(act, { now = clock.now(), width = 78, maxSteps = 6
     if (s.found?.length) L.push([{ t: `      found: ${fit(s.found.join(', '), width - 13)}`, dim: true }])
   })
   if (running && !act.waitingForYou && !steps.some((s) => s.phase === 'writing')) L.push([{ t: `    ${sym.bullet} `, dim: true }, { t: 'Next: writing the answer', dim: true }])
-  L.push(dataSegs(dataLine(act.models, act.online, { running, unreported: running ? '' : act.unreported })))
+  L.push(...dataRows(dataLine(act.models, act.online, { running, unreported: running ? '' : act.unreported }), width))
   if (running) L.push([{ t: `Esc stop ${sym.sep} ${stopHint}`, dim: true }])
   return L
 }
 
 /** After the answer: one line saying how long it took, then the data line. */
-export function doneLines(act) {
+export function doneLines(act, width = 78) {
   const n = act.steps.length
   return [
     [{ t: `${act.stopped ? 'Stopped' : act.failed ? 'Ended early' : 'Done'} after ${duration((act.endedAt || act.startedAt) - act.startedAt)} ${sym.sep} ${n} step${n === 1 ? '' : 's'}`, dim: true }],
-    dataSegs(dataLine(act.models, act.online, { unreported: act.unreported })),
+    ...dataRows(dataLine(act.models, act.online, { unreported: act.unreported }), width),
   ]
 }
 
@@ -499,7 +513,7 @@ export function workLines(w, { now = clock.now(), width = 78, maxItems = 7, stop
     if (more > 0) L.push([{ t: `    … ${more} more waiting`, dim: true }])
   }
   if (w.note) L.push([{ t: `  ${fit(w.note, width - 2)}`, dim: true }])
-  L.push(dataSegs(dataLine(w.models, w.online, { running })))
+  L.push(...dataRows(dataLine(w.models, w.online, { running }), width))
   if (running) L.push([{ t: `Esc stop ${sym.sep} ${stopHint}`, dim: true }])
   return L
 }

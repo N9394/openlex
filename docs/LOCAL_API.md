@@ -43,9 +43,20 @@ Long-running routes answer with Server-Sent Events: `Content-Type: text/event-st
 ### Asking and drafting
 | Method | Path | Body / query | What |
 |---|---|---|---|
-| POST | `/api/chat` | `{ message, text?, docId, matterId?, interactive?, allow?, yes? }` | Runs the agent on a document (`text`) or a free question. SSE events: `step`, `reasoning`, `law` (sources found), `text` (answer, possibly streamed in pieces), `suggestion` (a proposed change: `{ type, severity, summary, anchor, proposed_text, basis }`), `scorecard`, `permission` / `permission_result` (see *Permissions*), `done`. |
+| POST | `/api/chat` | `{ message, text?, docId, matterId?, interactive?, allow?, yes?, files? }` | Runs the agent on a document (`text`) or a free question. SSE events: `step`, `reasoning`, `law` (sources found), `text` (answer, possibly streamed in pieces), `suggestion` (a proposed change: `{ type, severity, summary, anchor, proposed_text, basis, verdict }`), `scorecard`, `note`, `model` (see *What OpenLex is doing*), `permission` / `permission_result` (see *Permissions*), `done`. `files` (optional): the names of the files whose text is in `text`, for the activity log. |
 | POST | `/api/session/clear` | `{ docId }` | Forgets the conversation for a document. |
-| GET | `/api/law/section` | `?id=` | Full text of a law chunk from the local packs. |
+| GET | `/api/law/section` | `?chunk_id=` | Full text of a law chunk from the local packs: `{ source_name, section, content }`. |
+| GET | `/api/activity` | `?matterId=&limit=20` | What OpenLex did for each recent request of a matter (no `matterId`: requests without a matter), newest first. See *What OpenLex is doing*. |
+
+### What OpenLex is doing (for front ends)
+
+So a front end can tell a lawyer, at every moment, what is happening, where data goes and what an answer is based on, the streams carry these fields (all additive; older clients ignore them):
+
+- **`model`** — once per AI call, before anything is sent: `{ type: "model", provider, label, model, local, region, redacted, role? }`. `local: true` means the call stayed on this computer; `redacted: true` means client names were replaced before sending; `region` is the provider's pinned region (e.g. `eu-central-1`) or `null`. Metadata only, never content. Sent on `/api/chat`, `/api/workflows/run`, `/api/grids/run` and `/api/plans/run`.
+- **`step`** keeps its `text` and adds `kind` — `tool`, `writing`, `retry`, `judge`, `judged` (with `verified`, `total`), `timeout`, `rethink`, `delegate`, `blocked`, `not_allowed`, `declined`, `tool_failed` (with `offline`), `model_unavailable`, `law_search`, `dropped` — and for tool steps `tool` plus `detail`: the safe, short arguments worth showing (`query`, `jurisdiction`, `clause: { index, heading }`, `host` of a web address, `file` name, `celex`, `article`, `format`, …). Never content, never a full URL, never a command line. In `/api/plans/run`, the agent's steps arrive as `progress` events with the same `kind` / `tool` / `detail`.
+- **`GET /api/activity`** — one record per request: `{ at, kind (question | review | chronology | translate | compare | grid | plan), asked, client, files?, looked: [{ tool, detail } | { document }], sources: ["ABGB § 933", …], data: [{ provider, label, model, local, region, redacted, calls }], suggestions, saved?, ms, result (done | stopped | failed), error? }`. Kept in `~/.lexvault/activity/<matter>.jsonl` (last 200). The question is stored (the conversation session stores it anyway); answers and document text are not.
+
+The terminal app turns these into plain sentences (`sidecar/tui/explain.mjs`: "Searching Austrian law: “Gewährleistung Frist”", "Sent to: Claude (Anthropic, EU) — names hidden · 2 times").
 
 ### Permissions
 Before each tool call the engine decides: allow, ask the lawyer, or refuse (rules in `openlex.json` → `permissions`, see [HARNESS.md](HARNESS.md)). When it must ask, the running stream (`/api/chat`, `/api/plans/run`) carries

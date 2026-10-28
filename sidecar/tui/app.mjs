@@ -136,7 +136,7 @@ export function Help() {
   const row = (k, what) => html`<${Box} key=${k}><${Box} width=${10} flexShrink=${0}><${Text} color=${color.accent}>${k}<//><//><${Text} wrap="truncate-end">${what}<//><//>`
   const keys = `→ ${page ? 'keys' : 'what OpenLex is doing and why'} ${sym.sep} Esc or Enter: back`
   if (page === 1) {
-    const point = (k, what) => html`<${Box} key=${k}><${Text} color=${color.accent}>${sym.bullet} <//><${Text} wrap="wrap">${what}<//><//>`
+    const point = (k, what) => html`<${Box} key=${k}><${Box} width=${2} flexShrink=${0}><${Text} color=${color.accent}>${sym.bullet}<//><//><${Box} flexGrow=${1}><${Text} wrap="wrap">${what}<//><//><//>`
     return html`<${Frame} title="What OpenLex is doing and why" status=${ctx.status()} keys=${keys}>
       <${Box} flexDirection="column">
         ${point(1, 'While it works you see each step in plain words — what it reads, what it searches — and how long it has taken.')}

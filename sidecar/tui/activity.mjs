@@ -42,8 +42,9 @@ export function RecentActivity({ matterId = null }) {
     body = html`<${Box} flexDirection="column">
       <${Menu} items=${items} maxVisible=${Math.max(rows - 18, 3)} onHighlight=${(it) => setAt(it.value)} onSelect=${(it) => setAt(it.value)} />
       <${Box} flexDirection="column" marginTop=${1} borderStyle="single" borderTop=${true} borderBottom=${false} borderLeft=${false} borderRight=${false} paddingTop=${0}>
-        <${Text} bold wrap="truncate-end">${cur.title}${cur.took ? html`<${Text} dimColor>  ${sym.sep} took ${cur.took}<//>` : null}<//>
-        ${cur.lines.map((l, i) => html`<${Text} key=${i} wrap="truncate-end" color=${l.startsWith('! ') ? color.warn : undefined} bold=${l.startsWith('! ')}>  ${l}<//>`)}
+        <${Text} bold wrap="truncate-end">${cur.title}<//>
+        ${cur.took ? html`<${Text} dimColor>  Took ${cur.took}<//>` : null}
+        ${cur.lines.map((l, i) => html`<${Box} key=${i} paddingLeft=${2}><${Text} wrap="wrap" color=${l.startsWith('! ') ? color.warn : undefined} bold=${l.startsWith('! ')}>${l}<//><//>`)}
       <//>
     <//>`
   }

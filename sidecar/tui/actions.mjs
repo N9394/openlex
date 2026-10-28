@@ -278,7 +278,7 @@ export function Action({ kind, matterId }) {
     const data = work ? dataLine(work.models, work.online) : null
     body = html`<${Box} flexDirection="column">
       ${result.stopped ? html`<${Note} kind="warn">${result.summary}<//>` : html`<${Note} kind="ok">Done${work ? ` in ${duration((work.endedAt || clock.now()) - work.startedAt)}` : ''}.${result.summary ? ` ${result.summary}` : ''}<//>`}
-      ${data ? html`<${Text} wrap="truncate-end">${dataSegs(data).map((g, k) => html`<${Text} key=${k} bold=${!!g.bold} color=${g.color}>${g.t}<//>`)}<//>` : null}
+      ${data ? html`<${Text} wrap="wrap">${dataSegs(data).map((g, k) => html`<${Text} key=${k} bold=${!!g.bold} color=${g.color}>${g.t}<//>`)}<//>` : null}
       ${result.files.length ? html`<${Text} dimColor wrap="truncate-middle">Saved in ${shortPath(path.dirname(result.files[0]))}<//>` : null}
       ${opened ? html`<${Text} dimColor>${opened}<//>` : null}
       <${Box} marginTop=${1}>

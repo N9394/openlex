@@ -35,6 +35,8 @@ import { pastedFiles, chipLabel, attachSentence, readAttachment, joinTexts } fro
 
 // Conversations survive going back to the matter list (for this session).
 const conversations = new Map()
+// Matters to reopen in the chat (left for Recent activity from the chat).
+const backToChat = new Set()
 
 export const ACTIONS = [
   { value: 'review', label: 'Review the documents against a checklist', hint: 'Every document, checked point by point; each finding quotes the document.' },
@@ -70,7 +72,7 @@ export function Matter({ matterId = null }) {
   const key = matterId || 'quick'
   const [matter, setMatter] = useState(null)
   const [docs, setDocs] = useState([])
-  const [mode, setMode] = useState(matterId ? 'menu' : 'chat')
+  const [mode, setMode] = useState(() => (!matterId || backToChat.delete(key) ? 'chat' : 'menu'))
   const [msgs, setMsgs] = useState(() => conversations.get(key) || [])
   const [input, setInput] = useState('')
   const [streaming, setStreaming] = useState(false)
@@ -150,15 +152,7 @@ export function Matter({ matterId = null }) {
     const att = files
     setFiles([])
     const id = ++seq
-    const t0 = clock.now()
-    // If the engine does not report its AI calls, the data line says what the rule allows.
-    const rule = matter ? matter.policy || ctx.info.policy?.default : ctx.info.policy?.default
-    const mayLeave = active && !active.local && !matter?.privileged && rule?.mode === 'allow-list' && (rule.providers || []).includes(active.id)
-    const answer = { id, role: 'ai', text: '', sources: [], suggestions: [], act: { ...startActivity(t0), unreported: mayLeave ? `Not reported which AI answered. Your client-data rule: ${describeRule(rule, matter)}` : '' }, as: as.name !== 'associate' ? as.title : '' }
-    setMsgs((m) => [...m, { role: 'you', text, files: att.map((f) => f.name) }, answer])
-    setNow(t0)
-    // By id, not "the last message": command lines may arrive while the answer streams.
-    const patch = (fn) => setMsgs((m) => m.map((x) => { if (x.id !== id) return x; const c = { ...x }; fn(c); return c }))
+    setMsgs((m) => [...m, { role: 'you', text, files: att.map((f) => f.name) }])
     const ac = new AbortController()
     abort.current = ac
     setStreaming(true)
@@ -180,6 +174,15 @@ export function Matter({ matterId = null }) {
       if (parts.length) { docText = joinTexts(parts); docId = `tui:${key}:${att.map((f) => f.path).join('|')}` }
       if (matterId) for (const n of await copyIntoMatter(att.map((f) => f.path))) sys(n.text, n.kind)
     }
+    const t0 = clock.now()
+    // If the engine does not report its AI calls, the data line says what the rule allows.
+    const rule = matter ? matter.policy || ctx.info.policy?.default : ctx.info.policy?.default
+    const mayLeave = active && !active.local && !matter?.privileged && rule?.mode === 'allow-list' && (rule.providers || []).includes(active.id)
+    const answer = { id, role: 'ai', text: '', sources: [], suggestions: [], act: { ...startActivity(t0), unreported: mayLeave ? `Not reported which AI answered. Your client-data rule: ${describeRule(rule, matter)}` : '' }, as: as.name !== 'associate' ? as.title : '' }
+    setMsgs((m) => [...m, answer])
+    setNow(t0)
+    // By id, not "the last message": command lines may arrive while the answer streams.
+    const patch = (fn) => setMsgs((m) => m.map((x) => { if (x.id !== id) return x; const c = { ...x }; fn(c); return c }))
     try {
       await ctx.api.chat({ message, docId, ...(docText ? { text: docText, files: att.map((f) => f.name) } : {}), matterId: matterId || undefined, agent: as.name, interactive: true }, (ev) => {
         const at = clock.now()
@@ -313,7 +316,7 @@ export function Matter({ matterId = null }) {
     }
     if (name === 'permissions') return setMode('perms')
     if (name === 'sources') return openSources()
-    if (name === 'activity') return ctx.go('activity', { matterId })
+    if (name === 'activity') { backToChat.add(key); return ctx.go('activity', { matterId }) }
     if (name === 'clear') {
       try {
         await ctx.api.clearConversation(`tui:${key}`)
@@ -666,7 +669,7 @@ export function transcript(msgs, width, now = clock.now()) {
     if (m.error) wrap(`${sym.bad} ${m.error}`, width).forEach((l) => add({ t: l, color: color.bad }))
     if (m.stopNote) para(m.stopNote, { dim: true })
     else if (m.stopped) add({ t: '(stopped)', dim: true })
-    if (act) for (const segs of doneLines(act)) add(...segs)
+    if (act) for (const segs of doneLines(act, width)) add(...segs)
   }
   return L
 }
