@@ -81,7 +81,7 @@ async function prepare(p, kind) {
   const decision = policy.check(p, matter)
   if (!decision.allowed) {
     policy.audit({ provider: p.id, model: p.model || null, matter, call: kind, decision: 'blocked', reason: decision.reason })
-    const err = new Error(`Blocked by data policy: ${decision.reason}. Change it in Settings → Data policy, or switch to a local model.`)
+    const err = new Error(`Blocked by data policy: ${decision.reason}. Change it in Settings → Data policy (or "openlex policy"), or switch to a local model.`)
     err.code = 'POLICY_BLOCKED'
     throw err
   }

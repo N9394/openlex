@@ -55,6 +55,9 @@ The firm library is **not** exposed over MCP unless `~/.lexvault/mcp-expose.json
 ```bash
 cd sidecar && npm link        # installs `openlex`
 openlex status
+openlex use anthropic                     # or: use local · use openrouter:qwen/qwen3.5-9b · use azure --base-url …
+openlex key anthropic                     # your own API key, stored in the OS keychain
+openlex policy allow anthropic --regions eu --redact   # where client data may go (default: nowhere)
 openlex ask "Is the liability cap enforceable under Austrian law?" --file contract.docx
 openlex review --matter <id>              # checklist over the matter's documents
 openlex translate contract.docx --to en   # Word translation + review table + checks
