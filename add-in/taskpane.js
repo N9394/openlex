@@ -519,7 +519,8 @@
       const res = await fetch(SIDECAR + '/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, doc: currentDocMap(), lang, docId, text: docText }),
+        // interactive: this pane answers "may OpenLex …?" (permission cards).
+        body: JSON.stringify({ message: text, doc: currentDocMap(), lang, docId, text: docText, interactive: true }),
         signal: chatAbort.signal,
       })
       if (!res.ok) throw new Error(await res.text())
@@ -716,6 +717,17 @@
         }
         $('#chat').scrollTop = $('#chat').scrollHeight
         break
+      case 'permission':
+        // The engine waits: OpenLex wants to save a file, open a web page,
+        // run a command or use a connector. Nothing happens until answered.
+        dismissCompaction()
+        clearLive()
+        finalizeThinkCard()
+        addPermissionCard(evt)
+        break
+      case 'permission_result':
+        closePermissionCard(evt)
+        break
       case 'warning':
         // Firm rule (hooks: before_answer / on_suggestion) — shown under the answer.
         addMsg('warn', '⚠ ' + (evt.message || 'firm rule'))
@@ -741,6 +753,75 @@
         addMsg('err', evt.message || 'unknown engine error')
         break
     }
+  }
+
+  /* Permission card ("OpenLex wants to save a file"): the same four
+   * choices as the terminal app. Allow once is the highlighted default but
+   * never chosen by itself; no answer within a few minutes = not allowed. */
+  const PERMISSION_CHOICES = { once: 'Allow once', always_matter: 'Always allow (this matter)', always: 'Always allow', deny: 'Don\'t allow' }
+  function addPermissionCard(evt) {
+    const el = document.createElement('div')
+    el.className = 'msg permission'
+    el.dataset.id = evt.id
+    const title = document.createElement('div')
+    title.className = 'perm-title'
+    title.textContent = evt.title || 'OpenLex wants to use a tool'
+    const summary = document.createElement('div')
+    summary.className = 'perm-summary'
+    summary.textContent = evt.summary || evt.tool
+    el.append(title, summary)
+    const d = evt.detail || {}
+    const keys = ['path', 'url', 'command', 'query', 'format'].filter((k) => d[k] !== undefined && d[k] !== '').slice(0, 2)
+    for (const k of keys) {
+      const line = document.createElement('div')
+      line.className = 'perm-detail'
+      line.textContent = `${k}: ${typeof d[k] === 'string' ? d[k] : JSON.stringify(d[k])}`
+      el.appendChild(line)
+    }
+    const risk = document.createElement('div')
+    risk.className = 'perm-risk'
+    risk.textContent = `This ${evt.risk || 'changes something'}.${evt.firmRule ? ' Your firm asks for confirmation here.' : ''} Nothing happens until you choose.`
+    el.appendChild(risk)
+    const row = document.createElement('div')
+    row.className = 'perm-actions'
+    for (const c of (evt.choices || ['once', 'deny'])) {
+      if (!PERMISSION_CHOICES[c]) continue
+      const b = document.createElement('button')
+      b.type = 'button'
+      b.className = c === 'once' ? 'btn' : 'btn btn-ghost'
+      b.textContent = PERMISSION_CHOICES[c]
+      if (c === 'always' && evt.always) b.title = `Saves the rule "${evt.always}" (remove it in Settings or with: openlex permissions remove)`
+      b.addEventListener('click', async () => {
+        row.querySelectorAll('button').forEach((x) => { x.disabled = true })
+        try {
+          const r = await api('/api/permissions/answer', { method: 'POST', body: { id: evt.id, decision: c } })
+          settlePermissionCard(el, c === 'deny' ? 'Not allowed.' : c === 'once' ? 'Allowed once.' : `Allowed from now on${c === 'always_matter' ? ' for this matter' : ''}${r && r.saved ? ` (${r.saved})` : ''}.`)
+        } catch (err) {
+          settlePermissionCard(el, 'Could not send the answer: ' + err.message)
+        }
+      })
+      row.appendChild(b)
+    }
+    el.appendChild(row)
+    $('#chat').appendChild(el)
+    $('#chat').scrollTop = $('#chat').scrollHeight
+    const first = row.querySelector('button')
+    if (first) first.focus()
+  }
+  function settlePermissionCard(el, text) {
+    if (el.classList.contains('settled')) return
+    el.classList.add('settled')
+    const row = el.querySelector('.perm-actions')
+    if (row) row.remove()
+    const out = document.createElement('div')
+    out.className = 'perm-outcome'
+    out.textContent = text
+    el.appendChild(out)
+  }
+  function closePermissionCard(evt) {
+    const el = document.querySelector(`.msg.permission[data-id="${CSS.escape(evt.id)}"]`)
+    if (!el || el.classList.contains('settled')) return
+    settlePermissionCard(el, evt.by === 'timeout' ? 'No answer in time, so not allowed.' : evt.by === 'disconnect' ? 'Stopped, so not allowed.' : evt.decision === 'deny' ? 'Not allowed.' : 'Allowed.')
   }
 
   /* Law-sources card: which laws the agent found and used from the local

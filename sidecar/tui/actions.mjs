@@ -13,6 +13,7 @@ import { useAppCtx } from './context.mjs'
 import { friendly, log } from './api.mjs'
 import { shortPath } from './paths.mjs'
 import { ACTIONS } from './matter.mjs'
+import { PermissionPrompt, answeredLine } from './permission.mjs'
 
 const TITLES = { review: 'Checklist review', chronology: 'Chronology', translate: 'Translation', compare: 'Compare two versions', grid: 'Review grid', plan: 'Plan a larger task' }
 
@@ -37,6 +38,7 @@ export function Action({ kind, matterId }) {
   const [plan, setPlan] = useState(null)
   const [waiting, setWaiting] = useState(null)
   const [opened, setOpened] = useState('')
+  const [perm, setPerm] = useState(null) // "may OpenLex …?" while a plan step runs
   const abort = useRef(null)
 
   useEffect(() => {
@@ -57,7 +59,7 @@ export function Action({ kind, matterId }) {
   const line = (t) => setProgress((p) => [...p.slice(-30), t])
 
   useInput((_, k) => {
-    if (!k.escape) return
+    if (!k.escape || perm) return
     if (step === 'running') { abort.current?.abort(); return }
     ctx.back()
   })
@@ -125,9 +127,12 @@ export function Action({ kind, matterId }) {
     try {
       await ctx.api.runPlan(id, (ev) => {
         if (ev.type === 'progress' && ev.status) line(`${ev.title || ev.step}: ${ev.status}${ev.summary ? ` — ${ev.summary}` : ''}${ev.error ? ` — ${friendly(ev.error)}` : ''}`)
+        else if (ev.type === 'permission') setPerm(ev)
+        else if (ev.type === 'permission_result' && ev.by !== 'lawyer') setPerm((p) => { if (p?.id === ev.id) line(`No answer in time, so not allowed: ${p.summary}`); return p?.id === ev.id ? null : p })
         else if (ev.type === 'error') failed = friendly(ev.message)
         else if (ev.type === 'done') done = ev
       }, ac.signal)
+      setPerm(null)
       if (ac.signal.aborted) return ctx.back()
       if (failed) throw new Error(failed)
       if (done?.status === 'waiting' && done.waiting) { setWaiting(done.waiting); return setStep('checkpoint') }
@@ -215,6 +220,15 @@ export function Action({ kind, matterId }) {
           runPlan(plan.id)
         }} />
       <//><//>
+    <//>`
+  } else if (step === 'running' && perm) {
+    keys = `Enter choose ${sym.sep} ${perm.choices?.includes('always_matter') ? `a always (this matter) ${sym.sep} ` : ''}${perm.choices?.includes('always') ? `A always ${sym.sep} ` : ''}n or Esc don't allow`
+    body = html`<${Box} flexDirection="column">
+      ${progress.slice(-3).map((p, i) => html`<${Text} key=${i} dimColor wrap="truncate-end">  ${p}<//>`)}
+      <${PermissionPrompt} key=${perm.id} req=${perm} onAnswer=${async (d) => {
+        try { const r = await ctx.api.answerPermission(perm.id, d); line(answeredLine(perm, d, r?.saved)) } catch (err) { line(err.message) }
+        setPerm((p) => (p?.id === perm.id ? null : p))
+      }} />
     <//>`
   } else if (step === 'running') {
     keys = `Esc stop ${sym.sep} Ctrl+C quit`

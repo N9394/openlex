@@ -1,6 +1,6 @@
 /**
- * Settings: the AI model, your keys, where client data may go, and the
- * folder where OpenLex saves its work.
+ * Settings: the AI model, your keys, where client data may go, what
+ * OpenLex may do without asking, and the folder where it saves its work.
  */
 
 import { useEffect, useState } from 'react'
@@ -9,6 +9,7 @@ import { html, Frame, Menu, TextField, Field, Spinner, Note, sym } from './ui.mj
 import { useAppCtx } from './context.mjs'
 import { describeModel, describeRule, nameOf, friendly } from './api.mjs'
 import { cleanPath, completePath, shortPath } from './paths.mjs'
+import { PermissionRules } from './permission.mjs'
 
 export function Settings() {
   const ctx = useAppCtx()
@@ -45,6 +46,7 @@ export function Settings() {
       { value: 'model', label: 'AI model', hint: describeModel(ctx.info) },
       { value: 'keys', label: 'Your keys', hint: `${withKeys.filter((p) => p.hasKey).length} saved` },
       { value: 'data', label: 'Where client data may go', hint: describeRule(ctx.info.policy?.default) },
+      { value: 'perms', label: 'What OpenLex may do without asking', hint: 'saving files, web pages, commands, connectors' },
       { value: 'workspace', label: 'Folder for results', hint: shortPath(workspace) },
       { value: 'back', label: 'Back' },
     ]
@@ -94,6 +96,12 @@ export function Settings() {
         setMode('key')
         return { kind: 'ok', text: 'Key saved in this computer\'s keychain.' }
       })} />
+    <//>`
+  } else if (mode === 'perms') {
+    keys = `↑↓ move ${sym.sep} Enter remove ${sym.sep} Esc back`
+    body = html`<${Box} flexDirection="column">
+      ${note ? html`<${Note} kind=${note.kind}>${note.text}<//>` : null}
+      <${PermissionRules} api=${ctx.api} onNote=${setNote} />
     <//>`
   } else if (mode === 'workspace') {
     keys = `Enter save ${sym.sep} Tab complete ${sym.sep} Esc back`

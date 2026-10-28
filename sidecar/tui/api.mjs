@@ -94,7 +94,12 @@ export function createApi(c = client) {
     exportGrid: (id) => call('POST', '/api/grids/export', { id }),
     proposePlan: (goal, matterId) => call('POST', '/api/plans', { goal, matterId }),
     approvePlan: (id) => call('POST', '/api/plans/approve', { id }),
-    runPlan: (id, onEvent, signal) => stream('/api/plans/run', { id }, onEvent, signal),
+    runPlan: (id, onEvent, signal) => stream('/api/plans/run', { id, interactive: true }, onEvent, signal),
+    answerPermission: (id, decision) => call('POST', '/api/permissions/answer', { id, decision }),
+    permissions: () => call('GET', '/api/permissions'),
+    permissionRule: (action, pattern, matterId) => call('POST', '/api/permissions/rules', { action, pattern, ...(matterId ? { matterId } : {}) }),
+    clearConversation: (docId) => call('POST', '/api/session/clear', { docId }),
+    followHub: (onEvent, signal) => (c.followHub ? c.followHub(onEvent, signal) : Promise.resolve()),
     decidePlan: (id, stepId, decision) => call('POST', '/api/plans/decide', { id, stepId, decision }),
     getPlan: (id) => call('GET', `/api/plans/get${q({ id })}`),
   }

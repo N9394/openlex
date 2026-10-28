@@ -18,6 +18,10 @@ const DATA_DIR = process.env.OPENLEX_DATA_DIR || process.env.LEXVAULT_DATA_DIR |
 const REG = path.join(DATA_DIR, 'run', 'sidecar.json')
 const LOG_DIR = path.join(DATA_DIR, 'logs')
 
+// How this program names itself to the engine (hub events say who changed what).
+let clientName = 'cli'
+function setClientName(name) { clientName = String(name || 'cli') }
+
 function engine() {
   let reg
   try { reg = JSON.parse(fs.readFileSync(REG, 'utf8')) } catch {
@@ -32,7 +36,7 @@ function engine() {
  * One request to the engine. With onEvent the response is read as SSE and
  * every event is handed over as it arrives; `signal` aborts the request.
  */
-function request(method, pathname, body, { onEvent, signal } = {}) {
+function request(method, pathname, body, { onEvent, signal, headers = {} } = {}) {
   const { url, ca } = engine()
   const u = new URL(pathname, url)
   const lib = u.protocol === 'https:' ? https : http
@@ -42,7 +46,7 @@ function request(method, pathname, body, { onEvent, signal } = {}) {
       method,
       ca,
       signal,
-      headers: { Accept: onEvent ? 'text/event-stream' : 'application/json', ...(data ? { 'Content-Type': 'application/json', 'Content-Length': data.length } : {}) },
+      headers: { Accept: onEvent ? 'text/event-stream' : 'application/json', 'X-OpenLex-Client': clientName, ...headers, ...(data ? { 'Content-Type': 'application/json', 'Content-Length': data.length } : {}) },
     }, (res) => {
       res.setEncoding('utf8')
       if (onEvent) {
@@ -76,6 +80,22 @@ function request(method, pathname, body, { onEvent, signal } = {}) {
     if (data) req.write(data)
     req.end()
   })
+}
+
+/**
+ * Follow the hub (provider-changed, policy-changed, matter-changed,
+ * permissions-changed …) until `signal` aborts; reconnects after a drop.
+ * Needs the hub token (~/.lexvault/run/hub.token, same OS user).
+ */
+async function followHub(onEvent, signal) {
+  while (!signal?.aborted) {
+    try {
+      const token = fs.readFileSync(path.join(DATA_DIR, 'run', 'hub.token'), 'utf8').trim()
+      await request('GET', '/api/hub/events', null, { onEvent, signal, headers: { Authorization: `Bearer ${token}` } })
+    } catch { /* engine restarting or no token yet */ }
+    if (signal?.aborted) return
+    await new Promise((r) => { const t = setTimeout(r, 3000); t.unref?.(); signal?.addEventListener?.('abort', () => { clearTimeout(t); r() }, { once: true }) })
+  }
 }
 
 /** True when the registry points at a live engine that answers /health. */
@@ -126,4 +146,4 @@ function openPath(target) {
   })
 }
 
-module.exports = { DATA_DIR, REG, LOG_DIR, engine, request, engineUp, ensureEngine, stopEngine, openPath }
+module.exports = { DATA_DIR, REG, LOG_DIR, engine, request, followHub, setClientName, engineUp, ensureEngine, stopEngine, openPath }
