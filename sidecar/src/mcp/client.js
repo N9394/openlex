@@ -111,7 +111,7 @@ class StdioConnection {
     await this.request('initialize', {
       protocolVersion: PROTOCOL_VERSION,
       capabilities: {},
-      clientInfo: { name: 'openlex', version: '0.2.0' },
+      clientInfo: { name: 'openlex', version: '0.2.1' },
     }, 20000)
     this.notify('notifications/initialized', {})
     const r = await this.request('tools/list', {}, 20000)
