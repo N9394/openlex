@@ -9,7 +9,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { createRequire } from 'node:module'
 import { cleanPaths } from './paths.mjs'
-import { sym } from './ui.mjs'
+import { sym } from './theme.mjs'
 
 const require = createRequire(import.meta.url)
 

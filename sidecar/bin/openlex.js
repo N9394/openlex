@@ -5,14 +5,14 @@
  * Word add-in, Outlook and the desktop app use: same matters, data policy,
  * model, firm library and audit log).
  *
- *   openlex                            the terminal app (full screen; also `openlex tui`)
+ *   openlex [--folder DIR]             the terminal app (full screen; also `openlex tui`), working in this folder (or DIR)
  *   openlex status
  *   openlex providers                  model providers, which is active, which have a key
  *   openlex use PROVIDER[:MODEL] [--base-url URL] [--region R]   e.g. use anthropic, use local, use openrouter:qwen/qwen3.5-9b
  *   openlex key PROVIDER [--remove]    store an API key in the OS keychain (typed hidden, or piped in)
  *   openlex test [PROVIDER]            one tiny call to check the model works (the data policy applies)
  *   openlex policy [--matter ID] | policy local-only | policy allow P1,P2 [--regions eu] [--redact]   where client data may go
- *   openlex ask "Is the liability cap enforceable?" [--file contract.docx] [--matter ID] [--allow TOOL[,PATTERN…]] [--yes]
+ *   openlex ask "Is the liability cap enforceable?" [--file contract.docx] [--matter ID] [--folder DIR | --no-folder] [--allow TOOL[,PATTERN…]] [--yes]
  *   openlex permissions [list | allow PATTERN [--matter ID] | ask PATTERN | deny PATTERN | remove PATTERN [--matter ID]]   what OpenLex may do without asking
  *   openlex review   [--matter ID] [--playbook NAME] [--folder DIR]
  *   openlex chronology [--matter ID] [--folder DIR]
@@ -36,11 +36,19 @@
  *
  * Finds the engine via ~/.lexvault/run/sidecar.json (url + its localhost
  * certificate); --json prints raw events/results for scripting.
+ *
+ * Working folder: `openlex` and `openlex ask` work in the folder they are
+ * started in (--folder DIR another one, --no-folder none): OpenLex may read
+ * the files there and asks before it changes anything. The whole home
+ * folder is never used without asking. --ascii: plain ASCII symbols.
  */
 
 const fs = require('fs')
 const path = require('path')
-const { engine, request } = require('./client')
+const { engine, request, DATA_DIR } = require('./client')
+const { friendly } = require('./friendly')
+
+const esm = (f) => import(require('url').pathToFileURL(path.join(__dirname, '..', 'tui', f)).href)
 
 function parseArgs(argv) {
   const out = { _: [] }
@@ -50,7 +58,8 @@ function parseArgs(argv) {
     else if (a === '--json') out.json = true
     else if (a === '--force') out.force = true
     else if (a === '--clear') out.clear = true
-    else if (['--local', '--remove', '--redact', '--privileged', '--off', '--yes'].includes(a)) out[a.slice(2)] = true
+    else if (['--local', '--remove', '--redact', '--privileged', '--off', '--yes', '--ascii'].includes(a)) out[a.slice(2)] = true
+    else if (a === '--no-folder') out.folder = false
     else if (a === '--allow') out.allow = [...(out.allow || []), ...String(argv[++i] || '').split(',').map((x) => x.trim()).filter(Boolean)]
     else if (a === '--save' && (i + 1 >= argv.length || argv[i + 1].startsWith('--'))) out.save = true
     else if (a.startsWith('--')) out[a.slice(2)] = argv[++i]
@@ -90,18 +99,67 @@ async function readFileText(file) {
 
 async function runWorkflow(type, body, opts) {
   let result = null
+  const printer = opts.json ? null : (await esm('cli.mjs')).workPrinter(type)
   await request('POST', '/api/workflows/run', { type, ...body }, {
     onEvent: (ev) => {
       if (opts.json) { console.log(JSON.stringify(ev)); return }
-      if (ev.type === 'progress') process.stderr.write(`  ${ev.index ? `${ev.index}/${ev.total} ` : ''}${ev.name || ev.step || ''}\n`)
-      else if (ev.type === 'error') { process.exitCode = 1; console.error(`error: ${ev.message}`) }
+      printer.onEvent(ev)
+      if (ev.type === 'error') process.exitCode = 1
       else if (ev.type === 'done') result = ev
     },
   })
-  if (result && !opts.json) {
-    console.log(Object.entries(result.stats || {}).filter(([, v]) => typeof v !== 'object').map(([k, v]) => `${k}: ${v}`).join(' · '))
-    for (const f of result.files || []) console.log(f)
+  if (!opts.json) {
+    printer.finish(result)
+    for (const f of result?.files || []) console.log(f)
   }
+}
+
+/** The small preferences shared with the terminal app (tui.json): which folders were already used. */
+const PREFS = path.join(DATA_DIR, 'tui.json')
+const loadPrefs = () => { try { return JSON.parse(fs.readFileSync(PREFS, 'utf8')) } catch { return {} } }
+function savePrefs(patch) { try { fs.mkdirSync(DATA_DIR, { recursive: true }); fs.writeFileSync(PREFS, JSON.stringify({ ...loadPrefs(), ...patch }, null, 2)) } catch { /* not essential */ } }
+
+/** One yes/no question in the terminal (no = default). */
+async function confirm(question) {
+  if (!process.stdin.isTTY || !process.stderr.isTTY) return false
+  const rl = require('readline').createInterface({ input: process.stdin, output: process.stderr })
+  const reply = await new Promise((resolve) => rl.question(`${question} [y/N] `, (x) => { rl.close(); resolve(String(x).trim().toLowerCase()) }))
+  return reply === 'y' || reply === 'yes'
+}
+
+/**
+ * The working folder of a command: --folder DIR, else (when `implicit`)
+ * the current folder. Never the whole home folder without asking; a folder
+ * used for the first time gets a one-line notice. Returns the request
+ * fields ({ folder, folderConfirmed? }) or {}.
+ */
+async function workingFolder(a, { implicit = true } = {}) {
+  if (a.folder === false) return {}
+  const explicit = typeof a.folder === 'string'
+  if (!explicit && !implicit) return {}
+  const dir = path.resolve(explicit ? a.folder : process.cwd())
+  const info = await request('GET', `/api/folder?path=${encodeURIComponent(dir)}`)
+  if (!info.ok) {
+    if (explicit) throw new Error(info.error)
+    return {}
+  }
+  const known = (loadPrefs().folders || {})[info.path]
+  if (known === 'forbidden') { if (explicit) process.stderr.write(`You asked OpenLex not to read ${info.short}; working without a folder.\n`); return {} }
+  if (info.broad) {
+    const whole = info.broad === 'home' ? 'your whole home folder' : 'the whole computer'
+    if (!explicit) {
+      if (!a.json) process.stderr.write(`(Not working in ${whole}. To work with the files of one client: cd into their folder, or use --folder DIR.)\n`)
+      return {}
+    }
+    process.stderr.write(`! That's ${whole} (${info.short}). OpenLex would be able to read every document in it.\n`)
+    if (!(await confirm('Work in it anyway?'))) throw new Error(`Not working in ${whole}. Choose the folder of one client or matter with --folder.`)
+    return { folder: info.path, folderConfirmed: true }
+  }
+  if (known !== 'ok' && !a.json) {
+    process.stderr.write(`OpenLex can read the files in this folder: ${info.short}${info.documents ? ` (${info.documents} document${info.documents === 1 ? '' : 's'})` : ''}. It asks before it saves, renames or deletes anything here. (To forbid it: openlex permissions deny '*:${info.short}/**')\n`)
+    savePrefs({ folders: { ...(loadPrefs().folders || {}), [info.path]: 'ok' } })
+  }
+  return { folder: info.path }
 }
 
 /**
@@ -110,16 +168,16 @@ async function runWorkflow(type, body, opts) {
  */
 async function askPermission(ev) {
   const readline = require('readline')
-  const always = ev.choices.includes('always_matter') ? 'always_matter' : ev.choices.includes('always') ? 'always' : null
-  const keys = `[y]es once${always ? ` / [a]lways${always === 'always_matter' ? ' (this matter)' : ''}` : ''} / [n]o`
+  const always = ev.choices.includes('always_matter') ? 'always_matter' : ev.choices.includes('always_folder') ? 'always_folder' : ev.choices.includes('always') ? 'always' : null
+  const keys = `[y]es once${always ? ` / [a]lways${always === 'always_matter' ? ' (this matter)' : always === 'always_folder' ? ' (this folder)' : ''}` : ''} / [n]o`
   const detail = ev.tool === 'run_bash' ? '' : Object.entries(ev.detail || {}).filter(([k]) => k !== 'content').map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`).join(' · ')
-  process.stderr.write(`\n${ev.title} (${ev.risk})\n  ${ev.summary}${detail ? `\n  ${detail.slice(0, 200)}` : ''}${ev.firmRule ? '\n  (your firm asks for confirmation here)' : ''}\n`)
+  process.stderr.write(`\n${ev.title} (${ev.risk})\n  ${ev.summary}${detail && !ev.folder ? `\n  ${detail.slice(0, 200)}` : ''}${ev.firmRule ? '\n  (your firm asks for confirmation here)' : ''}\n`)
   const rl = readline.createInterface({ input: process.stdin, output: process.stderr })
   const reply = await new Promise((resolve) => rl.question(`  Allow? ${keys}: `, (x) => { rl.close(); resolve(String(x).trim().toLowerCase()) }))
   const decision = reply === '' || reply === 'y' || reply === 'yes' ? 'once' : (reply === 'a' || reply === 'always') && always ? always : 'deny'
   const r = await request('POST', '/api/permissions/answer', { id: ev.id, decision }).catch((err) => ({ ok: false, error: err.message }))
   if (!r.ok) process.stderr.write(`  (too late: ${r.error})\n`)
-  else process.stderr.write(decision === 'deny' ? '  not allowed\n' : `  allowed${r.saved ? ` — saved: ${r.saved}` : ''}\n`)
+  else process.stderr.write(decision === 'deny' ? '  not allowed\n' : `  allowed${r.saved ? ` — from now on without asking: ${r.saved}` : ''}\n`)
 }
 
 function printPermissions(r) {
@@ -140,18 +198,23 @@ function printPermissions(r) {
 const USAGE = (() => { const lines = fs.readFileSync(__filename, 'utf8').split('\n'); const end = lines.findIndex((l) => l.includes('Finds the engine')) - 1; return lines.slice(3, end).map((l) => l.replace(/^ \* ?/, '')).join('\n') })()
 
 /** The terminal app (tui/, ES modules: Ink + React) loaded on demand. */
-async function startTui() {
+async function startTui(a = {}) {
   if (!process.stdin.isTTY || !process.stdout.isTTY) throw new Error('the terminal app needs an interactive terminal — run `openlex help` for the commands')
-  const { run } = await import(require('url').pathToFileURL(path.join(__dirname, '..', 'tui', 'index.mjs')).href)
-  await run()
+  const { run } = await esm('index.mjs')
+  // The working folder: --folder DIR, else the folder the app was started in (checked in the app).
+  const folder = a.folder === false ? null : path.resolve(typeof a.folder === 'string' ? a.folder : process.cwd())
+  await run({ folder })
 }
 
 async function main() {
-  const [cmd, ...rest] = process.argv.slice(2)
+  const argv = process.argv.slice(2)
+  // `openlex --folder DIR` (the app) and `openlex --ascii`: options without a command.
+  const [cmd, ...rest] = argv[0] && argv[0].startsWith('--') ? [undefined, ...argv] : argv
   const a = parseArgs(rest)
+  if (a.ascii) process.env.OPENLEX_ASCII = '1'
   switch (cmd) {
     case 'tui':
-      return startTui()
+      return startTui(a)
     case 'serve':
       // Run until stopped: without this the engine shuts down when no Word,
       // Outlook or desktop app is attached (their idle rule), which is never
@@ -230,30 +293,32 @@ async function main() {
     }
     case 'ask': {
       const message = a._.join(' ').trim()
-      if (!message) throw new Error('usage: openlex ask "question" [--file doc] [--matter ID]')
+      if (!message) throw new Error('usage: openlex ask "question" [--file doc] [--matter ID] [--folder DIR]')
       const text = a.file ? await readFileText(a.file) : ''
       const docId = `cli:${a.file ? path.resolve(a.file) : 'scratch'}`
-      let wroteText = false
+      const where = await workingFolder(a)
+      // Plain sentences, a spinner while it works, and where the data went (tui/cli.mjs).
+      const printer = a.json ? null : (await esm('cli.mjs')).askPrinter()
       // Only a person at a terminal can answer "may OpenLex …?"; scripts
       // (--json, pipes) fail closed unless --allow / --yes say otherwise.
       const interactive = !a.json && !!process.stdin.isTTY && !!process.stderr.isTTY
-      await request('POST', '/api/chat', { message, text, docId, matterId: a.matter, interactive, ...(a.allow ? { allow: a.allow } : {}), ...(a.yes ? { yes: true } : {}) }, {
+      await request('POST', '/api/chat', { message, text, docId, matterId: a.matter, interactive, ...where, ...(a.allow ? { allow: a.allow } : {}), ...(a.yes ? { yes: true } : {}) }, {
         onEvent: (ev) => {
           if (a.json) { console.log(JSON.stringify(ev)); return }
-          if (ev.type === 'permission') { askPermission(ev).catch((err) => console.error(`error: ${err.message}`)); return }
-          if (ev.type === 'text') { process.stdout.write(ev.text); wroteText = true }
-          else if (ev.type === 'step') process.stderr.write(`  · ${ev.text}\n`)
-          else if (ev.type === 'law') for (const s of ev.sources || []) process.stderr.write(`  § ${s.source_name || s.title}\n`)
-          else if (ev.type === 'suggestion') console.log(`\n[${ev.suggestion.severity}] ${ev.suggestion.summary}${ev.suggestion.proposed_text ? `\n  → ${ev.suggestion.proposed_text}` : ''}`)
-          else if (ev.type === 'error') { process.exitCode = 1; console.error(`error: ${ev.message}`) }
+          if (ev.type === 'permission') { printer.pause(); askPermission(ev).then(() => printer.resume()).catch((err) => console.error(`openlex: ${friendly(err)}`)); return }
+          if (ev.type === 'text') { printer.wrote(); process.stdout.write(ev.text); return }
+          printer.onEvent(ev)
+          if (ev.type === 'suggestion') console.log(`\n[${ev.suggestion.severity}] ${ev.suggestion.summary}${ev.suggestion.proposed_text ? `\n  → ${ev.suggestion.proposed_text}` : ''}`)
+          else if (ev.type === 'error') process.exitCode = 1
         },
       })
-      if (wroteText && !a.json) process.stdout.write('\n')
+      if (!a.json) printer.finish()
       return
     }
     case 'review':
     case 'chronology':
-      return runWorkflow(cmd, { matterId: a.matter, playbook: a.playbook, folder: a.folder && path.resolve(a.folder) }, a)
+      // The documents: the matter's, plus --folder DIR (its files are read, nothing there is changed).
+      return runWorkflow(cmd, { matterId: a.matter, playbook: a.playbook, ...(await workingFolder(a, { implicit: false })) }, a)
     case 'translate':
       if (!a._[0] || !a.to) throw new Error('usage: openlex translate FILE --to en [--glossary NAME]')
       return runWorkflow('translate', { matterId: a.matter, file: path.resolve(a._[0]), target: a.to, glossary: a.glossary }, a)
@@ -566,10 +631,11 @@ async function main() {
     }
     default:
       // No arguments in a terminal: the full-screen app. Piped/scripted: usage.
-      if (!cmd && process.stdin.isTTY && process.stdout.isTTY) return startTui()
+      if (!cmd && process.stdin.isTTY && process.stdout.isTTY) return startTui(a)
       console.log(USAGE)
       if (cmd && cmd !== 'help' && cmd !== '--help') process.exitCode = 2
   }
 }
 
-main().catch((err) => { console.error(`openlex: ${err.message}`); process.exitCode = 1 })
+// Errors in plain words (bin/friendly.js), never a stack trace; usage lines are shown as they are.
+main().catch((err) => { console.error(`openlex: ${/^usage:/.test(err.message) ? err.message : friendly(err)}`); process.exitCode = 1 })

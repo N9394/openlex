@@ -87,6 +87,17 @@ const engine = http.createServer((req, res) => {
       case 'GET /api/workflows/playbooks': return json({ playbooks: [{ name: '', title: 'Standard contract review', builtIn: true }, { name: 'spa', title: 'Share purchase checklist', checks: 14, firm: true }] })
       case 'GET /api/workspace': return json({ base: path.join(DATA, 'workspace') })
       case 'POST /api/library/folders': return json({ ok: true })
+      case 'GET /api/folder': {
+        // As the engine does it (folder.js check), with the documents counted.
+        const fo = require('../src/folder')
+        const c = fo.check(new URL(req.url, 'http://x').searchParams.get('path'))
+        if (!c.ok) return json({ ok: false, error: c.error })
+        return json({ ok: true, path: c.path, short: c.short, broad: c.broad, documents: c.broad ? null : fo.documents(c.path).count, truncated: false })
+      }
+      case 'POST /api/folder/save':
+        if (!body.decision) return json({ ask: { type: 'permission', id: 'save', tool: 'write_file', title: 'OpenLex wants to save a file', summary: `Save ${body.path} in this folder: ~/Clients/Alpine`, risk: 'writes a file', choices: ['once', 'always_folder', 'deny'], folder: '~/Clients/Alpine' } })
+        state.saved = body
+        return json({ saved: `/x/${body.path}`, short: `~/Clients/Alpine/${body.path}` })
       case 'POST /api/chat':
         // A scripted answer (transparency tests): its events, then held open until finishChat().
         if (state.chatScript) {
@@ -272,7 +283,8 @@ test('home lists matters with the privileged marker and the status bar', async (
   assert.match(f, /Quick question \(no matter\)/)
   assert.match(f, /Internal investigation\s+\[privileged\]/)
   assert.match(f, /Matter: none/)
-  assert.match(f, /Ctrl\+C quit/)
+  assert.match(f, /N new matter · Q quick question · \/ filter/)
+  assert.match(f, /\? help/)
   capture('home', f)
   r.unmount()
 })
@@ -305,7 +317,7 @@ test('matter chat: streamed answer, sources, suggestion card; "as researcher:" p
   await waitFor(r, 'Working as: Drafter')
   assert.deepStrictEqual(posted('/api/matters/update').at(-1).body, { id: 'm_1', patch: { agent: 'drafter' } })
   await press(r, 'Redraft clause 7', 'enter')
-  await waitFor(r, 'You: Redraft clause 7')
+  await waitFor(r, 'as Drafter')
   await sleep(50)
   assert.strictEqual(posted('/api/chat').at(-1).body.agent, 'drafter')
   r.unmount()
@@ -325,12 +337,14 @@ test('privileged toggle: on at once, off only after confirming', async () => {
   const before = posted('/api/matters/update').length
   await press(r, '5')
   f = await waitFor(r, 'Turn privileged off?')
-  await press(r, 'enter') // "No, keep it privileged" is first
+  // A severe change: it needs "yes" typed; anything else keeps it privileged.
+  await press(r, 'ok', 'enter')
+  await waitFor(r, 'Still privileged.')
   await waitFor(r, 'Privileged — keep on this computer: On')
   assert.strictEqual(posted('/api/matters/update').length, before)
   await press(r, '5')
   await waitFor(r, 'Turn privileged off?')
-  await press(r, 'down', 'enter')
+  await press(r, 'yes', 'enter')
   await waitFor(r, 'Privileged — keep on this computer: Off')
   assert.deepStrictEqual(posted('/api/matters/update').at(-1).body, { id: 'm_1', patch: { privileged: false } })
   r.unmount()
@@ -437,14 +451,17 @@ test('help with "?", quick question works without a matter', async () => {
   const r = show(h(App))
   await waitFor(r, 'Alpine share deal')
   await press(r, '?')
-  let f = await waitFor(r, 'Add documents:')
-  assert.match(f, /Esc\s+go back one step/)
+  let f = await waitFor(r, 'Work with files')
+  capture('help', f)
+  assert.match(f, /Esc\s+stop the answer/)
+  assert.match(f, /\/folder\s+the folder OpenLex works in/)
   await press(r, 'esc')
   await waitFor(r, 'Quick question (no matter)')
   await press(r, 'down', 'enter')
   await waitFor(r, 'Ask a legal question.')
   await press(r, 'Is ? typed, not help', 'enter')
-  f = await waitFor(r, 'You: Is ? typed, not help')
+  f = await waitFor(r, 'enforceable only if reasonable')
+  assert.strictEqual(posted('/api/chat').at(-1).body.message, 'Is ? typed, not help')
   assert.strictEqual(posted('/api/chat').at(-1).body.matterId, undefined)
   r.unmount()
 })
@@ -491,6 +508,8 @@ async function openMatterChat(r) {
   await press(r, 'down', 'down', 'enter')
   await waitFor(r, 'Ask a question')
   await press(r, 'enter')
+  await waitFor(r, 'Tab to change')
+  await press(r, '\u0015') // Ctrl+U: text kept from an earlier test (drafts survive going back)
   await waitFor(r, 'Type your question')
 }
 const answered = () => posted('/api/permissions/answer').map((x) => x.body.decision)
@@ -510,13 +529,13 @@ test('permission prompt: plain words over the chat; Enter = allow once, a = this
   let f = await waitFor(r, 'OpenLex wants to save a file')
   capture('permission prompt', f)
   assert.strictEqual(posted('/api/chat').at(-1).body.interactive, true, 'the TUI says it can answer')
-  assert.match(f, /Save obligations\.csv in Alpine\//)
+  assert.match(flat(f), /OpenLex wants to save obligations\.csv in Alpine\/\. Allow\?/)
   assert.match(f, /path: Alpine\/obligations\.csv/)
-  assert.match(f, /This writes a file\. Nothing happens until you choose\./)
-  assert.match(f, /▸ Allow once\s+Enter/, 'the default is visible')
-  assert.match(f, /Always allow \(this matter\)\s+a/)
-  assert.match(f, /Always allow\s+A/)
-  assert.match(f, /Don't allow\s+n \/ Esc/)
+  assert.match(flat(f), /This writes a file\. Nothing happens until you choose\./)
+  assert.match(f, /▸ 1 Allow once\s+Enter/, 'the default is visible, numbered')
+  assert.match(f, /2 Always allow \(this matter\)\s+a/)
+  assert.match(f, /3 Always allow\s+A/)
+  assert.match(f, /4 Don't allow\s+n \/ Esc/)
   await sleep(150)
   assert.strictEqual(answered().length, 0, 'never answered by itself')
   await press(r, 'enter')
@@ -611,7 +630,7 @@ test('chat commands: "/" shows hints; /model, /key, /data, /as, /privileged, /pe
   assert.deepStrictEqual(posted('/api/matters/update').at(-1).body, { id: 'm_1', patch: { privileged: true } })
   await press(r, '/privileged off', 'enter')
   await waitFor(r, 'Turn privileged off?')
-  await press(r, 'down', 'enter')
+  await press(r, 'yes', 'enter')
   await waitFor(r, 'No longer privileged')
   assert.deepStrictEqual(posted('/api/matters/update').at(-1).body, { id: 'm_1', patch: { privileged: false } })
   await waitFor(r, 'Type your question')
@@ -829,11 +848,7 @@ test('explain: progress and time left for 12 documents', () => {
 
 const scriptStep = (tool, detail) => ({ type: 'step', text: `tool: ${tool}`, kind: 'tool', tool, detail })
 async function openChat(r) {
-  await waitFor(r, 'Alpine share deal')
-  await press(r, 'down', 'down', 'enter')
-  await waitFor(r, 'Ask a question')
-  await press(r, 'enter')
-  await waitFor(r, 'Type your question')
+  await openMatterChat(r)
 }
 
 test('chat in progress (AI on this computer): numbered steps, times, data line, how to stop; then "Based on" and Ctrl+B', async () => {
@@ -1033,8 +1048,8 @@ test('files dropped into the question: chips, Backspace removes, sent with the q
   await press(r, `\u001b[200~'${a}' '${b}'\u001b[201~`)
   let f = await waitFor(r, 'All 2 files are included in this question.')
   capture('two files dropped into the question', f)
-  assert.match(f, /📎 SPA draft 3\.txt · 56 bytes/)
-  assert.match(f, /📎 Side letter\.txt · 35 bytes/)
+  assert.match(f, /\+ SPA draft 3\.txt · 56 bytes/)
+  assert.match(f, /\+ Side letter\.txt · 35 bytes/)
   assert.match(f, /Type your question about the file/)
   await press(r, '\u007f') // Backspace in the empty field: the last chip goes
   f = await waitFor(r, 'Your question will be about SPA draft 3.txt.')

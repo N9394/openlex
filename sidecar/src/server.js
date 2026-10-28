@@ -1260,6 +1260,33 @@ async function handle(req, res) {
       const docs = c.broad ? { count: null, truncated: true } : fo.documents(c.path)
       return sendJson(res, 200, { ok: true, path: c.path, short: c.short, broad: c.broad, documents: docs.count, truncated: docs.truncated })
     }
+    // A front end saves something itself (the terminal app's "save the
+    // answer"): the same rules as the agent's write_file. No decision yet →
+    // { ask } with the question to show; then again with decision.
+    if (req.method === 'POST' && p === '/api/folder/save') {
+      const body = await readBody(req, 20)
+      const fo = require('./folder')
+      const perms = require('./permissions')
+      require('./workspace').setBase(require('./agent-config').load().workspace)
+      let dir
+      try { dir = folderFor(body) } catch (err) { return sendJson(res, 400, { error: err.message }) }
+      return fo.run(dir, () => {
+        const args = { path: String(body.path || ''), content: '' }
+        const ev = perms.evaluate('write_file', args, { matterId: body.matterId || null })
+        const summary = perms.summarize('write_file', args)
+        if (ev.decision === 'deny') return sendJson(res, 403, { error: ev.reason || `Not allowed by ${ev.source === 'firm' ? 'the firm\'s' : 'your'} permission rules: ${summary}` })
+        if (ev.decision === 'ask' && !['once', 'always_folder'].includes(body.decision)) {
+          const inFolder = ev.area === 'folder' && ev.root
+          return sendJson(res, 200, { ask: { type: 'permission', id: 'save', tool: 'write_file', title: 'OpenLex wants to save a file', summary, risk: 'writes a file', detail: { path: args.path }, choices: inFolder && ev.canAlways ? ['once', 'always_folder', 'deny'] : ['once', 'deny'], ...(inFolder ? { folder: fo.tilde(ev.root), alwaysFolder: `write_file:${fo.tilde(ev.root)}/**` } : {}) } })
+        }
+        if (body.decision === 'always_folder' && ev.area === 'folder' && ev.canAlways) perms.addRule('allow', `write_file:${fo.tilde(ev.root)}/**`)
+        try {
+          const loc = fo.write(args.path, String(body.content ?? ''))
+          require('./policy').audit({ provider: 'permissions', model: null, call: 'write_file', decision: 'allowed', by: ev.decision === 'allow' ? `rule:${ev.source}` : 'lawyer', client: clientOf(req) })
+          return sendJson(res, 200, { saved: loc.abs, short: fo.tilde(loc.abs) })
+        } catch (err) { return sendJson(res, 400, { error: err.message }) }
+      })
+    }
     if (req.method === 'POST' && p === '/api/workspace/reveal') {
       const body = await readBody(req).catch(() => ({}))
       const ws = require('./workspace')

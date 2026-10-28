@@ -16,7 +16,7 @@
  * sentence, never the raw text.
  */
 
-import { sym, color } from './ui.mjs'
+import { sym, color } from './theme.mjs'
 import { friendly, NAMES } from './api.mjs'
 
 /** The time source (tests set a fake one to show "about 2 minutes left"). */
@@ -49,6 +49,8 @@ export function clauseName(c) {
 }
 
 const fileWord = (d) => (d?.file ? `“${clip(d.file, 40)}”` : 'a file')
+/** Where a file tool works: the folder the lawyer is working in, or OpenLex's own files folder. */
+const placeWord = (d) => (d?.where === 'folder' ? 'in this folder' : 'in your files folder')
 const FORMATS = { csv: 'a spreadsheet (CSV)', xml: 'an XML', json: 'a data', md: 'a text', dat: 'a data', ics: 'a calendar', pdf: 'a PDF', docx: 'a Word', xlsx: 'an Excel' }
 
 /**
@@ -71,11 +73,13 @@ export const TOOL_WORDS = {
   find_clause: () => ({ text: 'Looking through your firm\'s precedents' }),
   search_sources: (d) => ({ text: `Searching your firm's connected databases${quoted(d.query, 40)}` }),
   search_docs: (d) => ({ text: `Searching the matter's documents${quoted(d.query, 40)}` }),
-  search_local_files: (d) => ({ text: `Searching your files folder${quoted(d.query, 40)}` }),
-  read_file: (d) => ({ text: `Reading ${fileWord(d)} from your files folder` }),
-  list_directory: () => ({ text: 'Looking at what is in your files folder' }),
-  write_file: (d) => ({ text: `Saving ${fileWord(d)} in your files folder` }),
-  append_file: (d) => ({ text: `Adding to ${fileWord(d)} in your files folder` }),
+  search_local_files: (d) => ({ text: `Searching the files ${placeWord(d)}${quoted(d.query, 40)}` }),
+  read_file: (d) => ({ text: `Reading ${fileWord(d)} ${placeWord(d)}` }),
+  list_directory: (d) => ({ text: `Looking at what is ${placeWord(d)}` }),
+  write_file: (d) => ({ text: `Saving ${fileWord(d)} ${placeWord(d)}` }),
+  append_file: (d) => ({ text: `Adding to ${fileWord(d)} ${placeWord(d)}` }),
+  delete_file: (d) => ({ text: `Deleting ${fileWord(d)} ${placeWord(d)} (a copy is kept)` }),
+  rename_file: (d) => ({ text: `Renaming ${fileWord(d)}${d.to ? ` to “${clip(d.to, 40)}”` : ''} ${placeWord(d)}` }),
   export_document: (d) => ({ text: `Saving the result as ${FORMATS[String(d.format || '').toLowerCase()] || 'a'} file` }),
   sync_calendar: () => ({ text: 'Putting the deadlines into a calendar file' }),
   risk_scorecard: () => ({ text: 'Scoring the risks in the document' }),
@@ -121,8 +125,8 @@ export function explainStep(ev = {}) {
   let tool = ev.tool
   const text = String(ev.text || '')
   if (!kind) {
-    const m = /^(tool|blocked|declined|not allowed|failed):\s*(\S+)/.exec(text)
-    if (m) { kind = { tool: 'tool', blocked: 'blocked', declined: 'declined', 'not allowed': 'not_allowed', failed: 'tool_failed' }[m[1]]; tool = tool || m[2] }
+    const m = /^(tool|blocked|declined|not allowed|failed|outside):\s*(\S+)/.exec(text)
+    if (m) { kind = { tool: 'tool', blocked: 'blocked', declined: 'declined', 'not allowed': 'not_allowed', failed: 'tool_failed', outside: 'outside' }[m[1]]; tool = tool || m[2] }
     else if (/^writing… \(truncated|retrying|rewrite must land/.test(text)) kind = 'retry'
     else if (/^writing/.test(text)) kind = 'writing'
     else if (/^judge: verifying/.test(text)) kind = 'judge'
@@ -147,6 +151,7 @@ export function explainStep(ev = {}) {
     case 'blocked': return { text: `Not done — your firm's rules don't allow it: ${lower(explainTool(tool, d).text || 'this step')}`, failed: true }
     case 'not_allowed': return { text: `Not done — not allowed without asking you: ${lower(explainTool(tool, d).text || 'this step')}`, failed: true }
     case 'declined': return { text: `Not done — you said no: ${lower(explainTool(tool, d).text || 'this step')}`, failed: true }
+    case 'outside': return { text: `Not done — ${d.file ? `“${clip(d.file, 40)}”` : 'that file'} is outside the folder you are working in (never allowed)`, failed: true }
     case 'tool_failed': return { text: failedSentence(tool, d, ev.offline), failed: true }
     case 'model_unavailable': return { text: 'The AI stopped responding; writing the answer with what was found so far', failed: true, phase: 'writing' }
     case 'law_search': case 'dropped': case 'filter': return { hide: true }
@@ -495,8 +500,8 @@ export function workLines(w, { now = clock.now(), width = 78, maxItems = 7, stop
   if (w.total) {
     const barW = Math.max(Math.min(width - 10, 40), 10)
     const fill = Math.round((w.done / w.total) * barW)
-    const full = sym.ok === '+' ? '#' : '█'
-    const empty = sym.ok === '+' ? '-' : '░'
+    const full = sym.full
+    const empty = sym.empty
     L.push([{ t: full.repeat(fill), color: color.accent }, { t: empty.repeat(barW - fill), dim: true }, { t: ` ${Math.round((w.done / w.total) * 100)}%`, dim: true }])
   }
   if (w.kind !== 'translate' && w.items.length) {

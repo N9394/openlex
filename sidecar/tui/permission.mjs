@@ -3,20 +3,26 @@
  * action while the engine waits for the lawyer's answer, and the list of
  * what OpenLex may do without asking (Settings, and /permissions in chat).
  *
- * The prompt never answers by itself: Enter takes the highlighted choice
- * ("Allow once" to start with), a = always for this matter, A = always,
- * n or Esc = don't allow. No answer within a few minutes = not allowed
- * (decided by the engine).
+ * One sentence with the verb in bold ("OpenLex wants to save
+ * obligations.csv in this folder: ~/Clients/Alpine. Allow?"), the choices
+ * numbered: 1 Allow once (always the one highlighted at first — never an
+ * "Always …"), then the "always" choices, then Don't allow. Enter takes the
+ * highlighted one, 1–4 pick directly, a = always (this matter / this
+ * folder), A = always everywhere, n or Esc = don't allow. A short bell
+ * rings when it opens (Settings → Accessibility turns it off). It never
+ * answers by itself; no answer within a few minutes = not allowed (decided
+ * by the engine).
  */
 
 import { useContext, useEffect, useState } from 'react'
-import { Box, Text, useInput } from 'ink'
-import { html, Menu, Spinner, Note, color, sym, BORDER } from './ui.mjs'
+import { Box, Text, useInput, useStdout } from 'ink'
+import { html, Menu, Spinner, Note, color, sym, look } from './ui.mjs'
 import { TypingContext } from './context.mjs'
 
 const LABELS = {
   once: { label: 'Allow once', key: 'Enter' },
   always_matter: { label: 'Always allow (this matter)', key: 'a' },
+  always_folder: { label: 'Always allow (this folder)', key: 'a' },
   always: { label: 'Always allow', key: 'A' },
   deny: { label: 'Don\'t allow', key: 'n / Esc' },
 }
@@ -24,14 +30,24 @@ const LABELS = {
 /** The one or two arguments worth showing (never the full content of a file). */
 function keyDetail(req) {
   const d = req.detail || {}
-  const pick = ['path', 'url', 'command', 'query', 'format', 'matter', 'directory'].filter((k) => d[k] !== undefined && d[k] !== '').slice(0, 2)
+  const pick = ['url', 'command', 'query', 'format', 'matter', 'directory', ...(req.folder ? [] : ['path'])].filter((k) => d[k] !== undefined && d[k] !== '').slice(0, 2)
   const out = pick.map((k) => `${k}: ${typeof d[k] === 'string' ? d[k] : JSON.stringify(d[k])}`)
   if (typeof d.content === 'string') out.push(`content: ${d.content.length > 60 ? `${d.content.slice(0, 60).replace(/\s+/g, ' ')}…` : d.content.replace(/\s+/g, ' ')}`)
   return out.slice(0, 2)
 }
 
+/** "Save obligations.csv in …" → { verb: 'save', rest: 'obligations.csv in …' } (the verb shown in bold). */
+export function questionParts(req) {
+  const s = String(req.summary || 'use a tool').trim()
+  const two = /^(Add to|Look up|Read the web page|Save the web page)\b\s*(.*)$/i.exec(s)
+  if (two) return { verb: two[1].toLowerCase(), rest: two[2] }
+  const one = /^(\S+)\s*(.*)$/.exec(s)
+  return { verb: one[1].toLowerCase().replace(/:$/, ''), rest: one[2] }
+}
+
 const ACTS = {
   write_file: 'saving files', append_file: 'adding to files', export_document: 'saving results as files', sync_calendar: 'writing calendar files',
+  delete_file: 'deleting files', rename_file: 'renaming files', read_file: 'reading files', list_directory: 'listing files', search_local_files: 'searching files',
   web_fetch: 'opening web pages', web_save: 'saving web pages', download_to_matter: 'downloading files', run_bash: 'running programs on this computer',
 }
 
@@ -39,6 +55,8 @@ const ACTS = {
 export function patternWords(pattern) {
   const p = String(pattern || '')
   if (p === '*') return 'everything'
+  // "*:~/Clients/Alpine/**": anything in that folder.
+  if (/^\*:/.test(p)) return `anything in ${p.slice(2).replace(/\/?\*\*?$/, '/')}`
   const mcp = /^mcp:([^:]+)(?::(.*))?$/.exec(p)
   if (mcp) return `using your connector “${mcp[1]}”${mcp[2] && mcp[2] !== '*' ? ` (${mcp[2]})` : ''}`
   const i = p.indexOf(':')
@@ -57,30 +75,37 @@ const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1)
 export function answeredLine(req, decision, saved) {
   if (decision === 'deny') return `Not allowed: ${req.summary}`
   if (decision === 'once') return `Allowed once: ${req.summary}`
+  if (decision === 'always_folder') return `Allowed in this folder from now on: ${patternWords(saved || req.alwaysFolder || req.tool)} (remove it with /permissions)`
   return `Allowed${decision === 'always_matter' ? ' for this matter' : ''} from now on: ${patternWords(saved || req.always || req.tool)} (remove it with /permissions)`
 }
 
 export function PermissionPrompt({ req, onAnswer }) {
   const choices = (req.choices || ['once', 'deny']).filter((c) => LABELS[c])
   const [sent, setSent] = useState(false)
+  const { stdout } = useStdout()
   // While the prompt is open, single keys belong to it ("?" must not leave the screen).
   const typing = useContext(TypingContext)
   useEffect(() => { typing.current++; return () => { typing.current-- } }, [])
+  // A short bell: the lawyer may be looking elsewhere while OpenLex waits.
+  useEffect(() => { if (look.bell && stdout?.isTTY) stdout.write('\x07') }, [])
   const answer = (d) => { if (sent || !choices.includes(d)) return; setSent(true); onAnswer(d) }
   useInput((input, key) => {
     if (sent) return
     if (key.escape || input === 'n' || input === 'N') return answer('deny')
-    if (input === 'a') return answer('always_matter')
+    if (input === 'a') return answer(choices.includes('always_matter') ? 'always_matter' : 'always_folder')
     if (input === 'A') return answer('always')
   })
   const items = choices.map((c) => ({ value: c, label: `${LABELS[c].label.padEnd(28)}${LABELS[c].key}` }))
-  return html`<${Box} flexDirection="column" borderStyle=${BORDER} borderColor=${color.accent} paddingX=${1}>
-    <${Text} bold color=${color.accent}>${req.title || 'OpenLex wants to use a tool'}<//>
-    <${Text} wrap="wrap">${req.summary}<//>
-    ${keyDetail(req).map((l, i) => html`<${Text} key=${i} dimColor wrap="truncate-end">  ${l}<//>`)}
-    <${Text} dimColor wrap="wrap">This ${req.risk || 'changes something'}.${req.firmRule ? ' Your firm asks for confirmation here.' : ''} Nothing happens until you choose.<//>
-    <${Box} marginTop=${1}>
-      ${sent ? html`<${Spinner} label="Sending your answer…" />` : html`<${Menu} items=${items} onSelect=${(it) => answer(it.value)} />`}
+  const q = questionParts(req)
+  return html`<${Box} justifyContent="center">
+    <${Box} flexDirection="column" borderStyle=${look.accessible ? undefined : look.border} borderColor=${color.accent} paddingX=${1} width="94%">
+      <${Text} bold color=${color.accent}>${look.accessible ? 'Permission required: ' : ''}${req.title || 'OpenLex wants to use a tool'}<//>
+      <${Text} wrap="wrap">OpenLex wants to <${Text} bold>${q.verb}<//>${q.rest ? ` ${q.rest}` : ''}. Allow?<//>
+      ${keyDetail(req).map((l, i) => html`<${Text} key=${i} dimColor wrap="truncate-end">  ${l}<//>`)}
+      <${Text} dimColor wrap="wrap">This ${req.risk || 'changes something'}.${req.firmRule ? ' Your firm asks for confirmation here.' : ''} Nothing happens until you choose.<//>
+      <${Box} marginTop=${1}>
+        ${sent ? html`<${Spinner} label="Sending your answer…" />` : html`<${Menu} items=${items} numbered onSelect=${(it) => answer(it.value)} />`}
+      <//>
     <//>
   <//>`
 }
