@@ -432,6 +432,11 @@ async function dispatch({ doc, memory, search, embeddings, packStore }, rawName,
     case 'append_file': {
       const ws = require('./workspace')
       try {
+        // The agent may never change the firm's rules or its own history:
+        // a manipulated document must not be able to rewrite openlex.json,
+        // skills or playbooks through the agent.
+        const rel = require('path').relative(ws.base(), ws.resolve(args.path)).replace(/\\/g, '/')
+        if (/^(\.openlex(\/|$)|openlex\.json$|skills(\/|$)|playbooks(\/|$))/i.test(rel)) return { output: `ERROR: ${rel} is protected (firm configuration). Save your output in a matter folder instead.` }
         const p = name === 'write_file' ? ws.writeFile(args.path, args.content) : ws.appendFile(args.path, args.content)
         return { output: `written: ${p}` }
       } catch (e) {
