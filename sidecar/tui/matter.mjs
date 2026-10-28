@@ -35,7 +35,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { useEffect, useRef, useState } from 'react'
 import { Box, Text, useInput } from 'ink'
-import { html, Frame, Menu, TextField, Field, Spinner, Note, color, sym, look, useSize } from './ui.mjs'
+import { html, Frame, Menu, TextField, Field, Spinner, Note, color, sym, look, useSize, fitPath } from './ui.mjs'
 import { useAppCtx } from './context.mjs'
 import { matchInvocation, log, friendly, errorParts, describeRule, describeModel, nameOf } from './api.mjs'
 import { cleanPaths, completePath, shortPath } from './paths.mjs'
@@ -625,7 +625,7 @@ export function Matter({ matterId = null }) {
     keys = `Enter use it ${sym.sep} Tab complete ${sym.sep} Esc back to the chat`
     body = html`<${FolderPicker} onDone=${(n) => { setMode('chat'); sys(n.text, n.kind) }} />`
   } else if (mode === 'folderDocs') {
-    body = html`<${Field} label=${`Use the ${ctx.folder?.documents || ''} documents in this folder for this matter?`} help=${`${ctx.folder?.short || ''} — OpenLex adds the folder to this matter's documents (your files stay where they are) and reads them for reviews, chronologies and questions.`}>
+    body = html`<${Field} label=${`Use the ${ctx.folder?.documents || ''} documents in this folder for this matter?`} help=${`${fitPath(ctx.folder?.short || '', cols - 10)} — OpenLex adds the folder to this matter's documents (your files stay where they are) and reads them for reviews, chronologies and questions.`}>
       <${Menu} numbered items=${[{ value: true, label: 'Yes, use them for this matter' }, { value: false, label: 'No' }]} onSelect=${async (it) => {
         if (!it.value) return setMode('menu')
         setBusy('Adding the folder to the matter…')
@@ -730,9 +730,9 @@ export function Matter({ matterId = null }) {
     const current = running?.act.steps.findLast((x) => x.status === 'now')?.text
     const ask = perm || saveAsk?.req
     keys = ask ? `1-${(ask.choices || []).length} or Enter choose ${sym.sep} ${ask.choices?.includes('always_matter') ? `a always (this matter) ${sym.sep} ` : ask.choices?.includes('always_folder') ? `a always (this folder) ${sym.sep} ` : ''}${ask.choices?.includes('always') ? `A always ${sym.sep} ` : ''}n or Esc don't allow`
-      : streaming ? `Esc or Ctrl+C stop ${sym.sep} the answer so far is kept ${sym.sep} /model, /data … work meanwhile`
+      : streaming ? `Esc or Ctrl+C stop (the answer so far is kept) ${sym.sep} /model, /data work meanwhile`
         : escHint ? `Esc again: ${matterId ? 'menu' : 'back'} ${sym.sep} your text is kept for when you come back`
-          : `Enter send ${sym.sep} Ctrl+J new line ${sym.sep} / or Ctrl+K commands ${sym.sep} Tab working as ${sym.sep} Esc ${matterId ? 'menu' : 'back'}`
+          : `Enter send ${sym.sep} Ctrl+J new line ${sym.sep} / or Ctrl+K commands ${sym.sep} Esc ${matterId ? 'menu' : 'back'}`
     const slash = ask || slashClosed ? [] : slashHints(input, () => { loadSkills(); return skills || [] })
     const chips = (files.length ? files.length + 1 : 0) + (pastes.length ? 1 : 0)
     // The newest lines that fit between the title and the question field
@@ -788,11 +788,16 @@ export function slashHints(input, skills) {
   }
   if (!/^\/[\w-]*$/.test(input)) return []
   const word = input.slice(1).toLowerCase()
-  const cmds = COMMANDS.filter((c) => c.name.startsWith(word)).slice(0, word ? 4 : COMMANDS.length)
-  const sk = skills().filter((s) => s.name.startsWith(word) && !COMMANDS.some((c) => c.name === s.name)).slice(0, word ? 3 : 2)
+  // A short list that leaves room for the conversation: keep typing to narrow it, Ctrl+K for all.
+  const allCmds = COMMANDS.filter((c) => c.name.startsWith(word))
+  const allSk = skills().filter((s) => s.name.startsWith(word) && !COMMANDS.some((c) => c.name === s.name))
+  const cmds = allCmds.slice(0, word ? 5 : 6)
+  const sk = allSk.slice(0, word ? 2 : 1)
+  const more = allCmds.length - cmds.length + allSk.length - sk.length
   return [
     ...cmds.map((c) => ({ key: `c:${c.name}`, text: `/${c.name}${c.args ? ` ${c.args}` : ''} ${sym.sep} ${c.help}` })),
     ...sk.map((s) => ({ key: `s:${s.name}`, text: `/${s.name} ${sym.sep} firm instructions: ${s.description || s.title || ''}` })),
+    ...(more > 0 ? [{ key: 'more', text: `${sym.ell} ${more} more: keep typing, or Ctrl+K for the full list` }] : []),
   ]
 }
 
@@ -851,7 +856,8 @@ export function transcript(msgs, width, now = clock.now()) {
       m.sources.slice(0, 5).forEach((s, i) => add({ t: `  [${i + 1}] ` }, { t: [s.source_name, s.section].filter(Boolean).join(' ') }))
     }
     for (const s of m.suggestions) {
-      const bar = { t: `${sym.bar} `, color: color.accent }
+      const bar = { t: look.accessible ? '  ' : `${sym.bar} `, color: color.accent }
+      if (look.accessible) add({ t: 'Proposed change:', bold: true })
       add(bar, { t: String(s.severity || 'note').toUpperCase(), bold: true, color: s.severity === 'high' ? color.bad : color.accent }, { t: `  ${s.summary || ''}` })
       if (s.proposed_text) wrap(`Proposed: ${String(s.proposed_text).slice(0, 400)}`, width - 2).forEach((l) => add(bar, { t: l }))
       if (s.basis) wrap(`Legal basis: ${basisText(s.basis)}`, width - 2).forEach((l) => add(bar, { t: l, dim: true }))

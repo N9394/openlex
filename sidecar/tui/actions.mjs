@@ -268,7 +268,7 @@ export function Action({ kind, matterId }) {
       }} />
     <//>`
   } else if (step === 'running') {
-    keys = `Esc stop ${sym.sep} ${kind === 'plan' ? 'finished steps keep their results' : 'what is done so far is kept'} ${sym.sep} Ctrl+C quit`
+    keys = `Esc or Ctrl+C stop ${sym.sep} ${kind === 'plan' ? 'finished steps keep their results' : 'what is done so far is kept'}`
     const lines = work ? workLines(work, { now, width: Math.max(cols - 2, 20), maxItems: Math.max(rows - 18, 3), stopHint: kind === 'plan' ? 'finished steps keep their results' : 'what is done so far is saved in the matter folder' }) : []
     body = html`<${Box} flexDirection="column">
       <${Spinner} label=${`${TITLES[kind] || 'Working'}${docs.length && kind !== 'plan' && kind !== 'translate' && kind !== 'compare' ? ` of ${docs.length} document${docs.length === 1 ? '' : 's'}` : ''}…`} />

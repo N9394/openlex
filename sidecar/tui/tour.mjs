@@ -54,7 +54,10 @@ export function Tour({ firstRun = false }) {
   return html`<${Frame} title=${`Welcome (${i + 1} of ${PAGES.length})`} status=${ctx.status()} keys=${`Enter ${i < PAGES.length - 1 ? 'next' : 'start'} ${sym.sep} ← back ${sym.sep} Esc skip the tour`}>
     <${Text} bold color=${color.accent}>${p.title}<//>
     <${Box} flexDirection="column" marginTop=${1}>
-      ${p.lines.map((l, k) => html`<${Box} key=${k} marginBottom=${l.startsWith('  ') ? 0 : 1}><${Text} wrap="wrap">${l.startsWith('  ') ? l : `${sym.bullet} ${l}`}<//><//>`)}
+      ${p.lines.map((l, k) => html`<${Box} key=${k} marginBottom=${l.startsWith('  ') && !p.lines[k + 1]?.startsWith('  ') ? 1 : l.startsWith('  ') || p.lines[k + 1]?.startsWith('  ') ? 0 : 1}>
+        <${Box} width=${2} flexShrink=${0}><${Text} color=${color.accent}>${l.startsWith('  ') ? ' ' : sym.bullet}<//><//>
+        <${Box} flexGrow=${1}><${Text} wrap="wrap">${l.trim()}<//><//>
+      <//>`)}
     <//>
     <${Text} dimColor>${PAGES.map((_, k) => (k === i ? sym.ok : sym.bullet)).join(' ')}<//>
   <//>`

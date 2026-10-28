@@ -11,7 +11,7 @@
 
 import { useState } from 'react'
 import { Box, Text, useInput } from 'ink'
-import { html, Frame, Menu, TextField, Field, Note, Spinner, sym, color } from './ui.mjs'
+import { html, Frame, Menu, TextField, Field, Note, Spinner, sym, color, fitPath, useSize } from './ui.mjs'
 import { useAppCtx } from './context.mjs'
 import { cleanPath, completePath } from './paths.mjs'
 
@@ -19,6 +19,7 @@ const docsWord = (n) => (n === null || n === undefined ? '' : n === 1 ? '1 docum
 
 export function FolderCheck({ info, reason = 'new' }) {
   const ctx = useAppCtx()
+  const { cols } = useSize()
   const [mode, setMode] = useState('ask') // ask | choose
   const [input, setInput] = useState('')
   const [note, setNote] = useState(null)
@@ -67,7 +68,7 @@ export function FolderCheck({ info, reason = 'new' }) {
     const n = docsWord(info.documents)
     body = html`<${Box} flexDirection="column">
       <${Text} bold color=${color.accent}>OpenLex can read the files in this folder<//>
-      <${Text} wrap="wrap">${info.short}${n ? ` (${n}${info.truncated ? ' or more' : ''})` : ''}<//>
+      <${Text} wrap="truncate-start">${fitPath(info.short, cols - 22)}${n ? ` (${n}${info.truncated ? ' or more' : ''})` : ''}<//>
       <${Box} marginTop=${1} flexDirection="column">
         <${Text} wrap="wrap">${sym.bullet} It reads the documents here when your question needs them.<//>
         <${Text} wrap="wrap">${sym.bullet} It asks before it saves, renames or deletes anything here.<//>

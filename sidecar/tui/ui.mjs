@@ -41,7 +41,7 @@ export function Spinner({ label }) {
   useEffect(() => { if (still) return undefined; const t = setInterval(() => setI((x) => x + 1), 100); return () => clearInterval(t) }, [still])
   if (still) {
     const l = String(label || 'Working')
-    return html`<${Text}>${look.accessible ? 'Working: ' : ''}${/(…|\.\.\.)\)?$/.test(l) ? l : `${l} ${sym.ell}`}<//>`
+    return html`<${Text}>${look.accessible ? 'Working: ' : ''}${/…|\.\.\./.test(l) ? l : `${l} ${sym.ell}`}<//>`
   }
   return html`<${Text}><${Text} color=${color.accent}>${sym.spin[i % sym.spin.length]}<//> ${label || ''}<//>`
 }
@@ -141,7 +141,7 @@ export function TextField({ value, onChange, onSubmit, mask = false, placeholder
     const { value: v, cur: c0 } = st.current
     const c = Math.min(c0, v.length)
     // A new line: Ctrl+J (a line feed), Alt+Enter.
-    if (multiline && ((input === '\n' && !key.return) || (key.return && key.meta))) return insert('\n', true)
+    if (multiline && ((input === '\n' && !key.return) || (key.return && (key.meta || key.shift)))) return insert('\n', true)
     if (key.return) return onSubmit?.(v)
     if (key.tab) {
       if (!onTab) return

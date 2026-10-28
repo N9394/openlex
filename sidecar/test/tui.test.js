@@ -1433,9 +1433,10 @@ test('look: no colour with NO_COLOR, plain ASCII when asked, a screen-reader mod
     await press(r, CTRL.u, 'Is it valid?', 'enter')
     f = await waitFor(r, 'enforceable only if reasonable')
     capture('screen-reader mode', f)
-    assert.match(f, /OpenLex:\n A two-year non-compete/)
+    assert.match(f, /Proposed change:\n {3}HIGH/, 'cards without box characters')
     const mt = await import('../tui/matter.mjs')
-    assert.match(mt.transcript([{ role: 'you', text: 'Is it valid?' }], 78).map((l) => l.segs.map((s) => s.t).join('')).join('\n'), /you: Is it valid\?/)
+    const said = mt.transcript([{ role: 'you', text: 'Is it valid?' }, { id: 1, role: 'ai', text: 'Yes.', suggestions: [] }], 78).map((l) => l.segs.map((s) => s.t).join('')).join('\n')
+    assert.match(said, /you: Is it valid\?\nOpenLex:\nYes\./)
     assert.ok(!/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏╭╮╰╯]/.test(f))
     r.unmount()
     delete process.env.OPENLEX_ACCESSIBLE
