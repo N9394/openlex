@@ -502,7 +502,7 @@ async function runAction(ctx, userMessage, onEvent, opts = {}) {
   while (hops < maxHops() && totalIterations < MAX_ITERATIONS) {
     totalIterations++
     if (Date.now() - hopStart > HOP_TIMEOUT_MS) {
-      emit('step', { text: 'analysis time limit reached — writing answer' })
+      emit('step', { text: 'analysis time limit reached — writing answer', kind: 'timeout' })
       break
     }
     const call = parseToolCall(cursor)
@@ -519,7 +519,7 @@ async function runAction(ctx, userMessage, onEvent, opts = {}) {
       // a truncated tool call must never become the user-facing answer.
       if (/^\s*\{/.test(cursor) && !finalRetried) {
         console.warn('[agent] truncated reply:', cursor.length, 'chars:', JSON.stringify(String(cursor).slice(0, 300)))
-        emit('step', { text: 'writing… (truncated — retrying)' })
+        emit('step', { text: 'writing… (truncated — retrying)', kind: 'retry' })
         finalRetried = true
         // Full conversation, not just the last result: the model needs the
         // whole tool trail to resume a multi-hop analysis. User role keeps
@@ -562,7 +562,7 @@ async function runAction(ctx, userMessage, onEvent, opts = {}) {
       console.warn('[agent] unknown tool response:', String(cursor).slice(0, 120))
       if (!steerRetried) {
         steerRetried = true
-        emit('step', { text: `retrying… ("${call.tool}" not available)` })
+        emit('step', { text: `retrying… ("${call.tool}" not available)`, kind: 'retry' })
         const steer = await thinkChat([
           { role: 'system', content: sysCtx('analyzing') },
           { role: 'user', content: userMessage },
@@ -577,7 +577,12 @@ async function runAction(ctx, userMessage, onEvent, opts = {}) {
       break
     }
     if (aborted()) return stopEarly()
-    emit('step', { text: `tool: ${toolName}` })
+    // Front ends explain the step in plain words from tool + detail
+    // (search words, jurisdiction, clause, web host — never content).
+    let stepSection = null
+    if (toolName === 'get_range_text' || toolName === 'get_clause_analysis') { try { stepSection = ctx.doc ? resolveSection(ctx.doc, call.args || {}) : null } catch { stepSection = null } }
+    const stepDetail = require('./activity').toolDetail(toolName, call.args || {}, stepSection)
+    emit('step', { text: `tool: ${toolName}`, kind: 'tool', tool: toolName, detail: stepDetail })
     if (call.reasoning) emit('reasoning', { text: showReasoning(call.reasoning), tool: call.tool })
     require('./turndump').logTool(toolName, call.args || {})
     let suppress = false
@@ -624,10 +629,10 @@ async function runAction(ctx, userMessage, onEvent, opts = {}) {
       const perm = gate.decision === 'deny' ? null : await require('./permissions').authorize({ tool: toolName, args: call.args || {}, matterId: require('./policy').currentMatter() })
       if (gate.decision === 'deny') {
         r = { output: `BLOCKED by firm rule: ${gate.reason}. Do not retry this tool; continue with what you have or explain the limitation.` }
-        emit('step', { text: `blocked: ${toolName}` })
+        emit('step', { text: `blocked: ${toolName}`, kind: 'blocked', tool: toolName, detail: stepDetail })
       } else if (!perm.allowed) {
         r = { output: perm.output }
-        emit('step', { text: `${['rule', 'non-interactive'].includes(perm.by) ? 'not allowed' : 'declined'}: ${toolName}` })
+        emit('step', { text: `${['rule', 'non-interactive'].includes(perm.by) ? 'not allowed' : 'declined'}: ${toolName}`, kind: ['rule', 'non-interactive'].includes(perm.by) ? 'not_allowed' : 'declined', tool: toolName, detail: stepDetail })
       } else {
         try {
           r = await dispatch(ctx, toolName, call.args || {})
@@ -637,13 +642,14 @@ async function runAction(ctx, userMessage, onEvent, opts = {}) {
           console.warn(`[agent] tool ${toolName} failed:`, err.message)
           const why = /ECONNREFUSED|ENOTFOUND|fetch failed/.test(String(err.message)) ? 'the service it needs is not available on this machine' : String(err.message).slice(0, 200)
           r = { output: `ERROR: ${toolName} failed (${why}). Do not retry it; continue with the other tools or explain what could not be checked.` }
+          emit('step', { text: `failed: ${toolName}`, kind: 'tool_failed', tool: toolName, detail: stepDetail, offline: /ECONNREFUSED|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|fetch failed|timed? ?out/i.test(String(err.message)) })
         }
         if (hooks.has('after_tool')) hooks.run('after_tool', { tool: toolName, args: call.args || {}, ok: !/^ERROR|BLOCKED/.test(String(r.output || '')), chars: String(r.output || '').length, matterId: require('./policy').currentMatter() }).catch(() => {})
       }
       output = r.output
       // Handle delegate_task: spawn a fresh LLM call with focused context
       if (r.delegate) {
-        emit('step', { text: `delegating: ${call.args.task?.slice(0, 60)}…` })
+        emit('step', { text: `delegating: ${call.args.task?.slice(0, 60)}…`, kind: 'delegate' })
         try {
           const freshMessages = [
             { role: 'system', content: `You are a legal analyst. Complete this task:\n${call.args.task}\n\nReturn your findings as concise text. Include statute citations.` },
@@ -721,7 +727,7 @@ async function runAction(ctx, userMessage, onEvent, opts = {}) {
     }
     if (!suppress) hops++
     if (toolName === 'search_law' || toolName === 'get_law_section') {
-      emit('step', { text: 'searching local law packs…' })
+      emit('step', { text: 'searching local law packs…', kind: 'law_search' })
     }
     let hop
     try {
@@ -733,7 +739,7 @@ async function runAction(ctx, userMessage, onEvent, opts = {}) {
       ], { maxTokens: AGENT.WRITE_MAX_TOKENS, phase: 'analyzing', thinking: true, emit, toolNames: toolNames() })
     } catch (hopErr) {
       console.warn('[agent] hop LLM failed:', hopErr.message)
-      emit('step', { text: 'LLM temporarily unavailable — writing with what we have' })
+      emit('step', { text: 'LLM temporarily unavailable — writing with what we have', kind: 'model_unavailable' })
       break
     }
     if (hop.reasoning.trim()) emit('reasoning', { text: showReasoning(hop.reasoning), hop: true })
@@ -743,7 +749,7 @@ async function runAction(ctx, userMessage, onEvent, opts = {}) {
     // loops where the model keeps requesting the same tools with minor
     // variations. After MAX_ITERATIONS we force the write phase.
     if (totalIterations === RETHINK_AFTER) {
-      emit('step', { text: 'rethinking approach…' })
+      emit('step', { text: 'rethinking approach…', kind: 'rethink' })
       toolHistory.push({ role: 'user', content: 'You have been iterating for a while. Pause: is your current approach yielding new information? If yes, continue with ONE more targeted step. If not, stop tool calls and emit your findings as {"tool": "propose_suggestions", "args": {"suggestions": [...]}} or answer in plain text.' })
     }
   }
@@ -756,7 +762,7 @@ async function runAction(ctx, userMessage, onEvent, opts = {}) {
   //    judge pass so its count reflects verified suggestions only.
   if (!finalText && !suggestionsAreFinal) {
     if (aborted()) return stopEarly()
-    emit('step', { text: 'writing…' })
+    emit('step', { text: 'writing…', kind: 'writing' })
     const writeCtx = [
       { role: 'system', content: sysCtx('writing') },
       { role: 'user', content: userMessage },
@@ -805,7 +811,7 @@ ANCHOR RULE: never quote more than ONE sentence (≤220 chars) in an anchor — 
     } else if (call) {
       // The model STILL tool-calls at write time (analysis loop). Do not
       // dispatch again — force a decision with the evidence in context.
-      emit('step', { text: 'writing… (final answer)' })
+      emit('step', { text: 'writing… (final answer)', kind: 'writing' })
       const forceCtx = [
         { role: 'system', content: sysCtx('writing') },
         { role: 'user', content: userMessage },
@@ -840,7 +846,7 @@ ANCHOR RULE: never quote more than ONE sentence (≤220 chars) in an anchor — 
       let content = w.content
       if (!writeRetried && /^\s*\{/.test(String(content || '').trim())) {
         console.warn('[agent] write truncated:', String(content || '').length, 'chars:', JSON.stringify(String(content || '').slice(0, 300)))
-        emit('step', { text: 'writing… (truncated — retrying)' })
+        emit('step', { text: 'writing… (truncated — retrying)', kind: 'retry' })
         writeRetried = true
         const retryMsgs = [...writeCtx, { role: 'user', content: 'Your previous reply was cut off mid-JSON (it ended prematurely). Emit the complete tool call now. ANCHOR RULE: each anchor ≤220 chars (one sentence only) — long verbatim anchors make the reply end early. Keep proposed_text complete.' }]
         // thinking:false — shorter generation, more likely to complete on RDNA1
@@ -852,7 +858,7 @@ ANCHOR RULE: never quote more than ONE sentence (≤220 chars) in an anchor — 
       // Rewrite ask answered in prose despite the instruction → one hard
       // retry: the suggestion JSON is the deliverable, prose is not.
       if (wantsRewrite && !extractToolCall(content) && !writeRetried) {
-        emit('step', { text: 'writing… (rewrite must land as a suggestion)' })
+        emit('step', { text: 'writing… (rewrite must land as a suggestion)', kind: 'retry' })
         writeRetried = true
         const wForce = await thinkChat([
           { role: 'system', content: sysCtx('writing') },
@@ -910,24 +916,24 @@ ANCHOR RULE: never quote more than ONE sentence (≤220 chars) in an anchor — 
       if (prop && userWords.size > 3) {
         const overlap = [...userWords].filter((w) => prop.includes(w)).length
         if (overlap / userWords.size > 0.5) {
-          emit('step', { text: `dropped suggestion: echoed user prompt (${overlap}/${userWords.size} words matched)` })
+          emit('step', { text: `dropped suggestion: echoed user prompt (${overlap}/${userWords.size} words matched)`, kind: 'dropped' })
           continue
         }
       }
       // Near-duplicate: proposed_text is very similar to the original (no-op rewrite)
       if (prop && anchor && prop === anchor) {
-        emit('step', { text: 'dropped suggestion: proposed text identical to original' })
+        emit('step', { text: 'dropped suggestion: proposed text identical to original', kind: 'dropped' })
         continue
       }
       // Too short to be a real clause rewrite
       if (prop && prop.length < 30 && s.type !== 'flag-favoring') {
-        emit('step', { text: `dropped suggestion: too short (${prop.length} chars)` })
+        emit('step', { text: `dropped suggestion: too short (${prop.length} chars)`, kind: 'dropped' })
         continue
       }
       filtered.push(s)
     }
     if (filtered.length < suggestions.length) {
-      emit('step', { text: `garbage filter: ${suggestions.length} → ${filtered.length} suggestions` })
+      emit('step', { text: `garbage filter: ${suggestions.length} → ${filtered.length} suggestions`, kind: 'dropped' })
       suggestions.length = 0
       suggestions.push(...filtered)
     }
@@ -936,7 +942,7 @@ ANCHOR RULE: never quote more than ONE sentence (≤220 chars) in an anchor — 
   // 4. JUDGE — proofread every suggestion against its anchor + cited law
   if (suggestions.length) {
     if (aborted()) return stopEarly()
-    emit('step', { text: `judge: verifying ${suggestions.length} suggestion(s)…` })
+    emit('step', { text: `judge: verifying ${suggestions.length} suggestion(s)…`, kind: 'judge', total: suggestions.length })
     // Give the judge the FULL text of the clauses the model read — a
     // fragment-anchored suggestion must be checked against the real
     // clause, not against itself.
@@ -1019,7 +1025,7 @@ ANCHOR RULE: never quote more than ONE sentence (≤220 chars) in an anchor — 
       }
     } catch { /* verification is best-effort */ }
     const verified = suggestions.filter((_, i) => verdicts[i]?.status !== 'drop')
-    emit('step', { text: `judge: ${verified.length}/${suggestions.length} verified` })
+    emit('step', { text: `judge: ${verified.length}/${suggestions.length} verified`, kind: 'judged', verified: verified.length, total: suggestions.length })
     suggestions.length = 0
     suggestions.push(...verified.map((s, i) => ({ ...s, id: `s-${Date.now().toString(36)}-${i}`, verdict: verdicts[i] })))
     for (const s of suggestions) ctx.memory?.registerSuggestion?.(s)

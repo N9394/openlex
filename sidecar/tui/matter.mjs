@@ -13,6 +13,12 @@
  * they win over firm skills of the same name, "/skill …" runs a skill
  * otherwise. When OpenLex wants to save a file, open a web page, run a
  * command or use a connector, a prompt asks first (permission.mjs).
+ *
+ * While a question runs, the lawyer sees each step in plain words, how
+ * long it has taken, where the data went and how to stop (explain.mjs);
+ * afterwards what the answer is based on (Ctrl+B or /sources for the full
+ * text). Files dropped into the question field are attached to that
+ * question (attach.mjs).
  */
 
 import fs from 'node:fs'
@@ -21,9 +27,11 @@ import { useEffect, useRef, useState } from 'react'
 import { Box, Text, useInput } from 'ink'
 import { html, Frame, Menu, TextField, Field, Spinner, Note, color, sym, useSize } from './ui.mjs'
 import { useAppCtx } from './context.mjs'
-import { matchInvocation, log, friendly, describeRule, nameOf } from './api.mjs'
+import { matchInvocation, log, friendly, describeRule, describeModel, nameOf } from './api.mjs'
 import { cleanPaths, completePath, shortPath } from './paths.mjs'
 import { PermissionPrompt, PermissionRules, answeredLine } from './permission.mjs'
+import { clock, startActivity, applyEvent, activityLines, doneLines, basedOnLines, basedOn, checkLine, basisText, stopSentence } from './explain.mjs'
+import { pastedFiles, chipLabel, attachSentence, readAttachment, joinTexts } from './attach.mjs'
 
 // Conversations survive going back to the matter list (for this session).
 const conversations = new Map()
@@ -35,7 +43,7 @@ export const ACTIONS = [
   { value: 'compare', label: 'Compare two versions', hint: 'What changed between two drafts, with the important changes rated.' },
   { value: 'grid', label: 'Ask the same questions of every document (review grid)', hint: 'One row per document, one column per question, saved as Excel.' },
   { value: 'plan', label: 'Plan a larger task (you approve each step)', hint: 'OpenLex proposes the steps; nothing runs until you approve.' },
-  { value: 'skill', label: 'Use a firm skill', hint: 'Instructions your firm wrote for recurring tasks.' },
+  { value: 'skill', label: 'Use your firm\'s instructions', hint: 'Instructions your firm wrote for recurring tasks.' },
 ]
 
 /** Commands in the chat ("/model …"). They win over firm skills with the same name. */
@@ -43,14 +51,15 @@ export const COMMANDS = [
   { name: 'model', args: '[local | anthropic | openrouter:MODEL]', help: 'where the AI runs' },
   { name: 'key', args: '[service]', help: 'add or replace a key, then check it' },
   { name: 'data', args: '', help: 'where client data may go' },
-  { name: 'as', args: '[profile]', help: 'who OpenLex works as' },
+  { name: 'as', args: '[role]', help: 'who OpenLex works as' },
   { name: 'privileged', args: 'on|off', help: 'keep this matter on this computer' },
   { name: 'permissions', args: '', help: 'what OpenLex may do without asking' },
+  { name: 'sources', args: '', help: 'what the last answer is based on, in full' },
+  { name: 'activity', args: '', help: 'what OpenLex did recently, and where data went' },
   { name: 'clear', args: '', help: 'start a new conversation' },
   { name: 'help', args: '', help: 'these commands' },
 ]
 const PROVIDER_WORDS = { claude: 'anthropic', computer: 'local', 'this-computer': 'local', gpt: 'openai', firm: 'custom' }
-const isEu = (r) => /^(eu|europe)/i.test(String(r || ''))
 let seq = 0
 
 /** Folder name the engine uses for a matter's files (workspace.matterFolder). */
@@ -73,6 +82,9 @@ export function Matter({ matterId = null }) {
   const [keyFor, setKeyFor] = useState(null) // provider whose key is being typed (/key)
   const [secret, setSecret] = useState('')
   const [returnTo, setReturnTo] = useState('menu') // where a picker opened from the chat goes back to
+  const [files, setFiles] = useState([]) // files dropped into the question field: [{ path, name, size }]
+  const [now, setNow] = useState(clock.now()) // ticks every second while an answer is written
+  const [source, setSource] = useState(null) // the law section opened from "Based on"
   const abort = useRef(null)
   const pageRef = useRef({ height: 10, total: 0 })
   const { cols, rows } = useSize()
@@ -97,12 +109,24 @@ export function Matter({ matterId = null }) {
   useEffect(() => { load() }, [matterId, ctx.hubTick])
   useEffect(() => { conversations.set(key, msgs) }, [msgs])
   useEffect(() => () => abort.current?.abort(), [])
+  useEffect(() => {
+    if (!streaming) return undefined
+    const t = setInterval(() => setNow(clock.now()), 1000)
+    return () => clearInterval(t)
+  }, [streaming])
   const skillsAsked = useRef(false)
   const loadSkills = () => { if (skillsAsked.current) return; skillsAsked.current = true; ctx.api.skills().then((r) => setSkills((r.skills || []).filter((s) => !s.error))).catch(() => setSkills([])) }
 
   // ── asking ──
   /** One line from OpenLex itself in the conversation (command confirmations, permission answers). */
   const sys = (text, kind = 'ok') => setMsgs((m) => [...m, { role: 'sys', text, kind }])
+
+  /** Files dropped or pasted into the question field become chips (not text). */
+  const attach = (list) => {
+    setFiles((cur) => [...cur, ...list.filter((f) => !cur.some((c) => c.path === f.path))])
+    return true
+  }
+  const onPaste = (text) => { const list = pastedFiles(text); return list ? attach(list) : false }
 
   const send = async (raw) => {
     const text = raw.trim()
@@ -113,6 +137,9 @@ export function Matter({ matterId = null }) {
       setScroll(0)
       return command(cmd[1].toLowerCase(), (cmd[2] || '').trim())
     }
+    // Only paths typed or pasted without bracketed paste: attach them.
+    const dropped = pastedFiles(text)
+    if (dropped) { setInput(''); return attach(dropped) }
     if (streaming) return sys('The answer is still being written. Wait for it (or press Esc to stop it), then ask again. Commands like /model work meanwhile.', 'warn')
     let message = text
     let as = agent
@@ -120,22 +147,48 @@ export function Matter({ matterId = null }) {
     if (inv) { as = inv.agent; message = inv.message || text }
     setInput('')
     setScroll(0)
+    const att = files
+    setFiles([])
     const id = ++seq
-    const answer = { id, role: 'ai', text: '', sources: [], suggestions: [], step: 'Thinking…', as: as.name !== 'associate' ? as.title : '' }
-    setMsgs((m) => [...m, { role: 'you', text }, answer])
+    const t0 = clock.now()
+    // If the engine does not report its AI calls, the data line says what the rule allows.
+    const rule = matter ? matter.policy || ctx.info.policy?.default : ctx.info.policy?.default
+    const mayLeave = active && !active.local && !matter?.privileged && rule?.mode === 'allow-list' && (rule.providers || []).includes(active.id)
+    const answer = { id, role: 'ai', text: '', sources: [], suggestions: [], act: { ...startActivity(t0), unreported: mayLeave ? `Not reported which AI answered. Your client-data rule: ${describeRule(rule, matter)}` : '' }, as: as.name !== 'associate' ? as.title : '' }
+    setMsgs((m) => [...m, { role: 'you', text, files: att.map((f) => f.name) }, answer])
+    setNow(t0)
     // By id, not "the last message": command lines may arrive while the answer streams.
     const patch = (fn) => setMsgs((m) => m.map((x) => { if (x.id !== id) return x; const c = { ...x }; fn(c); return c }))
     const ac = new AbortController()
     abort.current = ac
     setStreaming(true)
+    // Attached files: read here, sent with the question (like `openlex ask --file`), and kept in the matter.
+    let docText = ''
+    let docId = `tui:${key}`
+    if (att.length) {
+      const parts = []
+      for (const f of att) {
+        try {
+          const t = String(await readAttachment(f.path) || '').trim()
+          if (t) parts.push({ name: f.name, text: t })
+          else sys(`${f.name} has no readable text (perhaps a scan), so the question is sent without it.`, 'warn')
+        } catch (err) {
+          log(`reading ${f.path} failed:`, err)
+          sys(`${f.name} could not be read (${String(err.message).split('\n')[0]}), so the question is sent without it.`, 'warn')
+        }
+      }
+      if (parts.length) { docText = joinTexts(parts); docId = `tui:${key}:${att.map((f) => f.path).join('|')}` }
+      if (matterId) for (const n of await copyIntoMatter(att.map((f) => f.path))) sys(n.text, n.kind)
+    }
     try {
-      await ctx.api.chat({ message, docId: `tui:${key}`, matterId: matterId || undefined, agent: as.name, interactive: true }, (ev) => {
-        if (ev.type === 'text') patch((a) => { a.text += ev.text; a.step = '' })
-        else if (ev.type === 'step') patch((a) => { a.step = ev.text })
+      await ctx.api.chat({ message, docId, ...(docText ? { text: docText, files: att.map((f) => f.name) } : {}), matterId: matterId || undefined, agent: as.name, interactive: true }, (ev) => {
+        const at = clock.now()
+        patch((a) => { a.act = applyEvent(a.act, ev, at) })
+        if (ev.type === 'text') patch((a) => { a.text += ev.text })
         else if (ev.type === 'law') patch((a) => { for (const s of ev.sources || []) if (!a.sources.some((x) => (x.chunk_id && x.chunk_id === s.chunk_id) || (x.source_name === s.source_name && x.section === s.section))) a.sources = [...a.sources, s] })
         else if (ev.type === 'suggestion') patch((a) => { a.suggestions = [...a.suggestions, ev.suggestion] })
         else if (ev.type === 'skill') patch((a) => { a.skill = ev.title })
-        else if (ev.type === 'skill_suggestion' && ev.name) patch((a) => { a.tip = `The firm skill "${ev.title || ev.name}" may fit — choose it under Actions → Use a firm skill.` })
+        else if (ev.type === 'skill_suggestion' && ev.name) patch((a) => { a.tip = `Your firm's instructions "${ev.title || ev.name}" may fit — choose them under Actions → Use your firm's instructions.` })
         else if (ev.type === 'error') patch((a) => { a.error = friendly(ev.message) })
         else if (ev.type === 'permission') { setPerm(ev); setMode('chat') }
         else if (ev.type === 'permission_result' && ev.by !== 'lawyer') {
@@ -144,9 +197,12 @@ export function Matter({ matterId = null }) {
         }
       }, ac.signal)
     } catch (err) {
-      patch((a) => { a.error = err.message })
+      if (!ac.signal.aborted) patch((a) => { a.error = err.message; a.act = applyEvent(a.act, { type: 'error', message: err.raw || err.message }) })
     }
-    patch((a) => { a.step = ''; if (ac.signal.aborted) a.stopped = true })
+    patch((a) => {
+      if (ac.signal.aborted) { a.stopped = true; a.stopNote = stopSentence(a.act, a.text) }
+      a.act = applyEvent(a.act, { type: 'done', ...(ac.signal.aborted ? { stopped: true } : {}) })
+    })
     abort.current = null
     setPerm(null)
     setStreaming(false)
@@ -168,10 +224,9 @@ export function Matter({ matterId = null }) {
     if (matterId) { try { m = (await ctx.api.matters()).matters.find((x) => x.id === matterId) || m; setMatter(m) } catch { /* keep */ } }
     const prov = info?.providers?.providers?.find((p) => p.id === info.providers.active)
     const rule = m ? m.policy || info?.policy?.default : info?.policy?.default
-    const name = prov ? `${prov.model || (prov.local && info?.status?.model?.name) || 'the AI'} (${nameOf(prov.id)})` : 'the AI'
-    const where = !prov || prov.local ? 'on this computer' : `cloud${isEu(prov.region) ? ', EU' : ''}`
+    const where = !prov || prov.local ? 'the AI on this computer' : describeModel(info).replace(' — online AI service', ', an online AI service')
     const allowed = prov?.local || (rule?.mode === 'allow-list' && (rule.providers || []).includes(prov?.id) && !m?.privileged)
-    return { line: `Now using ${name}, ${where}. Client data${matterId ? ' for this matter' : ''}: ${describeRule(rule, m)}.${!allowed && prov && !prov.local ? ` To send documents to ${nameOf(prov.id)}: /data.` : ''}`, info }
+    return { line: `Now using ${where}. Client data${matterId ? ' for this matter' : ''}: ${describeRule(rule, m)}.${!allowed && prov && !prov.local ? ` To send documents to ${nameOf(prov.id)}: /data.` : ''}`, info }
   }
   const nextNote = () => (streaming ? ' This applies from your next question; the answer being written keeps the current model.' : '')
 
@@ -186,7 +241,7 @@ export function Matter({ matterId = null }) {
       await ctx.api.useProvider(id, model ? { model } : undefined)
       const { line, info } = await describeSetup()
       const fresh = info?.providers?.providers?.find((p) => p.id === id)
-      sys(`${line}${nextNote()}${fresh?.needsKey && !fresh.hasKey ? ` There is no key for ${nameOf(id)} yet: /key ${id}.` : ''}`)
+      sys(`${line}${model ? ` Model: ${model}.` : ''}${nextNote()}${fresh?.needsKey && !fresh.hasKey ? ` There is no key for ${nameOf(id)} yet: /key ${id}.` : ''}`)
     } catch (err) { sys(err.message, 'bad') }
   }
 
@@ -220,7 +275,7 @@ export function Matter({ matterId = null }) {
     if (name === 'help') {
       sys('Commands (type them in the question field):', 'info')
       for (const c of COMMANDS) sys(`/${c.name}${c.args ? ` ${c.args}` : ''} — ${c.help}`, 'info')
-      return sys('Anything else after "/" runs a firm skill of that name.', 'info')
+      return sys('Anything else after "/" uses your firm\'s instructions of that name.', 'info')
     }
     if (name === 'model') { if (arg) return switchModel(arg); return setMode('model') }
     if (name === 'key') {
@@ -243,7 +298,7 @@ export function Matter({ matterId = null }) {
     if (name === 'as') {
       if (!arg) return setMode('agent')
       const a = agents.find((x) => x.name === arg.toLowerCase() || String(x.title).toLowerCase() === arg.toLowerCase())
-      if (!a) return sys(`No profile called "${arg}". Choose one of: ${agents.map((x) => x.name).join(', ')}.`, 'bad')
+      if (!a) return sys(`No role called "${arg}". Choose one of: ${agents.map((x) => x.name).join(', ')}.`, 'bad')
       await chooseAgent(a.name)
       return sys(`Now working as ${a.title}${matterId ? ' for this matter' : ''}.`)
     }
@@ -257,6 +312,8 @@ export function Matter({ matterId = null }) {
       return setMode('unprivilege')
     }
     if (name === 'permissions') return setMode('perms')
+    if (name === 'sources') return openSources()
+    if (name === 'activity') return ctx.go('activity', { matterId })
     if (name === 'clear') {
       try {
         await ctx.api.clearConversation(`tui:${key}`)
@@ -267,10 +324,8 @@ export function Matter({ matterId = null }) {
   }
 
   // ── adding documents ──
-  const addDocs = async (raw) => {
-    const paths = cleanPaths(raw)
-    if (!paths.length) return
-    setBusy('Adding and reading the documents… (large folders take a while)')
+  /** Copy files (or register folders) into the matter; one plain line per item. */
+  const copyIntoMatter = async (paths) => {
     const out = []
     try {
       const ws = await ctx.api.workspace()
@@ -284,7 +339,8 @@ export function Matter({ matterId = null }) {
             out.push({ kind: 'ok', text: `Folder added: ${shortPath(p)}` })
           } else {
             fs.mkdirSync(dest, { recursive: true })
-            fs.copyFileSync(p, path.join(dest, path.basename(p)))
+            const target = path.join(dest, path.basename(p))
+            if (path.resolve(target) !== path.resolve(p)) fs.copyFileSync(p, target)
             copied = true
             out.push({ kind: 'ok', text: `${path.basename(p)} — copied into the matter folder (your original is unchanged)` })
           }
@@ -295,6 +351,14 @@ export function Matter({ matterId = null }) {
       }
       if (copied) await ctx.api.addFolder(dest, matterId)
     } catch (err) { out.push({ kind: 'bad', text: err.message }) }
+    return out
+  }
+
+  const addDocs = async (raw) => {
+    const paths = cleanPaths(raw)
+    if (!paths.length) return
+    setBusy('Adding and reading the documents… (large folders take a while)')
+    const out = await copyIntoMatter(paths)
     setBusy('')
     setNotes(out)
     setInput('')
@@ -322,10 +386,20 @@ export function Matter({ matterId = null }) {
     setMode(matterId && mode === 'agent-menu' ? 'menu' : 'chat')
   }
 
+  /** "Based on" in full for the last answer (Ctrl+B, /sources). */
+  const lastAnswer = [...msgs].reverse().find((m) => m.role === 'ai' && m.act)
+  const openSources = () => {
+    if (!lastAnswer || !basedOn(lastAnswer.act).length) return sys('Nothing to show yet: the last answer did not use any law or document passages.', 'info')
+    setSource(null)
+    setMode('sources')
+  }
+
   useInput((ch, k) => {
     if (busy || perm) return
+    if (mode === 'chat' && k.ctrl && ch === 'b') return openSources()
     if (k.escape) {
-      if (['model', 'key', 'keypick', 'datapick', 'perms'].includes(mode) || (mode === 'unprivilege' && returnTo === 'chat')) { setReturnTo('menu'); return setMode('chat') }
+      if (mode === 'sources' && source) return setSource(null)
+      if (['model', 'key', 'keypick', 'datapick', 'perms', 'sources'].includes(mode) || (mode === 'unprivilege' && returnTo === 'chat')) { setReturnTo('menu'); return setMode('chat') }
       if (streaming && mode === 'chat') return abort.current?.abort()
       if (mode === 'chat') return matterId ? setMode('menu') : ctx.back()
       if (mode === 'agent') return setMode('chat')
@@ -356,6 +430,7 @@ export function Matter({ matterId = null }) {
       { value: 'priv', label: `Privileged — keep on this computer: ${matter?.privileged ? 'On' : 'Off'}` },
       ...(cloud && !matter?.privileged ? [{ value: 'data', label: `Client data for this matter: ${describeRule(matter?.policy, matter)}` }] : []),
       { value: 'docs', label: `Documents in this matter (${docs.length})` },
+      { value: 'activity', label: 'Recent activity', hint: 'what OpenLex did, and where data went' },
       { value: 'back', label: 'Back to matters' },
     ]
     body = html`<${Box} flexDirection="column">
@@ -366,6 +441,7 @@ export function Matter({ matterId = null }) {
         if (it.value === 'agent') return setMode('agent-menu')
         if (it.value === 'priv') return matter?.privileged ? setMode('unprivilege') : setPrivileged(true)
         if (it.value === 'actions') return setMode('actions')
+        if (it.value === 'activity') return ctx.go('activity', { matterId })
         setMode(it.value)
       }} />
       <${Box} marginTop=${1}><${Text} dimColor wrap="wrap">${matter?.privileged ? 'Privileged: nothing from this matter leaves this computer, whatever the settings say.' : 'Mark the matter privileged to keep everything in it on this computer.'}<//><//>
@@ -435,12 +511,31 @@ export function Matter({ matterId = null }) {
     <//>`
   } else if (mode === 'skills') {
     body = skills === null
-      ? html`<${Spinner} label="Loading the firm's skills…" />`
+      ? html`<${Spinner} label="Loading your firm's instructions…" />`
       : skills.length
-        ? html`<${Field} label="Which skill?">
+        ? html`<${Field} label="Which of your firm's instructions?">
             <${Menu} items=${skills.map((s) => ({ value: s.name, label: s.title || s.name, hint: s.description }))} describe onSelect=${(it) => { setInput(`/${it.value} `); setMode('chat') }} />
           <//>`
-        : html`<${Note}>Your firm has no skills yet.<//>`
+        : html`<${Note}>Your firm has not written any instructions yet.<//>`
+  } else if (mode === 'sources') {
+    keys = source ? 'Esc back to the list' : `↑↓ move ${sym.sep} Enter show in full ${sym.sep} Esc back to the chat`
+    const items = basedOn(lastAnswer?.act)
+    body = source
+      ? html`<${Box} flexDirection="column">
+          <${Text} bold wrap="truncate-end">${source.label}<//>
+          <${Box} marginTop=${1}><${Text} wrap="wrap">${source.text}<//><//>
+        <//>`
+      : html`<${Field} label="What the last answer is based on" help="Law sections come from the law collection on this computer. Check them before relying on the answer.">
+          <${Menu} items=${items.map((it, i) => ({ value: i, label: `[${i + 1}] ${it.label}`, hint: it.detail || (it.kind === 'doc' ? 'a passage of your document that OpenLex read' : '') }))} describe onSelect=${async (it) => {
+            const item = items[it.value]
+            if (item.kind !== 'law' || !item.chunk_id) return setSource({ label: item.label, text: item.detail || 'OpenLex read this part of your document for the answer.' })
+            setSource({ label: item.label, text: 'Opening…' })
+            try {
+              const r = await ctx.api.lawSection(item.chunk_id)
+              setSource({ label: [r.source_name, r.section].filter(Boolean).join(' ') || item.label, text: r.content || item.detail })
+            } catch (err) { setSource({ label: item.label, text: `${item.detail ? `${item.detail}\n\n` : ''}(The full text could not be opened: ${err.message})` }) }
+          }} />
+        <//>`
   } else if (mode === 'docs') {
     body = html`<${Box} flexDirection="column">
       ${docs.length ? docs.slice(0, rows - 11).map((d) => html`<${Text} key=${d.path} wrap="truncate-middle">${sym.bullet} ${d.name}<${Text} dimColor>  ${shortPath(path.dirname(d.path))}<//><//>`) : html`<${Text} dimColor>No documents yet. Choose "Add documents".<//>`}
@@ -456,14 +551,17 @@ export function Matter({ matterId = null }) {
     <//>`
   } else {
     // chat
+    const running = streaming ? [...msgs].reverse().find((m) => m.role === 'ai' && m.act && !m.act.endedAt) : null
+    const current = running?.act.steps.findLast((x) => x.status === 'now')?.text
     keys = perm ? `Enter choose ${sym.sep} ${perm.choices?.includes('always_matter') ? `a always (this matter) ${sym.sep} ` : ''}${perm.choices?.includes('always') ? `A always ${sym.sep} ` : ''}n or Esc don't allow`
-      : streaming ? `Esc stop the answer ${sym.sep} /model, /data … work meanwhile ${sym.sep} Ctrl+C quit` : `Enter send ${sym.sep} / commands ${sym.sep} Tab working as ${sym.sep} PgUp/PgDn scroll ${sym.sep} Esc ${matterId ? 'menu' : 'back'}`
+      : streaming ? `Esc stop ${sym.sep} the answer so far is kept ${sym.sep} /model, /data … work meanwhile` : `Enter send ${sym.sep} / commands ${sym.sep} Tab working as ${sym.sep} Ctrl+B based on ${sym.sep} Esc ${matterId ? 'menu' : 'back'}`
     const slash = perm ? [] : slashHints(input, () => { loadSkills(); return skills || [] })
+    const chips = files.length ? files.length + 1 : 0
     // The newest lines that fit between the title and the question field
     // (the permission prompt takes about 11 of them while it is open).
     const width = Math.max(cols - 2, 20)
-    const height = perm ? Math.max(rows - 21, 1) : Math.max(rows - 10 - slash.length - Math.ceil((input.length + 3) / width), 3)
-    const lines = msgs.length ? transcript(msgs, width) : [{ segs: [{ t: matterId ? 'Ask anything about this matter: its documents, the law, a draft.' : 'Ask a legal question. Nothing here is tied to a matter.', dim: true }] }]
+    const height = perm ? Math.max(rows - 21, 1) : Math.max(rows - 10 - slash.length - chips - Math.ceil((input.length + 3) / width), 3)
+    const lines = msgs.length ? transcript(msgs, width, now) : [{ segs: [{ t: matterId ? 'Ask anything about this matter: its documents, the law, a draft. Drop a file here to ask about it.' : 'Ask a legal question. Nothing here is tied to a matter. Drop a file here to ask about it.', dim: true }] }]
     const end = Math.max(lines.length - Math.min(scroll, Math.max(lines.length - height, 0)), 0)
     const shown = lines.slice(Math.max(end - height, 0), end)
     pageRef.current = { height, total: lines.length }
@@ -475,8 +573,10 @@ export function Matter({ matterId = null }) {
       ${perm
         ? html`<${PermissionPrompt} key=${perm.id} req=${perm} onAnswer=${(d) => answerPerm(perm, d)} />`
         : html`<${Box} flexDirection="column">
-            ${streaming ? html`<${Spinner} label="Writing the answer… (Esc stops it)" />` : html`<${Text} dimColor>Working as: <${Text} color=${color.accent}>${agent.title} ${sym.down}<//> (Tab to change)<//>`}
-            <${TextField} value=${input} onChange=${setInput} onSubmit=${send} placeholder=${streaming ? 'Commands work while the answer is written: /model, /data …' : 'Type your question (or / for commands) and press Enter'} />
+            ${files.map((f) => html`<${Text} key=${f.path} color=${color.accent} wrap="truncate-middle">${chipLabel(f)}<//>`)}
+            ${files.length ? html`<${Text} dimColor wrap="truncate-end">${attachSentence(files)}<//>` : null}
+            ${streaming ? html`<${Spinner} label=${`${current || 'Working'}… (Esc stops it)`} />` : html`<${Text} dimColor>Working as: <${Text} color=${color.accent}>${agent.title} ${sym.down}<//> (Tab to change)<//>`}
+            <${TextField} value=${input} onChange=${setInput} onSubmit=${send} onPaste=${onPaste} onBackspaceEmpty=${() => setFiles((f) => f.slice(0, -1))} placeholder=${streaming ? 'Commands work while the answer is written: /model, /data …' : files.length ? 'Type your question about the file and press Enter' : 'Type your question (or / for commands) and press Enter'} />
           <//>`}
     <//>`
   }
@@ -499,7 +599,7 @@ export function slashHints(input, skills) {
   const sk = skills().filter((s) => s.name.startsWith(word) && !COMMANDS.some((c) => c.name === s.name)).slice(0, word ? 3 : 2)
   return [
     ...cmds.map((c) => ({ key: `c:${c.name}`, text: `/${c.name}${c.args ? ` ${c.args}` : ''} ${sym.sep} ${c.help}` })),
-    ...sk.map((s) => ({ key: `s:${s.name}`, text: `/${s.name} ${sym.sep} firm skill: ${s.description || s.title || ''}` })),
+    ...sk.map((s) => ({ key: `s:${s.name}`, text: `/${s.name} ${sym.sep} firm instructions: ${s.description || s.title || ''}` })),
   ]
 }
 
@@ -518,10 +618,12 @@ export function wrap(text, width) {
 }
 
 /**
- * The conversation as screen lines: the question, the answer, the sources
- * found (numbered), proposed changes as cards, tips and errors.
+ * The conversation as screen lines: the question (and the files sent with
+ * it), the answer; while it is written the live steps (explain.mjs), then
+ * what it is based on, proposed changes as cards with their check, where
+ * the data went, tips and errors.
  */
-export function transcript(msgs, width) {
+export function transcript(msgs, width, now = clock.now()) {
   const L = []
   const add = (...segs) => L.push({ segs })
   const para = (text, style = {}, indent = '') => { for (const l of wrap(text, width - indent.length)) add(...(indent ? [{ t: indent, ...style.bar }] : []), { t: l, ...style }) }
@@ -535,25 +637,36 @@ export function transcript(msgs, width) {
     if (m.role === 'you') {
       add({ t: '' })
       wrap(`You: ${m.text}`, width).forEach((l, i) => add(...(i ? [{ t: l }] : [{ t: 'You: ', color: color.accent, bold: true }, { t: l.slice(5) }])))
+      if (m.files?.length) add({ t: `  ${sym.clip} with ${m.files.join(', ')}`, dim: true })
       continue
     }
-    if (m.as || m.skill) add({ t: [m.as ? `as ${m.as}` : '', m.skill ? `firm skill: ${m.skill}` : ''].filter(Boolean).join(` ${sym.sep} `), dim: true })
+    if (m.as || m.skill) add({ t: [m.as ? `as ${m.as}` : '', m.skill ? `firm instructions: ${m.skill}` : ''].filter(Boolean).join(` ${sym.sep} `), dim: true })
     if (m.text) para(m.text)
-    if (m.step) add({ t: `${sym.bullet} ${m.step}`, dim: true })
-    if (m.sources.length) {
-      add({ t: 'Sources found:', dim: true })
-      m.sources.slice(0, 5).forEach((s, i) => add({ t: `  [${i + 1}] `, dim: true }, { t: [s.source_name, s.section].filter(Boolean).join(' ') }))
-      if (m.sources.length > 5) add({ t: `  … ${m.sources.length - 5} more`, dim: true })
+    const act = m.act
+    const live = act && !act.endedAt
+    if (live) {
+      if (m.text) add({ t: '' })
+      for (const segs of activityLines(act, { now, width })) add(...segs)
+      continue
+    }
+    if (act) for (const segs of basedOnLines(act, width)) add(...segs)
+    else if (m.sources?.length) {
+      add({ t: 'Based on:', bold: true })
+      m.sources.slice(0, 5).forEach((s, i) => add({ t: `  [${i + 1}] ` }, { t: [s.source_name, s.section].filter(Boolean).join(' ') }))
     }
     for (const s of m.suggestions) {
       const bar = { t: `${sym.bar} `, color: color.accent }
       add(bar, { t: String(s.severity || 'note').toUpperCase(), bold: true, color: s.severity === 'high' ? color.bad : color.accent }, { t: `  ${s.summary || ''}` })
       if (s.proposed_text) wrap(`Proposed: ${String(s.proposed_text).slice(0, 400)}`, width - 2).forEach((l) => add(bar, { t: l }))
-      if (s.basis) wrap(`Basis: ${s.basis}`, width - 2).forEach((l) => add(bar, { t: l, dim: true }))
+      if (s.basis) wrap(`Legal basis: ${basisText(s.basis)}`, width - 2).forEach((l) => add(bar, { t: l, dim: true }))
+      const check = checkLine(s)
+      add(bar, { t: check.ok ? check.text : `! ${check.text}`, color: check.ok ? color.ok : color.warn })
     }
     if (m.tip) para(m.tip, { dim: true })
     if (m.error) wrap(`${sym.bad} ${m.error}`, width).forEach((l) => add({ t: l, color: color.bad }))
-    if (m.stopped) add({ t: '(stopped)', dim: true })
+    if (m.stopNote) para(m.stopNote, { dim: true })
+    else if (m.stopped) add({ t: '(stopped)', dim: true })
+    if (act) for (const segs of doneLines(act)) add(...segs)
   }
   return L
 }

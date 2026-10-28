@@ -428,16 +428,21 @@ async function handle(req, res) {
       res.on('close', () => ac.abort())
       const matterId = body.matterId || matterIdFor(body, null)
       require('./workspace').setBase(require('./agent-config').load().workspace)
+      // Activity record + `model` events: what was read and where data went.
+      const rec = require('./activity').start({ matterId, kind: body.type, asked: [body.playbook, body.target].filter(Boolean).join(' · '), client: clientOf(req), files: [body.file, body.fileA, body.fileB].filter(Boolean) })
+      const out = (e) => { rec.see(e); sendSse(res, e) }
       try {
-        const r = await policy.withMatter(matterId, () => run({
+        const r = await policy.observeModels((m) => out({ type: 'model', ...m }), () => policy.withMatter(matterId, () => run({
           matterId, folder: body.folder, playbook: body.playbook, signal: ac.signal,
           file: body.file, target: body.target, glossary: body.glossary, fileA: body.fileA, fileB: body.fileB, rate: body.rate !== false,
-          onProgress: (ev) => sendSse(res, { type: 'progress', ...ev }),
-        }))
-        sendSse(res, { type: 'done', files: r.files, stats: r.stats, count: (r.findings || r.events || r.changes || r.flags || []).length })
+          onProgress: (ev) => out({ type: 'progress', ...ev }),
+        })))
+        out({ type: 'done', files: r.files, stats: r.stats, count: (r.findings || r.events || r.changes || r.flags || []).length })
+        rec.finish({ aborted: ac.signal.aborted, files: r.files || [] })
         require('./hooks').run('after_workflow', { workflow: body.type, files: r.files, stats: r.stats, matterId }).catch(() => {})
       } catch (err) {
-        sendSse(res, { type: 'error', message: err.message })
+        out({ type: 'error', message: err.message })
+        rec.finish({ error: err.message })
       }
       return res.end()
     }
@@ -615,12 +620,16 @@ async function handle(req, res) {
           if (!ready?.ok) { sendSse(res, { type: 'error', message: `model unavailable: ${ready.reason}` }); return res.end() }
           const ac = new AbortController()
           res.on('close', () => ac.abort())
+          const rec = require('./activity').start({ matterId: plan.matterId, kind: 'plan', asked: plan.goal || '', client: clientOf(req) })
+          const out = (e) => { rec.see(e); sendSse(res, e) }
           try {
-            const r = await require('./permissions').session(permissionSession(body, res, ac.signal), () => policy.withMatter(plan.matterId, () => planMod.run(body.id, { signal: ac.signal, onProgress: (ev) => sendSse(res, { type: 'progress', ...ev }) })))
-            sendSse(res, { type: 'done', status: r.status, report: r.report || null, waiting: r.steps.find((x) => x.status === 'waiting') || null })
+            const r = await require('./permissions').session(permissionSession(body, res, ac.signal), () => policy.observeModels((m) => out({ type: 'model', ...m }), () => policy.withMatter(plan.matterId, () => planMod.run(body.id, { signal: ac.signal, onProgress: (ev) => out({ type: 'progress', ...ev }) }))))
+            out({ type: 'done', status: r.status, report: r.report || null, waiting: r.steps.find((x) => x.status === 'waiting') || null })
+            rec.finish({ aborted: ac.signal.aborted, files: [r.report, ...r.steps.flatMap((x) => x.result?.files || [])] })
             if (r.status === 'done' || r.status === 'failed') require('./hooks').run('after_workflow', { workflow: 'plan', files: [r.report, ...r.steps.flatMap((x) => x.result?.files || [])].filter(Boolean), stats: { status: r.status, steps: r.steps.length }, matterId: plan.matterId }).catch(() => {})
           } catch (err) {
-            sendSse(res, { type: 'error', message: err.message })
+            out({ type: 'error', message: err.message })
+            rec.finish({ error: err.message })
           }
           return res.end()
         }
@@ -732,15 +741,19 @@ async function handle(req, res) {
           if (!ready?.ok) { sendSse(res, { type: 'error', message: `model unavailable: ${ready.reason}` }); return res.end() }
           const ac = new AbortController()
           res.on('close', () => ac.abort())
+          const rec = require('./activity').start({ matterId: g.matterId, kind: 'grid', asked: g.title || '', client: clientOf(req) })
+          const out = (e) => { rec.see(e); sendSse(res, e) }
           try {
-            const r = await policy.withMatter(g.matterId, () => grid.run(body.id, {
+            const r = await policy.observeModels((m) => out({ type: 'model', ...m }), () => policy.withMatter(g.matterId, () => grid.run(body.id, {
               documents: body.documents, columns: body.columns, force: !!body.force, signal: ac.signal,
-              onProgress: (ev) => sendSse(res, { type: 'progress', ...ev }),
-            }))
-            sendSse(res, { type: 'done', stats: r.stats })
+              onProgress: (ev) => out({ type: 'progress', ...ev }),
+            })))
+            out({ type: 'done', stats: r.stats })
+            rec.finish({ aborted: ac.signal.aborted })
             require('./hooks').run('after_workflow', { workflow: 'grid', files: [], stats: r.stats, matterId: g.matterId }).catch(() => {})
           } catch (err) {
-            sendSse(res, { type: 'error', message: err.message })
+            out({ type: 'error', message: err.message })
+            rec.finish({ error: err.message })
           }
           return res.end()
         }
@@ -1112,6 +1125,10 @@ async function handle(req, res) {
       return res.end()
     }
 
+    // What OpenLex did per request (activity.js): asked, looked at, where data went, result.
+    if (req.method === 'GET' && p === '/api/activity') {
+      return sendJson(res, 200, { activity: require('./activity').list(url.searchParams.get('matterId') || null, +(url.searchParams.get('limit') || 20)) })
+    }
     if (req.method === 'POST' && p === '/api/chat') {
       const body = await readBody(req, 20)
       const entry = getDoc(body)
@@ -1156,6 +1173,9 @@ async function handle(req, res) {
           if (inv) { skill = inv.skill; body.message = inv.message || `Apply the "${inv.skill.title}" skill to this document.` }
         }
       } catch (err) { sendSse(res, { type: 'error', message: err.message }); return res.end() }
+      // Activity record (GET /api/activity) + `model` events (where the data went).
+      const rec = require('./activity').start({ matterId: matterIdFor(body, entry), kind: 'question', asked: body.message, client: clientOf(req), files: Array.isArray(body.files) ? body.files : [] })
+      const out = (e) => { rec.see(e); sendSse(res, e) }
       if (agent && agent.name !== 'associate') sendSse(res, { type: 'agent', name: agent.name, title: agent.title })
       if (skill) sendSse(res, { type: 'skill', name: skill.name, title: skill.title })
       else if (body.suggestSkill !== false) {
@@ -1169,7 +1189,7 @@ async function handle(req, res) {
       try {
         // Permissions: an interactive front end answers "may OpenLex …?"
         // questions on this stream; anything else fails closed (deny).
-        const r = await require('./permissions').session(permissionSession(body, res, ac.signal), () => policy.withMatter(matterIdFor(body, entry), () => agentsMod.run(agent, () => runAction(context, body.message, (e) => sendSse(res, e), { signal: ac.signal, skill, agent }))))
+        const r = await require('./permissions').session(permissionSession(body, res, ac.signal), () => policy.observeModels((m) => out({ type: 'model', ...m }), () => policy.withMatter(matterIdFor(body, entry), () => agentsMod.run(agent, () => runAction(context, body.message, out, { signal: ac.signal, skill, agent })))))
         // Conversation memory: persist the exchange (best-effort; the
         // model's streamed prose already went out token-by-token).
         session.append(body.message, r.text)
@@ -1178,24 +1198,26 @@ async function handle(req, res) {
         const hooks = require('./hooks')
         const mid = matterIdFor(body, entry)
         const gate = hooks.has('before_answer') && r.text ? await hooks.run('before_answer', { text: r.text, matterId: mid }) : { decision: 'allow', warnings: [] }
-        if (gate.decision === 'deny') sendSse(res, { type: 'withheld', message: gate.reason })
+        if (gate.decision === 'deny') out({ type: 'withheld', message: gate.reason })
         else {
           // streamed=true → the write phase already streamed the prose token
           // by token; skip the duplicate final event.
-          if (!r.streamed) sendSse(res, { type: 'text', text: r.text + '\n' })
-          for (const w of gate.warnings) sendSse(res, { type: 'warning', message: w })
+          if (!r.streamed) out({ type: 'text', text: r.text + '\n' })
+          for (const w of gate.warnings) out({ type: 'warning', message: w })
         }
         for (const sug of r.suggestions) {
           if (hooks.has('on_suggestion')) {
             const g = await hooks.run('on_suggestion', { text: sug.proposed_text || '', summary: sug.summary || '', severity: sug.severity, matterId: mid })
-            if (g.decision === 'deny') { sendSse(res, { type: 'warning', message: `A suggestion was removed by a firm rule: ${g.reason}` }); continue }
+            if (g.decision === 'deny') { out({ type: 'warning', message: `A suggestion was removed by a firm rule: ${g.reason}` }); continue }
             if (g.flags.length || g.warnings.length) sug.flags = [...g.flags, ...g.warnings]
           }
-          sendSse(res, { type: 'suggestion', suggestion: sug })
+          out({ type: 'suggestion', suggestion: sug })
         }
-        sendSse(res, { type: 'done' })
+        out({ type: 'done' })
+        rec.finish({ aborted: ac.signal.aborted })
       } catch (err) {
-        sendSse(res, { type: 'error', message: err.message })
+        out({ type: 'error', message: err.message })
+        rec.finish({ error: err.message })
       }
       return res.end()
     }

@@ -39,15 +39,15 @@ export const nameOf = (id) => NAMES[id] || (String(id).startsWith('mcp:') ? `con
  */
 export function friendly(err) {
   const m = String(err?.message || err || '')
-  if (/Blocked by data policy|POLICY_BLOCKED|local-only|not on the allow-list/i.test(m)) return 'Your client-data rule does not allow sending this to the AI model. Change it in Settings → Where client data may go, or use the AI on this computer.'
-  if (/outside the approved regions|no pinned region/i.test(m)) return 'This AI model is not in an approved region (EU only). Pick an EU model in Settings, or change the client-data rule.'
-  if (/no API key|NO_KEY|no AWS credentials/i.test(m)) return 'There is no key for this AI model yet. Add it in Settings → AI model.'
-  if (/401|403|invalid.*key|unauthori[sz]ed|authentication|permission denied/i.test(m)) return 'The AI service did not accept your key. Check the key in Settings → AI model (copy it again from your account page).'
+  if (/Blocked by data policy|POLICY_BLOCKED|local-only|not on the allow-list/i.test(m)) return 'Your client-data rule does not allow sending this to the AI service. Change it in Settings → Where client data may go, or use the AI on this computer.'
+  if (/outside the approved regions|no pinned region/i.test(m)) return 'This AI service is not in an approved region (EU only). Pick an EU service in Settings, or change the client-data rule.'
+  if (/no API key|NO_KEY|no AWS credentials/i.test(m)) return 'There is no key for this AI service yet. Add it in Settings → Which AI.'
+  if (/401|403|invalid.*key|unauthori[sz]ed|authentication|permission denied/i.test(m)) return 'The AI service did not accept your key. Check the key in Settings → Which AI (copy it again from your account page).'
   if (/429|rate limit|quota|insufficient/i.test(m)) return 'The AI service says the account has reached its limit. Try again in a minute, or check your plan with the provider of your key.'
   if (/ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ETIMEDOUT|timed? ?out|network|socket hang up/i.test(m) && !/engine/i.test(m)) return 'The AI service could not be reached. Check the internet connection (or that the firm server is running) and try again.'
   if (/cannot reach the engine|engine is not running|registry is stale|did not start/i.test(m)) return 'OpenLex is not running in the background. Restart this app; if it keeps happening, see the log file.'
-  if (/model not installed|local engine unavailable/i.test(m)) return 'No AI model is installed on this computer yet. Choose Settings → AI model to set one up (or use your own key).'
-  if (/model unavailable|not loaded|no model|llama/i.test(m)) return 'The AI model is not ready. Open Settings → AI model to set it up.'
+  if (/model not installed|local engine unavailable/i.test(m)) return 'No AI model is installed on this computer yet. Choose Settings → Which AI to set one up (or use your own key).'
+  if (/model unavailable|not loaded|no model|llama/i.test(m)) return 'The AI is not ready. Open Settings → Which AI to set it up.'
   if (/not a folder|ENOENT|no such file/i.test(m)) return 'That file or folder was not found. Check the path (you can drag the file into this window).'
   if (/matter title is required/i.test(m)) return 'Please give the matter a name.'
   if (/privileged/i.test(m)) return 'This matter is privileged, so its documents stay on this computer. Turn "Privileged" off first if that is really intended.'
@@ -102,6 +102,8 @@ export function createApi(c = client) {
     followHub: (onEvent, signal) => (c.followHub ? c.followHub(onEvent, signal) : Promise.resolve()),
     decidePlan: (id, stepId, decision) => call('POST', '/api/plans/decide', { id, stepId, decision }),
     getPlan: (id) => call('GET', `/api/plans/get${q({ id })}`),
+    activity: (matterId, limit = 20) => call('GET', `/api/activity${q({ matterId, limit })}`),
+    lawSection: (chunkId) => call('GET', `/api/law/section${q({ chunk_id: chunkId })}`),
   }
 }
 
@@ -117,14 +119,21 @@ export function savePrefs(patch) {
 // ── describing the current setup in plain words ─────────────────────────
 const isEu = (region) => /^(eu|europe)/i.test(String(region || ''))
 
-/** "claude-sonnet-5-5 — cloud: Anthropic" / "… — on this computer". */
+/**
+ * Which AI, in words: "Claude (Anthropic, EU) — online AI service" or
+ * "on this computer". No model ids (those are in Settings → AI).
+ */
 export function describeModel(info) {
   const st = info?.status?.model
   const prov = info?.providers?.providers?.find((p) => p.id === info?.providers?.active)
   if (!st && !prov) return 'not set up yet'
-  const name = st?.name || prov?.model || 'AI model'
-  if (prov?.local || st?.local) return `${name} — on this computer${st && !st.loaded ? ' (not ready)' : ''}`
-  return `${name} — cloud: ${nameOf(prov?.id || st?.provider)}${isEu(prov?.region) ? ', EU' : ''}`
+  if (prov?.local || st?.local) return `on this computer${st && !st.loaded ? ' (not ready)' : ''}`
+  if (prov?.id === 'custom') return 'your firm\'s AI server'
+  const id = prov?.id || st?.provider
+  const model = String(prov?.model || st?.name || '')
+  const family = id === 'anthropic' ? 'Claude' : id === 'mistral' ? 'Mistral' : /claude/i.test(model) ? 'Claude' : /gpt|^o\d/i.test(model) ? 'GPT' : /mistral/i.test(model) ? 'Mistral' : /gemini/i.test(model) ? 'Gemini' : ''
+  const where = [family && family !== nameOf(id) ? nameOf(id) : '', isEu(prov?.region) ? 'EU' : ''].filter(Boolean).join(', ')
+  return `${family && family !== nameOf(id) ? family : nameOf(id)}${where ? ` (${where})` : ''} — online AI service`
 }
 
 /** Where client data may go under a rule, in one short phrase. */

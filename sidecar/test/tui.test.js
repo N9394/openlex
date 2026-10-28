@@ -79,11 +79,27 @@ const engine = http.createServer((req, res) => {
       case 'POST /api/matters': { const m = { id: 'm_new', title: body.title, client: body.client, privileged: !!body.privileged, policy: { mode: 'local-only' } }; state.matters.push(m); return json({ ok: true, matter: m }) }
       case 'POST /api/matters/update': { const m = state.matters.find((x) => x.id === body.id); Object.assign(m, body.patch); return json({ ok: true, matter: m }) }
       case 'POST /api/matters/policy': { const m = state.matters.find((x) => x.id === body.id); m.policy = body.rule; return json({ ok: true, matter: m }) }
-      case 'GET /api/workflows/documents': return json({ documents: [{ name: 'SPA draft 3.docx', path: '/docs/SPA draft 3.docx' }, { name: 'SPA draft 4.docx', path: '/docs/SPA draft 4.docx' }], languages: { en: 'English', de: 'German' } })
+      case 'GET /api/activity': return json({ activity: state.activity || [] })
+      case 'GET /api/law/section': return json({ source_name: 'ABGB', section: '§ 933', content: 'Das Recht auf die Gewährleistung muss gerichtlich geltend gemacht werden, und zwar, wenn es unbewegliche Sachen betrifft, binnen drei Jahren.' })
+      case 'GET /api/workflows/documents':
+        if (state.manyDocs) return json({ documents: Array.from({ length: 12 }, (_, i) => ({ name: `Lease ${String(i + 1).padStart(2, '0')}.docx`, path: `/docs/Lease ${i + 1}.docx` })), languages: { en: 'English' } })
+        return json({ documents: [{ name: 'SPA draft 3.docx', path: '/docs/SPA draft 3.docx' }, { name: 'SPA draft 4.docx', path: '/docs/SPA draft 4.docx' }], languages: { en: 'English', de: 'German' } })
       case 'GET /api/workflows/playbooks': return json({ playbooks: [{ name: '', title: 'Standard contract review', builtIn: true }, { name: 'spa', title: 'Share purchase checklist', checks: 14, firm: true }] })
       case 'GET /api/workspace': return json({ base: path.join(DATA, 'workspace') })
       case 'POST /api/library/folders': return json({ ok: true })
       case 'POST /api/chat':
+        // A scripted answer (transparency tests): its events, then held open until finishChat().
+        if (state.chatScript) {
+          const script = state.chatScript
+          state.chatScript = null
+          res.writeHead(200, { 'Content-Type': 'text/event-stream' })
+          for (const e of script) res.write(`data: ${JSON.stringify(e)}\n\n`)
+          state.chatRes = res
+          state.chatSend = (e) => res.write(`data: ${JSON.stringify(e)}\n\n`)
+          res.on('close', () => { state.chatClosed = true })
+          state.finishChat = (more = []) => { for (const e of more) res.write(`data: ${JSON.stringify(e)}\n\n`); res.end(`data: ${JSON.stringify({ type: 'done' })}\n\n`) }
+          return
+        }
         if (/still writing/i.test(body.message)) {
           res.writeHead(200, { 'Content-Type': 'text/event-stream' })
           res.write(`data: ${JSON.stringify({ type: 'text', text: 'Part one of a long answer…' })}\n\n`)
@@ -112,6 +128,16 @@ const engine = http.createServer((req, res) => {
           { type: 'done' },
         ])
       case 'POST /api/workflows/run':
+        if (state.workflowScript) {
+          const script = state.workflowScript
+          state.workflowScript = null
+          res.writeHead(200, { 'Content-Type': 'text/event-stream' })
+          state.workflowSend = (e) => res.write(`data: ${JSON.stringify(e)}\n\n`)
+          state.finishWorkflow = (e) => res.end(`data: ${JSON.stringify(e)}\n\n`)
+          res.on('close', () => { state.workflowClosed = true })
+          for (const e of script) state.workflowSend(e)
+          return
+        }
         if (body.type === 'chronology') {
           // Held open until the test has seen the progress.
           res.writeHead(200, { 'Content-Type': 'text/event-stream' })
@@ -145,7 +171,7 @@ const engine = http.createServer((req, res) => {
   })
 })
 
-let ink, React, App, paths, h
+let ink, React, App, paths, h, explain
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const flat = (f) => String(f).replace(/\s+/g, ' ')
 async function waitFor(r, text, ms = 3000) {
@@ -185,6 +211,7 @@ test.before(async () => {
   React = await import('react')
   App = (await import('../tui/app.mjs')).App
   paths = await import('../tui/paths.mjs')
+  explain = await import('../tui/explain.mjs')
   h = React.createElement
 })
 test.after(() => { for (const r of rendered) { try { r.unmount() } catch { /* already */ } } engine.closeAllConnections?.(); engine.close(); fs.rmSync(DATA, { recursive: true, force: true }) })
@@ -195,7 +222,7 @@ test('first run: wizard asks where the AI runs, stores the key, sets the most pr
   assert.match(f, /On this computer/)
   assert.match(f, /With my own key/)
   assert.match(f, /With my firm's cloud account/)
-  assert.match(f, /AI model: lotus — on this computer \(not ready\)/)
+  assert.match(f, /AI: on this computer \(not ready\)/)
   capture('first run', f)
   await press(r, 'down', 'enter')
   await waitFor(r, 'Which service is your key from?')
@@ -336,7 +363,7 @@ test('action: checklist review shows progress, then the result files to open', a
   await waitFor(r, 'Which checklist?')
   await press(r, 'down', 'enter') // the firm's checklist
   const f = await waitFor(r, 'Open review.xlsx')
-  assert.match(f, /Done\. 2 documents · 5 findings \(each quoted\)|Done\. 2 documents \| 5 findings/)
+  assert.match(f, /Done in \d+ s\. 2 documents (·|\|) 5 findings \(each quoted\)/)
   assert.match(f, /Open review\.docx/)
   assert.match(f, /Open the folder/)
   assert.deepStrictEqual(posted('/api/workflows/run').at(-1).body, { type: 'review', playbook: 'spa', matterId: 'm_1' })
@@ -355,9 +382,11 @@ test('action progress: the chronology shows which document is being read, then t
   await press(r, '2')
   await waitFor(r, 'Build a chronology from 2 documents?')
   await press(r, 'enter')
-  let f = await waitFor(r, 'Working — 1 of 2…')
-  assert.match(f, /Reading SPA draft 3\.docx/)
-  assert.match(f, /Esc stop/)
+  let f = await waitFor(r, 'Document 1 of 2')
+  assert.match(f, /▸ SPA draft 3\.docx — finding the dated events/)
+  assert.match(f, /• SPA draft 4\.docx/)
+  assert.match(f, /time left: known after the first one/)
+  assert.match(f, /Esc stop · what is done so far is saved in the matter folder/)
   capture('action progress', f)
   state.finishChronology()
   f = await waitFor(r, 'Open chronology.xlsx')
@@ -495,7 +524,7 @@ test('permission prompt: plain words over the chat; Enter = allow once, a = this
   assert.match(f, /Allowed once: Save obligations\.csv in Alpine\//)
   assert.deepStrictEqual(answered(), ['once'])
 
-  for (const [k, want, line] of [['a', 'always_matter', 'Allowed for this matter from now on: write_file'], ['A', 'always', 'Allowed from now on: write_file'], ['esc', 'deny', 'I did not save the file.'], ['n', 'deny', 'Not allowed: Save obligations.csv']]) {
+  for (const [k, want, line] of [['a', 'always_matter', 'Allowed for this matter from now on: saving files'], ['A', 'always', 'Allowed from now on: saving files'], ['esc', 'deny', 'I did not save the file.'], ['n', 'deny', 'Not allowed: Save obligations.csv']]) {
     const n = answered().length
     await press(r, 'Save it again', 'enter')
     await waitFor(r, 'OpenLex wants to save a file')
@@ -532,16 +561,16 @@ test('chat commands: "/" shows hints; /model, /key, /data, /as, /privileged, /pe
   f = await waitFor(r, '/model [local')
   assert.ok(!f.includes('/key [service]'))
   await press(r, CTRL_U, '/nda')
-  await waitFor(r, '/nda-review · firm skill')
+  await waitFor(r, '/nda-review · firm instructions')
 
   // /model anthropic → active provider, one confirmation line, status bar at once.
   await press(r, CTRL_U, '/model anthropic', 'enter')
-  f = await waitFor(r, 'Now using claude-sonnet-5-5 (Anthropic), cloud.')
+  f = await waitFor(r, 'Now using Claude (Anthropic), an online AI service.')
   capture('model command', f)
   assert.deepStrictEqual(posted('/api/providers').at(-1).body, { active: 'anthropic' })
   assert.match(flat(f), /Client data for this matter: stays on this computer\. To send documents to Anthropic: \/data\./)
   assert.match(flat(f), /There is no key for Anthropic yet: \/key anthropic\./)
-  assert.match(f, /AI model: claude-sonnet-5-5 — cloud: Anthropic/)
+  assert.match(f, /AI: Claude \(Anthropic\) — online AI service/)
 
   // /key: hidden, saved, then checked.
   await press(r, '/key', 'enter')
@@ -561,7 +590,7 @@ test('chat commands: "/" shows hints; /model, /key, /data, /as, /privileged, /pe
 
   // /model with a model name; an unknown service.
   await press(r, '/model openrouter:qwen/qwen3.5-9b', 'enter')
-  await waitFor(r, 'Now using qwen/qwen3.5-9b (OpenRouter), cloud.')
+  await waitFor(r, 'Now using OpenRouter, an online AI service. Client')
   assert.deepStrictEqual(posted('/api/providers').at(-1).body, { active: 'openrouter', provider: 'openrouter', overrides: { model: 'qwen/qwen3.5-9b' } })
   await press(r, '/model nowhere', 'enter')
   await waitFor(r, 'There is no AI service called "nowhere"')
@@ -570,7 +599,7 @@ test('chat commands: "/" shows hints; /model, /key, /data, /as, /privileged, /pe
   await press(r, '/model', 'enter')
   await waitFor(r, 'Where should the AI run?')
   await press(r, 'enter') // first: on this computer
-  await waitFor(r, 'Now using lotus (this computer), on this computer.')
+  await waitFor(r, 'Now using the AI on this computer.')
   assert.strictEqual(posted('/api/providers').at(-1).body.active, 'local')
 
   // /as and /privileged.
@@ -591,16 +620,16 @@ test('chat commands: "/" shows hints; /model, /key, /data, /as, /privileged, /pe
   await press(r, '/permissions', 'enter')
   f = await waitFor(r, 'What OpenLex may do without asking')
   capture('permissions list', f)
-  assert.match(f, /web_fetch:eur-lex\.europa\.eu\s+allowed everywhere/)
-  assert.match(f, /write_file\s+this matter/)
-  assert.match(f, /run_bash\s+blocked by your firm/)
+  assert.match(f, /Opening web pages on eur-lex\.europa\.eu\s+allowed everywhere/)
+  assert.match(f, /Saving files\s+this matter/)
+  assert.match(f, /Running programs on this computer\s+blocked by your firm/)
   await press(r, 'enter')
-  await waitFor(r, 'Remove "web_fetch:eur-lex.europa.eu"?')
+  await waitFor(r, 'Remove "opening web pages on eur-lex.europa.eu"?')
   await press(r, 'enter')
-  await waitFor(r, '▸ ✓ write_file')
+  await waitFor(r, '▸ ✓ Saving files')
   assert.deepStrictEqual(posted('/api/permissions/rules').at(-1).body, { action: 'remove', pattern: 'web_fetch:eur-lex.europa.eu' })
   await press(r, 'esc')
-  await waitFor(r, 'Removed: web_fetch:eur-lex.europa.eu')
+  await waitFor(r, 'Removed: opening web pages on eur-lex.europa.eu')
 
   // /help and /clear.
   await press(r, '/help', 'enter')
@@ -634,7 +663,7 @@ test('another front end changes the model or the rule: the status bar follows (h
   Object.assign(state, { active: 'local', models: {}, policy: { mode: 'local-only' } })
   const r = show(h(App))
   await waitFor(r, 'Alpine share deal')
-  await waitFor(r, 'AI model: lotus — on this computer')
+  await waitFor(r, 'AI: on this computer')
   const until = Date.now() + 3000
   while (!state.hub.length && Date.now() < until) await sleep(20)
   assert.ok(state.hub.length, 'the terminal app follows the hub')
@@ -642,7 +671,7 @@ test('another front end changes the model or the rule: the status bar follows (h
   state.active = 'mistral'
   state.policy = { mode: 'allow-list', providers: ['mistral'], regions: ['eu'] }
   for (const res of state.hub) res.write(`data: ${JSON.stringify({ type: 'provider-changed', from: 'cli', data: {} })}\n\n`)
-  const f = await waitFor(r, 'AI model: claude-sonnet-5-5 — cloud: Mistral, EU')
+  const f = await waitFor(r, 'AI: Mistral (EU) — online AI service')
   assert.match(f, /Client data: may go to Mistral \(EU only\)/)
   r.unmount()
 })
@@ -667,4 +696,387 @@ test('CLI: permissions list / allow --matter / remove; ask from a script never a
   await run('ask', 'What applies?', '--json', '--allow', 'write_file:Acme/**,web_fetch:eur-lex.europa.eu', '--yes')
   chat = posted('/api/chat').at(-1).body
   assert.deepStrictEqual([chat.allow, chat.yes], [['write_file:Acme/**', 'web_fetch:eur-lex.europa.eu'], true])
+})
+
+// ── transparency: what OpenLex is doing, in a lawyer's words ─────────────
+
+test('explain: every engine event becomes a plain sentence (no tool names, JSON or model ids)', () => {
+  const step = (tool, detail = {}, extra = {}) => explain.explainStep({ type: 'step', text: `tool: ${tool}`, kind: 'tool', tool, detail, ...extra }).text
+  const table = [
+    [step('get_range_text', { clause: { index: 3, heading: '4. Liability' } }), 'Reading clause 4 (Liability)'],
+    [step('get_clause_analysis', { clause: { index: 6, heading: '§ 7 Haftung' } }), 'Reading clause 7 (Haftung)'],
+    [step('get_range_text', { clause: { index: 2, heading: null } }), 'Reading part 3 of the document'],
+    [step('search_law', { query: 'Gewährleistung Frist', jurisdiction: 'AT' }), 'Searching Austrian law: “Gewährleistung Frist”'],
+    [step('search_law', { query: 'notice period' }), 'Searching the law: “notice period”'],
+    [step('search_ris', { query: 'Gewährleistung' }), 'Checking the official source (RIS, Austria\'s federal law database): “Gewährleistung”'],
+    [step('search_eurlex', {}), 'Checking the official source (EUR-Lex, the EU\'s law database)'],
+    [step('web_fetch', { host: 'eur-lex.europa.eu' }), 'Opening a web page: eur-lex.europa.eu'],
+    [step('search_firm_library', { query: 'cap' }), 'Looking through your firm\'s precedents'],
+    [step('find_clause', {}), 'Looking through your firm\'s precedents'],
+    [step('write_file', { file: 'obligations.csv' }), 'Saving “obligations.csv” in your files folder'],
+    [step('run_bash'), 'Running a program on this computer'],
+    [step('mcp__dms__search'), 'Using your connector “dms”'],
+    [step('some_new_tool'), 'Working on your question'],
+    [explain.explainStep({ type: 'step', text: 'writing…', kind: 'writing' }).text, 'Writing the answer'],
+    [explain.explainStep({ type: 'step', text: 'judge: verifying 2 suggestion(s)…', kind: 'judge', total: 2 }).text, 'Checking each suggestion against the law it cites'],
+    [explain.explainStep({ type: 'step', text: 'judge: 1/2 verified', kind: 'judged', verified: 1, total: 2 }).text, 'Checked the suggestions: 1 of 2 hold up'],
+    [explain.explainStep({ type: 'step', text: 'analysis time limit reached — writing answer', kind: 'timeout' }).text, 'Enough research for this question — writing the answer now'],
+    [explain.explainStep({ type: 'step', text: 'failed: search_ris', kind: 'tool_failed', tool: 'search_ris', offline: true }).text, 'Couldn\'t reach RIS (Austria\'s federal law database); the answer uses the copy of the law on this computer instead.'],
+    [explain.explainStep({ type: 'step', text: 'declined: web_fetch', kind: 'declined', tool: 'web_fetch', detail: { host: 'example.com' } }).text, 'Not done — you said no: opening a web page: example.com'],
+    [explain.explainStep({ type: 'step', text: 'blocked: run_bash', kind: 'blocked', tool: 'run_bash' }).text, 'Not done — your firm\'s rules don\'t allow it: running a program on this computer'],
+    [explain.explainStep({ type: 'step', text: 'LLM temporarily unavailable — writing with what we have', kind: 'model_unavailable' }).text, 'The AI stopped responding; writing the answer with what was found so far'],
+    // Older engines send only the text: still plain words.
+    [explain.explainStep({ type: 'step', text: 'tool: search_law' }).text, 'Searching the law'],
+    [explain.explainStep({ type: 'step', text: 'writing… (truncated — retrying)' }).text, 'Writing the answer again (the first try was cut off)'],
+    [explain.explainStep({ type: 'step', text: 'judge: 2/3 verified' }).text, 'Checked the suggestions: 2 of 3 hold up'],
+    [explain.explainStep({ type: 'step', text: 'something brand new from the engine' }).text, 'Working on your question'],
+  ]
+  for (const [got, want] of table) assert.strictEqual(got, want)
+  assert.strictEqual(explain.explainStep({ type: 'step', text: 'searching local law packs…', kind: 'law_search' }).hide, true)
+  assert.strictEqual(explain.explainStep({ type: 'step', text: 'garbage filter: 3 → 2 suggestions' }).hide, true)
+  // Every tool in the table: words only — never the tool's own name, an underscore or braces.
+  for (const tool of Object.keys(explain.TOOL_WORDS)) {
+    const x = explain.explainTool(tool, { query: 'q', host: 'h.example', clause: { heading: '1. A' }, file: 'f.txt' })
+    if (x.hide) continue
+    assert.ok(!x.text.includes(tool) && !/[_{}]/.test(x.text), `${tool}: ${x.text}`)
+  }
+  assert.strictEqual(explain.explainTool('search_ris', {}).online, 'RIS (Austria\'s federal law database)')
+  assert.strictEqual(explain.explainTool('search_law', {}).online, undefined, 'the law on this computer is not "online"')
+  // Errors: what went wrong and what it means for the answer.
+  assert.match(explain.errorSentence('ECONNREFUSED api.anthropic.com', { partial: true }), /could not be reached.*The answer stops here; what was written so far is kept\./)
+  assert.match(explain.errorSentence('Blocked by data policy: local-only'), /client-data rule.*There is no answer this time\./)
+})
+
+test('explain: the activity grows step by step (✓ done · ▸ now), with times and what was found', () => {
+  let a = explain.startActivity(0)
+  a = explain.applyEvent(a, { type: 'model', provider: 'local', local: true }, 500)
+  a = explain.applyEvent(a, { type: 'reasoning', text: 'hmm', streaming: true }, 600)
+  a = explain.applyEvent(a, { type: 'step', kind: 'tool', tool: 'get_range_text', detail: { clause: { index: 3, heading: '4. Liability' } } }, 2000)
+  a = explain.applyEvent(a, { type: 'step', kind: 'tool', tool: 'search_law', detail: { query: 'Haftung', jurisdiction: 'AT' } }, 3000)
+  a = explain.applyEvent(a, { type: 'law', sources: [{ chunk_id: 'c1', source_name: 'ABGB', section: '§ 1295' }] }, 4000)
+  a = explain.applyEvent(a, { type: 'step', kind: 'law_search', text: 'searching local law packs…' }, 4100)
+  a = explain.applyEvent(a, { type: 'compact', actions: ['x'] }, 4200)
+  assert.deepStrictEqual(a.steps.map((s) => [s.text, s.status]), [
+    ['Working out how to answer', 'done'], ['Reading clause 4 (Liability)', 'done'], ['Searching Austrian law: “Haftung”', 'now'],
+  ])
+  let lines = explain.activityLines(a, { now: 9000, width: 78 }).map((l) => l.map((g) => g.t).join(''))
+  assert.match(lines[0], /OpenLex is working on it · 9 s so far/)
+  assert.match(lines[1], /^ 1 ✓ Working out how to answer\s+2 s$/)
+  assert.match(lines[3], /^ 3 ▸ Searching Austrian law: “Haftung”\s+6 s$/)
+  assert.match(lines[4], /found: ABGB § 1295/)
+  assert.match(lines.join('\n'), /• Next: writing the answer/)
+  assert.match(lines.join('\n'), /✓ Stayed on this computer|Nothing has left this computer so far/)
+  assert.match(lines.at(-1), /Esc stop · the answer so far is kept/)
+  a = explain.applyEvent(a, { type: 'text', text: 'The cap ' }, 10000)
+  a = explain.applyEvent(a, { type: 'text', text: 'is valid.' }, 10100)
+  a = explain.applyEvent(a, { type: 'done' }, 12000)
+  assert.deepStrictEqual(a.steps.map((s) => s.status), ['done', 'done', 'done', 'done'])
+  assert.strictEqual(a.steps[3].text, 'Writing the answer')
+  lines = explain.doneLines(a).map((l) => l.map((g) => g.t).join(''))
+  assert.deepStrictEqual(lines, ['Done after 12 s · 4 steps', '✓ Stayed on this computer'])
+  // Based on: the law found and the clause read.
+  assert.deepStrictEqual(explain.basedOn(a).map((x) => x.label), ['ABGB § 1295', 'Your document: clause 4 (Liability)'])
+  // A stop says what was kept.
+  assert.strictEqual(explain.stopSentence(a, 'The cap is valid.'), 'Stopped by you. Kept: the answer so far (4 words), 1 law section it found. Nothing more is sent or saved.')
+  // Suggestions: checked or not.
+  assert.strictEqual(explain.checkLine({ basis: { source: 'ABGB', section: '§ 933' }, verdict: { status: 'verified' } }).text, 'checked against ABGB § 933 ✓')
+  assert.strictEqual(explain.checkLine({ basis: 'ABGB § 933', verdict: { status: 'verified', note: 'judge unavailable — unverified' } }).text, 'could not be verified — review carefully')
+  assert.strictEqual(explain.checkLine({}).ok, false)
+})
+
+test('explain: where the data went — this computer, a cloud AI, names hidden, public law databases', () => {
+  const local = { type: 'model', provider: 'local', local: true }
+  const claude = { type: 'model', provider: 'anthropic', label: 'Anthropic', model: 'claude-sonnet-5-5', region: 'eu-central-1', local: false, redacted: true }
+  let m = explain.addModel([], local)
+  assert.deepStrictEqual(explain.dataLine(m), { text: 'Stayed on this computer', left: false })
+  assert.deepStrictEqual(explain.dataLine([], [], { running: true }), { text: 'Nothing has left this computer so far', left: false })
+  m = explain.addModel(explain.addModel(m, claude), claude)
+  assert.deepStrictEqual(explain.dataLine(m), { text: 'Sent to: Claude (Anthropic, EU) — names hidden · 2 times', left: true })
+  const open = explain.addModel([], { ...claude, provider: 'openai', label: 'OpenAI', model: 'gpt-5', region: null, redacted: false })
+  assert.strictEqual(explain.dataLine(open).text, 'Sent to: GPT (OpenAI) — names not hidden · once')
+  assert.strictEqual(explain.dataLine(explain.addModel([], { ...claude, provider: 'mistral', model: 'mistral-large', region: 'eu', redacted: false })).text, 'Sent to: Mistral (EU) — names not hidden · once')
+  const web = explain.dataLine(explain.addModel([], local), ['RIS (Austria\'s federal law database)'])
+  assert.deepStrictEqual(web, { text: 'Your documents stayed on this computer. Looked up online: RIS (Austria\'s federal law database) (only search words or web addresses)', left: true })
+  assert.match(explain.dataLine([], [], { unreported: 'Not reported which AI answered.' }).text, /Not reported/)
+  assert.ok(!/claude-sonnet/.test(explain.serviceName(claude)), 'no model ids')
+})
+
+test('explain: progress and time left for 12 documents', () => {
+  const t = (ms) => explain.timeLeft(ms)
+  assert.strictEqual(t({ done: 0, total: 12, startedAt: 0, currentAt: 0, now: 5000 }), 'time left: known after the first one')
+  assert.strictEqual(t({ done: 2, total: 12, startedAt: 0, currentAt: 24000, now: 30000 }), 'about 2 minutes left')
+  assert.strictEqual(t({ done: 11, total: 12, startedAt: 0, currentAt: 110000, now: 112000 }), 'less than a minute left')
+  assert.strictEqual(t({ done: 12, total: 12, startedAt: 0, now: 1 }), '')
+  const names = Array.from({ length: 12 }, (_, i) => `Lease ${i + 1}.docx`)
+  let w = explain.startWork('review', names, 0)
+  w = explain.applyProgress(w, { type: 'progress', step: 'document', index: 1, total: 12, name: 'Lease 1.docx' }, 0)
+  w = explain.applyProgress(w, { type: 'progress', step: 'document', index: 2, total: 12, name: 'Lease 2.docx' }, 30000)
+  w = explain.applyProgress(w, { type: 'progress', step: 'document', index: 3, total: 12, name: 'Lease 3.docx' }, 60000)
+  assert.deepStrictEqual([w.done, w.total], [2, 12])
+  const lines = explain.workLines(w, { now: 70000, width: 78 }).map((l) => l.map((g) => g.t).join(''))
+  assert.match(lines[0], /^Document 3 of 12 · about 5 minutes left · 1 min 10 s so far$/)
+  assert.match(lines[1], /17%$/)
+  assert.match(lines.join('\n'), /✓ Lease 1\.docx\s+30 s/)
+  assert.match(lines.join('\n'), /▸ Lease 3\.docx — checking it point by point\s+10 s/)
+  assert.match(lines.join('\n'), /• Lease 4\.docx/)
+  assert.match(lines.join('\n'), /… \d+ more waiting/)
+  assert.match(lines.at(-1), /Esc stop · what is done so far is saved in the matter folder/)
+  // The grid reports a document when it is finished.
+  let g = explain.startWork('grid', ['A.docx', 'B.docx'], 0)
+  g = explain.applyProgress(g, { type: 'progress', step: 'document', index: 1, total: 2, name: 'A.docx' }, 20000)
+  assert.deepStrictEqual(g.items.map((x) => x.status), ['done', 'now'])
+})
+
+const scriptStep = (tool, detail) => ({ type: 'step', text: `tool: ${tool}`, kind: 'tool', tool, detail })
+async function openChat(r) {
+  await waitFor(r, 'Alpine share deal')
+  await press(r, 'down', 'down', 'enter')
+  await waitFor(r, 'Ask a question')
+  await press(r, 'enter')
+  await waitFor(r, 'Type your question')
+}
+
+test('chat in progress (AI on this computer): numbered steps, times, data line, how to stop; then "Based on" and Ctrl+B', async () => {
+  prefs({ setupDone: true })
+  Object.assign(state, { active: 'local', models: {}, policy: { mode: 'local-only' } })
+  state.matters[0].policy = { mode: 'local-only' }
+  let T = 1_000_000
+  explain.clock.now = () => T
+  const local = { type: 'model', provider: 'local', label: 'this computer', local: true, region: null, redacted: false }
+  state.chatScript = [local]
+  const r = show(h(App))
+  await openChat(r)
+  await press(r, 'How long is the warranty period under clause 4?', 'enter')
+  await waitFor(r, 'Working out how to answer')
+  T += 3000; state.chatSend(scriptStep('get_range_text', { clause: { index: 3, heading: '4. Gewährleistung' } }))
+  await waitFor(r, 'Reading clause 4 (Gewährleistung)')
+  T += 2000; state.chatSend(local)
+  state.chatSend(scriptStep('search_law', { query: 'Gewährleistung Frist', jurisdiction: 'AT' }))
+  await waitFor(r, 'Searching Austrian law')
+  T += 4000; state.chatSend({ type: 'law', sources: [{ chunk_id: 'c9', source_name: 'ABGB', section: '§ 933', snippet: 'Das Recht auf die Gewährleistung muss gerichtlich geltend gemacht werden' }, { chunk_id: 'c10', source_name: 'ABGB', section: '§ 932', snippet: 'Der Übernehmer kann wegen eines Mangels die Verbesserung verlangen' }] })
+  state.chatSend({ type: 'step', text: 'searching local law packs…', kind: 'law_search' })
+  T += 1000
+  let f = await waitFor(r, 'found: ABGB § 933, ABGB § 932')
+  await sleep(1100) // the clock ticks once a second
+  f = r.lastFrame()
+  capture('chat in progress — AI on this computer', f)
+  assert.match(f, / 1 ✓ Working out how to answer\s+3 s/)
+  assert.match(f, / 2 ✓ Reading clause 4 \(Gewährleistung\)\s+2 s/)
+  assert.match(f, / 3 ▸ Searching Austrian law: “Gewährleistung Frist”\s+5 s/)
+  assert.match(f, /Next: writing the answer/)
+  assert.match(f, /✓ Nothing has left this computer so far/)
+  assert.match(f, /Esc stop · the answer so far is kept/)
+  assert.match(f, /OpenLex is working on it · 10 s so far/)
+  assert.ok(!/search_law|get_range_text|tool:|SSE|hop|phase/.test(f), 'no engine words on screen')
+
+  T += 2000; state.chatSend({ type: 'step', text: 'writing…', kind: 'writing' })
+  state.chatSend({ type: 'text', text: 'The warranty period is two years for movable goods (ABGB § 933). Clause 4 shortens it to six months.' })
+  state.chatSend({ type: 'step', text: 'judge: verifying 1 suggestion(s)…', kind: 'judge', total: 1 })
+  T += 3000; state.chatSend({ type: 'step', text: 'judge: 1/1 verified', kind: 'judged', verified: 1, total: 1 })
+  state.finishChat([{ type: 'suggestion', suggestion: { severity: 'high', summary: 'Restore the statutory two-year period', proposed_text: 'Die Gewährleistungsfrist beträgt zwei Jahre.', basis: { source: 'ABGB', section: '§ 933' }, verdict: { status: 'verified', note: 'consistent' } } }])
+  f = await waitFor(r, 'checked against ABGB § 933 ✓')
+  capture('the "Based on" block', f)
+  assert.match(f, /Based on:/)
+  assert.match(f, /\[1\] ABGB § 933 — Das Recht auf die Gewährleistung/)
+  assert.match(f, /\[3\] Your document: clause 4 \(Gewährleistung\)/)
+  assert.match(f, /Ctrl\+B or \/sources: see each one in full/)
+  assert.match(f, /Done after 15 s · 5 steps/)
+  assert.match(f, /✓ Stayed on this computer/)
+
+  // Ctrl+B: everything it is based on; Enter opens the law section in full.
+  await press(r, '\u0002')
+  f = await waitFor(r, 'What the last answer is based on')
+  assert.match(f, /\[2\] ABGB § 932/)
+  await press(r, 'enter')
+  f = await waitFor(r, 'binnen drei Jahren')
+  capture('a law section opened from "Based on"', f)
+  await press(r, 'esc')
+  await waitFor(r, 'What the last answer is based on')
+  await press(r, 'esc')
+  await waitFor(r, 'Type your question')
+  explain.clock.now = () => Date.now()
+  r.unmount()
+})
+
+test('chat with a cloud AI and names hidden: "Sent to" cannot be missed; Esc stops and says what was kept', async () => {
+  prefs({ setupDone: true })
+  Object.assign(state, { active: 'anthropic', keys: { anthropic: 'k' }, models: {}, policy: { mode: 'allow-list', providers: ['anthropic'], regions: ['eu'], redact: true } })
+  state.matters[0].policy = { mode: 'allow-list', providers: ['anthropic'], regions: ['eu'], redact: true }
+  let T = 2_000_000
+  explain.clock.now = () => T
+  const claude = { type: 'model', provider: 'anthropic', label: 'Anthropic', model: 'claude-sonnet-5-5', local: false, region: 'eu-central-1', redacted: true, role: 'plan' }
+  state.chatScript = [claude]
+  state.chatClosed = false
+  const r = show(h(App))
+  await openChat(r)
+  await press(r, 'Can the seller limit liability to the purchase price?', 'enter')
+  await waitFor(r, 'Sent to: Claude (Anthropic, EU) — names hidden · once')
+  T += 4000; state.chatSend(scriptStep('search_ris', { query: 'Haftungsbeschränkung' }))
+  T += 3000; state.chatSend({ ...claude, role: 'analyze' })
+  state.chatSend({ type: 'step', text: 'writing…', kind: 'writing' })
+  state.chatSend({ type: 'text', text: 'In principle yes, but not for' })
+  T += 2000
+  let f = await waitFor(r, 'names hidden · 2 times')
+  await sleep(1100)
+  f = r.lastFrame()
+  capture('chat in progress — cloud AI, names hidden', f)
+  assert.match(flat(f), /! Sent to: Claude \(Anthropic, EU\) — names hidden · 2 times\. Also looked up online: RIS/)
+  assert.match(f, /Checking the official source \(RIS, Austria's federal law/)
+  assert.match(f, /▸ Writing the answer/)
+  assert.match(f, /AI: Claude \(Anthropic\) — online AI service/)
+  assert.ok(!/claude-sonnet/.test(f), 'no model id')
+  await press(r, 'esc')
+  f = await waitFor(r, 'Stopped by you.')
+  capture('stopped', f)
+  assert.match(flat(f), /Stopped by you\. Kept: the answer so far \(7 words\)\. Nothing more is sent or saved\./)
+  assert.match(f, /Stopped after 9 s/)
+  assert.match(flat(f), /! Sent to: Claude \(Anthropic, EU\) — names hidden · 2 times/)
+  const until = Date.now() + 2000
+  while (!state.chatClosed && Date.now() < until) await sleep(20)
+  assert.ok(state.chatClosed, 'the engine is told to stop')
+  explain.clock.now = () => Date.now()
+  Object.assign(state, { active: 'local', keys: {}, policy: { mode: 'local-only' } })
+  state.matters[0].policy = { mode: 'local-only' }
+  r.unmount()
+})
+
+test('a 12-document review in progress: "Document 3 of 12 · about … left", each document, data line; Esc explains what is kept', async () => {
+  prefs({ setupDone: true })
+  state.manyDocs = true
+  let T = 3_000_000
+  explain.clock.now = () => T
+  const doc = (i) => ({ type: 'progress', step: 'document', index: i, total: 12, name: `Lease ${String(i).padStart(2, '0')}.docx` })
+  state.workflowScript = [doc(1)]
+  state.workflowClosed = false
+  const r = show(h(App))
+  await waitFor(r, 'Alpine share deal')
+  await press(r, 'down', 'down', 'enter')
+  await waitFor(r, 'Actions…')
+  await press(r, '3')
+  await waitFor(r, 'Review the documents against a checklist')
+  await press(r, 'enter')
+  await waitFor(r, 'Which checklist?')
+  await press(r, 'enter')
+  await waitFor(r, 'Document 1 of 12')
+  T += 2000; state.workflowSend({ type: 'model', provider: 'local', local: true })
+  T += 40000; state.workflowSend(doc(2))
+  await waitFor(r, 'Document 2 of 12')
+  T += 46000; state.workflowSend(doc(3))
+  state.workflowSend({ type: 'model', provider: 'local', local: true })
+  await waitFor(r, 'Document 3 of 12')
+  T += 12000
+  await sleep(1100)
+  let f = r.lastFrame()
+  capture('12-document review in progress', f)
+  assert.match(f, /Document 3 of 12 · about 7 minutes left · 1 min 40 s so far/)
+  assert.match(f, /✓ Lease 01\.docx\s+42 s/)
+  assert.match(f, /▸ Lease 03\.docx — checking it point by point\s+12 s/)
+  assert.match(f, /• Lease 04\.docx/)
+  assert.match(f, /✓ Stayed on this computer/)
+  assert.match(f, /Esc stop · what is done so far is saved in the matter folder/)
+  await press(r, 'esc')
+  f = await waitFor(r, 'Stopped by you after 2 of 12 documents')
+  assert.match(flat(f), /What was done so far is saved in the matter folder\. Nothing more is sent\./)
+  const until = Date.now() + 2000
+  while (!state.workflowClosed && Date.now() < until) await sleep(20)
+  assert.ok(state.workflowClosed)
+  state.manyDocs = false
+  explain.clock.now = () => Date.now()
+  r.unmount()
+})
+
+test('recent activity: when, what was asked, what was looked at, where data went, result', async () => {
+  prefs({ setupDone: true })
+  const today = new Date()
+  today.setHours(14, 2, 0, 0)
+  state.activity = [
+    { at: today.toISOString(), kind: 'question', asked: 'Can the seller limit liability to the purchase price?', ms: 34000, looked: [{ tool: 'get_range_text', detail: { clause: { index: 3, heading: '4. Liability' } } }, { tool: 'search_law', detail: { query: 'Haftungsbeschränkung', jurisdiction: 'AT' } }, { tool: 'search_ris', detail: { query: 'Haftung' } }], sources: ['ABGB § 1295', 'ABGB § 879'], data: [{ provider: 'anthropic', label: 'Anthropic', model: 'claude-sonnet-5-5', local: false, region: 'eu-central-1', redacted: true, calls: 3 }], suggestions: 1, result: 'done' },
+    { at: new Date(today.getTime() - 3600000).toISOString(), kind: 'review', asked: 'spa', ms: 410000, looked: [{ document: 'Lease 01.docx' }, { document: 'Lease 02.docx' }], sources: [], data: [{ provider: 'local', local: true, calls: 24 }], suggestions: 0, result: 'stopped' },
+    { at: new Date(today.getTime() - 86400000).toISOString(), kind: 'question', asked: 'Translate the term sheet', ms: 2000, looked: [], sources: [], data: [], suggestions: 0, result: 'failed', error: 'ECONNREFUSED' },
+  ]
+  const r = show(h(App))
+  await openChat(r)
+  await press(r, '/activity', 'enter')
+  let f = await waitFor(r, 'Looked at:')
+  capture('recent activity', f)
+  assert.match(f, /▸ ✓ Today 14:02 · Question: “Can the seller limit liability to the purchase/)
+  assert.match(f, /! Today 13:02 · Checklist review/)
+  assert.match(f, /✗ Yesterday 14:02 · Question: “Translate the term sheet”/)
+  assert.match(f, /took 34 s/)
+  assert.match(f, /Looked at: Reading clause 4 \(Liability\); Searching Austrian law: “Haftungsbeschränkung”/)
+  assert.match(f, /Law used: ABGB § 1295, ABGB § 879/)
+  assert.match(f, /! Sent to: Claude \(Anthropic, EU\) — names hidden · 3 times/)
+  assert.match(f, /Result: Answered, 1 proposed change/)
+  await press(r, 'down')
+  f = await waitFor(r, 'Stopped by you (what was done so far is kept)')
+  assert.match(f, /Looked at: Lease 01\.docx; Lease 02\.docx/)
+  assert.match(f, /Stayed on this computer/)
+  await press(r, 'down')
+  f = await waitFor(r, 'Did not finish:')
+  await press(r, 'esc')
+  await waitFor(r, 'Type your question')
+  r.unmount()
+})
+
+test('files dropped into the question: chips, Backspace removes, sent with the question and kept in the matter; a pasted block stays one question', async () => {
+  prefs({ setupDone: true })
+  Object.assign(state, { active: 'local', policy: { mode: 'local-only' } })
+  const src = fs.mkdtempSync(path.join(os.tmpdir(), 'openlex-tui-drop-'))
+  const a = path.join(src, 'SPA draft 3.txt')
+  const b = path.join(src, 'Side letter.txt')
+  fs.writeFileSync(a, 'The seller warrants the shares are free of encumbrances.')
+  fs.writeFileSync(b, 'Side letter: the price is adjusted.')
+  const r = show(h(App))
+  await openChat(r)
+  // A drop arrives as a bracketed paste (or one chunk): two quoted paths → two chips.
+  await press(r, `\u001b[200~'${a}' '${b}'\u001b[201~`)
+  let f = await waitFor(r, 'All 2 files are included in this question.')
+  capture('two files dropped into the question', f)
+  assert.match(f, /📎 SPA draft 3\.txt · 56 bytes/)
+  assert.match(f, /📎 Side letter\.txt · 35 bytes/)
+  assert.match(f, /Type your question about the file/)
+  await press(r, '\u007f') // Backspace in the empty field: the last chip goes
+  f = await waitFor(r, 'Your question will be about SPA draft 3.txt.')
+  assert.ok(!f.includes('Side letter.txt'))
+  // A pasted block with line breaks stays one question (no early send).
+  const before = posted('/api/chat').length
+  await press(r, '\u001b[200~Is the warranty\rcomplete?\u001b[201~')
+  f = await waitFor(r, 'Is the warranty complete?')
+  await press(r, ' Also\nthe cap?')
+  await sleep(80)
+  assert.strictEqual(posted('/api/chat').length, before, 'nothing sent while pasting')
+  assert.match(r.lastFrame(), /Is the warranty complete\? Also the cap\?/)
+  await press(r, 'enter')
+  f = await waitFor(r, 'with SPA draft 3.txt')
+  const chat = posted('/api/chat').at(-1).body
+  assert.strictEqual(chat.message, 'Is the warranty complete? Also the cap?')
+  assert.strictEqual(chat.text, 'The seller warrants the shares are free of encumbrances.')
+  assert.deepStrictEqual(chat.files, ['SPA draft 3.txt'])
+  assert.match(chat.docId, /^tui:m_1:.*SPA draft 3\.txt$/)
+  f = await waitFor(r, 'copied into the matter folder')
+  assert.match(flat(f), /SPA draft 3\.txt — copied into the matter folder \(your original is unchanged\)/)
+  const dest = path.join(DATA, 'workspace', 'Alpine_share_deal', 'documents', 'SPA draft 3.txt')
+  assert.strictEqual(fs.readFileSync(dest, 'utf8'), 'The seller warrants the shares are free of encumbrances.')
+  // A path typed by hand and sent alone is attached too, not asked.
+  await waitFor(r, 'enforceable only if reasonable.')
+  const n = posted('/api/chat').length
+  await press(r, `'${b}'`, 'enter')
+  await waitFor(r, 'Your question will be about Side letter.txt.')
+  assert.strictEqual(posted('/api/chat').length, n)
+  fs.rmSync(src, { recursive: true, force: true })
+  r.unmount()
+})
+
+test('help: a second page explains what OpenLex is doing and why', async () => {
+  prefs({ setupDone: true })
+  const r = show(h(App))
+  await waitFor(r, 'Alpine share deal')
+  await press(r, '?')
+  await waitFor(r, 'Ctrl+B')
+  await press(r, '\u001B[C') // →
+  const f = await waitFor(r, 'What OpenLex is doing and why')
+  capture('help: what OpenLex is doing and why', f)
+  assert.match(flat(f), /"Sent to:" names every AI service outside this computer/)
+  assert.match(flat(f), /Esc stops at any time\. What was written so far is kept; nothing more is sent\./)
+  r.unmount()
 })

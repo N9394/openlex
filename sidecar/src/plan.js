@@ -192,7 +192,7 @@ async function runStep(plan, step, { signal, onProgress }) {
       const question = step.kind === 'skill' ? (a.instruction || `Apply the "${skill.title}" skill to ${path.basename(a.file)}.`) : a.question
       const agentsMod = require('./agents')
       const agent = a.agent ? agentsMod.get(a.agent) : (step.kind === 'research' ? agentsMod.get('researcher') : null)
-      const r = await agentsMod.run(agent, () => runAction(ctx, question, (e) => { if (e.type === 'step') progress({ text: e.text }) }, { signal, skill, agent }))
+      const r = await agentsMod.run(agent, () => runAction(ctx, question, (e) => { if (e.type === 'step') progress({ text: e.text, ...(e.kind ? { kind: e.kind } : {}), ...(e.tool ? { tool: e.tool, detail: e.detail } : {}) }) }, { signal, skill, agent }))
       const ws = require('./workspace')
       const lines = [`# ${step.title}`, '', question, '', r.text || '']
       for (const s of r.suggestions || []) lines.push('', `- **[${s.severity}] ${s.summary}**`, s.anchor ? `  > ${String(s.anchor).replace(/\n/g, ' ')}` : '', s.proposed_text ? `  → ${s.proposed_text}` : '')

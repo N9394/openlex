@@ -31,8 +31,8 @@ export const color = {
 }
 
 export const sym = ASCII
-  ? { pointer: '>', ok: '+', bad: 'x', bullet: '-', sep: '|', down: 'v', on: '[x]', off: '[ ]', lock: '[privileged]', mask: '*', bar: '|', prompt: '>', rule: '-', spin: ['-', '\\', '|', '/'] }
-  : { pointer: '▸', ok: '✓', bad: '✗', bullet: '•', sep: '·', down: '▾', on: '[x]', off: '[ ]', lock: '[privileged]', mask: '•', bar: '│', prompt: '›', rule: '─', spin: ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'] }
+  ? { clip: '[file]', pointer: '>', ok: '+', bad: 'x', bullet: '-', sep: '|', down: 'v', on: '[x]', off: '[ ]', lock: '[privileged]', mask: '*', bar: '|', prompt: '>', rule: '-', spin: ['-', '\\', '|', '/'] }
+  : { clip: '📎', pointer: '▸', ok: '✓', bad: '✗', bullet: '•', sep: '·', down: '▾', on: '[x]', off: '[ ]', lock: '[privileged]', mask: '•', bar: '│', prompt: '›', rule: '─', spin: ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'] }
 export const BORDER = ASCII ? 'classic' : 'round'
 
 /** Terminal size, re-rendered on resize. Tests have no rows: 24 (the minimum we design for). */
@@ -102,10 +102,14 @@ export function Menu({ items, onSelect, onHighlight, isActive = true, initial = 
 /**
  * One-line text field with a cursor: ←→, Home/End (Ctrl+A/E), Backspace,
  * Ctrl+U clears. Pastes (and files dragged into the terminal) arrive as one
- * chunk; line breaks in them become spaces. `mask` hides what is typed;
- * `onTab` gets the value and returns a completed one.
+ * chunk — or, with bracketed paste on (index.mjs), between ESC[200~ and
+ * ESC[201~; either way a pasted line break never sends: it becomes a
+ * space, so a pasted block stays one question. `onPaste(text)` may take a
+ * paste (dropped files) by returning true. `onBackspaceEmpty` is called
+ * for Backspace in an empty field. `mask` hides what is typed; `onTab`
+ * gets the value and returns a completed one.
  */
-export function TextField({ value, onChange, onSubmit, mask = false, placeholder = '', isActive = true, onTab, prefix }) {
+export function TextField({ value, onChange, onSubmit, mask = false, placeholder = '', isActive = true, onTab, prefix, onPaste, onBackspaceEmpty }) {
   const [cur, setCur] = useState(value.length)
   // Refs as well as state: a paste followed at once by Enter must submit the pasted text.
   const st = useRef({ value, cur: value.length })
@@ -119,7 +123,25 @@ export function TextField({ value, onChange, onSubmit, mask = false, placeholder
     return () => { typing.current-- }
   }, [isActive])
   const put = (v, c) => { st.current = { value: v, cur: c, pending: v !== value }; if (v !== value) onChange(v); setCur(c) }
+  const paste = useRef(null) // text of a bracketed paste still arriving
+  const insert = (text) => {
+    const { value: v, cur: c0 } = st.current
+    const c = Math.min(c0, v.length)
+    if (onPaste && text.length > 1 && onPaste(text)) return
+    const t = text.replace(/\r\n|\r|\n/g, ' ')
+    put(v.slice(0, c) + t + v.slice(c), c + t.length)
+  }
   useInput((input, key) => {
+    // Bracketed paste: collect everything up to the end marker, Enter included.
+    if (input === '[200~' || input.startsWith('[200~')) { paste.current = input.slice(5); return }
+    if (paste.current !== null) {
+      const end = input.indexOf('[201~')
+      if (end < 0) { paste.current += key.return ? '\n' : input; return }
+      const text = paste.current + input.slice(0, end)
+      paste.current = null
+      return insert(text)
+    }
+    if (input === '[201~') return
     const { value: v, cur: c0 } = st.current
     const c = Math.min(c0, v.length)
     if (key.return) return onSubmit?.(v)
@@ -134,11 +156,10 @@ export function TextField({ value, onChange, onSubmit, mask = false, placeholder
     if (key.home || (key.ctrl && input === 'a')) return put(v, 0)
     if (key.end || (key.ctrl && input === 'e')) return put(v, v.length)
     if (key.ctrl && input === 'u') return put('', 0)
-    if (key.backspace || key.delete) return c ? put(v.slice(0, c - 1) + v.slice(c), c - 1) : undefined
+    if (key.backspace || key.delete) return c ? put(v.slice(0, c - 1) + v.slice(c), c - 1) : (!v ? onBackspaceEmpty?.() : undefined)
     if (key.ctrl || key.meta || key.escape || key.upArrow || key.downArrow || key.pageUp || key.pageDown) return
     if (!input) return
-    const text = input.replace(/\r\n|\r|\n/g, ' ')
-    put(v.slice(0, c) + text + v.slice(c), c + text.length)
+    insert(input)
   }, { isActive })
   const shown = mask ? sym.mask.repeat(value.length) : value
   const pre = prefix ?? `${sym.prompt} `
@@ -166,7 +187,7 @@ export function Note({ kind = 'info', children }) {
 
 /**
  * The screen frame: title line, body, and the always-visible status bar
- * (matter · AI model · where client data may go · working as) plus keys.
+ * (matter · which AI · where client data may go · working as) plus keys.
  */
 export function Frame({ title, subtitle, status, keys, children }) {
   const { cols, rows } = useSize()
@@ -184,7 +205,7 @@ export function Frame({ title, subtitle, status, keys, children }) {
     <${Text} wrap="truncate-end">
       <${Text} dimColor>Matter: <//>${s.matter || 'none'}${s.agent ? html`<${Text}><${Text} dimColor>  ${sym.sep}  Working as: <//>${s.agent}<//>` : null}
     <//>
-    <${Text} wrap="truncate-end"><${Text} dimColor>AI model: <//>${s.model || 'not set up yet'}<//>
+    <${Text} wrap="truncate-end"><${Text} dimColor>AI: <//>${s.model || 'not set up yet'}<//>
     <${Text} wrap="truncate-end"><${Text} dimColor>Client data: <//>${s.data || 'stays on this computer'}<//>
     <${Text} dimColor wrap="truncate-end">${keys || `↑↓ move ${sym.sep} Enter choose ${sym.sep} Esc back ${sym.sep} ? help ${sym.sep} Ctrl+C quit`}<//>
   <//>`

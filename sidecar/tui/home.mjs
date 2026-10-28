@@ -40,7 +40,7 @@ export function Home() {
     ctx.go('matter', { matterId: it.value })
   }
   return html`<${Frame} title="Your matters" status=${ctx.status()} keys=${`↑↓ move ${sym.sep} Enter open ${sym.sep} ? help ${sym.sep} q or Ctrl+C quit`}>
-    ${!ready ? html`<${Note} kind="warn">The AI is not set up yet. Choose Settings → AI model.<//>` : null}
+    ${!ready ? html`<${Note} kind="warn">The AI is not set up yet. Choose Settings → Which AI.<//>` : null}
     ${error ? html`<${Note} kind="bad">${error}<//>` : null}
     ${matters === null
       ? html`<${Spinner} label="Loading your matters…" />`
