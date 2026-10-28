@@ -3,6 +3,7 @@ dist/
 !desktop/server/dist/
 **/bin/*
 !sidecar/bin/openlex.js
+!sidecar/bin/client.js
 *.gguf
 *.lvpack
 certs/*.pem

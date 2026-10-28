@@ -73,6 +73,22 @@ test('"@name" invocation and combination with a skill', () => {
   assert.strictEqual(agents.parseInvocation('email me @ noon'), null)
 })
 
+test('no-"@" invocation for keyboards where @ is hard to type: "as researcher: …"', () => {
+  const inv = agents.parseInvocation('As Researcher: is a 2-year non-compete valid?')
+  assert.strictEqual(inv.agent.name, 'researcher')
+  assert.strictEqual(inv.message, 'is a 2-year non-compete valid?')
+  assert.strictEqual(agents.parseInvocation('as the reviewer: check clause 4').agent.name, 'reviewer')
+  assert.strictEqual(agents.parseInvocation('als drafter: Klausel 7 neu').agent.name, 'drafter')
+  assert.strictEqual(agents.parseInvocation('@Drafter fix §7').agent.name, 'drafter')
+  // Ordinary sentences are left alone.
+  assert.strictEqual(agents.parseInvocation('as discussed: the cap is too low'), null)
+  assert.strictEqual(agents.parseInvocation('as soon as possible please'), null)
+  // The same matcher against a list from GET /api/agents (the terminal app).
+  const listed = [{ name: 'tax-desk', title: 'Tax desk' }, { name: 'broken', error: 'x' }]
+  assert.strictEqual(agents.matchInvocation('as tax desk: VAT on this?', listed).agent.name, 'tax-desk')
+  assert.strictEqual(agents.matchInvocation('@broken hi', listed), null)
+})
+
 test('profile routes come before role routes; rules and the policy still come first', async () => {
   writeUser({ routes: { roles: { write: 'openai' } }, agents: { drafter: { routes: { write: 'custom' } } } })
   const llm = require('../src/llm')

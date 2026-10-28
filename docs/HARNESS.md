@@ -163,7 +163,7 @@ Every deny, warn and flag is written to the audit log (decision point, hook numb
 
 ## `agents`: named profiles
 
-A profile is a way of working: extra instructions, the tools it may use, its own model routes and a depth budget. Use one with `@name` at the start of a message (Word, CLI), `agent` in `/api/chat`, or set it as a matter's default (`matter.agent`). Profiles combine with skills: `@drafter /rebalance-clause make §7 fairer`.
+A profile is a way of working: extra instructions, the tools it may use, its own model routes and a depth budget. Use one with `@name` at the start of a message (Word, CLI) or, without the "@" (hard to type on German and Austrian keyboards), `as researcher: …` (also `als …:`, matched against the profile name or title), `agent` in `/api/chat`, or set it as a matter's default (`matter.agent`). Profiles combine with skills: `@drafter /rebalance-clause make §7 fairer`.
 
 Built in: `@associate` (the default), `@researcher` (statute and EU law memo, no document edits, deep budget), `@reviewer` (risk review with anchored fixes), `@drafter` (firm wording first). The firm and user layers add profiles or change these by name:
 

@@ -96,12 +96,32 @@ function get(name) {
   return a
 }
 
-/** "@researcher is X allowed?" → { agent, message }; anything else → null. */
+/**
+ * "@researcher is X allowed?" → { agent, message }; anything else → null.
+ * "@" is hard to type on German/Austrian keyboards in a terminal, so a
+ * no-symbol form works too: "as researcher: is X allowed?" (or "als …:"),
+ * matched case-insensitively against profile names and titles.
+ */
 function parseInvocation(message) {
-  const m = String(message || '').match(/^\s*@([a-z][a-z0-9-]{1,31})(?:\s+|$)([\s\S]*)$/)
-  if (!m) return null
-  const a = list().find((x) => x.name === m[1] && !x.error)
-  return a ? { agent: a, message: m[2].trim() } : null
+  return matchInvocation(message, list())
+}
+
+/** parseInvocation against a given profile list (the terminal app uses /api/agents). */
+function matchInvocation(message, profiles) {
+  const text = String(message || '')
+  const usable = (profiles || []).filter((x) => x && x.name && !x.error)
+  const at = text.match(/^\s*@([A-Za-z][A-Za-z0-9-]{1,31})(?:\s+|$)([\s\S]*)$/)
+  if (at) {
+    const a = usable.find((x) => x.name === at[1].toLowerCase())
+    return a ? { agent: a, message: at[2].trim() } : null
+  }
+  const as = text.match(/^\s*(?:as|als)\s+(?:(?:the|an?|der|die)\s+)?([^:\n]{2,60}?)\s*:\s*([\s\S]*)$/i)
+  if (as) {
+    const want = as[1].trim().toLowerCase()
+    const a = usable.find((x) => x.name === want || String(x.title || '').toLowerCase() === want)
+    return a ? { agent: a, message: as[2].trim() } : null
+  }
+  return null
 }
 
 /** Validate an agents section; returns problems (empty = fine). */
@@ -140,4 +160,4 @@ function allowedTools(agent, skill) {
   return a || s
 }
 
-module.exports = { list, get, parseInvocation, validate, run, current, promptBlock, allowedTools, BUILT_IN, DEPTHS }
+module.exports = { list, get, parseInvocation, matchInvocation, validate, run, current, promptBlock, allowedTools, BUILT_IN, DEPTHS }

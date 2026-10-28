@@ -5,6 +5,7 @@
  * Word add-in, Outlook and the desktop app use: same matters, data policy,
  * model, firm library and audit log).
  *
+ *   openlex                            the terminal app (full screen; also `openlex tui`)
  *   openlex status
  *   openlex providers                  model providers, which is active, which have a key
  *   openlex use PROVIDER[:MODEL] [--base-url URL] [--region R]   e.g. use anthropic, use local, use openrouter:qwen/qwen3.5-9b
@@ -16,7 +17,7 @@
  *   openlex chronology [--matter ID] [--folder DIR]
  *   openlex translate FILE --to en [--glossary NAME] [--matter ID]
  *   openlex compare OLD NEW [--matter ID] [--no-rate]
- *   openlex matters
+ *   openlex matters [new "Title" [--client X] [--privileged] | privileged ID [--off]]   privileged = never leaves this computer
  *   openlex clauses [--type liability] [--query words] [--matter ID]
  *   openlex grid list | new TITLE --columns cols.json [--matter ID] | run ID [--force] | show ID | export ID
  *   openlex decide "text" --question "Is …?" | --questions q.json [--file doc] [--matter ID]
@@ -36,13 +37,8 @@
  */
 
 const fs = require('fs')
-const os = require('os')
 const path = require('path')
-const https = require('https')
-const http = require('http')
-
-const DATA_DIR = process.env.OPENLEX_DATA_DIR || process.env.LEXVAULT_DATA_DIR || path.join(os.homedir(), '.lexvault')
-const REG = path.join(DATA_DIR, 'run', 'sidecar.json')
+const { engine, request } = require('./client')
 
 function parseArgs(argv) {
   const out = { _: [] }
@@ -52,63 +48,12 @@ function parseArgs(argv) {
     else if (a === '--json') out.json = true
     else if (a === '--force') out.force = true
     else if (a === '--clear') out.clear = true
-    else if (['--local', '--remove', '--redact'].includes(a)) out[a.slice(2)] = true
+    else if (['--local', '--remove', '--redact', '--privileged', '--off'].includes(a)) out[a.slice(2)] = true
     else if (a === '--save' && (i + 1 >= argv.length || argv[i + 1].startsWith('--'))) out.save = true
     else if (a.startsWith('--')) out[a.slice(2)] = argv[++i]
     else out._.push(a)
   }
   return out
-}
-
-function engine() {
-  let reg
-  try { reg = JSON.parse(fs.readFileSync(REG, 'utf8')) } catch {
-    throw new Error('OpenLex engine is not running — open Word with the add-in, start the desktop app, or run `openlex serve`.')
-  }
-  try { process.kill(reg.pid, 0) } catch { throw new Error(`engine registry is stale (pid ${reg.pid} is gone) — start the engine again`) }
-  const ca = reg.ca && fs.existsSync(reg.ca) ? fs.readFileSync(reg.ca) : undefined
-  return { url: reg.url, ca, version: reg.version }
-}
-
-function request(method, pathname, body, { onEvent } = {}) {
-  const { url, ca } = engine()
-  const u = new URL(pathname, url)
-  const lib = u.protocol === 'https:' ? https : http
-  const data = body ? Buffer.from(JSON.stringify(body)) : null
-  return new Promise((resolve, reject) => {
-    const req = lib.request(u, {
-      method,
-      ca,
-      headers: { Accept: onEvent ? 'text/event-stream' : 'application/json', ...(data ? { 'Content-Type': 'application/json', 'Content-Length': data.length } : {}) },
-    }, (res) => {
-      res.setEncoding('utf8')
-      if (onEvent) {
-        let buf = ''
-        res.on('data', (chunk) => {
-          buf += chunk
-          let i
-          while ((i = buf.indexOf('\n\n')) >= 0) {
-            const frame = buf.slice(0, i).replace(/^data:\s*/gm, '')
-            buf = buf.slice(i + 2)
-            try { onEvent(JSON.parse(frame)) } catch { /* keep-alive / partial */ }
-          }
-        })
-        res.on('end', () => resolve(null))
-        return
-      }
-      let raw = ''
-      res.on('data', (c) => { raw += c })
-      res.on('end', () => {
-        let json = null
-        try { json = raw ? JSON.parse(raw) : null } catch { /* not JSON */ }
-        if (res.statusCode >= 400) return reject(new Error(json?.error || `HTTP ${res.statusCode}`))
-        resolve(json)
-      })
-    })
-    req.on('error', (err) => reject(new Error(`cannot reach the engine at ${url}: ${err.message}`)))
-    if (data) req.write(data)
-    req.end()
-  })
 }
 
 /** A secret from the terminal without echoing it, or from a pipe. */
@@ -158,10 +103,19 @@ async function runWorkflow(type, body, opts) {
 
 const USAGE = (() => { const lines = fs.readFileSync(__filename, 'utf8').split('\n'); const end = lines.findIndex((l) => l.includes('Finds the engine')) - 1; return lines.slice(3, end).map((l) => l.replace(/^ \* ?/, '')).join('\n') })()
 
+/** The terminal app (tui/, ES modules: Ink + React) loaded on demand. */
+async function startTui() {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) throw new Error('the terminal app needs an interactive terminal — run `openlex help` for the commands')
+  const { run } = await import(require('url').pathToFileURL(path.join(__dirname, '..', 'tui', 'index.mjs')).href)
+  await run()
+}
+
 async function main() {
   const [cmd, ...rest] = process.argv.slice(2)
   const a = parseArgs(rest)
   switch (cmd) {
+    case 'tui':
+      return startTui()
     case 'serve':
       // Run until stopped: without this the engine shuts down when no Word,
       // Outlook or desktop app is attached (their idle rule), which is never
@@ -267,6 +221,19 @@ async function main() {
       if (a._.length < 2) throw new Error('usage: openlex compare OLD NEW')
       return runWorkflow('compare', { matterId: a.matter, fileA: path.resolve(a._[0]), fileB: path.resolve(a._[1]), rate: a.rate !== false }, a)
     case 'matters': {
+      const [sub, arg] = a._
+      if (sub === 'new') {
+        if (!arg) throw new Error('usage: openlex matters new "Title" [--client X] [--privileged]')
+        const r = await request('POST', '/api/matters', { title: arg, client: a.client, number: a.number, privileged: !!a.privileged })
+        if (a.json) return console.log(JSON.stringify(r, null, 2))
+        return console.log(`${r.matter.id}  ${r.matter.title}${r.matter.privileged ? '  [privileged: stays on this machine]' : ''}`)
+      }
+      if (sub === 'privileged') {
+        if (!arg) throw new Error('usage: openlex matters privileged ID [--off]')
+        const r = await request('POST', '/api/matters/update', { id: arg, patch: { privileged: !a.off } })
+        return console.log(r.matter.privileged ? `${r.matter.title}: privileged — nothing from this matter leaves this machine` : `${r.matter.title}: no longer privileged — its data policy now decides (openlex policy --matter ${arg})`)
+      }
+      if (sub) throw new Error(`unknown matters command: ${sub}`)
       const r = await request('GET', '/api/matters')
       if (a.json) return console.log(JSON.stringify(r, null, 2))
       for (const m of r.matters || []) console.log(`${m.id}  ${m.number ? m.number + ' · ' : ''}${m.title}${m.privileged ? '  [privileged]' : ''}  — ${m.policy?.mode === 'local-only' ? 'local only' : `cloud: ${(m.policy?.providers || []).join(', ')}`}`)
@@ -528,6 +495,8 @@ async function main() {
       return
     }
     default:
+      // No arguments in a terminal: the full-screen app. Piped/scripted: usage.
+      if (!cmd && process.stdin.isTTY && process.stdout.isTTY) return startTui()
       console.log(USAGE)
       if (cmd && cmd !== 'help' && cmd !== '--help') process.exitCode = 2
   }

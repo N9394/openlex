@@ -36,6 +36,10 @@ Start with [Getting started](docs/guides/getting-started.md). All guides: [docs/
 - **Customisable at every turn:** one `openlex.json` (firm layer, user layer, firm locks) for model routing per task, firm rules at each decision point (hooks), agent profiles (`@researcher`, `@drafter` …) and features. Skills and playbooks are plain files.
 - **Safe by construction:** the agent cannot run code or reach the network from a shell (the shell tool is off by default and sandboxed when a firm turns it on), cannot leave the workspace or change the firm's rules, and every overwrite keeps the previous version.
 
+## Terminal app
+
+Type `openlex` (no arguments) in a terminal and a full-screen app opens: no commands to learn. It starts OpenLex in the background if needed, walks you through choosing where the AI runs and where client data may go, and then shows your matters. In a matter you can ask questions (answers come with the sources found and proposed changes), add documents by dragging them into the window, and run the larger tasks: checklist review, chronology, translation, comparing two versions, a review grid, or a plan you approve step by step. The bar at the bottom always shows the matter, the AI model and where client data may go. Arrow keys and Enter to choose, Esc to go back, `?` for help. See [docs/guides/terminal-app.md](docs/guides/terminal-app.md).
+
 ## Install the CLI
 
 | | |
@@ -53,6 +57,7 @@ Start the engine once (`openlex serve`, or open Word with the add-in, or the des
 
 ```bash
 openlex serve                                   # the local engine (keeps running)
+openlex                                         # the terminal app (same as: openlex tui)
 openlex status                                  # engine, model, readiness
 openlex use anthropic                           # or: use local · use openrouter:qwen/qwen3.5-9b · use azure --base-url …
 openlex key anthropic                           # your own API key, stored in the OS keychain
@@ -62,6 +67,7 @@ openlex ask "@researcher /research-memo is a 2-year non-compete valid in Austria
 
 # matters and the firm's data
 openlex matters
+openlex matters new "Alpine share deal" --client "Alpine Holding" --privileged   # privileged: never leaves this computer
 openlex clauses --type liability                # the firm's own clause wording
 
 # workflows on a matter's documents
