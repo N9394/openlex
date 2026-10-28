@@ -77,8 +77,13 @@ function save(policy) {
 /** Set the rule for one matter (or the default when matterId is null). */
 function setRule(matterId, rule) {
   const p = load()
-  if (matterId) p.matters[matterId] = cleanRule(rule)
-  else p.default = cleanRule(rule)
+  const clean = cleanRule(rule)
+  // Privileged matters stay on this machine: loosening one means unmarking it first.
+  if (matterId && clean.mode !== 'local-only' && require('./matters').get(matterId)?.privileged) {
+    throw new Error('this matter is privileged and stays on this machine; unmark it as privileged first')
+  }
+  if (matterId) p.matters[matterId] = clean
+  else p.default = clean
   return save(p)
 }
 

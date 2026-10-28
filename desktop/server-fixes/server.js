@@ -134,23 +134,23 @@ app.use((req, res) => {
 app.use(errorHandler_1.errorHandler);
 // Local-mode bootstrap — when running inside the Electron App, the supervisor
 // sets LEXVAULT_LOCAL_MODE=1 and points LEXVAULT_LICENSE_PATH at the signed
-// license file. We upsert a User row matching the license's account_id so
-// that all the existing Prisma joins work without a real auth flow.
+// license file (empty in community mode). We upsert a User row matching the
+// license's account_id — or the local community user ('local') when there is
+// no license — so all the existing Prisma joins work without an auth flow.
 async function localModeBootstrap() {
     if (process.env.LEXVAULT_LOCAL_MODE !== '1') return;
     const licensePath = process.env.LEXVAULT_LICENSE_PATH;
-    if (!licensePath) return;
     try {
         const fs = require('fs');
         const { PrismaClient } = require('@prisma/client');
         const prisma = new PrismaClient();
-        if (!fs.existsSync(licensePath)) {
-            console.warn('[local-mode] license file missing — server will reject all requests until launcher writes it');
-            await prisma.$disconnect();
-            return;
+        let p = { tier: 'community' };
+        if (licensePath && fs.existsSync(licensePath)) {
+            const signed = JSON.parse(fs.readFileSync(licensePath, 'utf8'));
+            p = signed.payload || signed;
+        } else {
+            console.log('[local-mode] no license — community user, no sign-in');
         }
-        const signed = JSON.parse(fs.readFileSync(licensePath, 'utf8'));
-        const p = signed.payload || signed;
         const accountId = p.account_id || 'local';
         const email = p.email || 'local@lexvault';
         await prisma.user.upsert({
@@ -159,7 +159,7 @@ async function localModeBootstrap() {
                 id: accountId,
                 email,
                 passwordHash: 'local-mode-no-password',
-                name: p.email?.split('@')[0] || 'LexVault User',
+                name: p.email?.split('@')[0] || 'OpenLex User',
                 tier: p.tier || 'solo',
                 language: p.language_pref || 'auto',
                 weekResetDate: new Date(),
@@ -167,7 +167,7 @@ async function localModeBootstrap() {
             update: {
                 email,
                 tier: p.tier || 'solo',
-                language: p.language_pref || 'auto',
+                ...(p.language_pref ? { language: p.language_pref } : {}),
             },
         });
         console.log(`[local-mode] User row ready: ${accountId} (${email})`);

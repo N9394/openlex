@@ -4,6 +4,8 @@
  * The renderer talks to the local Express backend over HTTP at
  * window.lexvault.backendUrl (an http://127.0.0.1:PORT). Identity is the
  * license, exposed here so AuthContext can read it without an HTTP call.
+ * Without a license it is the community identity ({ community: true,
+ * account_id: null, tier: 'community' }) — there is no sign-in.
  */
 const { contextBridge, ipcRenderer } = require('electron')
 
@@ -43,11 +45,12 @@ contextBridge.exposeInMainWorld('lexvault', {
   checkForUpdate: () => ipcRenderer.invoke('lexvault:checkForUpdate'),
   installPendingUpdate: () => ipcRenderer.invoke('lexvault:installPendingUpdate'),
 
-  // First-run activation: renderer sends the pasted lv_live_… token, main
-  // saves it, fetches the signed license, returns { ok, error?, license? }.
+  // Optional activation (Settings → License): renderer sends the pasted
+  // lv_live_… token, main saves it, fetches the signed license, returns
+  // { ok, error?, license? } and relaunches the App on success.
   activateToken: (token) => ipcRenderer.invoke('lexvault:activateToken', token),
 
-  // Boot-stage progress events for the first-run window so the user sees
+  // Boot-stage progress events (any open window) so the user sees
   // model download progress + service startup instead of a black screen.
   onBootStage: (cb) => {
     ipcRenderer.on('lexvault:boot-stage', (_e, payload) => cb(payload))

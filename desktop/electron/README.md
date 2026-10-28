@@ -17,9 +17,13 @@ LexVault.app (Electron)
     Vite SPA (loaded from file://)
 ```
 
-Identity is the license file (no login screen). Auth middleware reads
-`LEXVAULT_LICENSE_PATH` and auto-authenticates every request to the single
-account on this machine. All LLM/embedding/Qdrant calls go to localhost.
+No account, no sign-in. Without a license the App boots in community mode
+(own API key, local GGUF in `userData/models/llm`, or a llama-server / Ollama
+endpoint; no pack sync, no licence polling). A distribution build can add a
+license by pasting a token in Settings → License. Auth middleware reads
+`LEXVAULT_LICENSE_PATH` when set, else uses the local community user, and
+auto-authenticates every request to the single user on this machine. All
+LLM/embedding/Qdrant calls go to localhost.
 
 ## Layout
 
