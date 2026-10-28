@@ -12,16 +12,26 @@ const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-production';
 // ─── Local mode (airgapped App) ───────────────────────────────────────────
 // When LEXVAULT_LOCAL_MODE=1, the Express server is running inside the
 // Electron App on the user's machine. Identity comes from the signed license
-// file written by the Launcher — there is no login flow, no cookies. Every
-// authenticated request is automatically the single account on this machine.
+// file when there is one, else the local community user — there is no login
+// flow, no cookies, no account. Every authenticated request is automatically
+// the single user on this machine.
 const LOCAL_MODE = process.env.LEXVAULT_LOCAL_MODE === '1';
 const LICENSE_PATH = process.env.LEXVAULT_LICENSE_PATH || '';
+const COMMUNITY_USER = Object.freeze({
+    userId: 'local',
+    email: 'local@lexvault',
+    sessionId: 'local',
+    tier: 'community',
+    language: 'auto',
+    entitlements: [],
+    isLocal: true,
+});
 
 let _cachedLocalUser = null;
 let _cachedLocalUserMtime = 0;
 
 function readLocalUser() {
-    if (!LICENSE_PATH || !fs.existsSync(LICENSE_PATH)) return null;
+    if (!LICENSE_PATH || !fs.existsSync(LICENSE_PATH)) return COMMUNITY_USER;
     try {
         const stat = fs.statSync(LICENSE_PATH);
         if (_cachedLocalUser && stat.mtimeMs === _cachedLocalUserMtime) return _cachedLocalUser;
@@ -39,8 +49,8 @@ function readLocalUser() {
         _cachedLocalUserMtime = stat.mtimeMs;
         return _cachedLocalUser;
     } catch (err) {
-        console.error('[AUTH] local license read error:', err);
-        return null;
+        console.error('[AUTH] local license read error — using the community user:', err);
+        return COMMUNITY_USER;
     }
 }
 
