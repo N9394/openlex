@@ -51,7 +51,7 @@ export function askPrinter({ out = process.stderr, tty = !!out.isTTY, now = cloc
     shown = cur.text
     if (tty && !look.reducedMotion && cur.status === 'now') { line.set(cur.text); return }
     line.clear()
-    out.write(`  ${cur.status === 'failed' ? '!' : sym.bullet} ${cur.text}\n`)
+    out.write(`  ${cur.failed || cur.status === 'failed' ? '!' : sym.bullet} ${cur.text}\n`)
   }
   return {
     onEvent(ev) {

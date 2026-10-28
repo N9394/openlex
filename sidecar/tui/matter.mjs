@@ -37,7 +37,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Box, Text, useInput } from 'ink'
 import { html, Frame, Menu, TextField, Field, Spinner, Note, color, sym, look, useSize } from './ui.mjs'
 import { useAppCtx } from './context.mjs'
-import { matchInvocation, log, friendly, describeRule, describeModel, nameOf } from './api.mjs'
+import { matchInvocation, log, friendly, errorParts, describeRule, describeModel, nameOf } from './api.mjs'
 import { cleanPaths, completePath, shortPath } from './paths.mjs'
 import { PermissionPrompt, PermissionRules, answeredLine } from './permission.mjs'
 import { clock, startActivity, applyEvent, activityLines, doneLines, basedOnLines, basedOn, checkLine, basisText, stopSentence } from './explain.mjs'
@@ -94,7 +94,7 @@ export function didYouMean(word, names) {
   let best = null
   for (const n of names) {
     const score = n.startsWith(w) && w.length >= 2 ? 0 : dist(w, n)
-    if (score <= Math.max(1, Math.floor(n.length / 3)) && (!best || score < best.score)) best = { n, score }
+    if (score <= Math.max(2, Math.floor(n.length / 3)) && (!best || score < best.score)) best = { n, score }
   }
   return best?.n || null
 }
@@ -210,7 +210,9 @@ export function Matter({ matterId = null }) {
       if (!list) { list = await ctx.api.skills().then((r) => (r.skills || []).filter((s) => !s.error)).catch(() => []); setSkills(list); skillsAsked.current = true }
       if (!list.some((s) => s.name === cmd[1])) {
         const guess = didYouMean(cmd[1], [...COMMANDS.map((c) => c.name), ...list.map((s) => s.name)])
-        return sys(guess ? `There is no command /${cmd[1]}. Did you mean /${guess}? (Type /help to see them all.)` : `There is no command /${cmd[1]}. Type /help to see the commands.`, 'warn')
+        // The likely command goes into the field: Enter uses it, or keep typing.
+        if (guess) setInput(`/${guess}${cmd[2] ? ` ${cmd[2]}` : ''}`)
+        return sys(guess ? `There is no command /${cmd[1]}. Did you mean /${guess}? Press Enter to use it (/help lists them all).` : `There is no command /${cmd[1]}. Type /help to see the commands.`, 'warn')
       }
     }
     // Only paths typed or pasted without bracketed paste: attach them.
@@ -286,7 +288,7 @@ export function Matter({ matterId = null }) {
         else if (ev.type === 'suggestion') patch((a) => { a.suggestions = [...a.suggestions, ev.suggestion] })
         else if (ev.type === 'skill') patch((a) => { a.skill = ev.title })
         else if (ev.type === 'skill_suggestion' && ev.name) patch((a) => { a.tip = `Your firm's instructions "${ev.title || ev.name}" may fit — choose them under Actions → Use your firm's instructions.` })
-        else if (ev.type === 'error') patch((a) => { a.error = friendly(ev.message) })
+        else if (ev.type === 'error') patch((a) => { a.error = friendly(ev.message); a.err = errorParts(ev.message) })
         else if (ev.type === 'permission') { setPerm(ev); setMode('chat') }
         else if (ev.type === 'permission_result' && ev.by !== 'lawyer') {
           // Decided without the lawyer (no answer in time): close the prompt and say so.
@@ -294,7 +296,7 @@ export function Matter({ matterId = null }) {
         }
       }, ac.signal)
     } catch (err) {
-      if (!ac.signal.aborted) { failed = true; patch((a) => { a.error = err.message; a.act = applyEvent(a.act, { type: 'error', message: err.raw || err.message }) }) }
+      if (!ac.signal.aborted) { failed = true; patch((a) => { a.error = err.message; a.err = errorParts(err); a.act = applyEvent(a.act, { type: 'error', message: err.raw || err.message }) }) }
     }
     flush()
     ctx.interrupt.current = null
@@ -857,7 +859,12 @@ export function transcript(msgs, width, now = clock.now()) {
       add(bar, { t: check.ok ? check.text : `! ${check.text}`, color: check.ok ? color.ok : color.warn })
     }
     if (m.tip) para(m.tip, { dim: true })
-    if (m.error) wrap(`${sym.bad} ${m.error}`, width).forEach((l) => add({ t: l, color: color.bad }))
+    // An error in three parts: what happened (bold), why, what to do.
+    if (m.err) {
+      wrap(`${sym.bad} ${look.accessible ? 'error: ' : ''}${m.err.what}`, width).forEach((l) => add({ t: l, color: color.bad, bold: true }))
+      if (m.err.why) wrap(m.err.why, width - 2).forEach((l) => add({ t: `  ${l}`, dim: true }))
+      if (m.err.todo) wrap(m.err.todo, width - 2).forEach((l) => add({ t: `  ${l}` }))
+    } else if (m.error) wrap(`${sym.bad} ${m.error}`, width).forEach((l) => add({ t: l, color: color.bad }))
     if (m.stopNote) para(m.stopNote, { dim: true })
     else if (m.stopped) add({ t: '(stopped)', dim: true })
     if (act) for (const segs of doneLines(act, width)) add(...segs)

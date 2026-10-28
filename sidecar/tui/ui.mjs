@@ -79,7 +79,7 @@ export function Menu({ items, onSelect, onHighlight, isActive = true, initial = 
   const start = Math.max(0, Math.min(idx - Math.floor(maxVisible / 2), items.length - maxVisible))
   const shown = items.slice(start, start + maxVisible)
   return html`<${Box} flexDirection="column">
-    ${start > 0 ? html`<${Text} dimColor>  ↑ more<//>` : null}
+    ${start > 0 ? html`<${Text} dimColor>  ${asciiKeys('↑')} more<//>` : null}
     ${shown.map((it, k) => {
       const on = start + k === idx
       const n = start + k + 1
@@ -89,7 +89,7 @@ export function Menu({ items, onSelect, onHighlight, isActive = true, initial = 
         <${Text} bold=${on} dimColor=${!!it.disabled} wrap="truncate-end">${it.label}${look.accessible && on ? ' (selected)' : ''}${!describe && it.hint ? html`<${Text} dimColor>  ${it.hint}<//>` : null}<//>
       <//>`
     })}
-    ${start + maxVisible < items.length ? html`<${Text} dimColor>  ↓ more<//>` : null}
+    ${start + maxVisible < items.length ? html`<${Text} dimColor>  ${asciiKeys('↓')} more<//>` : null}
     ${describe && items[idx]?.hint ? html`<${Box} marginTop=${1} paddingLeft=${2}><${Text} dimColor wrap="wrap">${items[idx].hint}<//><//>` : null}
   <//>`
 }
@@ -224,7 +224,13 @@ export function footerKeys(keys, { noBack = false } = {}) {
   let k = keys || `↑↓ move ${sym.sep} Enter choose ${sym.sep} Esc back`
   if (!noBack && !/\bEsc\b/i.test(k)) k += ` ${sym.sep} Esc back`
   if (!/\?\s*help/i.test(k)) k += ` ${sym.sep} ? help`
-  return k
+  return asciiKeys(k)
+}
+
+/** Arrow and dash characters in key hints and chrome, as plain ASCII when the terminal needs it. */
+export function asciiKeys(s) {
+  if (!look.ascii) return s
+  return String(s).replace(/↑↓/g, 'Up/Down').replace(/↑/g, 'Up').replace(/↓/g, 'Down').replace(/←/g, 'Left').replace(/→/g, 'Right').replace(/—/g, '-').replace(/…/g, '...').replace(/·/g, '|').replace(/[‘’]/g, "'").replace(/[“”]/g, '"')
 }
 
 /**
@@ -237,14 +243,14 @@ export function footerKeys(keys, { noBack = false } = {}) {
 export function Frame({ title, subtitle, crumbs, status, keys, noBack = false, children }) {
   const { cols, rows } = useSize()
   const app = useContext(AppContext)
-  const s = status || {}
+  const s = Object.fromEntries(Object.entries(status || {}).map(([k, v]) => [k, typeof v === 'string' ? asciiKeys(v) : v]))
   if (cols < MIN_COLS) {
     return html`<${Box} flexDirection="column" width=${cols} paddingX=${1}>
       <${Text} bold>OpenLex<//>
-      <${Text} wrap="wrap">Window too small — please make it wider (at least ${MIN_COLS} columns).<//>
+      <${Text} wrap="wrap">${asciiKeys('Window too small — please make it wider')} (at least ${MIN_COLS} columns).<//>
     <//>`
   }
-  const trail = [...(crumbs || []), ...(title ? [title] : [])]
+  const trail = [...(crumbs || []), ...(title ? [title] : [])].map(asciiKeys)
   const showAi = rows >= 24
   const showData = rows >= 18
   const foot = app?.quitArmed ? 'Press Ctrl+C again to quit' : footerKeys(keys, { noBack })

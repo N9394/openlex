@@ -6,7 +6,7 @@
 
 import { useEffect, useState } from 'react'
 import { Box, Text, useInput } from 'ink'
-import { html, Frame, Menu, TextField, Field, Spinner, Note, sym, color } from './ui.mjs'
+import { html, Frame, Menu, TextField, Field, Spinner, Note, sym, color, fitPath, useSize } from './ui.mjs'
 import { useAppCtx } from './context.mjs'
 import { nameOf } from './api.mjs'
 
@@ -22,6 +22,7 @@ function lastUsed(m) {
 
 export function Home({ note = null }) {
   const ctx = useAppCtx()
+  const { cols } = useSize()
   const [matters, setMatters] = useState(null)
   const [error, setError] = useState('')
   const [filter, setFilter] = useState(null) // null = no filter field
@@ -61,7 +62,7 @@ export function Home({ note = null }) {
     ${!ready ? html`<${Note} kind="warn">The AI is not set up yet. Choose Settings → Which AI.<//>` : null}
     ${note ? html`<${Note} kind=${note.kind}>${note.text}<//>` : null}
     ${error ? html`<${Note} kind="bad">${error}<//>` : null}
-    ${ctx.folder ? html`<${Text} wrap="truncate-end"><${Text} dimColor>Working in <//>${ctx.folder.short}${ctx.folder.documents ? html`<${Text} dimColor>  ${sym.sep}  ${ctx.folder.documents} document${ctx.folder.documents === 1 ? '' : 's'} OpenLex can read<//>` : null}<//>` : null}
+    ${ctx.folder ? html`<${Text} wrap="truncate-end"><${Text} dimColor>Working in <//>${fitPath(ctx.folder.short, Math.max(cols - 46, 16))}${ctx.folder.documents ? html`<${Text} dimColor>  ${sym.sep}  ${ctx.folder.documents} document${ctx.folder.documents === 1 ? '' : 's'} OpenLex can read<//>` : null}<//>` : null}
     ${matters === null
       ? html`<${Spinner} label="Loading your matters…" />`
       : html`<${Box} flexDirection="column" marginTop=${ready && !note && !ctx.folder ? 0 : 1}>
