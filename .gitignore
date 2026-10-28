@@ -1,5 +1,6 @@
 node_modules/
 dist/
+!desktop/server/dist/
 **/bin/*
 !sidecar/bin/openlex.js
 *.gguf
