@@ -1,5 +1,5 @@
 /**
- * Settings: the AI model, your keys, where client data may go, what
+ * Settings: which AI, your keys, where client data may go, what
  * OpenLex may do without asking, and the folder where it saves its work.
  */
 
@@ -43,7 +43,7 @@ export function Settings() {
   if (busy) body = html`<${Spinner} label=${busy} />`
   else if (mode === 'menu') {
     const items = [
-      { value: 'model', label: 'AI model', hint: describeModel(ctx.info) },
+      { value: 'model', label: 'Which AI', hint: describeModel(ctx.info) },
       { value: 'keys', label: 'Your keys', hint: `${withKeys.filter((p) => p.hasKey).length} saved` },
       { value: 'data', label: 'Where client data may go', hint: describeRule(ctx.info.policy?.default) },
       { value: 'perms', label: 'What OpenLex may do without asking', hint: 'saving files, web pages, commands, connectors' },
@@ -57,7 +57,7 @@ export function Settings() {
         if (it.value === 'back') return ctx.back()
         if (it.value === 'model') return ctx.go('setup', {})
         if (it.value === 'data') {
-          if (!active || active === 'local') return setNote({ kind: 'ok', text: 'The AI runs on this computer, so client data stays here. Choose a cloud AI model first to allow anything else.' })
+          if (!active || active === 'local') return setNote({ kind: 'ok', text: 'The AI runs on this computer, so client data stays here. Choose an online AI service first to allow anything else.' })
           return ctx.go('setup', { dataOnly: true })
         }
         if (it.value === 'workspace') { setInput(workspace); return setMode('workspace') }

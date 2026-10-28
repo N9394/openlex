@@ -36,13 +36,14 @@ OpenLex starts in the background if it isn't running yet. This takes a few secon
 |---|---|
 | ↑ ↓ | Move through a list |
 | Enter | Choose, or send your question |
-| Esc | Go back one step, or stop an answer while it is being written |
+| Esc | Go back one step, or stop the work in progress (what is done is kept) |
+| Ctrl+B | In a conversation: what the last answer is based on, in full |
 | Tab | In a question: choose who OpenLex works as. In a file name: complete it |
 | 1 to 9 | Choose that item in a list directly |
 | ? | Help (when you are not typing) |
 | Ctrl+C | Quit |
 
-The bar at the bottom always shows the matter you are in, the AI model, where client data may go, and the keys you can use on that screen.
+The bar at the bottom always shows the matter you are in, which AI is used, where client data may go, and the keys you can use on that screen.
 
 ## First start: two questions
 
@@ -66,11 +67,12 @@ The first screen lists your matters. Privileged ones are marked **[privileged]**
 
 - **New matter.** Give it a name, optionally the client, and say whether it is privileged. *Privileged* means nothing from this matter ever leaves this computer, whatever the other settings say.
 - **Quick question (no matter).** Ask a legal question without opening a matter.
-- **Settings.** The AI model, your keys, where client data may go, and the folder where results are saved.
+- **Settings.** Which AI, your keys, where client data may go, and the folder where results are saved.
 
 ## Inside a matter
 
-- **Ask a question.** Type it and press Enter. The answer appears as it is written, followed by the **sources found** (numbered, for example *[1] ABGB § 879*) and any **proposed changes** as cards (importance, proposed wording, legal basis). Esc stops an answer. PgUp and PgDn scroll back.
+- **Ask a question.** Type it and press Enter. While OpenLex works you see what it is doing, step by step (see *What the screens tell you* below). The answer appears as it is written, followed by **Based on** (the law and passages it used) and any **proposed changes** as cards. Esc stops an answer. PgUp and PgDn scroll back.
+- **Ask about a file.** Drag one or more files into the question field (or paste their paths). They appear above the field as *📎 SPA draft 3.docx · 2.1 MB*; Backspace in the empty field removes the last one. With one file the question is about that file; with several, all of them are included. The files are also copied into the matter's folder (your originals are unchanged). Word, PDF and text files work; a scanned PDF without text is sent without it, and the app says so. Pasting a block of text with line breaks keeps it as one question: nothing is sent until you press Enter.
 - **Add documents.** Drag files or a whole folder from Finder or Explorer into the window and press Enter. Typing the path works too, and Tab completes file names. Files are copied into the matter's folder and your originals are not changed. Folders are added where they are.
 - **Actions…**
   - *Review the documents against a checklist.* Every document is checked point by point. A finding is kept only if its quote really appears in the document.
@@ -79,16 +81,73 @@ The first screen lists your matters. Privileged ones are marked **[privileged]**
   - *Compare two versions.* Pick the older version, then the newer one. Shows what changed, with the important changes rated.
   - *Ask the same questions of every document (review grid).* Type your questions one by one. You get one row per document and one column per question, saved as Excel.
   - *Plan a larger task (you approve each step).* Describe the goal. OpenLex proposes the steps and nothing runs until you approve them. At each pause you decide whether to continue.
-  - *Use a firm skill.* Instructions your firm wrote for recurring tasks.
+  - *Use your firm's instructions.* Instructions your firm wrote for recurring tasks.
 
-  While an action runs you see which document is being worked on. At the end you can open each result file, or the folder, directly.
+  While an action runs you see how far it is and how long it will take (see below). At the end you can open each result file, or the folder, directly.
+- **Recent activity.** The last requests in this matter: when, what was asked, what OpenLex looked at, where the data went and the result. `/activity` opens it from the conversation.
 - **Working as.** Changes how OpenLex approaches your questions: *Associate* (the default), *Researcher* (legal research memo with exact citations, no document edits), *Reviewer* (risks, with proposed fixes) or *Drafter* (drafts in your firm's wording). Your firm may add its own. The choice is kept for the matter. You never need to type "@" (hard to find on German and Austrian keyboards). Press Tab in the question field, or start a question with `as researcher:`.
 - **Privileged: keep on this computer (On/Off).** Turning it on takes effect immediately. Turning it off asks you to confirm first.
 - **Client data for this matter.** Shown when a cloud AI is set up. Allows or blocks sending this matter's documents to it.
 
+## What the screens tell you
+
+OpenLex is built so that you always know what is going on, without technical knowledge.
+
+**While it answers a question**, a numbered list grows under your question, one line per step, with how long each step took:
+
+```
+ OpenLex is working on it · 10 s so far
+  1 ✓ Working out how to answer                                             3 s
+  2 ✓ Reading clause 4 (Gewährleistung)                                     2 s
+  3 ▸ Searching Austrian law: “Gewährleistung Frist”                        5 s
+       found: ABGB § 933, ABGB § 932
+     • Next: writing the answer
+ ✓ Nothing has left this computer so far
+ Esc stop · the answer so far is kept
+```
+
+✓ is done, ▸ is what it is doing now, • is what comes next. Steps say what is read ("Reading clause 4"), what is searched and with which words ("Searching Austrian law: …"), when an official source is checked ("Checking the official source (RIS, Austria's federal law database)"), when your firm's precedents are searched, and when proposed changes are checked against the law they cite. If a step fails, the line says what that means for the answer, for example *"Couldn't reach RIS; the answer uses the copy of the law on this computer instead."*
+
+**Where your data went** is always the last line of the list, and stays under the answer afterwards:
+
+- *✓ Stayed on this computer* — nothing left your computer.
+- *! Sent to: Claude (Anthropic, EU) — names hidden · 2 times* — your question or document text went to that AI service, that many times; "names hidden" means the client names you listed were replaced before sending. This line is shown in warning colour so it cannot be missed.
+- *Looked up online: RIS …* — only search words or a web address went to a public law database or website, not your documents.
+
+**What the answer is based on** follows each answer:
+
+```
+ Based on:
+   [1] ABGB § 933 — Das Recht auf die Gewährleistung muss gerichtlich …
+   [2] ABGB § 932 — Der Übernehmer kann wegen eines Mangels die …
+   [3] Your document: clause 4 (Gewährleistung)
+   Ctrl+B or /sources: see each one in full
+```
+
+Ctrl+B (or `/sources`) lists them all; Enter opens the full text of a law section. Each proposed change says whether it was checked: *checked against ABGB § 933 ✓*, or *could not be verified — review carefully*.
+
+**Larger work** (review, chronology, grid, translation, plan) shows how far it is and how long is left, with every document:
+
+```
+ Document 3 of 12 · about 7 minutes left · 1 min 40 s so far
+ ███████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ 17%
+   ✓ Lease 01.docx                                                         42 s
+   ✓ Lease 02.docx                                                         46 s
+   ▸ Lease 03.docx — checking it point by point                            12 s
+   • Lease 04.docx
+```
+
+The time left is estimated from the documents finished so far, so it appears after the first one.
+
+**Stopping.** Esc stops at any time, and the app says what was kept: *"Stopped by you. Kept: the answer so far (120 words), 2 law sections it found. Nothing more is sent or saved."* For larger work, what was done so far is saved in the matter folder.
+
+**Recent activity** (matter menu, or `/activity`) lists each request with when, what was asked, what was looked at, where the data went and the result. It never shows document text or answers.
+
+Press `?` and then → for a one-screen summary of all this inside the app.
+
 ## Changing the setup during a conversation
 
-Type `/` in the question field to see the commands. They change things without leaving the conversation, and each answers with one line, for example *"Now using claude-sonnet-5-5 (Anthropic), cloud. Client data for this matter: may go to Anthropic (EU only)."* The bar at the bottom changes at once.
+Type `/` in the question field to see the commands. They change things without leaving the conversation, and each answers with one line, for example *"Now using Claude (Anthropic, EU), an online AI service. Client data for this matter: may go to Anthropic (EU only)."* The bar at the bottom changes at once.
 
 | Command | What it does |
 |---|---|
@@ -98,10 +157,12 @@ Type `/` in the question field to see the commands. They change things without l
 | `/as` | Who OpenLex works as (`/as researcher`). |
 | `/privileged on` / `off` | Keep this matter on this computer. Turning it off asks you to confirm. |
 | `/permissions` | What OpenLex may do without asking (see below). |
+| `/sources` | What the last answer is based on, in full (same as Ctrl+B). |
+| `/activity` | Recent activity: what OpenLex did, and where the data went. |
 | `/clear` | Start a new conversation in this matter. |
 | `/help` | The list of commands. |
 
-A change of AI model applies from your next question; an answer that is being written finishes with the model it started with. Other words after `/` run a firm skill of that name. Changes made in Word or with the `openlex` command appear here too.
+A change of AI applies from your next question; an answer that is being written finishes with the AI it started with. Other words after `/` use your firm's instructions of that name. Changes made in Word or with the `openlex` command appear here too.
 
 ## When OpenLex asks first
 
@@ -116,7 +177,7 @@ Nothing happens until you choose. If you don't answer within five minutes, the a
 
 ## When something goes wrong
 
-The app shows one plain sentence and what to do, for example *"The AI service did not accept your key. Check the key in Settings → AI model."* The technical details are written to `~/.lexvault/logs/tui.log`, and the background engine's to `~/.lexvault/logs/engine.log`. Send these to IT if you need help.
+The app shows one plain sentence and what to do, for example *"The AI service did not accept your key. Check the key in Settings → Which AI."* The technical details are written to `~/.lexvault/logs/tui.log`, and the background engine's to `~/.lexvault/logs/engine.log`. Send these to IT if you need help.
 
 ## For IT
 

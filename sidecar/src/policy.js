@@ -19,7 +19,8 @@
  * only (provider, model, matter, sizes, decision), never prompt content.
  *
  * The active matter rides on AsyncLocalStorage (withMatter), so the agent
- * loop doesn't have to thread it through every call.
+ * loop doesn't have to thread it through every call; so does an optional
+ * observer of model calls (observeModels → the `model` event).
  */
 
 const fs = require('fs')
@@ -127,7 +128,22 @@ function regionAllowed(regions, region) {
 }
 
 function withMatter(matterId, fn) {
-  return matterStore.run({ matterId: matterId || null }, fn)
+  // Keeps a model observer set by an outer observeModels().
+  return matterStore.run({ ...(matterStore.getStore() || {}), matterId: matterId || null }, fn)
+}
+
+/**
+ * Call `onModel` once per model call made inside `fn` (front ends show
+ * where the data went: which service, local or cloud, region, names
+ * hidden). Metadata only — never content.
+ */
+function observeModels(onModel, fn) {
+  return matterStore.run({ ...(matterStore.getStore() || {}), onModel }, fn)
+}
+
+/** llm.js: report one model call to the observer of this request, if any. */
+function reportModel(info) {
+  try { matterStore.getStore()?.onModel?.(info) } catch { /* observers must not break a call */ }
 }
 
 function currentMatter() {
@@ -143,4 +159,4 @@ function audit(entry) {
   }
 }
 
-module.exports = { load, save, setRule, ruleFor, check, withMatter, currentMatter, audit, POLICY_PATH, AUDIT_PATH, MODES }
+module.exports = { load, save, setRule, ruleFor, check, withMatter, observeModels, reportModel, currentMatter, audit, POLICY_PATH, AUDIT_PATH, MODES }

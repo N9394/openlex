@@ -1,19 +1,22 @@
 /**
  * Larger pieces of work on a matter: checklist review, chronology,
  * translation, comparison, review grid, and a plan the lawyer approves
- * step by step. Each one: a few plain questions, progress while it runs,
- * then the result files with an option to open them.
+ * step by step. Each one: a few plain questions, progress while it runs
+ * ("Document 3 of 12 · about 2 minutes left", each document ✓ done /
+ * ▸ now / waiting, where the data went, how to stop — explain.mjs), then
+ * the result files with an option to open them.
  */
 
 import path from 'node:path'
 import { useEffect, useRef, useState } from 'react'
 import { Box, Text, useInput } from 'ink'
-import { html, Frame, Menu, TextField, Field, Spinner, Note, sym } from './ui.mjs'
+import { html, Frame, Menu, TextField, Field, Spinner, Note, sym, useSize } from './ui.mjs'
 import { useAppCtx } from './context.mjs'
 import { friendly, log } from './api.mjs'
 import { shortPath } from './paths.mjs'
 import { ACTIONS } from './matter.mjs'
 import { PermissionPrompt, answeredLine } from './permission.mjs'
+import { clock, startWork, applyProgress, workLines, dataLine, dataSegs, duration } from './explain.mjs'
 
 const TITLES = { review: 'Checklist review', chronology: 'Chronology', translate: 'Translation', compare: 'Compare two versions', grid: 'Review grid', plan: 'Plan a larger task' }
 
@@ -31,8 +34,9 @@ export function Action({ kind, matterId }) {
   const [choice, setChoice] = useState({})
   const [input, setInput] = useState('')
   const [questions, setQuestions] = useState([])
-  const [progress, setProgress] = useState([]) // lines
-  const [count, setCount] = useState('')
+  const [progress, setProgress] = useState([]) // lines (plan answers, permission answers)
+  const [work, setWork] = useState(null) // progress of the running work (explain.mjs)
+  const [now, setNow] = useState(clock.now())
   const [result, setResult] = useState(null) // { files, summary }
   const [error, setError] = useState('')
   const [plan, setPlan] = useState(null)
@@ -40,6 +44,7 @@ export function Action({ kind, matterId }) {
   const [opened, setOpened] = useState('')
   const [perm, setPerm] = useState(null) // "may OpenLex …?" while a plan step runs
   const abort = useRef(null)
+  const { cols, rows } = useSize()
 
   useEffect(() => {
     (async () => {
@@ -55,6 +60,23 @@ export function Action({ kind, matterId }) {
     return () => abort.current?.abort()
   }, [])
 
+  useEffect(() => {
+    if (step !== 'running') return undefined
+    const t = setInterval(() => setNow(clock.now()), 1000)
+    return () => clearInterval(t)
+  }, [step])
+  const track = (ev) => { const at = clock.now(); setWork((w) => (w ? applyProgress(w, ev, at) : w)) }
+  /** Esc while it runs: say what was kept, instead of just leaving. */
+  const stopped = () => {
+    setWork((w) => {
+      const done = w?.done || 0
+      const unit = kind === 'plan' ? 'step' : kind === 'translate' ? 'part' : 'document'
+      setResult({ files: [], stopped: true, summary: `Stopped by you after ${done} of ${w?.total || '?'} ${unit}${(w?.total || 0) === 1 ? '' : 's'}. ${kind === 'plan' ? 'Finished steps keep their results.' : 'What was done so far is saved in the matter folder.'} Nothing more is sent.` })
+      return w ? { ...w, endedAt: clock.now() } : w
+    })
+    setStep('done')
+  }
+
   const fail = (err) => { log(`${kind} failed:`, err); setError(err.message ? err.message : friendly(err)); setStep('failed') }
   const line = (t) => setProgress((p) => [...p.slice(-30), t])
 
@@ -66,6 +88,8 @@ export function Action({ kind, matterId }) {
 
   /** Run a workflow (review, chronology, translate, compare) with progress. */
   const runWorkflow = async (body) => {
+    setWork(startWork(body.type, ['review', 'chronology'].includes(body.type) ? docs.map((d) => d.name) : []))
+    setNow(clock.now())
     setStep('running')
     const ac = new AbortController()
     abort.current = ac
@@ -73,40 +97,40 @@ export function Action({ kind, matterId }) {
     let failed = ''
     try {
       await ctx.api.runWorkflow({ ...body, matterId }, (ev) => {
-        if (ev.type === 'progress') {
-          if (ev.total) setCount(`${ev.index || 0} of ${ev.total}`)
-          if (ev.name) line(`${ev.step === 'translate' ? 'Translating' : ev.step === 'rate' ? 'Rating changes' : 'Reading'} ${ev.name}`)
-        } else if (ev.type === 'error') failed = friendly(ev.message)
+        track(ev)
+        if (ev.type === 'error') failed = friendly(ev.message)
         else if (ev.type === 'done') done = ev
       }, ac.signal)
-      if (ac.signal.aborted) return ctx.back()
+      if (ac.signal.aborted) return stopped()
       if (failed) throw new Error(failed)
       if (!done) throw new Error('The work stopped before it finished. See the log file for details.')
       setResult({ files: done.files || [], summary: describeStats(done.stats) })
       setStep('done')
-    } catch (err) { fail(err) }
+    } catch (err) { if (ac.signal.aborted) stopped(); else fail(err) }
   }
 
   const runGrid = async () => {
     setStep('running')
+    const ac = new AbortController()
+    abort.current = ac
     try {
       const g = await ctx.api.createGrid({ matterId, title: choice.title || 'Review grid', columns: questions.map((q) => ({ label: q.length > 40 ? `${q.slice(0, 37)}…` : q, prompt: q, type: 'text' })) })
-      setCount(`${g.rows?.length || 0} documents × ${questions.length} questions`)
-      const ac = new AbortController()
-      abort.current = ac
+      const names = docs.map((d) => d.name)
+      setWork({ ...startWork('grid', names), items: names.map((n, i) => ({ name: n, status: i ? 'waiting' : 'now', at: clock.now() })) })
+      setNow(clock.now())
       let stats = null
       let failed = ''
       await ctx.api.runGrid(g.id, (ev) => {
-        if (ev.type === 'progress' && ev.step === 'cell') line(`${ev.document} ${sym.sep} ${ev.column}: ${ev.status === 'ok' ? ev.value : ev.status === 'not_found' ? 'not found' : 'check'}`)
-        else if (ev.type === 'error') failed = friendly(ev.message)
+        track(ev)
+        if (ev.type === 'error') failed = friendly(ev.message)
         else if (ev.type === 'done') stats = ev.stats
       }, ac.signal)
-      if (ac.signal.aborted) return ctx.back()
+      if (ac.signal.aborted) return stopped()
       if (failed) throw new Error(failed)
       const ex = await ctx.api.exportGrid(g.id)
       setResult({ files: ex.files || [], summary: describeStats(stats) })
       setStep('done')
-    } catch (err) { fail(err) }
+    } catch (err) { if (ac.signal.aborted) stopped(); else fail(err) }
   }
 
   const proposePlan = async (goal) => {
@@ -119,6 +143,10 @@ export function Action({ kind, matterId }) {
   }
 
   const runPlan = async (id) => {
+    // Steps already finished (after a pause) count as done.
+    setWork((w) => w || { ...startWork('plan', []), items: (plan?.steps || []).map((s) => ({ id: s.id, name: s.kind === 'checkpoint' ? 'Pause: you decide' : s.title, status: s.status === 'done' ? 'done' : 'waiting' })), total: plan?.steps?.length || 0, done: (plan?.steps || []).filter((s) => s.status === 'done').length })
+    setWork((w) => ({ ...w, endedAt: null, note: '' }))
+    setNow(clock.now())
     setStep('running')
     const ac = new AbortController()
     abort.current = ac
@@ -126,21 +154,22 @@ export function Action({ kind, matterId }) {
     let failed = ''
     try {
       await ctx.api.runPlan(id, (ev) => {
-        if (ev.type === 'progress' && ev.status) line(`${ev.title || ev.step}: ${ev.status}${ev.summary ? ` — ${ev.summary}` : ''}${ev.error ? ` — ${friendly(ev.error)}` : ''}`)
+        track(ev)
+        if (ev.type === 'progress' && ev.status === 'failed') line(`${ev.title || 'A step'} did not finish: ${friendly(ev.error)}`)
         else if (ev.type === 'permission') setPerm(ev)
         else if (ev.type === 'permission_result' && ev.by !== 'lawyer') setPerm((p) => { if (p?.id === ev.id) line(`No answer in time, so not allowed: ${p.summary}`); return p?.id === ev.id ? null : p })
         else if (ev.type === 'error') failed = friendly(ev.message)
         else if (ev.type === 'done') done = ev
       }, ac.signal)
       setPerm(null)
-      if (ac.signal.aborted) return ctx.back()
+      if (ac.signal.aborted) return stopped()
       if (failed) throw new Error(failed)
       if (done?.status === 'waiting' && done.waiting) { setWaiting(done.waiting); return setStep('checkpoint') }
       const full = await ctx.api.getPlan(id).catch(() => null)
       const files = [done?.report, ...((full?.plan?.steps || []).flatMap((s) => s.result?.files || []))].filter(Boolean)
-      setResult({ files, summary: done?.status === 'done' ? 'All steps done.' : `Finished: ${done?.status || 'stopped'}.` })
+      setResult({ files, summary: done?.status === 'done' ? 'All steps done.' : done?.status === 'failed' ? 'Some steps did not finish (see above).' : 'Stopped before the end.' })
       setStep('done')
-    } catch (err) { fail(err) }
+    } catch (err) { if (ac.signal.aborted) stopped(); else fail(err) }
   }
 
   const docItems = docs.map((d) => ({ value: d.path, label: d.name, hint: shortPath(path.dirname(d.path)) }))
@@ -200,6 +229,7 @@ export function Action({ kind, matterId }) {
   else if (step === 'plan-review' && plan) {
     body = html`<${Box} flexDirection="column">
       <${Text} bold wrap="wrap">${plan.goal}<//>
+      <${Text} dimColor wrap="wrap">What OpenLex will do, in this order:<//>
       ${plan.steps.slice(0, 9).map((s, i) => html`<${Text} key=${s.id} wrap="truncate-end">  ${i + 1}. ${s.kind === 'checkpoint' ? `Pause: you decide — ${s.args?.question || ''}` : s.title}<//>`)}
       ${plan.steps.length > 9 ? html`<${Text} dimColor>  … and ${plan.steps.length - 9} more steps<//>` : null}
       ${(plan.notes || []).slice(0, 2).map((n, i) => html`<${Text} key=${`n${i}`} dimColor wrap="truncate-end">${n}<//>`)}
@@ -213,7 +243,8 @@ export function Action({ kind, matterId }) {
     <//>`
   } else if (step === 'checkpoint' && waiting) {
     body = html`<${Box} flexDirection="column">
-      ${progress.slice(-6).map((p, i) => html`<${Text} key=${i} dimColor wrap="truncate-end">${p}<//>`)}
+      ${work ? html`<${Text} dimColor wrap="truncate-end">${work.done} of ${work.total} steps done ${sym.sep} ${dataLine(work.models, work.online).text}<//>` : null}
+      ${progress.slice(-4).map((p, i) => html`<${Text} key=${i} dimColor wrap="truncate-end">${p}<//>`)}
       <${Box} marginTop=${1}><${Field} label=${waiting.args?.question || 'Continue with the next steps?'}>
         <${Menu} items=${[{ value: 'continue', label: 'Continue' }, { value: 'stop', label: 'Stop here (a report is written)' }]} onSelect=${async (it) => {
           try { await ctx.api.decidePlan(plan.id, waiting.id, it.value) } catch (err) { return fail(err) }
@@ -231,10 +262,12 @@ export function Action({ kind, matterId }) {
       }} />
     <//>`
   } else if (step === 'running') {
-    keys = `Esc stop ${sym.sep} Ctrl+C quit`
+    keys = `Esc stop ${sym.sep} ${kind === 'plan' ? 'finished steps keep their results' : 'what is done so far is kept'} ${sym.sep} Ctrl+C quit`
+    const lines = work ? workLines(work, { now, width: Math.max(cols - 2, 20), maxItems: Math.max(rows - 18, 3), stopHint: kind === 'plan' ? 'finished steps keep their results' : 'what is done so far is saved in the matter folder' }) : []
     body = html`<${Box} flexDirection="column">
-      <${Spinner} label=${`Working${count ? ` — ${count}` : ''}…`} />
-      ${progress.slice(-8).map((p, i) => html`<${Text} key=${i} dimColor wrap="truncate-end">  ${p}<//>`)}
+      <${Spinner} label=${`${TITLES[kind] || 'Working'}${docs.length && kind !== 'plan' && kind !== 'translate' && kind !== 'compare' ? ` of ${docs.length} document${docs.length === 1 ? '' : 's'}` : ''}…`} />
+      ${lines.map((l, i) => html`<${Text} key=${i} wrap="truncate-end">${l.map((g, k) => html`<${Text} key=${k} dimColor=${!!g.dim} bold=${!!g.bold} color=${g.color}>${g.t}<//>`)}<//>`)}
+      ${progress.slice(-2).map((p, i) => html`<${Text} key=${`p${i}`} dimColor wrap="truncate-end">  ${p}<//>`)}
     <//>`
   } else if (step === 'done' && result) {
     const items = [
@@ -242,8 +275,10 @@ export function Action({ kind, matterId }) {
       ...(result.files.length ? [{ value: 'folder', label: 'Open the folder' }] : []),
       { value: 'back', label: 'Back to the matter' },
     ]
+    const data = work ? dataLine(work.models, work.online) : null
     body = html`<${Box} flexDirection="column">
-      <${Note} kind="ok">Done.${result.summary ? ` ${result.summary}` : ''}<//>
+      ${result.stopped ? html`<${Note} kind="warn">${result.summary}<//>` : html`<${Note} kind="ok">Done${work ? ` in ${duration((work.endedAt || clock.now()) - work.startedAt)}` : ''}.${result.summary ? ` ${result.summary}` : ''}<//>`}
+      ${data ? html`<${Text} wrap="wrap">${dataSegs(data).map((g, k) => html`<${Text} key=${k} bold=${!!g.bold} color=${g.color}>${g.t}<//>`)}<//>` : null}
       ${result.files.length ? html`<${Text} dimColor wrap="truncate-middle">Saved in ${shortPath(path.dirname(result.files[0]))}<//>` : null}
       ${opened ? html`<${Text} dimColor>${opened}<//>` : null}
       <${Box} marginTop=${1}>

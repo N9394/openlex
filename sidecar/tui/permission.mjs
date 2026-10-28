@@ -30,11 +30,34 @@ function keyDetail(req) {
   return out.slice(0, 2)
 }
 
+const ACTS = {
+  write_file: 'saving files', append_file: 'adding to files', export_document: 'saving results as files', sync_calendar: 'writing calendar files',
+  web_fetch: 'opening web pages', web_save: 'saving web pages', download_to_matter: 'downloading files', run_bash: 'running programs on this computer',
+}
+
+/** A permission rule in words: "web_fetch:eur-lex.europa.eu" → "opening web pages on eur-lex.europa.eu". */
+export function patternWords(pattern) {
+  const p = String(pattern || '')
+  if (p === '*') return 'everything'
+  const mcp = /^mcp:([^:]+)(?::(.*))?$/.exec(p)
+  if (mcp) return `using your connector “${mcp[1]}”${mcp[2] && mcp[2] !== '*' ? ` (${mcp[2]})` : ''}`
+  const i = p.indexOf(':')
+  const tool = i < 0 ? p : p.slice(0, i)
+  const arg = i < 0 ? '' : p.slice(i + 1)
+  const act = ACTS[tool]
+  if (!act) return p
+  if (!arg || arg === '*' || arg === '**') return act
+  if (/^web_|download/.test(tool)) return `${act} on ${arg}`
+  if (tool === 'run_bash') return `${act}: ${arg}`
+  return `${act} in ${arg.replace(/\/?\*\*?$/, '/')}`
+}
+const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1)
+
 /** What the confirmation line in the chat says after an answer. */
 export function answeredLine(req, decision, saved) {
   if (decision === 'deny') return `Not allowed: ${req.summary}`
   if (decision === 'once') return `Allowed once: ${req.summary}`
-  return `Allowed${decision === 'always_matter' ? ' for this matter' : ''} from now on: ${saved || req.always || req.tool} (remove it with /permissions)`
+  return `Allowed${decision === 'always_matter' ? ' for this matter' : ''} from now on: ${patternWords(saved || req.always || req.tool)} (remove it with /permissions)`
 }
 
 export function PermissionPrompt({ req, onAnswer }) {
@@ -77,12 +100,12 @@ export function PermissionRules({ api, matterId = null, onNote }) {
   if (data.error) return html`<${Note} kind="bad">${data.error}<//>`
   if (picked) {
     return html`<${Box} flexDirection="column">
-      <${Text} bold wrap="wrap">Remove "${picked.pattern}"${picked.matterId ? ' for this matter' : ''}?<//>
+      <${Text} bold wrap="wrap">Remove "${patternWords(picked.pattern)}"${picked.matterId ? ' for this matter' : ''}?<//>
       <${Text} dimColor wrap="wrap">${picked.list === 'deny' ? 'OpenLex may then ask for it again.' : 'OpenLex will ask again before doing it.'}<//>
       <${Box} marginTop=${1}><${Menu} items=${[{ value: true, label: 'Yes, remove it' }, { value: false, label: 'No, keep it' }]} onSelect=${async (it) => {
         if (!it.value) return setPicked(null)
         setBusy('Removing…')
-        try { await api.permissionRule('remove', picked.pattern, picked.matterId); onNote?.({ kind: 'ok', text: `Removed: ${picked.pattern}` }) } catch (err) { onNote?.({ kind: 'bad', text: err.message }) }
+        try { await api.permissionRule('remove', picked.pattern, picked.matterId); onNote?.({ kind: 'ok', text: `Removed: ${patternWords(picked.pattern)}` }) } catch (err) { onNote?.({ kind: 'bad', text: err.message }) }
         setPicked(null)
         setBusy('')
         load()
@@ -92,14 +115,14 @@ export function PermissionRules({ api, matterId = null, onNote }) {
   const u = data.user || {}
   const f = data.firm || {}
   const mine = [
-    ...(u.allow || []).map((p) => ({ value: `a:${p}`, label: `${sym.ok} ${p}`, hint: 'allowed everywhere', rule: { pattern: p, list: 'allow' } })),
-    ...Object.entries(u.matters || {}).filter(([id]) => !matterId || id === matterId).flatMap(([id, m]) => (m.allow || []).map((p) => ({ value: `m:${id}:${p}`, label: `${sym.ok} ${p}`, hint: id === matterId ? 'this matter' : `matter ${id}`, rule: { pattern: p, list: 'allow', matterId: id } }))),
-    ...(u.deny || []).map((p) => ({ value: `d:${p}`, label: `${sym.bad} ${p}`, hint: 'never allowed', rule: { pattern: p, list: 'deny' } })),
+    ...(u.allow || []).map((p) => ({ value: `a:${p}`, label: `${sym.ok} ${cap(patternWords(p))}`, hint: 'allowed everywhere', rule: { pattern: p, list: 'allow' } })),
+    ...Object.entries(u.matters || {}).filter(([id]) => !matterId || id === matterId).flatMap(([id, m]) => (m.allow || []).map((p) => ({ value: `m:${id}:${p}`, label: `${sym.ok} ${cap(patternWords(p))}`, hint: id === matterId ? 'this matter' : `matter ${id}`, rule: { pattern: p, list: 'allow', matterId: id } }))),
+    ...(u.deny || []).map((p) => ({ value: `d:${p}`, label: `${sym.bad} ${cap(patternWords(p))}`, hint: 'never allowed', rule: { pattern: p, list: 'deny' } })),
   ]
   const firm = [
-    ...(f.allow || []).map((p) => ({ value: `fa:${p}`, label: `${sym.ok} ${p}`, hint: 'allowed by your firm', disabled: true })),
-    ...(f.deny || []).map((p) => ({ value: `fd:${p}`, label: `${sym.bad} ${p}`, hint: 'blocked by your firm', disabled: true })),
-    ...(f.ask || []).map((p) => ({ value: `fq:${p}`, label: `? ${p}`, hint: 'your firm always asks', disabled: true })),
+    ...(f.allow || []).map((p) => ({ value: `fa:${p}`, label: `${sym.ok} ${cap(patternWords(p))}`, hint: 'allowed by your firm', disabled: true })),
+    ...(f.deny || []).map((p) => ({ value: `fd:${p}`, label: `${sym.bad} ${cap(patternWords(p))}`, hint: 'blocked by your firm', disabled: true })),
+    ...(f.ask || []).map((p) => ({ value: `fq:${p}`, label: `? ${cap(patternWords(p))}`, hint: 'your firm always asks', disabled: true })),
   ]
   return html`<${Box} flexDirection="column">
     <${Text} bold>What OpenLex may do without asking<//>

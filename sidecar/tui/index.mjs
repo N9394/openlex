@@ -13,8 +13,11 @@ import { createApi, client, log } from './api.mjs'
 
 export async function run({ stdout = process.stdout, stdin = process.stdin } = {}) {
   const alt = stdout.isTTY && process.env.OPENLEX_NO_ALT_SCREEN !== '1'
-  const restore = () => { if (alt) stdout.write('\x1b[?1049l\x1b[?25h') }
+  // Bracketed paste: a pasted block (or dropped files) arrives marked, so
+  // its line breaks never send the question half-typed (ui.mjs TextField).
+  const restore = () => { if (stdout.isTTY) stdout.write('\x1b[?2004l'); if (alt) stdout.write('\x1b[?1049l\x1b[?25h') }
   if (alt) stdout.write('\x1b[?1049h\x1b[H')
+  if (stdout.isTTY) stdout.write('\x1b[?2004h')
   process.on('exit', restore)
   // Anything unexpected goes to the log, never a stack trace on screen.
   const onCrash = (err) => {

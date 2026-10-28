@@ -57,7 +57,7 @@ function fieldsFor(id) {
   }
   if (id === 'local-server') {
     return [
-      { id: 'baseUrl', label: 'Address of the model server on this computer', help: 'Ollama: http://127.0.0.1:11434/v1 · LM Studio: http://127.0.0.1:1234/v1', initial: 'http://127.0.0.1:11434/v1' },
+      { id: 'baseUrl', label: 'Address of the AI program on this computer', help: 'Ollama: http://127.0.0.1:11434/v1 · LM Studio: http://127.0.0.1:1234/v1', initial: 'http://127.0.0.1:11434/v1' },
       { id: 'model', label: 'Name of the model', help: 'As shown by Ollama or LM Studio, for example qwen3:14b.' },
     ]
   }
@@ -247,7 +247,7 @@ export function Setup({ firstRun = false, dataOnly = false }) {
   } else if (step === 'local') {
     const ready = localState?.model?.loaded
     const options = [
-      { value: 'done', label: ready ? 'Continue' : 'Continue without a model for now' },
+      { value: 'done', label: ready ? 'Continue' : 'Continue without an AI for now' },
       { value: 'server', label: 'Use Ollama or LM Studio on this computer', hint: 'If you already run one of them' },
       { value: 'back', label: 'Choose a different way' },
     ]
