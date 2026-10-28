@@ -35,7 +35,8 @@ const DEFAULTS = {
   agents: {},
   sources: {},
   models: {},
-  features: { monitors: true, browser: true, skillSuggestions: true, grid: true, plans: true, lists: true },
+  // shell (run_bash) is off unless a firm turns it on; it also needs an OS sandbox.
+  features: { monitors: true, browser: true, skillSuggestions: true, grid: true, plans: true, lists: true, shell: false },
 }
 
 function firmPath() {

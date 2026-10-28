@@ -31,8 +31,13 @@ PAYLOAD="$STAGE/payload/Library/Application Support/LexVault/WordPlugin"
 SCRIPTS="$STAGE/scripts"
 NODE_VERSION="${LEXVAULT_NODE_VERSION:-v22.23.2}"
 PLATFORM="darwin"
-APP_BIN="../product/electron/dist/mac-arm64/LexVault.app/Contents/Resources/bin"
-if [ "$ARCH" = "x64" ]; then APP_BIN="../product/electron/dist/mac/LexVault.app/Contents/Resources/bin"; fi
+# Native binaries (llama.cpp, Qdrant) come from the official GitHub releases,
+# fetched into desktop/electron/resources/bin by fetch-sidecars.js.
+APP_BIN="${OPENLEX_BIN_DIR:-desktop/electron/resources/bin}"
+if [ ! -f "$APP_BIN/llama-server-${PLATFORM}-${ARCH}" ] || [ ! -f "$APP_BIN/qdrant-${PLATFORM}-${ARCH}" ]; then
+  echo "… fetching llama.cpp + Qdrant (official releases)"
+  (cd desktop/electron && FETCH_ALL_MAC=1 node scripts/fetch-sidecars.js)
+fi
 
 echo "== LexVault Word plugin — macOS installer ($ARCH, v$VERSION) =="
 
