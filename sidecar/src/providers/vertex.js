@@ -61,7 +61,8 @@ async function accessToken(key, opts = {}) {
     ttl = (json.expires_in || 3600) * 1000
   } else {
     token = await new Promise((resolve, reject) => {
-      execFile('gcloud', ['auth', 'print-access-token'], { timeout: 20000 }, (err, out) => {
+      // Windows: gcloud is gcloud.cmd, which Node only runs through the shell (fixed arguments).
+      execFile('gcloud', ['auth', 'print-access-token'], { timeout: 20000, windowsHide: true, shell: process.platform === 'win32' }, (err, out) => {
         if (err) return reject(new Error('Vertex AI: no service-account key stored and `gcloud auth print-access-token` failed — run `gcloud auth login` or add a key in Settings → Model provider'))
         resolve(String(out).trim())
       })

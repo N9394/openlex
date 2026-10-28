@@ -44,10 +44,13 @@ Type `openlex` (no arguments) in a terminal and a full-screen app opens: no comm
 
 | | |
 |---|---|
-| Script (macOS, Linux, WSL) | `curl -fsSL https://openlex.pinemarshlands.com/install \| bash` installs into `~/.openlex`, checks the release checksum and links `openlex` into `~/.local/bin`. |
+| Script (macOS, Linux) | `curl -fsSL https://openlex.pinemarshlands.com/install \| bash` installs into `~/.openlex`, checks the release checksum and links `openlex` into `~/.local/bin`. |
+| Script (Windows) | `irm https://openlex.pinemarshlands.com/install.ps1 \| iex` in PowerShell, no admin: installs into `%USERPROFILE%\.openlex`, verifies the checksum and adds `openlex.cmd` to your user PATH. No Node yet: `winget install OpenJS.NodeJS.LTS`. Use Windows Terminal for the full-screen app. |
 | Homebrew | `brew install n9394/openlex/openlex` |
 | Manual | Download `openlex-<version>.tar.gz` from [Releases](https://github.com/N9394/openlex/releases), unpack, run `./openlex`. |
 | From source | `cd sidecar && npm install && npm link` |
+
+A specific version: `OPENLEX_VERSION=0.2.0` (Windows: `$env:OPENLEX_VERSION = '0.2.0'`) before the line. Running it again upgrades. Uninstall: delete `~/.openlex` (Windows: `%USERPROFILE%\.openlex`, and remove its `bin` folder from your user PATH); your matters and keys in `~/.lexvault` stay.
 
 All need Node.js 20 or newer. Models are not included: add a cloud key, or run a local model (`brew install llama.cpp`; OpenLex finds `llama-server` on `PATH`) with a GGUF in `~/.lexvault/models/`.
 
