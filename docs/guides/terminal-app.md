@@ -2,6 +2,24 @@
 
 A full-screen app in the terminal window. You choose everything with the arrow keys and Enter; there are no commands to remember (a few optional ones, typed with `/`, change the setup during a conversation).
 
+## Installing it
+
+You need Node.js 20 or newer. On macOS or Linux, paste into the terminal:
+
+```
+curl -fsSL https://openlex.pinemarshlands.com/install | bash
+```
+
+On Windows, open **Windows Terminal** (or PowerShell) and paste:
+
+```
+irm https://openlex.pinemarshlands.com/install.ps1 | iex
+```
+
+No Node.js yet? The Windows installer tells you; install it with `winget install OpenJS.NodeJS.LTS`, open a new window and paste the line again. The installer needs no administrator rights. It checks the download's checksum, installs into `%USERPROFILE%\.openlex` and adds `%USERPROFILE%\.openlex\bin` to your own PATH; nothing else changes. Paste the same line again to update.
+
+To remove OpenLex from Windows: `Remove-Item -Recurse -Force "$env:USERPROFILE\.openlex"`, then remove `…\.openlex\bin` from *Path* under *Edit environment variables for your account*. On macOS and Linux: `rm -rf ~/.openlex ~/.local/bin/openlex`. Your matters and settings in `.lexvault` stay; delete that folder too to remove everything.
+
 ## Starting it
 
 Open Terminal (macOS), Windows Terminal or any Linux terminal and type:
@@ -105,4 +123,5 @@ The app shows one plain sentence and what to do, for example *"The AI service di
 - `openlex tui` opens the same app. Without a terminal, for example in scripts, `openlex` prints the command list as before, and every command (`openlex status`, `openlex ask …`, …) works unchanged.
 - Permissions from scripts: `openlex ask` in a terminal asks on one line (*[y]es once / [a]lways / [n]o*). Piped or with `--json` it never asks and anything that would need a yes is refused, unless you pass `--allow write_file:Acme/**` (patterns, this run only) or `--yes` (everything that would be asked, this run only). Firm blocks still apply. Rules: `openlex permissions [list | allow PATTERN [--matter ID] | ask PATTERN | deny PATTERN | remove PATTERN]`; the format is in `docs/HARNESS.md` → `permissions`.
 - `NO_COLOR=1` turns colours off. `OPENLEX_ASCII=1` uses plain ASCII symbols, which old consoles need. `OPENLEX_KEEP_ENGINE=1` keeps the background engine running after the app quits.
+- Windows: Windows Terminal is recommended. The old console window (conhost) gets plain ASCII symbols automatically (`OPENLEX_ASCII=0` turns the symbols back on). In Git Bash's own window (mintty) Node may not see an interactive terminal, and `openlex` then prints the command list; use Windows Terminal. Logs are in `%USERPROFILE%\.lexvault\logs`. Install for all users or offline: unpack the release `.tar.gz` anywhere and run its `openlex.cmd`; `OPENLEX_HOME` and `OPENLEX_BIN_DIR` move the installer's folders.
 - The app needs a terminal of at least 80×24 characters.

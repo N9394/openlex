@@ -34,6 +34,14 @@ if find "$STAGE/sidecar/node_modules" -name '*.node' | grep -q .; then
   find "$STAGE/sidecar/node_modules" -name '*.node' >&2
   exit 1
 fi
+# No symlinks: Windows' tar.exe cannot create them without admin rights or
+# Developer Mode. npm's .bin links are not used at runtime.
+rm -rf "$STAGE/sidecar/node_modules/.bin"
+if find "$STAGE" -type l | grep -q .; then
+  echo "symlink found — the tarball would not unpack on Windows" >&2
+  find "$STAGE" -type l >&2
+  exit 1
+fi
 
 # Launcher at the top level so `openlex` works from an unpacked tarball too.
 cat > "$STAGE/openlex" <<'SH'
@@ -43,6 +51,8 @@ DIR=$(cd "$(dirname "$(readlink -f "$0" 2>/dev/null || echo "$0")")" && pwd)
 exec node "$DIR/sidecar/bin/openlex.js" "$@"
 SH
 chmod +x "$STAGE/openlex" "$STAGE/sidecar/bin/openlex.js"
+# The same for Windows (cmd.exe wants CRLF line endings).
+printf '@echo off\r\nnode "%%~dp0sidecar\\bin\\openlex.js" %%*\r\n' > "$STAGE/openlex.cmd"
 
 # Reproducible-ish archive: fixed owner, sorted entries.
 (cd "$DIST" && COPYFILE_DISABLE=1 tar --uid 0 --gid 0 --uname root --gname root -czf "$NAME.tar.gz" "$NAME" 2>/dev/null || COPYFILE_DISABLE=1 tar -czf "$NAME.tar.gz" "$NAME")
