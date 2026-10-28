@@ -38,6 +38,10 @@ test('privileged matters are pinned to local-only even when the default allows c
   assert.strictEqual(policy.check(claude, open.id).allowed, true)
   assert.strictEqual(policy.check(claude, priv.id).allowed, false)
   assert.strictEqual(matters.get(priv.id).policy.mode, 'local-only')
+  assert.throws(() => policy.setRule(priv.id, { mode: 'allow-list', providers: ['anthropic'] }), /privileged/)
+  matters.update(priv.id, { privileged: false })
+  policy.setRule(priv.id, { mode: 'allow-list', providers: ['anthropic'] })
+  assert.strictEqual(policy.check(claude, priv.id).allowed, true, 'once unmarked, the matter can be opened up')
 })
 
 test('a document belongs to one matter; rebinding moves it', () => {
