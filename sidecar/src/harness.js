@@ -16,6 +16,7 @@
  *   features switch whole features on or off
  *   sources  the firm's own data and subscriptions as searchable sources (sources.js)
  *   models   model profiles: thinking, tool protocol, temperature, context, extra instructions (models.js)
+ *   prompts  the prompt roadmap: change or add instruction blocks and when they are injected (prompts.js)
  *
  * Files are re-read when they change (mtime), so edits apply without a
  * restart. Invalid JSON never takes the engine down: that layer is
@@ -27,7 +28,7 @@ const path = require('path')
 const { DATA_DIR } = require('./config')
 
 const USER_PATH = path.join(DATA_DIR, 'openlex.json')
-const SECTIONS = ['routes', 'hooks', 'agents', 'features', 'sources', 'models']
+const SECTIONS = ['routes', 'hooks', 'agents', 'features', 'sources', 'models', 'prompts']
 
 const DEFAULTS = {
   routes: { roles: {}, rules: [], fallback: [] },
@@ -35,6 +36,7 @@ const DEFAULTS = {
   agents: {},
   sources: {},
   models: {},
+  prompts: {},
   features: { monitors: true, browser: true, skillSuggestions: true, grid: true, plans: true, lists: true },
 }
 

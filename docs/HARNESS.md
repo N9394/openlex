@@ -100,6 +100,10 @@ Built-ins: `lotus-2`, `lotus`, `qwen3-local`, `openai-reasoning`, `claude`, `dee
 
 `openlex models` shows the model and profile each role gets, plus all profiles in lookup order. `openlex models <model name> [--local]` shows the profile for one model. API: `GET /api/models`, `GET /api/models?model=NAME&kind=local|hosted`.
 
+## `prompts`: when each instruction reaches the model
+
+Instructions arrive at the turn that needs them, not all up front. Change a block's wording or trigger, add your own, or switch one off. See [PROMPTS.md](PROMPTS.md), and run `openlex prompts "question"` to see what each step gets.
+
 ## `sources`
 
 The firm's own databases, DMS, folders and the legal databases it subscribes to, as searchable sources for the agent (`http`, `mcp`, `folder` adapters, no code). See [SOURCES.md](SOURCES.md).

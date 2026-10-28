@@ -68,19 +68,25 @@ const safeName = (n) => String(n).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64)
  * Neutral tool list: [{ name, description, parameters }], plus a map from
  * the API-safe name back to the agent's tool name.
  */
-function toolList() {
+/**
+ * Native tool definitions. `only` (a list of tool names, from the prompt
+ * roadmap) limits them to the tools offered this turn; get_tool_schemas is
+ * then offered too, so the model can load the rest.
+ */
+function toolList(only) {
   const { TOOLS } = require('../tools')
+  const want = only ? new Set(only) : null
   const tools = []
   const names = new Map()
   for (const [name, t] of Object.entries(TOOLS)) {
-    if (SKIP.has(name)) continue
+    if (want ? !want.has(name) : SKIP.has(name)) continue
     tools.push({ name: safeName(name), description: t.description, parameters: inputSchema(name, t.input) })
     names.set(safeName(name), name)
   }
   try {
     for (const t of require('../mcp/client').allTools()) {
       const sn = safeName(t.qualified)
-      if (names.has(sn)) continue
+      if (names.has(sn) || (want && !want.has(t.qualified))) continue
       const params = t.inputSchema && t.inputSchema.type === 'object' ? t.inputSchema : { type: 'object', properties: {} }
       tools.push({ name: sn, description: `${t.description || t.name}${t.remote ? ' (external service)' : ''}`, parameters: params })
       names.set(sn, t.qualified)
