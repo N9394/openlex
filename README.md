@@ -73,9 +73,13 @@ openlex ask "@researcher /research-memo is a 2-year non-compete valid in Austria
 # matters and the firm's data
 openlex matters
 openlex matters new "Alpine share deal" --client "Alpine Holding" --privileged   # privileged: never leaves this computer
+openlex matters show <id>                       # the matter at a glance: findings, deadlines, decisions, open questions
+openlex recall "liability cap" --matter <id>    # search everything stored for the matter
+openlex matters export <id> --format docx       # a "matter memo" (docx, pdf or md) in the matter folder
 openlex clauses --type liability                # the firm's own clause wording
 
 # workflows on a matter's documents
+openlex analyse contract.docx --matter <id>     # risks, deadlines, obligations, key terms; quotes checked
 openlex review --matter <id> [--playbook nda]   # checklist review, verbatim quotes only
 openlex chronology --matter <id>
 openlex translate contract.docx --to en         # Word translation + review table + checks

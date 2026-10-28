@@ -137,6 +137,10 @@ const TOOLS = {
     description: 'Add the contract\'s dated deadlines to the user\'s calendar (Apple Calendar or Outlook, per Settings). Use when the user asks to put deadlines/due dates in their calendar.',
     input: { matter: 'string' },
   },
+  analyse_document: {
+    description: 'Full document analysis (the analyse workflow): summary, key terms, deadlines, obligations per party, risks high/medium/low with a suggested fix, notable/missing clauses — every finding verified against a verbatim quote, law looked up for high and medium risks, fixes double-checked. Saves analysis .md/.docx/.json in the matter folder and returns a short summary. Use when the lawyer asks to analyse a whole document (/analyse).',
+    input: { file: 'string (optional — a document in the matter folders; default: the open document)' },
+  },
   risk_scorecard: {
     description: 'Emit an overall contract risk score (0-100) with a category breakdown. Call after reviewing a document when the user asks for a risk assessment or scorecard.',
     input: { score: 'number 0-100', categories: 'object (e.g. {liability: 40, termination: 30, ip: 10, data: 20})', summary: 'string (one sentence)' },
@@ -550,6 +554,24 @@ async function dispatch({ doc, memory, search, embeddings, packStore }, rawName,
       const model = buildModel(doc, (args.matter || currentMatterName()))
       const result = await calendar.sync(model.deadlines, (args.matter || currentMatterName()))
       return { output: result }
+    }
+
+    case 'analyse_document': {
+      const an = require('./analysis')
+      const matterId = require('./policy').currentMatter()
+      try {
+        let input
+        if (args.file) input = { file: String(args.file) }
+        else {
+          if (!String(doc?.text || '').trim()) return { output: 'ERROR: no open document — pass file (a document in the matter folders)' }
+          const bound = require('./matters').forDoc(doc.docId)?.docs?.find((d) => d.docId === doc.docId)
+          input = { text: doc.text, name: bound?.title || 'Word document' }
+        }
+        const r = await an.runAnalyse({ matterId, ...input })
+        return { output: `ANALYSIS (verified quotes only; the lawyer can open the full report):\n${r.summary}\n\nSaved: ${r.files.join(', ')}` }
+      } catch (e) {
+        return { output: `ERROR: ${e.message}` }
+      }
     }
 
     case 'risk_scorecard': {

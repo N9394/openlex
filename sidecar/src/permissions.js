@@ -74,6 +74,9 @@ const BUILTIN = {
   recall: 'allow',
   risk_scorecard: 'allow', // only shows a card in the front end
   run_playbook: 'allow', // reads a playbook file and matches it against the document
+  // Reads the document and writes only its own report files into the matter
+  // folder (earlier versions are kept); its law lookups follow the data policy.
+  analyse_document: 'allow',
 
   // Proposed changes: each suggestion card is reviewed by the lawyer anyway.
   propose_suggestions: 'allow',
