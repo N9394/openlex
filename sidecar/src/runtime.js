@@ -72,7 +72,7 @@ function serverBuild() {
   try {
     // --version prints to stderr on macOS/Windows builds, and the binary
     // needs its companion dylibs on DYLD_LIBRARY_PATH to even exec.
-    const r = require('child_process').spawnSync(bin, ['--version'], { encoding: 'utf8', timeout: 10000, env: { ...process.env, ...llamaEnv(bin) } })
+    const r = require('child_process').spawnSync(bin, ['--version'], { encoding: 'utf8', timeout: 10000, windowsHide: true, env: { ...process.env, ...llamaEnv(bin) } })
     const out = (r.stdout || '') + (r.stderr || '')
     // llama.cpp prints e.g. "version: 0.1.0-dev (build 10400, commit …)".
     // The naive /version:\s*(\d+)/ grabs the "0" of "0.1.0-dev" → build 0 →
@@ -122,11 +122,11 @@ function llamaEnv(binPath) {
   if (process.platform === 'win32') {
     try {
       const { execFileSync } = require('child_process')
-      const registered = execFileSync('reg', ['query', 'HKLM\\SOFTWARE\\Khronos\\Vulkan\\Drivers'], { encoding: 'utf8', timeout: 5000 }).toString()
+      const registered = execFileSync('reg', ['query', 'HKLM\\SOFTWARE\\Khronos\\Vulkan\\Drivers'], { encoding: 'utf8', timeout: 5000, windowsHide: true }).toString()
       if (!/\.[jJ][sS][oO][nN]/i.test(registered)) {
         const icd = execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
           "(Get-ChildItem 'C:\\Windows\\System32\\DriverStore\\FileRepository' -Recurse -Filter amd-vulkan64.json -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName)"],
-          { encoding: 'utf8', timeout: 15000 }).toString().trim()
+          { encoding: 'utf8', timeout: 15000, windowsHide: true }).toString().trim()
         if (icd && icd.toLowerCase().endsWith('.json')) {
           env.VK_DRIVER_FILES = icd
           console.log('[llama] AMD Vulkan ICD not registered — using VK_DRIVER_FILES:', icd)
@@ -197,10 +197,10 @@ function detectAmdGpu() {
   return new Promise((resolve) => {
     const { execFile } = require('child_process')
     const check = (stdout) => resolve(/(amd|radeon|rx\s*\d)/i.test(String(stdout || '')))
-    execFile('wmic', ['path', 'win32_VideoController', 'get', 'name'], { timeout: 5000 }, (err, stdout) => {
+    execFile('wmic', ['path', 'win32_VideoController', 'get', 'name'], { timeout: 5000, windowsHide: true }, (err, stdout) => {
       if (!err && stdout) return check(stdout)
       execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', '(Get-CimInstance Win32_VideoController).Name'],
-        { timeout: 8000 }, (err2, stdout2) => {
+        { timeout: 8000, windowsHide: true }, (err2, stdout2) => {
           if (err2) return resolve(false)
           check(stdout2)
         })
@@ -219,15 +219,15 @@ function triggerScheduledLlama() {
   return new Promise((resolve) => {
     if (process.platform !== 'win32') return resolve(false)
     const { execFile } = require('child_process')
-    execFile('schtasks', ['/query', '/tn', 'llama-server'], { timeout: 5000 }, (errQ) => {
+    execFile('schtasks', ['/query', '/tn', 'llama-server'], { timeout: 5000, windowsHide: true }, (errQ) => {
       if (errQ) return resolve(false) // no such task — own spawn path
       // A hard GPU hang can leave the task stuck in "running" (schtasks
       // result 267014) — /run is then silently ignored and the sidecar
       // falls back to its own spawn. /end clears the stale instance first
       // (harmless when nothing is running).
-      execFile('schtasks', ['/end', '/tn', 'llama-server'], { timeout: 5000 }, () => {
+      execFile('schtasks', ['/end', '/tn', 'llama-server'], { timeout: 5000, windowsHide: true }, () => {
         setTimeout(() => {
-          execFile('schtasks', ['/run', '/tn', 'llama-server'], { timeout: 8000 }, () => {
+          execFile('schtasks', ['/run', '/tn', 'llama-server'], { timeout: 8000, windowsHide: true }, () => {
             // Poll LLM_BASE (the scheduled llama's port via LEXVAULT_LLM_URL)
             // until it answers — model load on Vulkan takes ~20-40s.
             const started = Date.now()
@@ -355,7 +355,7 @@ async function ensureLlama() {
   if (flashOk) flags.push('flash-attn', 'batch=16384')
   console.log(`[llama] spawn tier=${TIER} ctx=${ctxSize} ngl=${ngl} build=${build} [${flags.join(', ')}]`)
 
-  proc = spawn(bin, args, { stdio: 'ignore', env: llamaEnv(bin) })
+  proc = spawn(bin, args, { stdio: 'ignore', env: llamaEnv(bin), windowsHide: true })
   proc.on('error', (err) => {
     console.error('[llama] spawn failed:', err.message)
     proc = null

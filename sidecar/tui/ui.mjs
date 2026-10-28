@@ -16,8 +16,11 @@ export const html = htm.bind(React.createElement)
 
 const env = process.env
 export const NO_COLOR = env.NO_COLOR !== undefined && env.NO_COLOR !== ''
-// Legacy Windows consoles and dumb terminals get plain ASCII.
-const ASCII = env.OPENLEX_ASCII === '1' || env.TERM === 'dumb' || (process.platform === 'win32' && !env.WT_SESSION && !env.TERM_PROGRAM)
+// Legacy Windows consoles (conhost: no braille or rounded corners in its
+// fonts) and dumb terminals get plain ASCII. Windows Terminal sets
+// WT_SESSION, VS Code / WezTerm TERM_PROGRAM, ConEmu ConEmuANSI.
+// OPENLEX_ASCII=1 forces ASCII, OPENLEX_ASCII=0 forces the symbols.
+const ASCII = env.OPENLEX_ASCII === '1' || (env.OPENLEX_ASCII !== '0' && (env.TERM === 'dumb' || (process.platform === 'win32' && !env.WT_SESSION && !env.TERM_PROGRAM && env.ConEmuANSI !== 'ON')))
 
 /** Colours: amber accent sparingly; everything else is the terminal's own foreground (works light and dark). */
 export const color = {

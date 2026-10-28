@@ -31,9 +31,12 @@ export async function run({ stdout = process.stdout, stdin = process.stdin } = {
   let started = false
   const ensure = api.ensureEngine
   api.ensureEngine = async (opts) => { const r = await ensure(opts); started = started || r.started; return r }
+  const stopStarted = () => { if (started && process.env.OPENLEX_KEEP_ENGINE !== '1') client.stopEngine() }
+  // Terminal window closed (Windows: the console's close button) instead of quitting.
+  process.on('SIGHUP', () => { stopStarted(); process.exit(129) })
 
   const app = render(html`<${App} api=${api} />`, { stdout, stdin, exitOnCtrlC: true, patchConsole: true })
   await app.waitUntilExit()
   restore()
-  if (started && process.env.OPENLEX_KEEP_ENGINE !== '1') client.stopEngine()
+  stopStarted()
 }

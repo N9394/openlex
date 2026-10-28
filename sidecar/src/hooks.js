@@ -103,7 +103,7 @@ function runCommand(h, ev) {
     const done = (r) => { if (!settled) { settled = true; resolve(r) } }
     let child
     try {
-      child = spawn(String(h.command), { shell: true, stdio: ['pipe', 'pipe', 'ignore'], env: { ...process.env, OPENLEX_HOOK_EVENT: ev.event } })
+      child = spawn(String(h.command), { shell: true, windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'], env: { ...process.env, OPENLEX_HOOK_EVENT: ev.event } })
     } catch (err) { return done({ error: err.message }) }
     const timer = setTimeout(() => { try { child.kill('SIGKILL') } catch { /* gone */ } done({ error: `timed out after ${timeoutMs} ms` }) }, timeoutMs)
     child.stdout.on('data', (c) => { if (out.length < 100000) out += c })

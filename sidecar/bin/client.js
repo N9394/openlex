@@ -12,7 +12,7 @@ const os = require('os')
 const path = require('path')
 const https = require('https')
 const http = require('http')
-const { spawn, execFile } = require('child_process')
+const { spawn, execFile, execFileSync } = require('child_process')
 
 const DATA_DIR = process.env.OPENLEX_DATA_DIR || process.env.LEXVAULT_DATA_DIR || path.join(os.homedir(), '.lexvault')
 const REG = path.join(DATA_DIR, 'run', 'sidecar.json')
@@ -27,7 +27,8 @@ function engine() {
   try { reg = JSON.parse(fs.readFileSync(REG, 'utf8')) } catch {
     throw new Error('OpenLex engine is not running — open Word with the add-in, start the desktop app, or run `openlex serve`.')
   }
-  try { process.kill(reg.pid, 0) } catch { throw new Error(`engine registry is stale (pid ${reg.pid} is gone) — start the engine again`) }
+  // EPERM: alive, but another user's process.
+  try { process.kill(reg.pid, 0) } catch (err) { if (err.code !== 'EPERM') throw new Error(`engine registry is stale (pid ${reg.pid} is gone) — start the engine again`) }
   const ca = reg.ca && fs.existsSync(reg.ca) ? fs.readFileSync(reg.ca) : undefined
   return { url: reg.url, ca, version: reg.version }
 }
@@ -131,18 +132,34 @@ async function ensureEngine({ timeoutMs = 20000, onWaiting } = {}) {
   throw new Error(`the engine did not start (details in ${path.join(LOG_DIR, 'engine.log')})`)
 }
 
-/** Ask the running engine to shut down (it removes its registry on exit). */
+/**
+ * Ask the running engine to shut down (it removes its registry on exit).
+ * Windows has no SIGTERM: process.kill ends the engine at once, so its own
+ * shutdown (stopping a local model or Qdrant it started, removing the
+ * registry) never runs. There the whole process tree is ended instead and
+ * the registry removed here.
+ */
 function stopEngine() {
-  try { process.kill(JSON.parse(fs.readFileSync(REG, 'utf8')).pid, 'SIGTERM') } catch { /* already gone */ }
+  let pid
+  try { pid = JSON.parse(fs.readFileSync(REG, 'utf8')).pid } catch { return /* already gone */ }
+  if (!Number.isInteger(pid) || pid <= 0) return
+  if (process.platform !== 'win32') { try { process.kill(pid, 'SIGTERM') } catch { /* already gone */ } return }
+  try { execFileSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true, timeout: 10000 }) } catch { /* already gone */ }
+  try { if (JSON.parse(fs.readFileSync(REG, 'utf8')).pid === pid) fs.rmSync(REG, { force: true }) } catch { /* gone */ }
 }
 
-/** Open a file or folder with the system's default app. */
+/**
+ * Open a file or folder with the system's default app. Windows: not
+ * `cmd /c start`, which runs a file name containing & as a command and
+ * expands %…%; PowerShell's Invoke-Item gets the path through the
+ * environment, so nothing in it is parsed.
+ */
 function openPath(target) {
   return new Promise((resolve, reject) => {
-    const [cmd, args] = process.platform === 'darwin' ? ['open', [target]]
-      : process.platform === 'win32' ? ['cmd', ['/c', 'start', '', target]]
+    const [cmd, args, env] = process.platform === 'darwin' ? ['open', [target]]
+      : process.platform === 'win32' ? ['powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', 'Invoke-Item -LiteralPath $env:OPENLEX_OPEN_PATH'], { ...process.env, OPENLEX_OPEN_PATH: target }]
         : ['xdg-open', [target]]
-    execFile(cmd, args, { windowsHide: true }, (err) => (err ? reject(err) : resolve()))
+    execFile(cmd, args, { windowsHide: true, env }, (err) => (err ? reject(err) : resolve()))
   })
 }
 

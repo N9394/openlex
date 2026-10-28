@@ -75,7 +75,7 @@ async function ensureQdrant() {
   writeConfig()
   const bin = findBinary()
   const args = ['--config-path', CONFIG_PATH]
-  proc = spawn(bin, args, { stdio: 'ignore' })
+  proc = spawn(bin, args, { stdio: 'ignore', windowsHide: true })
   proc.on('error', (err) => {
     console.error('[qdrant] spawn failed:', err.message)
     proc = null

@@ -23,7 +23,9 @@ function setProviderConfig(patch) {
 function openICS(filePath) {
   return new Promise((resolve) => {
     if (process.platform === 'darwin') execFile('open', [String(filePath)], () => resolve(true))
-    else execFile('cmd.exe', ['/c', 'start', '', `"${filePath}"`], () => resolve(true))
+    // Windows: the path goes through the environment, never through cmd's parser.
+    else execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', 'Invoke-Item -LiteralPath $env:OPENLEX_OPEN_PATH'],
+      { windowsHide: true, env: { ...process.env, OPENLEX_OPEN_PATH: String(filePath) } }, () => resolve(true))
   })
 }
 

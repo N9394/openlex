@@ -433,12 +433,13 @@ test('dropped paths: quoted, backslash-escaped, file:// URLs, several at once', 
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'openlex-tui-paths-'))
   const spaced = path.join(tmp, 'My Contract.docx')
   fs.writeFileSync(spaced, 'x')
-  assert.deepStrictEqual(paths.cleanPaths(`'${spaced}'`), [spaced])
+  const q = process.platform === 'win32' ? '"' : "'" // Windows terminals quote with "…" only
+  assert.deepStrictEqual(paths.cleanPaths(`${q}${spaced}${q}`), [spaced])
   assert.deepStrictEqual(paths.cleanPaths(`"${spaced}"`), [spaced])
   assert.deepStrictEqual(paths.cleanPaths(spaced), [spaced]) // typed by hand, unquoted
   if (process.platform !== 'win32') assert.deepStrictEqual(paths.cleanPaths(spaced.replace(/ /g, '\\ ')), [spaced])
-  assert.deepStrictEqual(paths.cleanPaths(`file://${spaced.replace(/ /g, '%20')}`), [spaced])
-  assert.deepStrictEqual(paths.cleanPaths(`'${spaced}' '${tmp}'`), [spaced, tmp])
+  assert.deepStrictEqual(paths.cleanPaths(require('node:url').pathToFileURL(spaced).href), [spaced])
+  assert.deepStrictEqual(paths.cleanPaths(`${q}${spaced}${q} ${q}${tmp}${q}`), [spaced, tmp])
   assert.strictEqual(paths.completePath(path.join(tmp, 'My C')), spaced)
   fs.rmSync(tmp, { recursive: true, force: true })
 })

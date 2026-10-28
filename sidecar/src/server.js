@@ -130,7 +130,7 @@ if (process.platform === 'win32' && !process.env.LEXVAULT_KEEPALIVE) {
   let wordGoneSince = null
   setInterval(() => {
     if (hub.readReg(hub.APP_REG)) { wordGoneSince = null; return } // the desktop App needs the engine
-    const child = execFile('tasklist', ['/fo', 'csv', '/nh'], { timeout: 5000 }, (err, out) => {
+    const child = execFile('tasklist', ['/fo', 'csv', '/nh'], { timeout: 5000, windowsHide: true }, (err, out) => {
       if (err) {
         // Command failed (timeout, permission, etc.) — treat as "Word not running"
         // but don't start the exit countdown on transient errors.
@@ -148,7 +148,7 @@ if (process.platform === 'win32' && !process.env.LEXVAULT_KEEPALIVE) {
         console.log('[sidecar] Word not detected (tasklist output:', JSON.stringify(outStr.slice(0, 100)), ') — starting 5 min exit countdown')
       } else if (Date.now() - wordGoneSince > 5 * 60 * 1000) {
         console.log('[sidecar] Word closed 5 min — unloading GPU llama + exiting')
-        execFile('schtasks', ['/end', '/tn', 'llama-server'], () => {}) // frees VRAM
+        execFile('schtasks', ['/end', '/tn', 'llama-server'], { windowsHide: true }, () => {}) // frees VRAM
         stopQdrant()
         stopLlama()
         setTimeout(() => process.exit(0), 1500)
