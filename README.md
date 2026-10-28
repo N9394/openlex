@@ -45,6 +45,7 @@ Type `openlex` (no arguments) in a terminal and a full-screen app opens: no comm
 | Homebrew | `brew install n9394/openlex/openlex` |
 | Manual | Download `openlex-<version>.tar.gz` from [Releases](https://github.com/N9394/openlex/releases), unpack, run `./openlex`. |
 | From source | `cd sidecar && npm install && npm link` |
+
 A specific version: `OPENLEX_VERSION=0.2.0` (Windows: `$env:OPENLEX_VERSION = '0.2.0'`) before the line. Running it again upgrades. Uninstall: delete `~/.openlex` (Windows: `%USERPROFILE%\.openlex`, and remove its `bin` folder from your user PATH); your matters and keys in `~/.lexvault` stay.
 
 All need Node.js 20 or newer. Models are not included: add a cloud key, or run a local model (`brew install llama.cpp`; OpenLex finds `llama-server` on `PATH`) with a GGUF in `~/.lexvault/models/`.
