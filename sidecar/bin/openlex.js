@@ -25,9 +25,10 @@
  *   openlex playbook draft FILE… --title T [--focus words] [--save NAME]
  *   openlex monitors [add eurlex|ris "words" | add rss|page URL] [--topics a,b] [--every H] | check [ID] | alerts
  *   openlex lists [show ID | new TITLE | add ID "item" [--due YYYY-MM-DD] [--owner X] | done ID ITEM | export ID]
- *   openlex map [--matter ID] [--agent NAME] | map set routes|hooks|agents|features|sources|models FILE.json | --clear
+ *   openlex map [--matter ID] [--agent NAME] | map set routes|hooks|agents|features|sources|models|prompts FILE.json | --clear
  *   openlex agents                     agent profiles (use one with "@name …" in ask)
  *   openlex models [MODEL] [--local]   model profiles, and which one each role's model gets
+ *   openlex prompts ["message"] [--after TOOL]   which instruction blocks and tools each step would get (the prompt roadmap)
  *   openlex sources [add PRESET|NAME --file def.json | remove NAME | key NAME KEY | test NAME | search "q" [--kind k]]
  *   openlex plan "goal" --matter ID | plan list | plan show ID | plan run ID (approves) | plan decide ID STEP continue|stop [--note text]
  *   openlex serve                      run the engine in the foreground
@@ -398,6 +399,19 @@ async function main() {
       for (const ag of r.agents) console.log(`@${ag.name.padEnd(14)} ${ag.error ? `INVALID: ${ag.error}` : `${ag.description}${ag.depth ? `  [${ag.depth}]` : ''}${Object.keys(ag.routes || {}).length ? `  routes: ${Object.entries(ag.routes).map(([k, v]) => `${k}→${v}`).join(', ')}` : ''}`}`)
       return
     }
+    case 'prompts': {
+      const q = new URLSearchParams({ message: a._.join(' '), ...(a.after ? { afterTool: a.after } : {}) })
+      const r = await request('GET', `/api/prompts?${q}`)
+      if (a.json) return console.log(JSON.stringify(r, null, 2))
+      console.log(`intents: ${r.intents.join(', ') || 'none'}`)
+      console.log(`tools offered: ${r.tools.offered.join(', ')}`)
+      console.log(`tools by name only (loaded on request): ${r.tools.deferred.join(', ') || 'none'}`)
+      console.log('\nSTEP        BLOCKS (≈ tokens of instructions, without the document)')
+      for (const t of r.turns) console.log(`  ${t.phase.padEnd(10)} ${t.blocks.join(' · ')}  (≈${t.tokens})`)
+      console.log('\nBLOCKS (change or add them in openlex.json → "prompts")')
+      for (const b of r.blocks) console.log(`  ${b.id.padEnd(12)} ≈${String(b.tokens).padStart(4)}  ${b.when ? Object.entries(b.when).map(([k, v]) => `${k}: ${[].concat(v).join('|')}`).join('; ') : 'always'}${b.origin !== 'built-in' ? `  [${b.origin}]` : ''}`)
+      return
+    }
     case 'models': {
       if (a._[0]) {
         const q = new URLSearchParams({ model: a._[0], kind: a.local ? 'local' : 'hosted' })
@@ -422,7 +436,7 @@ async function main() {
     case 'map': {
       if (a._[0] === 'set') {
         const [, section, file] = a._
-        if (!section || (!file && !a.clear)) throw new Error('usage: openlex map set routes|hooks|agents|features|sources|models FILE.json   (or --clear)')
+        if (!section || (!file && !a.clear)) throw new Error('usage: openlex map set routes|hooks|agents|features|sources|models|prompts FILE.json   (or --clear)')
         const value = a.clear ? null : JSON.parse(fs.readFileSync(file, 'utf8'))
         await request('POST', '/api/harness/section', { section, value })
         return console.log(a.clear ? `cleared ${section} from your layer` : `saved ${section} to your layer (validated)`)

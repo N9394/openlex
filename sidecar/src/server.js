@@ -428,6 +428,11 @@ async function handle(req, res) {
       if (model) return sendJson(res, 200, { profile: models.profileFor({ kind: url.searchParams.get('kind') || 'hosted', model }) })
       return sendJson(res, 200, { profiles: models.all(), generic: models.GENERIC, roles: models.explain({ matterId: url.searchParams.get('matterId') || null }), problems: models.validate(require('./harness').load().models) })
     }
+    if (req.method === 'GET' && p === '/api/prompts') {
+      require('./workspace').setBase(require('./agent-config').load().workspace)
+      const pr = require('./prompts')
+      return sendJson(res, 200, { ...pr.explain(url.searchParams.get('message') || '', { afterTool: url.searchParams.get('afterTool') || null, docFull: url.searchParams.get('docFull') === '1' }), blocks: pr.blocks().map((b) => ({ id: b.id, when: b.when || null, origin: b.origin, tokens: require('./compress').estimateTokens(b.text) })) })
+    }
     if (req.method === 'GET' && p === '/api/agents') {
       require('./workspace').setBase(require('./agent-config').load().workspace)
       return sendJson(res, 200, { agents: require('./agents').list() })
@@ -465,11 +470,11 @@ async function handle(req, res) {
           const matterId = url.searchParams.get('matterId') || null
           const agentName = url.searchParams.get('agent') || null
           const cfg = harness.load()
-          return sendJson(res, 200, { config: cfg, userLayer: harness.layers().user.data || {}, errors: harness.errors(), problems: [...routing.validate(cfg.routes), ...require('./hooks').validate(cfg.hooks), ...require('./agents').validate(cfg.agents), ...require('./sources').validate(cfg.sources), ...require('./models').validate(cfg.models)], agents: require('./agents').list(), routes: routing.explain({ matterId, agent: agentName }), roles: routing.ROLES, providers: Object.entries(require('./providers/catalog').PROVIDERS).map(([id, x]) => ({ id, label: x.label, local: !!x.local })), hookEvents: require('./hooks').EVENTS, files: { firm: harness.layers().firm.path, user: harness.USER_PATH } })
+          return sendJson(res, 200, { config: cfg, userLayer: harness.layers().user.data || {}, errors: harness.errors(), problems: [...routing.validate(cfg.routes), ...require('./hooks').validate(cfg.hooks), ...require('./agents').validate(cfg.agents), ...require('./sources').validate(cfg.sources), ...require('./models').validate(cfg.models), ...require('./prompts').validate(cfg.prompts)], agents: require('./agents').list(), routes: routing.explain({ matterId, agent: agentName }), roles: routing.ROLES, providers: Object.entries(require('./providers/catalog').PROVIDERS).map(([id, x]) => ({ id, label: x.label, local: !!x.local })), hookEvents: require('./hooks').EVENTS, files: { firm: harness.layers().firm.path, user: harness.USER_PATH } })
         }
         if (req.method === 'POST' && p === '/api/harness/section') {
           const body = await readBody(req)
-          if (body.value && ['routes', 'hooks', 'agents', 'sources', 'models'].includes(body.section)) { const problems = body.section === 'routes' ? routing.validate(body.value) : body.section === 'hooks' ? require('./hooks').validate(body.value) : body.section === 'sources' ? require('./sources').validate(body.value) : body.section === 'models' ? require('./models').validate(body.value) : require('./agents').validate(body.value); if (problems.length) return sendJson(res, 400, { error: problems.join('; '), problems }) }
+          if (body.value && ['routes', 'hooks', 'agents', 'sources', 'models', 'prompts'].includes(body.section)) { const problems = body.section === 'routes' ? routing.validate(body.value) : body.section === 'hooks' ? require('./hooks').validate(body.value) : body.section === 'sources' ? require('./sources').validate(body.value) : body.section === 'models' ? require('./models').validate(body.value) : body.section === 'prompts' ? require('./prompts').validate(body.value) : require('./agents').validate(body.value); if (problems.length) return sendJson(res, 400, { error: problems.join('; '), problems }) }
           return sendJson(res, 200, { config: harness.setUserSection(body.section, body.value ?? null) })
         }
         return sendJson(res, 404, { error: 'not found' })

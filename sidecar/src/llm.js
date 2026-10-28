@@ -118,7 +118,7 @@ async function cloudCall(kind, messages, opts, run, provider, routeReason) {
     (opts.phase === 'planning' || opts.phase === 'analyzing' || !opts.onContent)
   const callOpts = {
     ...opts,
-    ...(wantTools ? { nativeTools: require('./providers/native_tools').toolList() } : {}),
+    ...(wantTools ? { nativeTools: require('./providers/native_tools').toolList(opts.toolNames) } : {}),
     maxTokens: profile.maxOutput ? Math.min(opts.maxTokens || AGENT.GENERATION_MAX_TOKENS, profile.maxOutput) : (opts.maxTokens || AGENT.GENERATION_MAX_TOKENS),
     temperature: profile.temperature === null ? undefined : (opts.temperature ?? profile.temperature ?? AGENT.TEMP ?? 0),
     ...(profile.thinking !== 'native' ? { thinking: false } : {}),

@@ -13,6 +13,8 @@
  *   maxOutput     cap on output tokens per call (null: the call decides)
  *   thinkingBudget  local only: llama-server --reasoning-budget tokens
  *   instructions  extra system-prompt lines for this model (quirks, format reminders)
+ *   prompts       staged  instructions arrive at the turn that needs them (prompts.js)
+ *                 all     every instruction block on every call (models tuned on the old prompt)
  *
  * Profiles come from the built-ins below and from the harness map
  * (openlex.json → "models"). A map entry with a built-in's name changes
@@ -25,12 +27,12 @@
 const BUILTIN = {
   'lotus-2': {
     kind: 'local', match: ['lotus-2'],
-    thinking: 'native', tools: 'json', thinkingBudget: 400,
-    notes: 'Lotus 2: thinking trained in, closes its own trace; single tool call per hop.',
+    thinking: 'native', tools: 'json', thinkingBudget: 400, prompts: 'all',
+    notes: 'Lotus 2: thinking trained in, closes its own trace; single tool call per hop. Gets every prompt block at once until a LegalBench run confirms staged prompts.',
   },
   lotus: {
     kind: 'local', match: ['lotus'],
-    thinking: 'inline', tools: 'json',
+    thinking: 'inline', tools: 'json', prompts: 'all',
     notes: 'Lotus 1: fine-tuned on inline reasoning only; native thinking runs away.',
   },
   'qwen3-local': {
@@ -61,8 +63,8 @@ const BUILTIN = {
 }
 
 const GENERIC = {
-  local: { name: 'generic-local', kind: 'local', match: [], thinking: 'inline', tools: 'json', temperature: undefined, ctx: null, maxOutput: null, thinkingBudget: 400, instructions: '' },
-  hosted: { name: 'generic-hosted', kind: 'hosted', match: [], thinking: 'native', tools: 'native', temperature: undefined, ctx: null, maxOutput: null, thinkingBudget: null, instructions: '' },
+  local: { name: 'generic-local', kind: 'local', match: [], thinking: 'inline', tools: 'json', temperature: undefined, ctx: null, maxOutput: null, thinkingBudget: 400, instructions: '', prompts: 'staged' },
+  hosted: { name: 'generic-hosted', kind: 'hosted', match: [], thinking: 'native', tools: 'native', temperature: undefined, ctx: null, maxOutput: null, thinkingBudget: null, instructions: '', prompts: 'staged' },
 }
 
 const THINKING = ['native', 'inline', 'off']
@@ -77,6 +79,7 @@ function check(name, p) {
   if (p.kind !== undefined && !['local', 'hosted', 'any'].includes(p.kind)) out.push(`${name}: kind must be local, hosted or any`)
   if (p.thinking !== undefined && !THINKING.includes(p.thinking)) out.push(`${name}: thinking must be ${THINKING.join(', ')}`)
   if (p.tools !== undefined && !TOOLS.includes(p.tools)) out.push(`${name}: tools must be ${TOOLS.join(' or ')}`)
+  if (p.prompts !== undefined && !['staged', 'all'].includes(p.prompts)) out.push(`${name}: prompts must be staged or all`)
   for (const k of ['ctx', 'maxOutput', 'thinkingBudget']) if (p[k] != null && !(Number.isInteger(p[k]) && p[k] > 0)) out.push(`${name}: ${k} must be a positive whole number`)
   if (p.temperature != null && !(typeof p.temperature === 'number' && p.temperature >= 0 && p.temperature <= 2)) out.push(`${name}: temperature must be 0–2 or null`)
   return out
