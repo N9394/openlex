@@ -6,6 +6,11 @@
  * model, firm library and audit log).
  *
  *   openlex status
+ *   openlex providers                  model providers, which is active, which have a key
+ *   openlex use PROVIDER[:MODEL] [--base-url URL] [--region R]   e.g. use anthropic, use local, use openrouter:qwen/qwen3.5-9b
+ *   openlex key PROVIDER [--remove]    store an API key in the OS keychain (typed hidden, or piped in)
+ *   openlex test [PROVIDER]            one tiny call to check the model works (the data policy applies)
+ *   openlex policy [--matter ID] | policy local-only | policy allow P1,P2 [--regions eu] [--redact]   where client data may go
  *   openlex ask "Is the liability cap enforceable?" [--file contract.docx] [--matter ID]
  *   openlex review   [--matter ID] [--playbook NAME] [--folder DIR]
  *   openlex chronology [--matter ID] [--folder DIR]
@@ -19,8 +24,10 @@
  *   openlex playbook draft FILE… --title T [--focus words] [--save NAME]
  *   openlex monitors [add eurlex|ris "words" | add rss|page URL] [--topics a,b] [--every H] | check [ID] | alerts
  *   openlex lists [show ID | new TITLE | add ID "item" [--due YYYY-MM-DD] [--owner X] | done ID ITEM | export ID]
- *   openlex map [--matter ID] [--agent NAME] | map set routes|hooks|agents|features FILE.json | --clear
+ *   openlex map [--matter ID] [--agent NAME] | map set routes|hooks|agents|features|sources|models FILE.json | --clear
  *   openlex agents                     agent profiles (use one with "@name …" in ask)
+ *   openlex models [MODEL] [--local]   model profiles, and which one each role's model gets
+ *   openlex sources [add PRESET|NAME --file def.json | remove NAME | key NAME KEY | test NAME | search "q" [--kind k]]
  *   openlex plan "goal" --matter ID | plan list | plan show ID | plan run ID (approves) | plan decide ID STEP continue|stop [--note text]
  *   openlex serve                      run the engine in the foreground
  *
@@ -45,6 +52,7 @@ function parseArgs(argv) {
     else if (a === '--json') out.json = true
     else if (a === '--force') out.force = true
     else if (a === '--clear') out.clear = true
+    else if (['--local', '--remove', '--redact'].includes(a)) out[a.slice(2)] = true
     else if (a === '--save' && (i + 1 >= argv.length || argv[i + 1].startsWith('--'))) out.save = true
     else if (a.startsWith('--')) out[a.slice(2)] = argv[++i]
     else out._.push(a)
@@ -103,6 +111,27 @@ function request(method, pathname, body, { onEvent } = {}) {
   })
 }
 
+/** A secret from the terminal without echoing it, or from a pipe. */
+function readSecret(prompt) {
+  if (!process.stdin.isTTY) return new Promise((resolve) => { let s = ''; process.stdin.on('data', (c) => { s += c }); process.stdin.on('end', () => resolve(s)) })
+  return new Promise((resolve) => {
+    process.stderr.write(prompt)
+    let s = ''
+    process.stdin.setRawMode(true)
+    process.stdin.resume()
+    const done = (v) => { process.stdin.setRawMode(false); process.stdin.pause(); process.stdin.removeListener('data', on); process.stderr.write('\n'); resolve(v) }
+    const on = (buf) => {
+      for (const ch of buf.toString('utf8')) {
+        if (ch === '\r' || ch === '\n') return done(s)
+        if (ch === '\u0003') { process.stderr.write('\n'); process.exit(130) }
+        if (ch === '\u007f' || ch === '\b') s = s.slice(0, -1)
+        else s += ch
+      }
+    }
+    process.stdin.on('data', on)
+  })
+}
+
 async function readFileText(file) {
   const ext = path.extname(file).toLowerCase()
   const src = path.join(__dirname, '..', 'src')
@@ -147,6 +176,67 @@ async function main() {
       console.log(`engine   ${engine().url}  (version ${st.version || engine().version || '?'})`)
       console.log(`model    ${m.name || m.provider || '?'} — ${m.local !== false ? 'local' : `cloud: ${m.provider}`} — ${m.loaded ? 'ready' : m.error || 'not ready'}`)
       return
+    }
+    case 'providers': {
+      const r = await request('GET', '/api/providers')
+      if (a.json) return console.log(JSON.stringify(r, null, 2))
+      for (const p of r.providers) console.log(`${p.id === r.active ? '*' : ' '} ${p.id.padEnd(11)} ${p.label.padEnd(36)} ${p.local ? 'on this machine' : p.needsKey ? (p.hasKey ? 'key set' : 'no key') : ''}${p.model ? `  model ${p.model}` : ''}${p.region ? `  region ${p.region}` : ''}`)
+      console.log('\n* active.  openlex use PROVIDER[:MODEL] · openlex key PROVIDER · openlex policy allow PROVIDER')
+      return
+    }
+    case 'use': {
+      const [target] = a._
+      if (!target) throw new Error('usage: openlex use PROVIDER[:MODEL] [--base-url URL] [--region R]')
+      const i = target.indexOf(':')
+      const provider = i < 0 ? target : target.slice(0, i)
+      const overrides = { ...(i >= 0 ? { model: target.slice(i + 1) } : {}), ...(a['base-url'] ? { baseUrl: a['base-url'] } : {}), ...(a.region ? { region: a.region } : {}) }
+      await request('POST', '/api/providers', { active: provider, ...(Object.keys(overrides).length ? { provider, overrides } : {}) })
+      const r = await request('GET', '/api/providers')
+      const p = r.providers.find((x) => x.id === provider)
+      console.log(`using ${p.label}${p.model ? ` · ${p.model}` : ''}`)
+      if (p.needsKey && !p.hasKey) console.log(`no key yet: openlex key ${p.id}`)
+      if (!p.local) {
+        const pol = await request('GET', '/api/policy')
+        const ok = pol.default?.mode === 'allow-list' && (pol.default.providers || []).includes(p.id)
+        if (!ok) console.log(`the default data policy keeps client data on this machine; to allow ${p.id}: openlex policy allow ${p.id}   (or per matter with --matter ID)`)
+      }
+      return
+    }
+    case 'key': {
+      const [provider] = a._
+      if (!provider) throw new Error('usage: openlex key PROVIDER [--remove]')
+      if (a.remove) { await request('POST', '/api/providers/key', { provider, key: null }); return console.log(`removed the ${provider} key`) }
+      const key = (await readSecret(`${provider} API key (hidden): `)).trim()
+      if (!key) throw new Error('no key given')
+      const r = await request('POST', '/api/providers/key', { provider, key })
+      console.log(r.hasKey ? `saved the ${provider} key in the OS keychain` : 'the key was not saved')
+      return
+    }
+    case 'test': {
+      const r = await request('POST', '/api/providers/test', { ...(a._[0] ? { provider: a._[0] } : {}), ...(a.matter ? { matterId: a.matter } : {}) })
+      if (a.json) return console.log(JSON.stringify(r, null, 2))
+      if (r.ok) console.log(`ok${r.sample ? ` · ${String(r.sample).slice(0, 80)}` : ''}`)
+      else { process.exitCode = 1; console.log(`failed: ${r.error}`) }
+      return
+    }
+    case 'policy': {
+      const [mode, list] = a._
+      const show = (rule) => (rule?.mode === 'allow-list' ? `cloud allowed: ${(rule.providers || []).join(', ') || 'none'}${rule.regions ? ` · regions ${rule.regions.join(', ')}` : ''}${rule.redact ? ' · names redacted before sending' : ''}` : 'local only (nothing leaves this machine)')
+      if (!mode) {
+        const r = await request('GET', '/api/policy')
+        if (a.json) return console.log(JSON.stringify(r, null, 2))
+        if (a.matter) return console.log(`${a.matter}: ${show(r.matters?.[a.matter] || r.default)}${r.matters?.[a.matter] ? '' : '  (default)'}`)
+        console.log(`default: ${show(r.default)}`)
+        for (const [id, rule] of Object.entries(r.matters || {})) console.log(`${id}: ${show(rule)}`)
+        return console.log(`audit log: ${r.auditLog}`)
+      }
+      let rule
+      if (mode === 'local-only') rule = { mode: 'local-only' }
+      else if (mode === 'allow' && list) rule = { mode: 'allow-list', providers: list.split(',').map((s) => s.trim()).filter(Boolean), ...(a.regions ? { regions: a.regions.split(',') } : {}), ...(a.redact ? { redact: true } : {}) }
+      else throw new Error('usage: openlex policy local-only | policy allow P1,P2 [--regions eu] [--redact] [--matter ID]')
+      if (a.matter) await request('POST', '/api/matters/policy', { id: a.matter, rule })
+      else await request('POST', '/api/policy', { rule })
+      return console.log(`${a.matter || 'default'}: ${show(rule)}`)
     }
     case 'ask': {
       const message = a._.join(' ').trim()
@@ -312,16 +402,60 @@ async function main() {
       if (sub === 'export') { const r = await request('POST', '/api/lists/export', { id }); for (const f of r.files) console.log(f); return }
       throw new Error(`unknown lists command: ${sub}`)
     }
+    case 'sources': {
+      const [sub, name, val] = a._
+      if (!sub) {
+        const r = await request('GET', '/api/sources')
+        if (a.json) return console.log(JSON.stringify(r, null, 2))
+        for (const s of r.sources) console.log(`${s.name.padEnd(18)} ${s.type.padEnd(7)} ${s.kind.padEnd(11)} ${s.local === null ? 'INVALID' : s.local ? 'local ' : 'remote'}  ${s.error || s.title}`)
+        if (!r.sources.length) console.log('no sources configured')
+        console.log(`presets: ${r.presets.join(', ')}  (openlex sources add <preset>)`)
+        return
+      }
+      if (sub === 'add') { const r = await request('POST', '/api/sources/add', { name, source: a.file ? JSON.parse(fs.readFileSync(a.file, 'utf8')) : undefined }); return console.log(`added ${r.source.name} (${r.source.type}, ${r.source.kind}) to your layer — remote sources also need "source:${name}" allowed in the data policy`) }
+      if (sub === 'remove') { await request('POST', '/api/sources/remove', { name }); return console.log(`removed ${name}`) }
+      if (sub === 'key') { await request('POST', '/api/sources/key', { name, key: val || null }); return console.log(val ? `key for ${name} stored in the OS keychain` : `key for ${name} removed`) }
+      if (sub === 'test') { const r = await request('POST', '/api/sources/test', { name, query: val, matterId: a.matter }); return console.log(r.ok ? `ok: ${r.results} results${r.sample ? ` — ${r.sample.title}` : ''}` : `failed: ${r.error}`) }
+      if (sub === 'search') {
+        const r = await request('POST', '/api/sources/search', { query: [name, val].filter(Boolean).join(' '), kind: a.kind, jurisdiction: a.jurisdiction, matterId: a.matter })
+        if (a.json) return console.log(JSON.stringify(r, null, 2))
+        r.results.forEach((x, i) => console.log(`[${i + 1}] ${x.source} · ${x.title}${x.citation ? ` — ${x.citation}` : ''}\n    ${x.text.slice(0, 200)}${x.url ? `\n    ${x.url}` : ''}`))
+        for (const s of r.skipped) console.log(`not searched: ${s.source} — ${s.reason}`)
+        return
+      }
+      throw new Error(`unknown sources command: ${sub}`)
+    }
     case 'agents': {
       const r = await request('GET', '/api/agents')
       if (a.json) return console.log(JSON.stringify(r, null, 2))
       for (const ag of r.agents) console.log(`@${ag.name.padEnd(14)} ${ag.error ? `INVALID: ${ag.error}` : `${ag.description}${ag.depth ? `  [${ag.depth}]` : ''}${Object.keys(ag.routes || {}).length ? `  routes: ${Object.entries(ag.routes).map(([k, v]) => `${k}→${v}`).join(', ')}` : ''}`}`)
       return
     }
+    case 'models': {
+      if (a._[0]) {
+        const q = new URLSearchParams({ model: a._[0], kind: a.local ? 'local' : 'hosted' })
+        const r = await request('GET', `/api/models?${q}`)
+        if (a.json) return console.log(JSON.stringify(r, null, 2))
+        const pr = r.profile
+        console.log(`${pr.model}  →  profile ${pr.name}`)
+        console.log(`  thinking ${pr.thinking} · tools ${pr.tools} · temperature ${pr.temperature === null ? 'not sent' : pr.temperature ?? 'default'}${pr.ctx ? ` · ctx ${pr.ctx}` : ''}${pr.maxOutput ? ` · max output ${pr.maxOutput}` : ''}`)
+        if (pr.instructions) console.log(`  notes to the model: ${pr.instructions}`)
+        if (pr.notes) console.log(`  ${pr.notes}`)
+        return
+      }
+      const r = await request('GET', `/api/models${a.matter ? `?matterId=${encodeURIComponent(a.matter)}` : ''}`)
+      if (a.json) return console.log(JSON.stringify(r, null, 2))
+      for (const e of r.problems) console.log(`  ! ${e}`)
+      console.log('ROLES (first-choice model and its profile)')
+      for (const x of r.roles) console.log(`  ${x.role.padEnd(10)} ${x.provider}${x.model ? `:${x.model}` : ''}  →  ${x.profile} (thinking ${x.thinking}, tools ${x.tools})`)
+      console.log('\nPROFILES (tried in order; change or add them in openlex.json → "models")')
+      for (const pr of r.profiles) console.log(`  ${pr.name.padEnd(18)} ${String(pr.kind).padEnd(6)} ${pr.thinking.padEnd(6)} ${pr.tools.padEnd(6)} ${(pr.match || []).join(' | ')}${pr.origin !== 'built-in' ? `  [${pr.origin}]` : ''}`)
+      return
+    }
     case 'map': {
       if (a._[0] === 'set') {
         const [, section, file] = a._
-        if (!section || (!file && !a.clear)) throw new Error('usage: openlex map set routes|hooks|agents|features FILE.json   (or --clear)')
+        if (!section || (!file && !a.clear)) throw new Error('usage: openlex map set routes|hooks|agents|features|sources|models FILE.json   (or --clear)')
         const value = a.clear ? null : JSON.parse(fs.readFileSync(file, 'utf8'))
         await request('POST', '/api/harness/section', { section, value })
         return console.log(a.clear ? `cleared ${section} from your layer` : `saved ${section} to your layer (validated)`)

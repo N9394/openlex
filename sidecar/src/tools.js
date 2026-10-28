@@ -53,6 +53,10 @@ const TOOLS = {
     description: "Search the firm's own documents (precedents, templates, know-how) indexed locally — this matter's folders plus firm-wide ones. Cite results by file name.",
     input: { query: 'string' },
   },
+  search_sources: {
+    description: "Search the firm's connected data sources: its own databases, the legal databases and commentaries it subscribes to, DMS and document folders (configured in openlex.json). Filter by kind (law, caselaw, commentary, firm) or jurisdiction. Every result names its source and citation; cite them exactly.",
+    input: { query: 'string', kind: 'string (optional — law, caselaw, commentary, firm)', jurisdiction: 'string (optional — AT, DE, …)', sources: 'array (optional — source names)' },
+  },
   find_clause: {
     description: "The firm's own clauses from its precedents, by type (governing_law, disputes, liability, indemnity, termination, term, confidentiality, force_majeure, ip, data_protection, payment, warranty, penalty, non_compete, assignment, change_of_control, notices, severability, entire_agreement, insurance, subcontracting) and/or words. Most-used wording first, with the documents it appears in. Prefer the firm's standard wording when drafting or proposing a rewrite.",
     input: { type: 'string (optional — clause type id)', query: 'string (optional — words to match)', language: 'string (optional — de, en, …)' },
@@ -270,6 +274,20 @@ async function dispatch({ doc, memory, search, embeddings, packStore }, rawName,
       }
     }
 
+    case 'search_sources': {
+      const query = String(args.query || '').trim()
+      if (!query) return { output: 'ERROR: search_sources requires a query' }
+      const src = require('./sources')
+      if (!src.list().length) return { output: 'No data sources are configured (openlex.json → "sources"). Use search_law, search_firm_library or the official-source tools instead.' }
+      const r = await src.search({ query, kind: args.kind || undefined, jurisdiction: args.jurisdiction || undefined, sources: Array.isArray(args.sources) ? args.sources : undefined, limit: 5 })
+      const lines = r.results.slice(0, 10).map((x, i) => `[${i + 1}] (${x.source} · ${x.kind}) ${x.title}${x.citation ? ` — ${x.citation}` : ''}${x.date ? ` (${x.date})` : ''}${x.url ? `\n    ${x.url}` : ''}\n    ${x.text}`)
+      const skipped = r.skipped.map((s) => `${s.source}: ${s.reason}`)
+      return {
+        output: (lines.length ? `RESULTS from ${r.searched.join(', ')}:\n${lines.join('\n')}` : `NO RESULTS in ${r.searched.join(', ') || 'any source'}.`) + (skipped.length ? `\nNot searched: ${skipped.join('; ')}` : ''),
+        sourceResults: r.results.slice(0, 10).map((x) => ({ source: x.source, title: x.title, citation: x.citation, url: x.url })),
+      }
+    }
+
     case 'search_ris': {
       const query = String(args.query || '').trim()
       if (!query) return { output: 'ERROR: search_ris requires a query' }
@@ -432,6 +450,11 @@ async function dispatch({ doc, memory, search, embeddings, packStore }, rawName,
     case 'append_file': {
       const ws = require('./workspace')
       try {
+        // The agent may never change the firm's rules or its own history:
+        // a manipulated document must not be able to rewrite openlex.json,
+        // skills or playbooks through the agent.
+        const rel = require('path').relative(ws.base(), ws.resolve(args.path)).replace(/\\/g, '/')
+        if (/^(\.openlex(\/|$)|openlex\.json$|skills(\/|$)|playbooks(\/|$))/i.test(rel)) return { output: `ERROR: ${rel} is protected (firm configuration). Save your output in a matter folder instead.` }
         const p = name === 'write_file' ? ws.writeFile(args.path, args.content) : ws.appendFile(args.path, args.content)
         return { output: `written: ${p}` }
       } catch (e) {

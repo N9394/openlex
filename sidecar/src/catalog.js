@@ -16,6 +16,7 @@ const CATALOG = [
   { name: 'get_law_section', desc: 'Full text of a law chunk by id' },
   { name: 'search_firm_library', desc: "Search the firm's own precedents, templates and past work" },
   { name: 'find_clause', desc: "The firm's standard clauses by type, most-used wording first" },
+  { name: 'search_sources', desc: "The firm's connected data sources (its databases, subscribed legal databases and commentaries, DMS)" },
   { name: 'search_ris', desc: 'Live official Austrian federal law (RIS), current versions' },
   { name: 'search_eurlex', desc: 'Official EU law (EUR-Lex): find acts by number, name or title' },
   { name: 'get_eu_law', desc: 'Text of an EU act / one article by CELEX' },
@@ -84,6 +85,10 @@ const SCHEMAS = {
     input: { query: 'string' },
     description: "Search the firm's own documents (precedents, templates, know-how) for this matter and firm-wide. Cite results by file name.",
   },
+  search_sources: {
+    input: { query: 'string', kind: 'string (optional — law, caselaw, commentary, firm)', jurisdiction: 'string (optional)', sources: 'array (optional — source names)' },
+    description: "Search the firm's connected data sources configured in openlex.json; results name their source and citation.",
+  },
   get_law_section: {
     input: { chunk_id: 'string' },
     description: 'Full text of a law chunk by id (cite or judge).',
@@ -133,7 +138,11 @@ const SCHEMAS = {
 function getCatalogText() {
   // Connector tools (MCP servers the user configured) follow the built-ins.
   const mcp = require('./mcp/client').catalogLines()
-  return [...CATALOG.map((t) => `- ${t.name}: ${t.desc}`), ...mcp].join('\n')
+  // The firm's connected sources, so the agent knows what search_sources can reach.
+  let src = []
+  try { src = require('./sources').list().filter((s) => !s.error) } catch { /* none */ }
+  const lines = CATALOG.filter((t) => t.name !== 'search_sources' || src.length).map((t) => `- ${t.name}: ${t.desc}${t.name === 'search_sources' ? ` — ${src.map((s) => `${s.name} (${s.kind}${s.jurisdictions.length ? `, ${s.jurisdictions.join('/')}` : ''})`).join(', ')}` : ''}`)
+  return [...lines, ...mcp].join('\n')
 }
 
 function getSchemas(toolNames) {

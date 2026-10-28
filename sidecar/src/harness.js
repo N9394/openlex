@@ -14,6 +14,8 @@
  *   hooks    checks and actions at the harness's decision points (hooks.js)
  *   agents   named agent profiles: instructions, tools, routes, budgets (agents.js)
  *   features switch whole features on or off
+ *   sources  the firm's own data and subscriptions as searchable sources (sources.js)
+ *   models   model profiles: thinking, tool protocol, temperature, context, extra instructions (models.js)
  *
  * Files are re-read when they change (mtime), so edits apply without a
  * restart. Invalid JSON never takes the engine down: that layer is
@@ -25,13 +27,16 @@ const path = require('path')
 const { DATA_DIR } = require('./config')
 
 const USER_PATH = path.join(DATA_DIR, 'openlex.json')
-const SECTIONS = ['routes', 'hooks', 'agents', 'features']
+const SECTIONS = ['routes', 'hooks', 'agents', 'features', 'sources', 'models']
 
 const DEFAULTS = {
   routes: { roles: {}, rules: [], fallback: [] },
   hooks: {},
   agents: {},
-  features: { monitors: true, browser: true, skillSuggestions: true, grid: true, plans: true, lists: true },
+  sources: {},
+  models: {},
+  // shell (run_bash) is off unless a firm turns it on; it also needs an OS sandbox.
+  features: { monitors: true, browser: true, skillSuggestions: true, grid: true, plans: true, lists: true, shell: false },
 }
 
 function firmPath() {
@@ -70,20 +75,20 @@ function mergeSection(base, over) {
 
 /**
  * The effective configuration plus where each section came from.
- * @returns {{ routes, hooks, agents, features, sources: object, locked: string[] }}
+ * @returns {{ routes, hooks, agents, features, sources, origins: object, locked: string[] }}  (origins: which layer each section came from)
  */
 function load() {
   const firm = readLayer(firmPath())
   const user = readLayer(USER_PATH)
   const locked = Array.isArray(firm.data?.lock) ? firm.data.lock.filter((s) => SECTIONS.includes(s)) : []
-  const out = { sources: {}, locked }
+  const out = { origins: {}, locked }
   for (const s of SECTIONS) {
     let v = DEFAULTS[s]
     let src = 'default'
     if (firm.data && firm.data[s] !== undefined) { v = mergeSection(v, firm.data[s]); src = 'firm' }
     if (user.data && user.data[s] !== undefined && !locked.includes(s)) { v = mergeSection(v, user.data[s]); src = src === 'firm' ? 'firm+user' : 'user' }
     out[s] = v
-    out.sources[s] = src
+    out.origins[s] = src
   }
   return out
 }

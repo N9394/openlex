@@ -1,6 +1,6 @@
 # The OpenLex harness map (`openlex.json`)
 
-OpenLex is built for legal work, but every turn of the harness is yours to change: which model does what, what gets checked where, which agent profiles exist, which features are on. All of it lives in one JSON file, in layers:
+OpenLex is built for legal work, but every turn of the harness is yours to change: which model does what and how each model is driven, what gets checked where, which agent profiles exist, which features are on. All of it lives in one JSON file, in layers:
 
 | Layer | File | Who |
 |---|---|---|
@@ -70,6 +70,40 @@ The engine tries them in that order. **The data policy always has the last word*
 
 With no `routes` section, every call goes to the active provider, as before.
 
+## `models`: model profiles
+
+OpenLex works with any model. It doesn't check model names in code; a **profile** says how to drive each model. The first profile whose `match` patterns fit the model name (case-insensitive regular expressions) and whose `kind` fits the provider is used. Otherwise the generic local or generic hosted profile applies.
+
+| Field | Values | What it changes |
+|---|---|---|
+| `kind` | `local`, `hosted`, `any` | Which providers the profile applies to. |
+| `match` | list of patterns | Model names it applies to (required for a new profile). |
+| `thinking` | `native`, `inline`, `off` | `native`: the model thinks in its own trace when a step asks for it. `inline`: no native thinking, a one-line `reasoning` field in each tool call instead. `off`: never think. |
+| `tools` | `native`, `json` | The provider's tool-calling API, or the text-JSON tool protocol (for models with weak tool calling). |
+| `temperature` | 0–2 or `null` | `null` never sends one (for models that reject it). |
+| `ctx` | tokens | Context window to budget against (caps the depth preset). |
+| `maxOutput` | tokens | Cap on output tokens per call. |
+| `thinkingBudget` | tokens | Local only: llama.cpp `--reasoning-budget`. |
+| `instructions` | text | Extra lines added to the system prompt for this model. |
+
+Built-ins: `lotus-2`, `lotus`, `qwen3-local`, `openai-reasoning`, `claude`, `deepseek-reasoner`, `small-hosted`. A map entry with a built-in's name changes only the fields you give; a new name adds a profile that is tried before the built-ins:
+
+```json
+{
+  "models": {
+    "lotus-2": { "thinkingBudget": 200 },
+    "firm-gateway": { "kind": "hosted", "match": ["^firm/"], "tools": "json", "ctx": 16000,
+                      "instructions": "Answer in German unless asked otherwise." }
+  }
+}
+```
+
+`openlex models` shows the model and profile each role gets, plus all profiles in lookup order. `openlex models <model name> [--local]` shows the profile for one model. API: `GET /api/models`, `GET /api/models?model=NAME&kind=local|hosted`.
+
+## `sources`
+
+The firm's own databases, DMS, folders and the legal databases it subscribes to, as searchable sources for the agent (`http`, `mcp`, `folder` adapters, no code). See [SOURCES.md](SOURCES.md).
+
 ## `features`
 
 Switch whole features on or off for everyone (firm layer) or yourself:
@@ -77,6 +111,10 @@ Switch whole features on or off for everyone (firm layer) or yourself:
 ```json
 { "features": { "browser": false, "monitors": true, "skillSuggestions": true } }
 ```
+
+`shell` (the agent's `run_bash` tool) is **off by default**. When a firm turns it on, it is still limited to read/organise commands (`ls`, `find`, `grep`, `cat`, `head`, `tail`, `wc`, `sort`, `diff`, `stat`, `tree`, `du`, `mkdir`, `cp`/`mv` without overwriting, read-only `git`). Nothing that runs code, reaches the network or deletes is ever available. Every path must stay inside the workspace (symlinks resolved). Commands get no environment secrets and run inside the OS sandbox (macOS Seatbelt, Linux bubblewrap): writes only in the workspace, no reads in the home folder, no network. Without an OS sandbox it stays off unless `"shellWithoutSandbox": true`.
+
+The agent's file tools never write `openlex.json`, `skills/`, `playbooks/` or `.openlex/`, and every overwrite keeps the previous version in `.openlex/history/` (20 per file).
 
 ## `hooks`: firm rules at each decision point
 

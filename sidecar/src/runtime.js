@@ -348,7 +348,7 @@ async function ensureLlama() {
   // ("JSON.parse FAIL" at the last brace). Lotus 2 closes </think> on its
   // own anyway; the client guard in llm.js bounds runaway thinking.
   if (build >= 10353) {
-    args.push('--reasoning-budget', String(AGENT.THINKING_BUDGET || 400))
+    args.push('--reasoning-budget', String(require('./models').forLocal(LLM_MODEL).thinkingBudget || AGENT.THINKING_BUDGET || 400))
   }
   const flags = [amdGpu ? (cpuOnly ? 'amd-cpu-only' : 'amd') : 'non-amd']
   if (kvOk) flags.push('kvcache=' + cacheK + '/' + cacheV)

@@ -1953,6 +1953,32 @@
     b.textContent = m ? policyLabel(m.policy) : ''
     b.className = 'badge ' + (m ? (m.policy?.mode === 'local-only' ? 'local' : 'cloud') : '')
     b.style.display = m ? '' : 'none'
+    const p = $('#matterPrivBtn')
+    p.style.display = m ? '' : 'none'
+    p.textContent = m?.privileged ? '🔒' : '🔓'
+    p.title = m?.privileged ? 'Privileged: stays on this machine. Click twice to unmark.' : 'Mark as privileged: keep this matter on this machine'
+    p.dataset.armed = ''
+  }
+
+  // Privileged on/off for an existing matter. Marking is one click (it only
+  // tightens); unmarking needs a second click within 4 s (Office add-ins
+  // have no confirm dialog).
+  async function togglePrivileged() {
+    const m = mattersCache.find((x) => x.id === $('#matterSel').value)
+    const p = $('#matterPrivBtn')
+    if (!m) return
+    if (m.privileged && !p.dataset.armed) {
+      p.dataset.armed = '1'
+      p.textContent = 'Unmark?'
+      setTimeout(() => { if (p.dataset.armed) showMatterPolicy() }, 4000)
+      return
+    }
+    try {
+      await api('/api/matters/update', { method: 'POST', body: { id: m.id, patch: { privileged: !m.privileged } } })
+      addMsg('step', m.privileged ? `"${m.title}" is no longer privileged; its data policy is unchanged (local only) until you change it` : `"${m.title}" is privileged: it stays on this machine`)
+      await refreshMatters()
+      refreshDataBadge()
+    } catch (err) { addMsg('err', err.message) }
   }
 
   async function bindDocToMatter(id) {
@@ -1972,6 +1998,7 @@
       $('#matterTitle').focus()
     })
     $('#matterCancel').addEventListener('click', () => { $('#matterNew').style.display = 'none' })
+    $('#matterPrivBtn').addEventListener('click', togglePrivileged)
     $('#matterCreate').addEventListener('click', async () => {
       try {
         const r = await api('/api/matters', { method: 'POST', body: {
