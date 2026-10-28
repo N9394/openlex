@@ -1,0 +1,112 @@
+/**
+ * "May OpenLex …?" — the permission prompt shown over the chat or an
+ * action while the engine waits for the lawyer's answer, and the list of
+ * what OpenLex may do without asking (Settings, and /permissions in chat).
+ *
+ * The prompt never answers by itself: Enter takes the highlighted choice
+ * ("Allow once" to start with), a = always for this matter, A = always,
+ * n or Esc = don't allow. No answer within a few minutes = not allowed
+ * (decided by the engine).
+ */
+
+import { useContext, useEffect, useState } from 'react'
+import { Box, Text, useInput } from 'ink'
+import { html, Menu, Spinner, Note, color, sym, BORDER } from './ui.mjs'
+import { TypingContext } from './context.mjs'
+
+const LABELS = {
+  once: { label: 'Allow once', key: 'Enter' },
+  always_matter: { label: 'Always allow (this matter)', key: 'a' },
+  always: { label: 'Always allow', key: 'A' },
+  deny: { label: 'Don\'t allow', key: 'n / Esc' },
+}
+
+/** The one or two arguments worth showing (never the full content of a file). */
+function keyDetail(req) {
+  const d = req.detail || {}
+  const pick = ['path', 'url', 'command', 'query', 'format', 'matter', 'directory'].filter((k) => d[k] !== undefined && d[k] !== '').slice(0, 2)
+  const out = pick.map((k) => `${k}: ${typeof d[k] === 'string' ? d[k] : JSON.stringify(d[k])}`)
+  if (typeof d.content === 'string') out.push(`content: ${d.content.length > 60 ? `${d.content.slice(0, 60).replace(/\s+/g, ' ')}…` : d.content.replace(/\s+/g, ' ')}`)
+  return out.slice(0, 2)
+}
+
+/** What the confirmation line in the chat says after an answer. */
+export function answeredLine(req, decision, saved) {
+  if (decision === 'deny') return `Not allowed: ${req.summary}`
+  if (decision === 'once') return `Allowed once: ${req.summary}`
+  return `Allowed${decision === 'always_matter' ? ' for this matter' : ''} from now on: ${saved || req.always || req.tool} (remove it with /permissions)`
+}
+
+export function PermissionPrompt({ req, onAnswer }) {
+  const choices = (req.choices || ['once', 'deny']).filter((c) => LABELS[c])
+  const [sent, setSent] = useState(false)
+  // While the prompt is open, single keys belong to it ("?" must not leave the screen).
+  const typing = useContext(TypingContext)
+  useEffect(() => { typing.current++; return () => { typing.current-- } }, [])
+  const answer = (d) => { if (sent || !choices.includes(d)) return; setSent(true); onAnswer(d) }
+  useInput((input, key) => {
+    if (sent) return
+    if (key.escape || input === 'n' || input === 'N') return answer('deny')
+    if (input === 'a') return answer('always_matter')
+    if (input === 'A') return answer('always')
+  })
+  const items = choices.map((c) => ({ value: c, label: `${LABELS[c].label.padEnd(28)}${LABELS[c].key}` }))
+  return html`<${Box} flexDirection="column" borderStyle=${BORDER} borderColor=${color.accent} paddingX=${1}>
+    <${Text} bold color=${color.accent}>${req.title || 'OpenLex wants to use a tool'}<//>
+    <${Text} wrap="wrap">${req.summary}<//>
+    ${keyDetail(req).map((l, i) => html`<${Text} key=${i} dimColor wrap="truncate-end">  ${l}<//>`)}
+    <${Text} dimColor wrap="wrap">This ${req.risk || 'changes something'}.${req.firmRule ? ' Your firm asks for confirmation here.' : ''} Nothing happens until you choose.<//>
+    <${Box} marginTop=${1}>
+      ${sent ? html`<${Spinner} label="Sending your answer…" />` : html`<${Menu} items=${items} onSelect=${(it) => answer(it.value)} />`}
+    <//>
+  <//>`
+}
+
+/**
+ * The rules: allowed without asking (everywhere / per matter), never
+ * allowed, and the firm's own (shown, not editable). Enter on one of yours
+ * offers to remove it.
+ */
+export function PermissionRules({ api, matterId = null, onNote }) {
+  const [data, setData] = useState(null)
+  const [picked, setPicked] = useState(null)
+  const [busy, setBusy] = useState('')
+  const load = () => api.permissions().then(setData).catch((err) => { setData({ error: err.message }) })
+  useEffect(() => { load() }, [])
+  if (!data || busy) return html`<${Spinner} label=${busy || 'Loading…'} />`
+  if (data.error) return html`<${Note} kind="bad">${data.error}<//>`
+  if (picked) {
+    return html`<${Box} flexDirection="column">
+      <${Text} bold wrap="wrap">Remove "${picked.pattern}"${picked.matterId ? ' for this matter' : ''}?<//>
+      <${Text} dimColor wrap="wrap">${picked.list === 'deny' ? 'OpenLex may then ask for it again.' : 'OpenLex will ask again before doing it.'}<//>
+      <${Box} marginTop=${1}><${Menu} items=${[{ value: true, label: 'Yes, remove it' }, { value: false, label: 'No, keep it' }]} onSelect=${async (it) => {
+        if (!it.value) return setPicked(null)
+        setBusy('Removing…')
+        try { await api.permissionRule('remove', picked.pattern, picked.matterId); onNote?.({ kind: 'ok', text: `Removed: ${picked.pattern}` }) } catch (err) { onNote?.({ kind: 'bad', text: err.message }) }
+        setPicked(null)
+        setBusy('')
+        load()
+      }} /><//>
+    <//>`
+  }
+  const u = data.user || {}
+  const f = data.firm || {}
+  const mine = [
+    ...(u.allow || []).map((p) => ({ value: `a:${p}`, label: `${sym.ok} ${p}`, hint: 'allowed everywhere', rule: { pattern: p, list: 'allow' } })),
+    ...Object.entries(u.matters || {}).filter(([id]) => !matterId || id === matterId).flatMap(([id, m]) => (m.allow || []).map((p) => ({ value: `m:${id}:${p}`, label: `${sym.ok} ${p}`, hint: id === matterId ? 'this matter' : `matter ${id}`, rule: { pattern: p, list: 'allow', matterId: id } }))),
+    ...(u.deny || []).map((p) => ({ value: `d:${p}`, label: `${sym.bad} ${p}`, hint: 'never allowed', rule: { pattern: p, list: 'deny' } })),
+  ]
+  const firm = [
+    ...(f.allow || []).map((p) => ({ value: `fa:${p}`, label: `${sym.ok} ${p}`, hint: 'allowed by your firm', disabled: true })),
+    ...(f.deny || []).map((p) => ({ value: `fd:${p}`, label: `${sym.bad} ${p}`, hint: 'blocked by your firm', disabled: true })),
+    ...(f.ask || []).map((p) => ({ value: `fq:${p}`, label: `? ${p}`, hint: 'your firm always asks', disabled: true })),
+  ]
+  return html`<${Box} flexDirection="column">
+    <${Text} bold>What OpenLex may do without asking<//>
+    ${data.locked ? html`<${Text} dimColor wrap="wrap">Your firm has fixed these rules; your own are not used.<//>` : null}
+    ${mine.length || firm.length
+      ? html`<${Box} marginTop=${1}><${Menu} items=${[...mine, ...firm]} onSelect=${(it) => it.rule && setPicked(it.rule)} /><//>`
+      : html`<${Text} dimColor wrap="wrap">Nothing yet: OpenLex asks before it saves files, opens web pages, runs commands or uses connectors. Choose "Always allow" when it asks to stop being asked.<//>`}
+    <${Box} marginTop=${1}><${Text} dimColor wrap="wrap">Reading documents and searching the law never needs asking. Enter on one of your rules removes it.<//><//>
+  <//>`
+}

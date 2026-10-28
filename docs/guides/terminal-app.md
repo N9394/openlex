@@ -1,6 +1,6 @@
 # The OpenLex terminal app
 
-A full-screen app in the terminal window. You choose everything with the arrow keys and Enter; there are no commands to remember.
+A full-screen app in the terminal window. You choose everything with the arrow keys and Enter; there are no commands to remember (a few optional ones, typed with `/`, change the setup during a conversation).
 
 ## Starting it
 
@@ -68,6 +68,34 @@ The first screen lists your matters. Privileged ones are marked **[privileged]**
 - **Privileged: keep on this computer (On/Off).** Turning it on takes effect immediately. Turning it off asks you to confirm first.
 - **Client data for this matter.** Shown when a cloud AI is set up. Allows or blocks sending this matter's documents to it.
 
+## Changing the setup during a conversation
+
+Type `/` in the question field to see the commands. They change things without leaving the conversation, and each answers with one line, for example *"Now using claude-sonnet-5-5 (Anthropic), cloud. Client data for this matter: may go to Anthropic (EU only)."* The bar at the bottom changes at once.
+
+| Command | What it does |
+|---|---|
+| `/model` | Choose where the AI runs. `/model local`, `/model anthropic` or `/model openrouter:qwen/qwen3.5-9b` switch directly. |
+| `/key` | Add or replace the key for the AI in use (`/key mistral` for another), then check that it works. The key stays hidden. |
+| `/data` | Where client data of this matter may go: keep it on this computer, allow the AI in use, EU data centres only, or hide client names. |
+| `/as` | Who OpenLex works as (`/as researcher`). |
+| `/privileged on` / `off` | Keep this matter on this computer. Turning it off asks you to confirm. |
+| `/permissions` | What OpenLex may do without asking (see below). |
+| `/clear` | Start a new conversation in this matter. |
+| `/help` | The list of commands. |
+
+A change of AI model applies from your next question; an answer that is being written finishes with the model it started with. Other words after `/` run a firm skill of that name. Changes made in Word or with the `openlex` command appear here too.
+
+## When OpenLex asks first
+
+OpenLex reads documents and searches the law without asking. Before it **saves a file, opens a web page, runs a command, adds to your calendar or uses a connector** to another system, it stops and asks, for example *"OpenLex wants to save a file: Save obligations.csv in Acme/"*. You choose:
+
+- **Allow once** (Enter): just this time.
+- **Always allow (this matter)** (a): don't ask again in this matter.
+- **Always allow** (A): don't ask again anywhere.
+- **Don't allow** (n or Esc): OpenLex carries on without it and tells you what it could not do.
+
+Nothing happens until you choose. If you don't answer within five minutes, the answer is no. Your firm can allow or block things for everyone; a firm block always wins. To see or remove what you allowed: Settings → *What OpenLex may do without asking*, or `/permissions`. The Word pane shows the same question as a card with the same four buttons.
+
 ## When something goes wrong
 
 The app shows one plain sentence and what to do, for example *"The AI service did not accept your key. Check the key in Settings → AI model."* The technical details are written to `~/.lexvault/logs/tui.log`, and the background engine's to `~/.lexvault/logs/engine.log`. Send these to IT if you need help.
@@ -75,5 +103,6 @@ The app shows one plain sentence and what to do, for example *"The AI service di
 ## For IT
 
 - `openlex tui` opens the same app. Without a terminal, for example in scripts, `openlex` prints the command list as before, and every command (`openlex status`, `openlex ask …`, …) works unchanged.
+- Permissions from scripts: `openlex ask` in a terminal asks on one line (*[y]es once / [a]lways / [n]o*). Piped or with `--json` it never asks and anything that would need a yes is refused, unless you pass `--allow write_file:Acme/**` (patterns, this run only) or `--yes` (everything that would be asked, this run only). Firm blocks still apply. Rules: `openlex permissions [list | allow PATTERN [--matter ID] | ask PATTERN | deny PATTERN | remove PATTERN]`; the format is in `docs/HARNESS.md` → `permissions`.
 - `NO_COLOR=1` turns colours off. `OPENLEX_ASCII=1` uses plain ASCII symbols, which old consoles need. `OPENLEX_KEEP_ENGINE=1` keeps the background engine running after the app quits.
 - The app needs a terminal of at least 80×24 characters.

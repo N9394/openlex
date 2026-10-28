@@ -26,6 +26,7 @@ export async function run({ stdout = process.stdout, stdin = process.stdin } = {
   process.on('uncaughtException', onCrash)
   process.on('unhandledRejection', onCrash)
 
+  client.setClientName('tui')
   const api = createApi()
   let started = false
   const ensure = api.ensureEngine

@@ -18,6 +18,8 @@ import { AppContext, useAppCtx, TypingContext } from './context.mjs'
 
 export { AppContext, useAppCtx, TypingContext }
 
+const HUB_REFRESH = new Set(['provider-changed', 'policy-changed', 'matter-changed', 'permissions-changed'])
+
 const SCREENS = { setup: Setup, home: Home, newMatter: NewMatter, matter: Matter, action: Action, settings: Settings, help: Help }
 
 export function App({ api: apiIn, startTimeoutMs = 20000 }) {
@@ -28,6 +30,7 @@ export function App({ api: apiIn, startTimeoutMs = 20000 }) {
   const [info, setInfo] = useState({})
   const [stack, setStack] = useState([])
   const [prefs, setPrefsState] = useState(loadPrefs)
+  const [hubTick, setHubTick] = useState(0)
   const typing = useRef(0)
 
   const refresh = useCallback(async () => {
@@ -59,10 +62,26 @@ export function App({ api: apiIn, startTimeoutMs = 20000 }) {
 
   useEffect(() => { start() }, [])
 
+  // Another front end (Word, the CLI, the desktop app) changed the model,
+  // a key, the client-data rule, a matter or the permissions: refresh the
+  // status bar at once.
+  useEffect(() => {
+    if (phase !== 'ready') return undefined
+    const ac = new AbortController()
+    api.followHub?.((ev) => {
+      if (!HUB_REFRESH.has(ev.type)) return
+      refresh().catch(() => {})
+      setHubTick((t) => t + 1)
+    }, ac.signal).catch((err) => log('hub:', err))
+    return () => ac.abort()
+  }, [phase])
+
   const ctx = {
     api,
     info,
     refresh,
+    /** Bumps when another front end changed something (screens reload what they show). */
+    hubTick,
     prefs,
     setPrefs: (patch) => setPrefsState(savePrefs(patch)),
     go: (name, props = {}) => setStack((s) => [...s, { name, props }]),
@@ -115,6 +134,7 @@ export function Help() {
       ${row('Enter', 'choose / send your question')}
       ${row('Esc', 'go back one step (or stop an answer being written)')}
       ${row('Tab', 'choose who OpenLex works as · complete a file name')}
+      ${row('/', 'in a question: /model /key /data /as /permissions /help')}
       ${row('?', 'this help (when you are not typing)')}
       ${row('Ctrl+C', 'quit')}
     <//>
