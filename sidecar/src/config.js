@@ -21,7 +21,7 @@ for (const [k, v] of Object.entries(ENV)) {
   }
 }
 
-// Tier registry model name (also gates model-dependent defaults below).
+// Tier registry model name (models.js picks the model's profile from it).
 const LLM_MODEL_NAME = ENV.LEXVAULT_LLM_MODEL || 'lotus-2-reasoning-q4_k_m'
 
 const DATA_DIR_RESOLVED = ENV.LEXVAULT_DATA_DIR || path.join(os.homedir(), '.lexvault')
@@ -60,6 +60,7 @@ module.exports = {
   // Local inference services (same layout/ports as the App supervisor)
   LLM_BASE: resolveLlmBase(), // llama.cpp (Ollama-compatible) — App's proxy when the App runs
   LLM_MODEL: LLM_MODEL_NAME, // tier registry name
+  LLM_MODEL_NAME,
   QDRANT_BASE: ENV.LEXVAULT_QDRANT_URL || 'http://127.0.0.1:16333',
   QDRANT_COLLECTION: 'legal_chunks_local',
 
@@ -140,9 +141,8 @@ module.exports = {
     // call on 8GB M1 (120 thinking tokens @ ~10 t/s). INLINE_REASONING
     // (default true) skips native thinking and relies on the JSON
     // "reasoning" field Lotus was fine-tuned for: ~5s per call, no trace.
-    // 0.1.17: model-gated — Lotus-v2-reasoning (trained to close </think>)
-    // defaults to NATIVE thinking; v1 keeps inline.
-    INLINE_REASONING: !String(LLM_MODEL_NAME || '').includes('lotus-2'),
+    // Whether a model thinks natively or inline is now its profile's
+    // `thinking` field (models.js), not a check on the model name.
     REASONING_MAX_TOKENS: 64,
     // Native-thinking hard stop injected by llama-server --reasoning-budget
     // (b10353+ only). 400 tokens ≈ 1,600 chars — generous on purpose: the

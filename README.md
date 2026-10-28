@@ -50,6 +50,9 @@ Start the engine once (`openlex serve`, or open Word with the add-in, or the des
 ```bash
 openlex serve                                   # the local engine (keeps running)
 openlex status                                  # engine, model, readiness
+openlex use anthropic                           # or: use local · use openrouter:qwen/qwen3.5-9b · use azure --base-url …
+openlex key anthropic                           # your own API key, stored in the OS keychain
+openlex policy allow anthropic --regions eu --redact   # where client data may go (default: nowhere)
 openlex ask "Is the liability cap enforceable under Austrian law?" --file contract.docx
 openlex ask "@researcher /research-memo is a 2-year non-compete valid in Austria?"
 

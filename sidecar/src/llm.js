@@ -81,7 +81,7 @@ async function prepare(p, kind) {
   const decision = policy.check(p, matter)
   if (!decision.allowed) {
     policy.audit({ provider: p.id, model: p.model || null, matter, call: kind, decision: 'blocked', reason: decision.reason })
-    const err = new Error(`Blocked by data policy: ${decision.reason}. Change it in Settings → Data policy, or switch to a local model.`)
+    const err = new Error(`Blocked by data policy: ${decision.reason}. Change it in Settings → Data policy (or "openlex policy"), or switch to a local model.`)
     err.code = 'POLICY_BLOCKED'
     throw err
   }
@@ -110,13 +110,18 @@ async function cloudCall(kind, messages, opts, run, provider, routeReason) {
   // definitions. Not on calls that stream prose to the pane — a hosted
   // model's "Let me check…" preamble before a tool call would leak into
   // the answer. The text-JSON protocol still works there as a fallback.
-  const wantTools = p.nativeTools !== false && opts.phase && opts.tools !== false &&
+  // The model's profile (models.js) can switch a model to the text-JSON
+  // protocol, drop the temperature it rejects, cap output, or turn off
+  // its native thinking.
+  const profile = require('./models').profileFor({ kind: p.kind, model: p.model })
+  const wantTools = p.nativeTools !== false && profile.tools === 'native' && opts.phase && opts.tools !== false &&
     (opts.phase === 'planning' || opts.phase === 'analyzing' || !opts.onContent)
   const callOpts = {
     ...opts,
     ...(wantTools ? { nativeTools: require('./providers/native_tools').toolList() } : {}),
-    maxTokens: opts.maxTokens || AGENT.GENERATION_MAX_TOKENS,
-    temperature: opts.temperature ?? AGENT.TEMP ?? 0,
+    maxTokens: profile.maxOutput ? Math.min(opts.maxTokens || AGENT.GENERATION_MAX_TOKENS, profile.maxOutput) : (opts.maxTokens || AGENT.GENERATION_MAX_TOKENS),
+    temperature: profile.temperature === null ? undefined : (opts.temperature ?? profile.temperature ?? AGENT.TEMP ?? 0),
+    ...(profile.thinking !== 'native' ? { thinking: false } : {}),
     ...(restorer ? { onContent: restorer.push } : {}),
   }
   const t0 = Date.now()

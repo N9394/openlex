@@ -69,9 +69,10 @@ function effectiveAgent() {
   const provider = require('./routing').primary({ role: 'plan', matterId: require('./policy').currentMatter() })
   // Hosted models also get more tool hops and wall-clock per depth: the
   // local limits are sized for a 4B model on a laptop.
+  const profile = require('./models').profileFor({ kind: provider.kind, model: provider.model })
   if (provider.kind !== 'local') {
     return {
-      CTX_BUDGET_TOKENS: provider.ctx || 32768,
+      CTX_BUDGET_TOKENS: profile.ctx || provider.ctx || 32768,
       MAX_HOPS: CLOUD_HOPS[depth] || hops,
       HOP_TIMEOUT_MS: 240000,
       DEPTH: depth,
@@ -79,7 +80,7 @@ function effectiveAgent() {
     }
   }
   const ramCtx = ramCtxFor(os.totalmem() / 1024 / 1024 / 1024)
-  return { CTX_BUDGET_TOKENS: Math.min(ctx, ramCtx), MAX_HOPS: hops, HOP_TIMEOUT_MS: 90000, DEPTH: depth, PROVIDER: 'local' }
+  return { CTX_BUDGET_TOKENS: Math.min(ctx, ramCtx, profile.ctx || Infinity), MAX_HOPS: hops, HOP_TIMEOUT_MS: 90000, DEPTH: depth, PROVIDER: 'local' }
 }
 
 module.exports = { load, save, agentBudget, effectiveAgent, CONFIG_PATH, DEFAULTS }
