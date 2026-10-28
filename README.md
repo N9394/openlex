@@ -50,10 +50,15 @@ Pick a model in **Settings → Model**. Cloud models also need **Settings → Da
 
 The firm library is **not** exposed over MCP unless `~/.lexvault/mcp-expose.json` contains `{ "firmLibrary": true }`. MCP clients usually forward tool results to a cloud model.
 
+## Terminal app
+
+Type `openlex` (no arguments) in a terminal and a full-screen app opens: no commands to learn. It starts OpenLex in the background if needed, walks you through choosing where the AI runs and where client data may go, and then shows your matters. In a matter you can ask questions (answers come with the sources found and proposed changes), add documents by dragging them into the window, and run the larger tasks: checklist review, chronology, translation, comparing two versions, a review grid, or a plan you approve step by step. The bar at the bottom always shows the matter, the AI model and where client data may go. Arrow keys and Enter to choose, Esc to go back, `?` for help. See [docs/guides/terminal-app.md](docs/guides/terminal-app.md).
+
 ## Command line
 
 ```bash
 cd sidecar && npm link        # installs `openlex`
+openlex                                   # the terminal app (same as: openlex tui)
 openlex status
 openlex use anthropic                     # or: use local · use openrouter:qwen/qwen3.5-9b · use azure --base-url …
 openlex key anthropic                     # your own API key, stored in the OS keychain
@@ -63,6 +68,7 @@ openlex review --matter <id>              # checklist over the matter's document
 openlex translate contract.docx --to en   # Word translation + review table + checks
 openlex compare v1.docx v2.docx           # redline and materiality
 openlex clauses --type liability          # the firm's own clauses
+openlex matters new "Alpine share deal" --client "Alpine Holding" --privileged   # privileged: never leaves this computer
 ```
 
 The CLI talks to the same running engine as Word and the app. For your own integrations, see [docs/LOCAL_API.md](docs/LOCAL_API.md).
