@@ -10,6 +10,10 @@ curl -fsSL https://openlex.pinemarshlands.com/install | bash    # or: brew insta
 openlex serve
 ```
 
+## Guides
+
+Start with [Getting started](docs/guides/getting-started.md). All guides: [docs/guides](docs/guides/README.md) (choose your AI, client data rules, Word add-in, desktop app, firm setup, troubleshooting).
+
 ## What's in this repository
 
 | Product | Path | What it is |
