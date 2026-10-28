@@ -114,7 +114,7 @@ elif [ -f "$LLAMA_VULKAN/libomp140.x86_64.dll" ]; then
 fi
 cp "$LLAMA_VULKAN/mtmd.dll" "$STAGE/bin/mtmd.dll"
 # qdrant from App build or box
-APP_BIN="../product/electron/dist/win-unpacked/resources/bin"
+APP_BIN="${OPENLEX_BIN_DIR:-desktop/electron/resources/bin}"   # fetch-sidecars.js output
 if [ -f "$APP_BIN/qdrant-win32-x64.exe" ]; then
   cp "$APP_BIN/qdrant-win32-x64.exe" "$STAGE/bin/qdrant-win32-x64.exe"
 else
