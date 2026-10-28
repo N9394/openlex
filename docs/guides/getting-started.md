@@ -6,7 +6,7 @@ There are three ways in. They share one engine on your computer, so your matters
 
 | | For | Install |
 |---|---|---|
-| **Terminal app** | Everyone, on macOS, Linux and Windows (WSL). The leanest version. | One line in the terminal (below) |
+| **Terminal app** | Everyone, on macOS, Linux and Windows. The leanest version. | One line in the terminal (below) |
 | **Word add-in** | Working inside contracts: review, suggested edits as tracked changes, law search | Installer from the [download page](https://openlex.pinemarshlands.com/download) |
 | **Desktop app** | Research, document analysis, due diligence | Installer from the [download page](https://openlex.pinemarshlands.com/download) |
 
@@ -18,7 +18,13 @@ Open the Terminal app (macOS: press ⌘ Space, type *Terminal*, press Enter) and
 curl -fsSL https://openlex.pinemarshlands.com/install | bash
 ```
 
-You need Node.js 20 or newer. If you don't have it, install it from [nodejs.org](https://nodejs.org) first. With Homebrew you can instead run `brew install n9394/openlex/openlex`.
+On **Windows**, open Windows Terminal or PowerShell and paste this instead (no admin needed; it installs into `%USERPROFILE%\.openlex`):
+
+```powershell
+irm https://openlex.pinemarshlands.com/install.ps1 | iex
+```
+
+You need Node.js 20 or newer (on Windows: `winget install OpenJS.NodeJS.LTS`). If you don't have it, install it from [nodejs.org](https://nodejs.org) first. With Homebrew you can instead run `brew install n9394/openlex/openlex`.
 
 The installer only writes to `~/.openlex`. It checks the release checksum and changes nothing else on your computer.
 
