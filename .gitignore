@@ -9,3 +9,4 @@ certs/*.pem
 .DS_Store
 .env*
 desktop/electron/resources/
+.claude/
