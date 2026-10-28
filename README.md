@@ -2,7 +2,7 @@
 
 An open, local-first harness for legal work. It runs inside Microsoft Word and as a desktop app. The firm decides which model it uses and where client data may go.
 
-- **Bring your own model:** local (llama.cpp / Ollama, Lotus by default), Anthropic, OpenAI, Azure OpenAI, Mistral, AWS Bedrock, Google Vertex AI, OpenRouter or any OpenAI-compatible endpoint. Hosted models use their native tool calling. API keys are stored in the OS keychain.
+- **Bring your own model:** local (llama.cpp / Ollama, Lotus by default), Anthropic, OpenAI, Azure OpenAI, Mistral, AWS Bedrock, Google Vertex AI, OpenRouter or any OpenAI-compatible endpoint. Each model is driven by a profile (thinking, tool protocol, temperature, context window), not by checks on its name; firms can change or add profiles in `openlex.json` ([docs/HARNESS.md](docs/HARNESS.md)). API keys are stored in the OS keychain.
 - **Data policy per matter:** local-only by default. Cloud providers, web access and external connectors have to be allow-listed, optionally limited to approved regions (for example EU only). Privileged matters always stay on the machine. Every model, web and connector call is written to an audit log (metadata only, never content).
 - **Redact-before-send:** client names, listed parties, e-mail addresses, IBANs and phone numbers are replaced with placeholders before a cloud call and restored locally in the answer.
 - **Verified answers:** law search over local jurisdiction packs, a judge that checks suggestions against sources, and whole-matter workflows that drop any finding without a verbatim quote.

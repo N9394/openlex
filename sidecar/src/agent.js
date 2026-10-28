@@ -80,6 +80,15 @@ SUGGESTIONS (compact — truncation destroys them)
 Each: {"type": "rephrase|flag-favoring|legal-risk|alternative|compliance", "severity": "high|medium|low", "summary": "one sentence", "proposed_text": "the NEW legal text — a complete contract provision, NOT a description or the user's request", "anchor": "the EXACT original text being replaced (≤220 chars for partial edits; the full clause for whole-clause rewrites)", "basis": {"jurisdiction": "AT|DE|…", "source": "statute", "section": "§ N"}}.
 proposed_text = what the rewritten clause SAYS (e.g. "Der Lieferant haftet für Schäden bis EUR 10.000"). NOT what you think about it (e.g. "Ich schlage eine Haftungsbegrenzung vor"). NOT the user's prompt echoed back. It must be valid, enforceable legal text in the document's language.`
 
+/** Extra instructions from the planning model's profile (models.js), if any. */
+function modelBlock() {
+  try {
+    const p = require('./routing').primary({ role: 'plan', matterId: require('./policy').currentMatter() })
+    const text = require('./models').profileFor({ kind: p.kind, model: p.model }).instructions
+    return text ? `\n\nMODEL NOTES\n${text}` : ''
+  } catch { return '' }
+}
+
 const TYPES = new Set(['rephrase', 'flag-favoring', 'legal-risk', 'alternative', 'compliance'])
 const SEVERITIES = new Set(['high', 'medium', 'low'])
 
@@ -464,7 +473,7 @@ async function runAction(ctx, userMessage, onEvent, opts = {}) {
   // Agent profile (agents.js): its instructions and tool allow-list combine with the skill's.
   const skillBlock = require('./agents').promptBlock(opts.agent) + (opts.skill ? require('./skills').promptBlock(opts.skill) : '')
   const skillTools = require('./agents').allowedTools(opts.agent, opts.skill)
-  const sysCtx = (phase) => SYSTEM(docCtx(ctx, phase) + pre.block + skillBlock)
+  const sysCtx = (phase) => SYSTEM(docCtx(ctx, phase) + pre.block + skillBlock + modelBlock())
 
   // 1. PLAN — a single LLM call that decides the tool path (or answers directly)
   const planRes = await thinkChat([

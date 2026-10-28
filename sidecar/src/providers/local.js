@@ -185,34 +185,36 @@ async function chat(messages, opts = {}) {
 }
 
 /**
- * Chat completion with short, inline reasoning (spec §3). Per the agent
- * config, NATIVE thinking is OFF for the Lotus GGUF (INLINE_REASONING):
- * Lotus was fine-tuned to emit a one-line reasoning field inside the tool
- * JSON, and native <think> blocks just burn max_tokens until finish:length
- * with no content — which showed up as truncation-retry loops. So the
- * request disables thinking; `reasoning` comes back from the model's JSON
- * and is surfaced by the agent, not from reasoning_content deltas.
+ * Chat completion with short reasoning (spec §3). The model's profile
+ * (models.js) decides how: `thinking: native` lets the model think in its
+ * own trace (Lotus 2, bounded by --reasoning-budget); `inline` disables
+ * native thinking and relies on the one-line "reasoning" field in the
+ * tool JSON (Lotus 1 was fine-tuned on that only — its native <think>
+ * blocks burned max_tokens with no content); `off` never thinks.
  *
  * @param {Array<{role:string,content:string}>} messages
  * @param {{maxTokens?:number, thinkingBudget?:number, onReasoning?:Function}} opts
  * @returns {Promise<{content:string, reasoning:string}>}
  */
+const capOutput = (n, profile) => (profile.maxOutput ? Math.min(n, profile.maxOutput) : n)
+
 async function chatWithReasoning(messages, opts = {}) {
   const { compact } = require('../ctx')
   const out = compact(messages, opts.maxTokens || AGENT.GENERATION_MAX_TOKENS)
   if (out.compacted) opts.onCompacted?.(out.compacted)
-  const inlineReasoning = !!AGENT.INLINE_REASONING
+  const model = await resolveModelName()
+  const profile = require('../models').forLocal(model)
   const body = {
-    model: await resolveModelName(),
+    model,
     messages: out.messages,
-    temperature: AGENT.TEMP,
-    max_tokens: opts.maxTokens || AGENT.GENERATION_MAX_TOKENS,
+    temperature: profile.temperature === undefined ? AGENT.TEMP : (profile.temperature ?? undefined),
+    max_tokens: capOutput(opts.maxTokens || AGENT.GENERATION_MAX_TOKENS, profile),
     stream: true,
     // Primary thinking bound is the llama-server --reasoning-budget flag
     // (injects the end-of-thought tag Lotus never emits). Keep the client
     // control enabled as a secondary stop for old servers without the flag.
     reasoning_control: true,
-    chat_template_kwargs: { enable_thinking: !inlineReasoning && opts.thinking !== false },
+    chat_template_kwargs: { enable_thinking: profile.thinking === 'native' && opts.thinking !== false },
     think: false,
     options: { num_ctx: activeCtx() },
   }

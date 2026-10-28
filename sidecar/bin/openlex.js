@@ -19,8 +19,9 @@
  *   openlex playbook draft FILE… --title T [--focus words] [--save NAME]
  *   openlex monitors [add eurlex|ris "words" | add rss|page URL] [--topics a,b] [--every H] | check [ID] | alerts
  *   openlex lists [show ID | new TITLE | add ID "item" [--due YYYY-MM-DD] [--owner X] | done ID ITEM | export ID]
- *   openlex map [--matter ID] [--agent NAME] | map set routes|hooks|agents|features FILE.json | --clear
+ *   openlex map [--matter ID] [--agent NAME] | map set routes|hooks|agents|features|sources|models FILE.json | --clear
  *   openlex agents                     agent profiles (use one with "@name …" in ask)
+ *   openlex models [MODEL] [--local]   model profiles, and which one each role's model gets
  *   openlex sources [add PRESET|NAME --file def.json | remove NAME | key NAME KEY | test NAME | search "q" [--kind k]]
  *   openlex plan "goal" --matter ID | plan list | plan show ID | plan run ID (approves) | plan decide ID STEP continue|stop [--note text]
  *   openlex serve                      run the engine in the foreground
@@ -342,10 +343,31 @@ async function main() {
       for (const ag of r.agents) console.log(`@${ag.name.padEnd(14)} ${ag.error ? `INVALID: ${ag.error}` : `${ag.description}${ag.depth ? `  [${ag.depth}]` : ''}${Object.keys(ag.routes || {}).length ? `  routes: ${Object.entries(ag.routes).map(([k, v]) => `${k}→${v}`).join(', ')}` : ''}`}`)
       return
     }
+    case 'models': {
+      if (a._[0]) {
+        const q = new URLSearchParams({ model: a._[0], kind: a.local ? 'local' : 'hosted' })
+        const r = await request('GET', `/api/models?${q}`)
+        if (a.json) return console.log(JSON.stringify(r, null, 2))
+        const pr = r.profile
+        console.log(`${pr.model}  →  profile ${pr.name}`)
+        console.log(`  thinking ${pr.thinking} · tools ${pr.tools} · temperature ${pr.temperature === null ? 'not sent' : pr.temperature ?? 'default'}${pr.ctx ? ` · ctx ${pr.ctx}` : ''}${pr.maxOutput ? ` · max output ${pr.maxOutput}` : ''}`)
+        if (pr.instructions) console.log(`  notes to the model: ${pr.instructions}`)
+        if (pr.notes) console.log(`  ${pr.notes}`)
+        return
+      }
+      const r = await request('GET', `/api/models${a.matter ? `?matterId=${encodeURIComponent(a.matter)}` : ''}`)
+      if (a.json) return console.log(JSON.stringify(r, null, 2))
+      for (const e of r.problems) console.log(`  ! ${e}`)
+      console.log('ROLES (first-choice model and its profile)')
+      for (const x of r.roles) console.log(`  ${x.role.padEnd(10)} ${x.provider}${x.model ? `:${x.model}` : ''}  →  ${x.profile} (thinking ${x.thinking}, tools ${x.tools})`)
+      console.log('\nPROFILES (tried in order; change or add them in openlex.json → "models")')
+      for (const pr of r.profiles) console.log(`  ${pr.name.padEnd(18)} ${String(pr.kind).padEnd(6)} ${pr.thinking.padEnd(6)} ${pr.tools.padEnd(6)} ${(pr.match || []).join(' | ')}${pr.origin !== 'built-in' ? `  [${pr.origin}]` : ''}`)
+      return
+    }
     case 'map': {
       if (a._[0] === 'set') {
         const [, section, file] = a._
-        if (!section || (!file && !a.clear)) throw new Error('usage: openlex map set routes|hooks|agents|features FILE.json   (or --clear)')
+        if (!section || (!file && !a.clear)) throw new Error('usage: openlex map set routes|hooks|agents|features|sources|models FILE.json   (or --clear)')
         const value = a.clear ? null : JSON.parse(fs.readFileSync(file, 'utf8'))
         await request('POST', '/api/harness/section', { section, value })
         return console.log(a.clear ? `cleared ${section} from your layer` : `saved ${section} to your layer (validated)`)
