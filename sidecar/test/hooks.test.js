@@ -124,8 +124,12 @@ test('before_tool deny inside the agent loop; before_web deny in the web guard',
   replies.push(JSON.stringify({ reasoning: 'check RIS', tool: 'search_ris', args: { query: 'MRG' } }), 'Final.')
   const before = calls.cloud
   const steps = []
-  await policy.withMatter(null, () => runAction({ doc: new Document('§ 1 Test.', 'd-hook'), memory: null, session: null, summary: () => '' }, 'What applies?', (e) => e.type === 'step' && steps.push(e.text)))
+  const events = []
+  await policy.withMatter(null, () => runAction({ doc: new Document('§ 1 Test.', 'd-hook'), memory: null, session: null, summary: () => '' }, 'What applies?', (e) => { if (e.type === 'step') { steps.push(e.text); events.push(e) } }))
   assert.ok(steps.includes('blocked: search_ris'))
+  // Every step carries a plain sentence for the lawyer (explain.js), set at emit time.
+  assert.ok(events.every((e) => typeof e.plain === 'string' && e.plain.length > 0))
+  assert.match(events.find((e) => e.kind === 'blocked').plain, /^Not done — your firm's rules don't allow it: checking RIS, Austria's official law database/)
   assert.ok(calls.cloud > before)
   assert.strictEqual(await require('../src/web/guard').webHook('data.bka.gv.at', 'search_ris'), 'BLOCKED by firm rule: RIS disabled.')
 })

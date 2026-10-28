@@ -356,7 +356,8 @@ async function thinkChat(messages, opts = {}) {
  */
 async function runAction(ctx, userMessage, onEvent, opts = {}) {
   const log = []
-  const emit = (type, data) => { const e = { type, ...data }; log.push(e); onEvent?.(e) }
+  // Every step carries `plain` (a sentence for the lawyer) and `online` (explain.js).
+  const emit = (type, data) => { const e = { type, ...data }; if (type === 'step') require('./explain').withPlain(e); log.push(e); onEvent?.(e) }
   const suggestions = [] // hoisted — stopEarly() references it
   // Stop support (Batch 1.3): the pane can abort mid-run; we check between
   // phases and stop cleanly, keeping whatever arrived.

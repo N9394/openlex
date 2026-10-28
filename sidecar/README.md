@@ -171,7 +171,9 @@ budget.
 | `POST /api/download/pack` | download + ingest a jurisdiction pack → SSE progress |
 | `POST /api/document/map` | build heading map from body text |
 | `POST /api/document/section` | one section (raw + compressed) |
-| `POST /api/document/analyze` | full clause analysis → SSE suggestions |
+| `POST /api/document/analyze` | contract review clause by clause (side, checklist, focus) → SSE steps + suggestions |
+| `POST /api/review/export` | save a finished review as Word or PDF in the matter folder |
+| `GET /api/features` | the firm's feature switches (openlex.json) |
 | `POST /api/chat` | agent loop → SSE (step/suggestion/text/done/error) |
 | `POST /api/packs/ingest` | ingest a .lvpack → SSE progress |
 | `GET /api/license/status` | subscription state (from watchdog) |

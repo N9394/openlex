@@ -76,6 +76,7 @@ chmod +x "$PAYLOAD/bin/llama-server" "$PAYLOAD/bin/qdrant-${PLATFORM}-${ARCH}"
 echo "… staging add-in"
 cp -R add-in/commands.html add-in/manifest.xml add-in/taskpane.css add-in/taskpane.html add-in/taskpane.js "$PAYLOAD/add-in/"
 cp -R add-in/assets "$PAYLOAD/add-in/assets"
+cp -R add-in/lib "$PAYLOAD/add-in/lib"
 
 # ── 6. Self-signed localhost cert (10 years) ────────────────────────────────
 echo "… generating localhost cert"
