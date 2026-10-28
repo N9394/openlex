@@ -53,24 +53,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Electron App: identity comes from the signed license file via the
-    // preload bridge — no HTTP fetch, no cookies, no /login screen. This
-    // matches the SaaS architecture where the launcher writes the license
-    // and the App reads it on every boot.
+    // Electron App: identity comes from the preload bridge — the signed
+    // license if there is one, else the community identity. No HTTP fetch,
+    // no cookies, no /login screen, no account. 'local' matches the user the
+    // bundled backend uses when there is no license (middleware/auth.js).
     const isElectron = typeof window !== 'undefined' && (window as any).lexvault?.isElectron
     if (isElectron) {
+      const toUser = (id: any): User => ({
+        id: id?.account_id || 'local',
+        email: id?.email || '',
+        name: id?.email?.split('@')[0] || 'OpenLex User',
+        language: id?.language_pref,
+      })
       ;(window as any).lexvault.getIdentity()
         .then((id: any) => {
-          const u: User = {
-            id: id.account_id,
-            email: id.email,
-            name: id.email?.split('@')[0] || 'OpenLex User',
-            language: id.language_pref,
-          }
+          const u = toUser(id)
           setUser(u)
           applyLanguageFromUser(u)
         })
-        .catch((err: Error) => console.warn('[auth] getIdentity failed:', err.message))
+        .catch((err: Error) => {
+          // Never fall back to a login form in the App: run as the local user.
+          console.warn('[auth] getIdentity failed:', err.message)
+          setUser(toUser(null))
+        })
         .finally(() => setLoading(false))
     } else {
       // Web build: cookie-based session against the cloud backend
@@ -83,7 +88,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .finally(() => setLoading(false))
     }
 
-    // Listen for forced logout from api.ts 401 handler
+    // Listen for forced logout from api.ts 401 handler (web build only — the
+    // App has no session to lose, so a stray 401 must not open /login)
+    if (isElectron) return
     const handleForceLogout = () => {
       localStorage.removeItem('token')
       localStorage.removeItem('refreshToken')
