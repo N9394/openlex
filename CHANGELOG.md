@@ -5,6 +5,7 @@ All notable changes to OpenLex are listed here. The format follows [Keep a Chang
 ## [Unreleased]
 
 ### Added
+- **Law sources:** OpenLex connects to where the law is published instead of maintaining its own copy. Official sources, free and without a key: RIS Austria, EUR-Lex, German federal law (NeuRIS, test phase), Slov-Lex Slovakia, e-Sbírka Czechia. Paid gateway with the lawyer's own key: Ansvar. One interface with provenance on every result (source, URL, retrieval date, licence), the data policy and permissions applied, plain messages when a source is offline. `/law` in the terminal app (and Settings), `openlex sources`, `GET /api/sources/law`, agent tools `search_law_sources` and `get_law_source`. See [docs/SOURCES.md](docs/SOURCES.md).
 - **The same "/" commands in every window.** One list in the engine (`sidecar/src/commands.js`, `GET /api/commands?surface=app|word|tui&lang=en|de`) with plain descriptions in English and German and which window supports each command. The terminal app reads it instead of keeping its own copy; the Word pane's "/" menu now shows the commands it supports (/model, /data, /as, /record, /clear, /help) before the firm's instructions; the desktop app's chat gets a "/" menu (also Ctrl+K / ⌘K) with /model, /data, /matter, /copy, /save, /word, /activity, /record, /clear and /help, run through the engine.
 - A quiet hint line under the question field in the desktop app and the Word pane: "Type / for commands · ⌘K · /help" (hidden while you type).
 

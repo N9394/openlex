@@ -31,7 +31,7 @@ const fs = require('fs')
 const path = require('path')
 const chain = require('./chain')
 const { DATA_DIR } = require('./config')
-const { serviceName, explainTool, duration } = require('./explain')
+const { serviceName, explainTool, duration, LAW_SOURCES } = require('./explain')
 
 const AUDIT_PATH = () => require('./policy').AUDIT_PATH
 const ACTIVITY_DIR = () => require('./activity').DIR
@@ -46,6 +46,7 @@ const ACTIONS = {
   read_file: 'read a file', list_directory: 'look into a folder', search_local_files: 'search files', search_docs: 'search the matter\'s documents',
   run_bash: 'run a program', web_fetch: 'open a web page', web_save: 'save a web page', download_to_matter: 'download a file',
   export_document: 'save a file', sync_calendar: 'put deadlines into a calendar', search_ris: 'look up Austrian law online', search_eurlex: 'look up EU law online', get_eu_law: 'read EU law online',
+  search_law_sources: 'look up the law online', get_law_source: 'read a law text online',
 }
 const clip = (s, n) => { const t = String(s ?? '').replace(/\s+/g, ' ').trim(); return t.length > n ? `${t.slice(0, n - 1)}…` : t }
 const plural = (n, one, many) => `${n} ${n === 1 ? one : (many || `${one}s`)}`
@@ -129,6 +130,18 @@ function absorb(acc, e) {
     return
   }
   if (e.provider === 'mcp-server') { acc.lookups.push({ name: `another program used OpenLex (${clip(e.model, 40)})`, local: true, count: 1 }); return }
+  // Law sources (connectors/): the policy check ("web" or the gateway) and
+  // the call itself are audited; the call counts as the lookup.
+  const lawId = e.call === 'law_source' ? String(e.provider).slice(7) : e.provider === 'web' && /^source:/.test(String(e.call)) ? String(e.call).slice(7) : null
+  if (lawId && LAW_SOURCES[lawId]) {
+    const name = LAW_SOURCES[lawId]
+    if (e.decision === 'blocked') { acc.blocked.push({ what: name, why: 'your client-data rule does not allow it' }); return }
+    if (e.call !== 'law_source' || e.ok === undefined) return
+    const hit = acc.lookups.find((x) => x.name === name)
+    if (hit) hit.count++
+    else acc.lookups.push({ name, local: false, count: 1 })
+    return
+  }
   const isWeb = e.provider === 'web'
   const isSource = String(e.provider).startsWith('source:')
   const isConnector = String(e.provider).startsWith('mcp:')
@@ -207,7 +220,7 @@ function requestEntry(r, lines) {
   // Online lookups the request reported (host or database only — never the search words).
   for (const l of r.looked || []) {
     if (!l.tool) continue
-    const on = explainTool(l.tool, { host: l.detail?.host }).online
+    const on = explainTool(l.tool, { host: l.detail?.host, sources: l.detail?.sources, jurisdiction: l.detail?.jurisdiction }).online
     if (on && !acc.lookups.some((x) => x.name === on || (l.detail?.host && x.name === l.detail.host))) acc.lookups.push({ name: on, local: false, count: 1 })
   }
   return finishEntry({
@@ -235,6 +248,7 @@ function standaloneTitle(e, acc) {
   if (e.provider === 'mcp-server') return 'Another program used OpenLex'
   if (e.call === 'monitor') return 'Check for law updates'
   if (e.call === 'test') return 'Test of the AI connection'
+  if (e.call === 'law_source' || (e.provider === 'web' && /^source:/.test(String(e.call)))) return 'Looked up the law online'
   if (String(e.provider).startsWith('source:')) return 'Search in your firm\'s database'
   if (String(e.provider).startsWith('mcp:')) return 'Connector used'
   if (e.provider === 'web') return 'Looked up online'
@@ -242,12 +256,16 @@ function standaloneTitle(e, acc) {
   return 'AI used outside a question (for example a summary or a check)'
 }
 
+/** A law source's allowed policy check: the call that follows is the entry. */
+const lawGateLine = (e) => e.decision === 'allowed' && ((e.provider === 'web' && /^source:/.test(String(e.call))) || (e.call === 'law_source' && e.ok === undefined))
+
 /** Audit lines that belong to no request: one entry each, runs of the same thing folded. */
 function standaloneEntries(lines) {
   const out = []
   let cur = null
   const sig = (e) => `${e.provider}|${e.matter || ''}|${e.call}|${e.decision}|${e.by || ''}|${e.region || ''}`
   for (const e of lines) {
+    if (lawGateLine(e)) continue
     if (cur && cur.sig === sig(e) && Date.parse(e.ts) - Date.parse(cur.last) <= 10 * 60000) {
       absorb(cur.acc, e)
       cur.last = e.ts

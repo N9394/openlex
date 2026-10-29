@@ -34,7 +34,7 @@ test('one list: names unique, every command described in plain words in English 
 
 test('per window: only what that window can run, in its language', () => {
   const tui = commands.list({ surface: 'tui' }).map((c) => c.name)
-  assert.deepStrictEqual(tui, ['model', 'key', 'data', 'as', 'privileged', 'permissions', 'folder', 'sources', 'copy', 'save', 'transcript', 'activity', 'record', 'clear', 'help'])
+  assert.deepStrictEqual(tui, ['model', 'key', 'data', 'as', 'privileged', 'permissions', 'folder', 'sources', 'law', 'copy', 'save', 'transcript', 'activity', 'record', 'clear', 'help'])
   const app = commands.list({ surface: 'app' })
   for (const n of ['help', 'model', 'data', 'matter', 'copy', 'save', 'word', 'activity', 'record', 'clear']) assert.ok(app.some((c) => c.name === n), `app has /${n}`)
   assert.ok(!app.some((c) => c.name === 'transcript'), 'no terminal-only commands in the app')

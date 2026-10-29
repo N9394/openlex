@@ -108,6 +108,8 @@ Instructions arrive at the turn that needs them, not all up front. Change a bloc
 
 The firm's own databases, DMS, folders and the legal databases it subscribes to, as searchable sources for the agent (`http`, `mcp`, `folder` adapters, no code). See [SOURCES.md](SOURCES.md).
 
+The built-in law sources are switched off or on here too, by id: `"neuris": { "type": "connector", "enabled": false }` (ids: `ris`, `eurlex`, `neuris`, `slovlex`, `esbirka`, `ansvar`). Built-ins are on by default; lock the section to fix the list for everyone.
+
 ## `features`
 
 Switch whole features on or off for everyone (firm layer) or yourself:
@@ -200,6 +202,7 @@ Both layers are read separately: a user's own `allow` never removes a firm `deny
 | Web tools (`web_fetch`, `web_save`, `download_to_matter`) | Host; `*.europa.eu` includes `europa.eu` | `web_fetch:*.europa.eu` |
 | `run_bash` | The command; `git *` also covers a bare `git` | `run_bash:git *` |
 | `search_sources` | Source names, comma-separated | `search_sources:beck,juris` |
+| `search_law_sources`, `get_law_source` | Law-source ids, comma-separated | `search_law_sources:ansvar` |
 | Connector tools | `mcp:server:tool`; `mcp:*` is every connector | `mcp:dms:*` |
 
 **Built-in defaults.**
@@ -212,6 +215,7 @@ Both layers are read separately: a user's own `allow` never removes a firm `deny
 | allow | `search_firm_library`, `find_clause` | The firm's own knowledge, indexed on this computer. |
 | allow | `read_file`, `list_directory`, `search_local_files`, `search_docs` | Reading the working folder or the workspace (never outside them). |
 | allow | `get_tool_schemas`, `tool_picker`, `compress_context`, `delegate_task` | Housekeeping. `delegate_task` is a fresh model call without tools. |
+| allow / ask | `search_law_sources`, `get_law_source` | Allowed for the official law sources; asked when a paid gateway (Ansvar) would be used. |
 | allow / ask | `search_sources` | Allowed when every source searched is on this computer or the firm network; asked when the query goes outside. |
 | ask | `write_file`, `append_file`, `rename_file`, `export_document` | Writes or renames a file. |
 | ask, every time | `delete_file` | Deletes a file (a copy is kept in the workspace history). No `allow` rule, `--allow` or `--yes` skips this question, and "Always allow" is not offered. |

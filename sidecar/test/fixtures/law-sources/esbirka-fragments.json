@@ -1,0 +1,100 @@
+{
+ "pocetStranek": 1,
+ "seznam": [
+  {
+   "staleUrl": "/sb/2012/89/2026-01-01",
+   "kodTypuFragmentu": "Prefix_Type",
+   "xhtml": "ZÁKON"
+  },
+  {
+   "staleUrl": "/sb/2012/89/2026-01-01",
+   "kodTypuFragmentu": "Prefix_Title",
+   "xhtml": "občanský zákoník"
+  },
+  {
+   "staleUrl": "/sb/2012/89/2026-01-01#par_1",
+   "kodTypuFragmentu": "Paragraf",
+   "xhtml": "<var>§ 1</var>"
+  },
+  {
+   "staleUrl": "/sb/2012/89/2026-01-01#par_1-odst_1",
+   "kodTypuFragmentu": "Odstavec_Dc",
+   "xhtml": "<var>(1)</var> Ustanovení právního řádu upravující vzájemná práva a povinnosti osob vytvářejí ve svém souhrnu soukromé právo. Uplatňování soukromého práva je nezávislé na uplatňování práva veřejného."
+  },
+  {
+   "staleUrl": "/sb/2012/89/2026-01-01#par_1-odst_2",
+   "kodTypuFragmentu": "Odstavec_Dc",
+   "xhtml": "<var>(2)</var> Nezakazuje-li to zákon výslovně, mohou si osoby ujednat práva a povinnosti odchylně od zákona; zakázána jsou ujednání porušující dobré mravy, veřejný pořádek nebo právo týkající se postavení osob, včetně práva na ochranu osobnosti."
+  },
+  {
+   "staleUrl": "/sb/2012/89/2026-01-01#par_2",
+   "kodTypuFragmentu": "Paragraf",
+   "xhtml": "<var>§ 2</var>"
+  },
+  {
+   "staleUrl": "/sb/2012/89/2026-01-01#par_2-odst_1",
+   "kodTypuFragmentu": "Odstavec_Dc",
+   "xhtml": "<var>(1)</var> Každé ustanovení soukromého práva lze vykládat jenom ve shodě s <a data-odkaz-id=\"38153409\" href=\"#\" class=\"ext_odkaz\">Listinou základních práv a svobod</a> a ústavním pořádkem vůbec, se zásadami, na nichž spočívá tento zákon, jakož i s trvalým zřetelem k hodnotám, které se tím chrání. Rozejde-li se výklad jednotlivého ustanovení pouze podle jeho slov s tímto příkazem, musí mu ustoupit."
+  },
+  {
+   "staleUrl": "/sb/2012/89/2026-01-01#par_2-odst_2",
+   "kodTypuFragmentu": "Odstavec_Dc",
+   "xhtml": "<var>(2)</var> Zákonnému ustanovení nelze přikládat jiný význam, než jaký plyne z vlastního smyslu slov v jejich vzájemné souvislosti a z jasného úmyslu zákonodárce; nikdo se však nesmí dovolávat slov právního předpisu proti jeho smyslu."
+  },
+  {
+   "staleUrl": "/sb/2012/89/2026-01-01#par_2-odst_3",
+   "kodTypuFragmentu": "Odstavec_Dc",
+   "xhtml": "<var>(3)</var> Výklad a použití právního předpisu nesmí být v rozporu s dobrými mravy a nesmí vést ke krutosti nebo bezohlednosti urážející obyčejné lidské cítění."
+  },
+  {
+   "staleUrl": "/sb/2012/89/2026-01-01#par_3",
+   "kodTypuFragmentu": "Paragraf",
+   "xhtml": "<var>§ 3</var>"
+  },
+  {
+   "staleUrl": "/sb/2012/89/2026-01-01#par_3-odst_1",
+   "kodTypuFragmentu": "Odstavec_Dc",
+   "xhtml": "<var>(1)</var> Soukromé právo chrání důstojnost a svobodu člověka i jeho přirozené právo brát se o vlastní štěstí a štěstí jeho rodiny nebo lidí jemu blízkých takovým způsobem, jenž nepůsobí bezdůvodně újmu druhým."
+  },
+  {
+   "staleUrl": "/sb/2012/89/2026-01-01#par_3-odst_2",
+   "kodTypuFragmentu": "Odstavec_Dc",
+   "xhtml": "<var>(2)</var> Soukromé právo spočívá zejména na zásadách, že"
+  },
+  {
+   "staleUrl": "/sb/2012/89/2026-01-01#par_3-odst_2-pism_a",
+   "kodTypuFragmentu": "Pismeno_Lb",
+   "xhtml": "<var>a)</var> každý má právo na ochranu svého života a zdraví, jakož i svobody, cti, důstojnosti a soukromí,"
+  },
+  {
+   "staleUrl": "/sb/2012/89/2026-01-01#par_3-odst_2-pism_b",
+   "kodTypuFragmentu": "Pismeno_Lb",
+   "xhtml": "<var>b)</var> rodina, rodičovství a <czechvoc-termin koncept-id=\"279753\">manželství</czechvoc-termin> požívají zvláštní zákonné ochrany,"
+  },
+  {
+   "staleUrl": "/sb/2012/89/2026-01-01#par_3-odst_2-pism_c",
+   "kodTypuFragmentu": "Pismeno_Lb",
+   "xhtml": "<var>c)</var> nikdo nesmí pro nedostatek věku, rozumu nebo pro závislost svého postavení utrpět nedůvodnou újmu; nikdo však také nesmí bezdůvodně těžit z vlastní neschopnosti k újmě druhých,"
+  },
+  {
+   "staleUrl": "/sb/2012/89/2026-01-01#par_3-odst_2-pism_d",
+   "kodTypuFragmentu": "Pismeno_Lb",
+   "xhtml": "<var>d)</var> daný slib zavazuje a smlouvy mají být splněny,"
+  },
+  {
+   "staleUrl": "/sb/2012/89/2026-01-01#par_3-odst_2-pism_e",
+   "kodTypuFragmentu": "Pismeno_Lb",
+   "xhtml": "<var>e)</var> vlastnické právo je chráněno zákonem a jen zákon může stanovit, jak vlastnické právo vzniká a zaniká, a"
+  },
+  {
+   "staleUrl": "/sb/2012/89/2026-01-01#par_3-odst_2-pism_f",
+   "kodTypuFragmentu": "Pismeno_Lb",
+   "xhtml": "<var>f)</var> nikomu nelze odepřít, co mu po právu náleží."
+  },
+  {
+   "staleUrl": "/sb/2012/89/2026-01-01#par_3-odst_3",
+   "kodTypuFragmentu": "Odstavec_Dc",
+   "xhtml": "<var>(3)</var> Soukromé právo vyvěrá také z dalších obecně uznaných zásad spravedlnosti a práva."
+  }
+ ]
+}

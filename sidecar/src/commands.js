@@ -32,6 +32,7 @@ const COMMANDS = [
   { name: 'permissions', args: '', en: 'what OpenLex may do without asking', de: 'was OpenLex ohne Nachfrage darf', surfaces: ['tui'] },
   { name: 'folder', args: '[path | none]', en: 'the folder OpenLex works in', de: 'der Ordner, in dem OpenLex arbeitet', surfaces: ['tui'] },
   { name: 'sources', args: '', en: 'what the last answer is based on, in full', de: 'worauf die letzte Antwort beruht, vollständig', surfaces: ['tui'] },
+  { name: 'law', args: '', en: 'where OpenLex looks up the law: switch a law database on or off, paste a key', de: 'wo OpenLex das Recht nachschlägt: Rechtsdatenbanken ein- oder ausschalten, Schlüssel einfügen', surfaces: ['tui'] },
   { name: 'copy', args: '', en: 'copy the last answer', de: 'die letzte Antwort kopieren', surfaces: ['tui', 'app'] },
   { name: 'save', args: '[name]', en: 'save the last answer as a file (asks first)', de: 'die letzte Antwort als Datei speichern (fragt vorher)', surfaces: ['tui', 'app'] },
   { name: 'word', args: '', en: 'send the last answer to Word', de: 'die letzte Antwort an Word senden', surfaces: ['app'] },

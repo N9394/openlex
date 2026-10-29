@@ -44,6 +44,7 @@ import { PermissionPrompt, PermissionRules, answeredLine } from './permission.mj
 import { clock, startActivity, applyEvent, activityLines, doneLines, basedOnLines, basedOn, checkLine, basisText, stopSentence } from './explain.mjs'
 import { pastedFiles, chipLabel, attachSentence, readAttachment, joinTexts } from './attach.mjs'
 import { FolderPicker } from './folder.mjs'
+import { LawSources } from './sources.mjs'
 import { copyText, onExit } from './clip.mjs'
 
 const require = createRequire(import.meta.url)
@@ -431,6 +432,7 @@ export function Matter({ matterId = null }) {
       return sys('This conversation will be printed in your terminal window when you quit OpenLex (there you can scroll, select and copy it).')
     }
     if (name === 'sources') return openSources()
+    if (name === 'law') return setMode('lawsources')
     if (name === 'activity') { backToChat.add(key); return ctx.go('activity', { matterId }) }
     if (name === 'record') { backToChat.add(key); return ctx.go('record', { matterId: /^all\b/i.test(arg) ? null : matterId }) }
     if (name === 'clear') {
@@ -538,7 +540,7 @@ export function Matter({ matterId = null }) {
     if (mode === 'chat' && k.ctrl && ch === 'o' && pastes.length) { setInputRaw((v) => [v, ...pastes.map((p) => p.text)].filter(Boolean).join('\n')); return setPastes([]) }
     if (k.escape) {
       if (mode === 'sources' && source) return setSource(null)
-      if (['model', 'key', 'keypick', 'datapick', 'perms', 'sources', 'folder'].includes(mode) || (mode === 'unprivilege' && returnTo === 'chat')) { setReturnTo('menu'); return setMode('chat') }
+      if (['model', 'key', 'keypick', 'datapick', 'perms', 'sources', 'lawsources', 'folder'].includes(mode) || (mode === 'unprivilege' && returnTo === 'chat')) { setReturnTo('menu'); return setMode('chat') }
       if (mode === 'palette') return setMode(returnTo)
       if (streaming && mode === 'chat') return abort.current?.abort()
       // The command hints close first; the typed text stays.
@@ -560,7 +562,7 @@ export function Matter({ matterId = null }) {
   const title = matterId ? (matter ? matter.title : 'Matter') : 'Quick question'
   const subtitle = matter ? [matter.client, matter.privileged ? `${sym.lock} privileged` : ''].filter(Boolean).join(`  ${sym.sep}  `) : ''
   const status = ctx.status(matter, `${agent.title} ${sym.down}`, { busy: streaming })
-  const MODE_CRUMBS = { model: 'Which AI', key: 'Key', keypick: 'Key', datapick: 'Client data', data: 'Client data', perms: 'Permissions', actions: 'Actions', skills: 'Firm instructions', sources: 'Based on', docs: 'Documents', add: 'Add documents', folder: 'Working folder', palette: 'All commands', agent: 'Working as', 'agent-menu': 'Working as', unprivilege: 'Privileged', folderDocs: 'Working folder' }
+  const MODE_CRUMBS = { model: 'Which AI', key: 'Key', keypick: 'Key', datapick: 'Client data', data: 'Client data', perms: 'Permissions', lawsources: 'Law sources', actions: 'Actions', skills: 'Firm instructions', sources: 'Based on', docs: 'Documents', add: 'Add documents', folder: 'Working folder', palette: 'All commands', agent: 'Working as', 'agent-menu': 'Working as', unprivilege: 'Privileged', folderDocs: 'Working folder' }
   const crumbs = MODE_CRUMBS[mode] ? [title] : []
   const shownTitle = MODE_CRUMBS[mode] || title
   const agentItems = agents.map((a) => ({ value: a.name, label: `${a.name === agent.name ? sym.ok : ' '} ${a.title}`, hint: a.description }))
@@ -669,6 +671,9 @@ export function Matter({ matterId = null }) {
     body = html`<${Field} label=${`Where may client data ${matterId ? 'of this matter ' : ''}go?`} help=${matterId ? 'Only for this matter. Your general rule is in Settings.' : 'Your general rule (matters can have their own).'}>
       <${Menu} items=${items} describe onSelect=${(it) => setData(it.value)} />
     <//>`
+  } else if (mode === 'lawsources') {
+    keys = `↑↓ move ${sym.sep} Enter choose ${sym.sep} Esc back to the chat`
+    body = html`<${LawSources} api=${ctx.api} matterId=${matterId} />`
   } else if (mode === 'perms') {
     keys = `↑↓ move ${sym.sep} Enter remove ${sym.sep} Esc back to the chat`
     body = html`<${PermissionRules} api=${ctx.api} matterId=${matterId} onNote=${(n) => sys(n.text, n.kind)} />`

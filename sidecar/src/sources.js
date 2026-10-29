@@ -36,6 +36,10 @@ const path = require('path')
 const policy = require('./policy')
 
 const TYPES = ['http', 'mcp', 'folder']
+// Built-in law sources (connectors/) are switched on and off in the same
+// section: "ris": { "type": "connector", "enabled": false }. They are not
+// searched here (see connectors/index.js).
+const isConnector = (s) => s?.type === 'connector'
 
 // Ready-made sources a firm can add with `openlex sources add <preset>`.
 // Only presets whose responses were checked against the live API.
@@ -63,6 +67,13 @@ function validate(sources = {}) {
   const problems = []
   for (const [name, s] of Object.entries(sources || {})) {
     const where = `sources.${name}`
+    if (isConnector(s)) {
+      const ids = require('./connectors').IDS
+      if (!ids.includes(name)) problems.push(`${where}: no built-in law source called "${name}" (${ids.join(', ')})`)
+      if (s.enabled !== undefined && typeof s.enabled !== 'boolean') problems.push(`${where}: enabled must be true or false`)
+      continue
+    }
+    if (require('./connectors').IDS.includes(name)) { problems.push(`${where}: "${name}" is a built-in law source; use { "type": "connector", "enabled": true|false } or another name`); continue }
     if (!NAME_RE.test(name)) problems.push(`${where}: name must be 2–40 lowercase letters, digits or dashes`)
     if (!s || !TYPES.includes(s.type)) { problems.push(`${where}: type must be one of ${TYPES.join(', ')}`); continue }
     if (s.kind && !KINDS.includes(s.kind)) problems.push(`${where}: kind must be one of ${KINDS.join(', ')}`)
@@ -92,8 +103,13 @@ function isLocal(name, s) {
   return false
 }
 
+/** The firm's own sources (built-in law sources are listed by connectors/). */
+function own() {
+  return Object.fromEntries(Object.entries(configured()).filter(([, s]) => !isConnector(s)))
+}
+
 function list() {
-  return Object.entries(configured()).map(([name, s]) => {
+  return Object.entries(own()).map(([name, s]) => {
     const problems = validate({ [name]: s })
     return { name, type: s?.type, kind: s?.kind || 'other', title: s?.title || name, jurisdictions: s?.jurisdictions || [], local: problems.length ? null : isLocal(name, s), ...(problems.length ? { error: problems.join('; ') } : {}) }
   })
@@ -191,7 +207,7 @@ const adapters = {
  */
 async function search({ query, sources: only, kind, jurisdiction, lang, limit = 5 } = {}) {
   if (!String(query || '').trim()) throw new Error('query required')
-  const all = configured()
+  const all = own()
   const matter = policy.currentMatter()
   const skipped = []
   const picked = Object.entries(all).filter(([name, s]) => {
@@ -231,7 +247,7 @@ async function search({ query, sources: only, kind, jurisdiction, lang, limit = 
 
 /** One quick query to check a source works (Settings / `openlex sources test`). */
 async function test(name, query = 'contract') {
-  const s = configured()[name]
+  const s = own()[name]
   if (!s) throw new Error(`no source "${name}"`)
   const r = await search({ query, sources: [name], limit: 3 })
   if (r.skipped.length) return { ok: false, error: r.skipped[0].reason }

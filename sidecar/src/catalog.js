@@ -20,6 +20,8 @@ const CATALOG = [
   { name: 'search_ris', desc: 'Live official Austrian federal law (RIS), current versions' },
   { name: 'search_eurlex', desc: 'Official EU law (EUR-Lex): find acts by number, name or title' },
   { name: 'get_eu_law', desc: 'Text of an EU act / one article by CELEX' },
+  { name: 'search_law_sources', desc: 'Connected law sources live (AT, EU, DE, SK, CZ, gateways): search with citations' },
+  { name: 'get_law_source', desc: 'Text of one law-source document or section, with citation' },
   { name: 'download_to_matter', desc: 'Download a file into the matter with provenance' },
   { name: 'web_fetch', desc: 'Read a public web page with the lawyer\'s saved logins' },
   { name: 'web_save', desc: 'Save a web page to the matter with provenance' },
@@ -73,6 +75,14 @@ const SCHEMAS = {
   get_eu_law: {
     input: { celex: 'string', article: 'string (optional)', language: 'string (optional)' },
     description: 'Text of an EU act by CELEX (consolidated when available), optionally one article.',
+  },
+  search_law_sources: {
+    input: { query: 'string', jurisdiction: 'string (optional — AT, EU, DE, SK, CZ)', sources: 'array (optional — ris, eurlex, neuris, slovlex, esbirka, ansvar)' },
+    description: 'Live search of the connected law sources; results carry source, citation, URL, retrieval date and licence. Needs web access in the data policy.',
+  },
+  get_law_source: {
+    input: { source: 'string', ref: 'string', article: 'string (optional)', language: 'string (optional)' },
+    description: 'Text of one document (or one section) from a law source, with its citation.',
   },
   download_to_matter: {
     input: { url: 'string' },

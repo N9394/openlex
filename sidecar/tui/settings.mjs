@@ -13,6 +13,7 @@ import { describeModel, describeRule, nameOf, friendly } from './api.mjs'
 import { cleanPath, completePath, shortPath } from './paths.mjs'
 import { PermissionRules } from './permission.mjs'
 import { FolderPicker } from './folder.mjs'
+import { LawSources } from './sources.mjs'
 
 const row = (label, value) => `${label.padEnd(36)}${value}`
 const COLOURS = ['auto', 'none', 'high']
@@ -54,6 +55,7 @@ export function Settings() {
       { value: 'model', label: row('Which AI', describeModel(ctx.info)), hint: 'Where the AI runs: on this computer, or an online service with your key.' },
       { value: 'keys', label: row('Your keys', `${withKeys.filter((p) => p.hasKey).length} saved`), hint: 'Keys for online AI services, kept in this computer\'s keychain.' },
       { value: 'data', label: row('Where client data may go', describeRule(ctx.info.policy?.default)), hint: 'Which AI services may receive client documents. Privileged matters never leave this computer.' },
+      { value: 'lawsources', label: row('Where OpenLex looks up the law', 'law sources'), hint: 'Official law databases (free) and services you subscribe to (with your key). Same as /law.' },
       { value: 'perms', label: row('What OpenLex may do without asking', 'your rules'), hint: 'Saving files, opening web pages, running commands, using connectors.' },
       { value: 'folder', label: row('Working folder', ctx.folder?.short || 'none'), hint: 'The folder OpenLex reads (and asks before changing). Usually the folder you started OpenLex in.' },
       { value: 'workspace', label: row('Folder for results', shortPath(workspace)), hint: 'Where OpenLex keeps each matter\'s results and its history of earlier versions.' },
@@ -109,6 +111,9 @@ export function Settings() {
         return { kind: 'ok', text: 'Key saved in this computer\'s keychain.' }
       })} />
     <//>`
+  } else if (mode === 'lawsources') {
+    keys = `↑↓ move ${sym.sep} Enter choose ${sym.sep} Esc back`
+    body = html`<${LawSources} api=${ctx.api} />`
   } else if (mode === 'perms') {
     keys = `↑↓ move ${sym.sep} Enter remove ${sym.sep} Esc back`
     body = html`<${Box} flexDirection="column">
