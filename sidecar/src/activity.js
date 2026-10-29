@@ -2,8 +2,14 @@
 /**
  * What OpenLex did for each request, in a form a front end can explain to
  * a lawyer: what was asked, what was looked at, where the data went and
- * the result. One JSONL file per matter (~/.lexvault/activity/<matter>.jsonl,
- * the last MAX_RECORDS kept), served by GET /api/activity.
+ * the result. One JSONL file per matter (~/.lexvault/activity/<matter>.jsonl),
+ * served by GET /api/activity (the last MAX_RECORDS) and, merged with the
+ * audit log, by the AI record (record.js, GET /api/record). Lines are
+ * chained (chain.js) so changes show; old lines go only under the AI
+ * record's retention setting, never silently.
+ *
+ * Each request gets an id (`rid`); rec.run(fn) makes the audit lines written
+ * inside it carry the same id, so the AI record can group them.
  *
  * Metadata only: the question (the conversation session stores it
  * already), clause headings, law citations, search words, web hosts,
@@ -65,7 +71,8 @@ const fileFor = (matterId) => path.join(DIR, `${String(matterId || 'none').repla
  */
 function start({ matterId = null, kind = 'question', asked = '', client = null, files = [] } = {}) {
   const t0 = Date.now()
-  const rec = { at: new Date(t0).toISOString(), kind, asked: clip(asked, 200), ...(client ? { client: clip(client, 20) } : {}), ...(files.length ? { files: files.map((f) => path.basename(String(f)).slice(0, 80)).slice(0, 10) } : {}), looked: [], sources: [], data: [], suggestions: 0 }
+  const rid = `r_${t0.toString(36)}${require('crypto').randomBytes(3).toString('hex')}`
+  const rec = { at: new Date(t0).toISOString(), rid, ...(matterId ? { matter: String(matterId).slice(0, 80) } : {}), kind, asked: clip(asked, 200), ...(client ? { client: clip(client, 20) } : {}), ...(files.length ? { files: files.map((f) => path.basename(String(f)).slice(0, 80)).slice(0, 10) } : {}), looked: [], sources: [], data: [], suggestions: 0 }
   const seenLook = new Set()
   const look = (item) => {
     const key = JSON.stringify(item)
@@ -104,18 +111,16 @@ function start({ matterId = null, kind = 'question', asked = '', client = null, 
         ...(error || failed ? { error: clip(error || failed, 200) } : {}),
         ...(out.length ? { saved: out.filter(Boolean).map((f) => path.basename(String(f)).slice(0, 80)).slice(0, 10) } : {}),
       }
-      fs.mkdirSync(DIR, { recursive: true })
-      const file = fileFor(matterId)
-      fs.appendFileSync(file, JSON.stringify(record) + '\n')
-      const lines = fs.readFileSync(file, 'utf8').split('\n').filter(Boolean)
-      if (lines.length > MAX_RECORDS) fs.writeFileSync(file, lines.slice(-MAX_RECORDS).join('\n') + '\n')
+      require('./chain').append(fileFor(matterId), record)
       return record
     } catch (err) {
       console.warn('[activity] write failed:', err.message)
       return null
     }
   }
-  return { see, finish }
+  /** Run the request's work: audit lines written inside carry this request's id. */
+  const run = (fn) => require('./policy').withRequest(rid, fn)
+  return { see, finish, run, rid }
 }
 
 /** The last `limit` records of a matter, newest first. */
@@ -123,8 +128,13 @@ function list(matterId, limit = 20) {
   try {
     const lines = fs.readFileSync(fileFor(matterId), 'utf8').split('\n').filter(Boolean)
     const out = []
-    for (const l of lines.slice(-Math.max(1, Math.min(+limit || 20, MAX_RECORDS))).reverse()) {
-      try { out.push(JSON.parse(l)) } catch { /* skip a broken line */ }
+    for (const l of lines.reverse()) {
+      if (out.length >= Math.max(1, Math.min(+limit || 20, MAX_RECORDS))) break
+      try {
+        const { prev, h, ...r } = JSON.parse(l)
+        if (r.chain) continue // a chain marker, not a request
+        out.push(r)
+      } catch { /* skip a broken line */ }
     }
     return out
   } catch {
@@ -132,4 +142,4 @@ function list(matterId, limit = 20) {
   }
 }
 
-module.exports = { toolDetail, start, list, MAX_RECORDS, DIR }
+module.exports = { toolDetail, start, list, fileFor, MAX_RECORDS, DIR }

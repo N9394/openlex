@@ -107,3 +107,56 @@ export function workPrinter(kind, { out = process.stderr, tty = !!out.isTTY, now
     },
   }
 }
+
+// ── the AI record (`openlex record`, and the terminal app's record view) ──
+const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+/** The engine's sentences in plain ASCII when the terminal needs it. */
+export function asciiText(s) {
+  if (!look.ascii) return String(s ?? '')
+  return String(s ?? '').replace(/✓/g, '+').replace(/✗/g, 'x').replace(/[—–]/g, '-').replace(/…/g, '...').replace(/·/g, '|').replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/×/g, 'x')
+}
+
+/** "29 Oct 2026 14:02" (fixed English, local time). */
+export function recordWhen(iso) {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  return `${d.getDate()} ${MON[d.getMonth()]} ${d.getFullYear()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
+/** "12 requests · 3 sent to Claude (Anthropic, EU), names hidden · … · record intact ✓" */
+export function recordSummaryLine(r) {
+  const v = r?.verify
+  return asciiText(`${r?.summary?.text || 'Nothing recorded yet'}${v ? ` · ${v.ok ? `record intact ${sym.ok}` : `record changed ${sym.bad}`}` : ''}`)
+}
+
+/** One entry's first line: a mark that does not rely on colour, when, what, from where. */
+export function recordHead(x) {
+  const mark = x.outcome === 'failed' ? sym.bad : x.left ? '!' : sym.ok
+  return asciiText(`${mark} ${recordWhen(x.at)} · ${x.title}${x.window ? ` (${x.window})` : ''}`)
+}
+
+/** The record as plain text for `openlex record`. */
+export function recordText(r, { cmd = 'openlex record' } = {}) {
+  const out = [asciiText(`AI record — ${r.matter ? r.matter.title || r.matter.id : 'all matters'}`), recordSummaryLine(r)]
+  if (r.verify && !r.verify.ok) out.push(asciiText(`${sym.bad} ${r.verify.text}`))
+  out.push('')
+  if (!r.entries.length) out.push(r.total ? 'Nothing on this page.' : 'Nothing recorded for this selection yet. Each question and each larger piece of work is listed here.')
+  for (const x of r.entries) {
+    out.push(recordHead(x))
+    for (const l of x.lines) out.push(`    ${asciiText(l)}`)
+  }
+  out.push('')
+  if (r.nextCursor) out.push(`Showing ${r.entries.length} of ${r.total}. More: ${cmd} --limit ${Math.min(500, r.total)}`)
+  out.push(asciiText(`! = something left this computer · Export: ${cmd} --export pdf · Check: ${cmd} --verify`))
+  return out.join('\n')
+}
+
+/** `openlex record --verify` */
+export function verifyText(v) {
+  const out = [asciiText(`${v.ok ? sym.ok : sym.bad} ${v.text}`), `Fingerprint: ${v.fingerprint}`]
+  for (const f of v.files) out.push(asciiText(`  ${f.ok ? sym.ok : sym.bad} ${f.name}: ${f.entries} line${f.entries === 1 ? '' : 's'}${f.broken ? ` — ${f.broken.why}` : ''}`))
+  for (const f of v.files) for (const n of f.notes || []) out.push(asciiText(`  Note: ${n}`))
+  out.push('This check finds changed, removed or moved lines. It cannot stop someone with access to this computer from rewriting the files; keep an export as proof.')
+  return out.join('\n')
+}

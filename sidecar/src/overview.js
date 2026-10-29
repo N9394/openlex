@@ -347,7 +347,10 @@ function overview(id, { now = new Date() } = {}) {
       list = list.filter((x) => { const k = `${x.title}|${x.detail}`; if (seen.has(k)) return false; seen.add(k); return true })
     }
     const max = LIMITS[c.id]
-    return { id: c.id, title: c.title, items: list.slice(0, max).map(clean), more: Math.max(0, list.length - max), empty: c.empty }
+    const card = { id: c.id, title: c.title, items: list.slice(0, max).map(clean), more: Math.max(0, list.length - max), empty: c.empty }
+    // The full, checkable story of what the AI did in this matter (record.js).
+    if (c.id === 'activity') card.link = { label: 'Open the AI record', action: 'record', api: `/api/record?matterId=${encodeURIComponent(matter.id)}`, cli: `openlex record --matter ${matter.id}` }
+    return card
   })
   return {
     matter: { id: matter.id, title: matter.title, number: matter.number || '', client: matter.client || '', status: matter.status, privileged: !!matter.privileged },
@@ -440,6 +443,7 @@ function toText(ov) {
       out.push(`  • ${head}`, ...rest.map((l) => `      ${l}`))
     }
     if (c.more) out.push(`  … and ${c.more} more (search them with recall)`)
+    if (c.link) out.push(`  ${c.link.label}: ${c.link.cli}`)
     out.push('')
   }
   return out.join('\n')

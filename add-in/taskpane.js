@@ -22,7 +22,7 @@
   let sidecarOk = false
   let lang = 'auto'
   let features = {} // openlex.json → features (firm switches)
-  const available = { analyse: false, overview: false } // engine capabilities found by probing
+  const available = { analyse: false, overview: false, record: false } // engine capabilities found by probing
 
   const $ = (sel) => document.querySelector(sel)
   const now = () => Date.now()
@@ -56,6 +56,7 @@
     bindCompare()
     bindDocMap()
     bindSettings()
+    bindRecord()
     setStatus('Starting…')
     const ok = await pingSidecar()
     sidecarOk = ok
@@ -168,6 +169,13 @@
       available.overview = has
       available.analyse = has // both arrive with the same engine change
     } catch { /* engine offline */ }
+    try {
+      const res = await fetch(SIDECAR + '/api/record/settings')
+      let body = null
+      try { body = await res.json() } catch { /* not JSON */ }
+      available.record = P.matter.routeExists(res.status, body)
+      $('#dlRecord').hidden = !available.record || features.record === false
+    } catch { /* engine offline */ }
   }
 
   // ── Screen-reader announcements (one polite region, debounced) ───────────
@@ -243,6 +251,8 @@
     acceptAll: () => reviewAll('accept'),
     rejectAll: () => reviewAll('reject'),
     overview: () => showOverview(),
+    record: () => showRecord({ matterId: $('#matterSel').value || null }),
+    recordAll: () => showRecord({ matterId: null }),
     matterReview: () => showView('matter', '#wfPlaybook'),
     chronology: () => showView('matter', '#wfChrono'),
     translate: () => { showView('matter', '#wfDocA'); const d = $('#wfMore'); if (d) { d.open = true; refreshWorkflowDocs() } },
@@ -1843,9 +1853,90 @@
         card.appendChild(d)
       }
       if (!cards.length) card.appendChild(el('div', 'muted', 'Nothing recorded for this matter yet.'))
+      const link = ((data && data.cards) || []).map((c) => c.link).find(Boolean)
+      if (link && available.record) {
+        const b = el('button', 'btn btn-ghost btn-small', link.label || 'Open the AI record')
+        b.type = 'button'
+        b.addEventListener('click', () => showRecord({ matterId: id }))
+        card.appendChild(b)
+      }
       showView('chat')
       appendToChat(card)
     } catch (err) { addError(err, 'load') }
+  }
+
+  // ── The AI record (lib/record.js): one view, opened from the menu, the
+  // "Your data" line or the matter overview; nothing permanent in the pane.
+  const rec = { state: { matterId: null, from: '', to: '', left: false }, limit: 100, data: null }
+  function bindRecord() {
+    $('#dlRecord').addEventListener('click', () => showRecord({ matterId: $('#matterSel').value || null }))
+    const refilter = () => { rec.state.from = $('#recFrom').value; rec.state.to = $('#recTo').value; rec.state.left = $('#recLeft').checked; rec.limit = 100; loadRecord() }
+    for (const id of ['#recFrom', '#recTo', '#recLeft']) $(id).addEventListener('change', refilter)
+    $('#recMore').addEventListener('click', () => { rec.limit += 100; loadRecord() })
+    $('#recPdf').addEventListener('click', () => exportRecord('pdf'))
+    $('#recCsv').addEventListener('click', () => exportRecord('csv'))
+    $('#recVerify').addEventListener('click', verifyRecord)
+  }
+  function showRecord({ matterId }) {
+    rec.state = { matterId: matterId || null, from: '', to: '', left: false }
+    rec.limit = 100
+    $('#recFrom').value = ''
+    $('#recTo').value = ''
+    $('#recLeft').checked = false
+    const m = mattersCache.find((x) => x.id === matterId)
+    $('#h-record').textContent = P.record.title(rec.state, m && m.title)
+    $('#recMsg').textContent = ''
+    showView('record')
+    loadRecord()
+  }
+  async function loadRecord() {
+    const problem = P.record.rangeProblem(rec.state)
+    if (problem) { $('#recMsg').textContent = problem; return }
+    $('#recSummary').textContent = 'Loading…'
+    try {
+      rec.data = await api('/api/record' + P.record.query(rec.state, rec.limit))
+      renderRecord()
+    } catch (err) { const x = P.errors.explain(err, 'load'); $('#recSummary').textContent = ''; $('#recMsg').textContent = `${x.what}. ${x.why} ${x.todo}` }
+  }
+  function renderRecord() {
+    const r = rec.data || { entries: [] }
+    $('#recSummary').textContent = P.record.summaryLine(r)
+    $('#recSummary').classList.toggle('rec-bad', !!(r.verify && !r.verify.ok))
+    const list = $('#recList')
+    list.innerHTML = ''
+    if (!r.entries.length) list.appendChild(el('div', 'muted', rec.state.left ? 'Nothing left this computer in this selection.' : 'Nothing recorded yet. Each question and each larger piece of work is listed here.'))
+    for (const x of r.entries) {
+      const row = P.record.row(x)
+      const d = el('details', 'rec-item' + (row.left ? ' left' : ''))
+      const sum = el('summary')
+      const sy = el('span', 'rec-sym', row.symbol)
+      sy.setAttribute('aria-hidden', 'true')
+      const txt = el('span', null)
+      txt.append(el('span', 'sr-only', row.mark + ' '), el('span', null, row.head), el('span', 'rec-sub', row.sub))
+      sum.append(sy, txt)
+      const ul = el('ul')
+      for (const l of row.lines) ul.appendChild(el('li', null, l))
+      d.append(sum, ul)
+      list.appendChild(d)
+    }
+    $('#recMore').hidden = !r.nextCursor
+  }
+  async function exportRecord(format) {
+    $('#recMsg').textContent = 'Saving…'
+    try {
+      const r = await api('/api/record/export', { method: 'POST', body: P.record.exportBody(rec.state, format) })
+      $('#recMsg').textContent = `Saved: ${r.file}`
+    } catch (err) { const x = P.errors.explain(err, 'load'); $('#recMsg').textContent = `The AI record could not be saved. ${x.why} ${x.todo}` }
+  }
+  async function verifyRecord() {
+    $('#recMsg').textContent = 'Checking…'
+    try {
+      const v = await api('/api/record/verify')
+      const line = P.record.verifyLine(v)
+      $('#recMsg').textContent = line.text
+      if (rec.data) { rec.data.verify = v; renderRecord() }
+      announce(line.text, true)
+    } catch (err) { const x = P.errors.explain(err, 'load'); $('#recMsg').textContent = `The check could not run. ${x.why} ${x.todo}` }
   }
 
   // ── Calendar ─────────────────────────────────────────────────────────────

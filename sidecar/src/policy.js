@@ -17,6 +17,10 @@
  * Every model call is checked BEFORE any byte leaves the machine and is
  * written to the audit log (~/.lexvault/audit/llm-calls.jsonl) — metadata
  * only (provider, model, matter, sizes, decision), never prompt content.
+ * Each line is chained to the one before it (chain.js: `prev` + `h`), so a
+ * changed, removed or moved line shows up in the AI record's check
+ * (record.js). A line written during a request carries the request's `rid`
+ * (withRequest), which links it to the activity record of that request.
  *
  * The active matter rides on AsyncLocalStorage (withMatter), so the agent
  * loop doesn't have to thread it through every call; so does an optional
@@ -146,17 +150,22 @@ function reportModel(info) {
   try { matterStore.getStore()?.onModel?.(info) } catch { /* observers must not break a call */ }
 }
 
+/** Run `fn` as part of one request (activity.js): audit lines inside it carry `rid`. */
+function withRequest(rid, fn) {
+  return matterStore.run({ ...(matterStore.getStore() || {}), rid: rid || null }, fn)
+}
+
 function currentMatter() {
   return matterStore.getStore()?.matterId || null
 }
 
 function audit(entry) {
   try {
-    fs.mkdirSync(path.dirname(AUDIT_PATH), { recursive: true })
-    fs.appendFileSync(AUDIT_PATH, JSON.stringify({ ts: new Date().toISOString(), ...entry }) + '\n')
+    const rid = matterStore.getStore()?.rid
+    require('./chain').append(AUDIT_PATH, { ts: new Date().toISOString(), ...entry, ...(rid && !entry.rid ? { rid } : {}) })
   } catch (err) {
     console.warn('[policy] audit write failed:', err.message)
   }
 }
 
-module.exports = { load, save, setRule, ruleFor, check, withMatter, observeModels, reportModel, currentMatter, audit, POLICY_PATH, AUDIT_PATH, MODES }
+module.exports = { load, save, setRule, ruleFor, check, withMatter, withRequest, observeModels, reportModel, currentMatter, audit, POLICY_PATH, AUDIT_PATH, MODES }
