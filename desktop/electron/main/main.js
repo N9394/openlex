@@ -294,7 +294,7 @@ function focusMain() {
 }
 
 // Engine API paths the renderer may use (via IPC, never directly).
-const ENGINE_PATHS = /^\/api\/(status|providers(\/key|\/test)?|policy|matters(\/update|\/bind|\/policy)?|library(\/folders(\/remove)?|\/sync)?|mcp(\/servers(\/remove)?|\/reconnect)?|workflows\/(playbooks(\/draft)?|run|documents)|skills(\/get|\/suggest|\/draft|\/delete)?|plans(\/get|\/update|\/approve|\/decide|\/run)?|lists(\/get|\/sources|\/rename|\/delete|\/items(\/update|\/delete)?|\/seed|\/export)?|monitors(\/update|\/delete|\/check|\/alerts(\/read|\/file)?)?|agents|clauses|grids(\/view|\/update|\/cell|\/delete|\/export|\/run)?|decide(\/config|\/key|\/test)?|web\/login)(\?.*)?$/
+const ENGINE_PATHS = /^\/api\/(status|providers(\/key|\/test)?|policy|matters(\/update|\/bind|\/policy)?|library(\/folders(\/remove)?|\/sync)?|mcp(\/servers(\/remove)?|\/reconnect)?|workflows\/(playbooks(\/draft)?|run|documents)|skills(\/get|\/suggest|\/draft|\/delete)?|plans(\/get|\/update|\/approve|\/decide|\/run)?|lists(\/get|\/sources|\/rename|\/delete|\/items(\/update|\/delete)?|\/seed|\/export)?|monitors(\/update|\/delete|\/check|\/alerts(\/read|\/file)?)?|agents|commands|record(\/export|\/verify)?|folder\/save|clauses|grids(\/view|\/update|\/cell|\/delete|\/export|\/run)?|decide(\/config|\/key|\/test)?|web\/login)(\?.*)?$/
 
 async function startEngine() {
   const { ensureEngine } = require('./engine')

@@ -44,6 +44,9 @@ export default function MatterPicker() {
     refresh()
     // Word created/bound a matter → refresh the list.
     hubBridge()?.onEvent((ev) => { if (ev.type === 'matter-changed' || ev.type === 'policy-changed') refresh() })
+    // "/matter" in the chat chose another matter.
+    window.addEventListener('openlex:matter-changed', refresh)
+    return () => window.removeEventListener('openlex:matter-changed', refresh)
   }, [refresh])
 
   if (!bridge()) return null

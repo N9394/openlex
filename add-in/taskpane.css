@@ -263,6 +263,8 @@ h4 { font-size: 0.78rem; margin: 0.6rem 0 0.2rem; }
 .composer textarea { flex: 1; resize: none; padding: 0.5rem 0.85rem; min-height: 36px; height: 36px; overflow-y: auto; background: var(--glass); color: var(--text); border: 1px solid var(--hairline-strong); border-radius: 18px; font: inherit; font-size: 0.82rem; }
 .composer textarea.multi { border-radius: 12px; }
 .composer textarea::placeholder { color: var(--text-faint); }
+.cmd-hint { color: var(--text-faint); font-size: 0.7rem; padding: 0 0.85rem; margin-top: -0.2rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dock.dock-min .cmd-hint { display: none !important; }
 .mainrow { display: flex; align-items: center; gap: 0.4rem; }
 .grow { flex: 1; }
 .review-opts { margin: 0; max-height: 50vh; overflow-y: auto; }
