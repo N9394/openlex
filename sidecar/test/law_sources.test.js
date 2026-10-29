@@ -4,7 +4,8 @@
  * one interface, with provenance, under the data policy and the
  * permissions broker. Offline: one local fake server answers for every
  * source with responses recorded from the real services
- * (test/fixtures/law-sources) and a fake MCP gateway for Ansvar.
+ * (test/fixtures/law-sources), a fake MCP gateway for Ansvar and a fake
+ * OAuth server (metadata, client registration, device code, PKCE, refresh).
  * No live calls, no paid calls.
  *
  *   node --test test/law_sources.test.js
@@ -27,12 +28,15 @@ const fixture = (f) => fs.readFileSync(path.join(FIX, f), 'utf8')
 const seen = [] // { path, method, headers, body }
 let down = new Set() // sources the fake answers with 503
 let ansvarCap = false
+const validTokens = new Set(['tok-123'])
+const auth = { register: 'open', device: 'ok', approved: false, polls: 0, registrations: 0, refreshes: 0, rotate: 1, refreshOk: true, codes: new Map() }
+const mem = new Map() // the keychain, for these tests
 
 const XHTML = '<html><body><p>Artikel 17</p><p>Recht auf Löschung</p><p>(1) Die betroffene Person hat das Recht …</p><p>Artikel 18</p><p>Einschränkung</p></body></html>'
 
 function ansvar(req, res, body) {
   const msg = JSON.parse(body || '{}')
-  if (req.headers.authorization !== 'Bearer tok-123') { res.writeHead(401, { 'Content-Type': 'application/json' }); return res.end('{"error":"invalid_token"}') }
+  if (!validTokens.has(String(req.headers.authorization || '').replace(/^Bearer /, ''))) { res.writeHead(401, { 'Content-Type': 'application/json' }); return res.end('{"error":"invalid_token"}') }
   const reply = (result, sse = false) => {
     const payload = JSON.stringify({ jsonrpc: '2.0', id: msg.id, ...result })
     if (sse) { res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Mcp-Session-Id': 'sess-1' }); return res.end(`event: message\ndata: ${payload}\n\n`) }
@@ -92,9 +96,9 @@ const fake = http.createServer((req, res) => {
     if (p === '/sk/static/SK/ZZ/1991/513/') return html(fixture('slovlex-history.html'))
     if (p === '/sk/static/SK/ZZ/1991/513/20260817.html') return html(fixture('slovlex-version.html'))
     if (p.startsWith('/sk/')) { res.writeHead(404); return res.end() }
-    // e-Sbírka: public JSON service and the keyed API (same paths)
-    if (src === 'cz' || src === 'czkey') {
-      if (src === 'czkey' && req.headers['esel-api-access-key'] !== 'dia-key') return json({ error: 'no key' }, 401)
+    // e-Sbírka: the registered API only (key in the header)
+    if (src === 'czkey') {
+      if (req.headers['esel-api-access-key'] !== 'dia-key') return json({ error: 'no key' }, 401)
       const rest = p.slice(src.length + 1)
       if (rest === '/rozsirena-vyhledavani' && req.method === 'POST') return json(fixture('esbirka-search.json'))
       if (rest === `/dokumenty-sbirky/${encodeURIComponent('/sb/2012/89')}`) return json(fixture('esbirka-act.json'))
@@ -108,6 +112,56 @@ const fake = http.createServer((req, res) => {
       return json({ error: 'invalid_client' }, 401)
     }
     if (p === '/ansvar/mcp') return ansvar(req, res, body)
+    // Ansvar's sign-in server (Keycloak-like): metadata, registration, device code, PKCE, refresh
+    const origin = `http://127.0.0.1:${fake.address().port}`
+    const issuer = `${origin}/auth/realms/ansvar`
+    if (p === '/.well-known/oauth-protected-resource/ansvar/mcp') return json({ resource: `${origin}/ansvar/mcp`, authorization_servers: [issuer], scopes_supported: ['mcp:tools'] })
+    if (p === '/auth/realms/ansvar/.well-known/oauth-authorization-server') {
+      return json({ issuer, authorization_endpoint: `${origin}/auth/authorize`, token_endpoint: `${origin}/auth/token`, device_authorization_endpoint: `${origin}/auth/device`, registration_endpoint: `${origin}/auth/register`, code_challenge_methods_supported: ['plain', 'S256'] })
+    }
+    if (p === '/auth/register') {
+      auth.registrations++
+      if (auth.register !== 'open') return json({ error: 'insufficient_scope', error_description: 'Policy \'Trusted Hosts\' rejected request' }, 403)
+      const b = JSON.parse(body)
+      auth.lastRegistration = b
+      return json({ client_id: `openlex-${auth.registrations}`, client_name: b.client_name, redirect_uris: b.redirect_uris }, 201)
+    }
+    if (p === '/auth/device') {
+      const f = new URLSearchParams(body)
+      auth.lastDevice = Object.fromEntries(f)
+      if (auth.device !== 'ok') return json({ error: 'unauthorized_client' }, 400)
+      return json({ device_code: 'dev-1', user_code: 'WDJB-MJHT', verification_uri: 'https://auth.example/device', verification_uri_complete: 'https://auth.example/device?user_code=WDJB-MJHT', expires_in: 30, interval: 1 })
+    }
+    if (p === '/auth/authorize') {
+      const q = u.searchParams
+      const code = `code-${auth.codes.size + 1}`
+      auth.codes.set(code, { challenge: q.get('code_challenge'), method: q.get('code_challenge_method'), redirect: q.get('redirect_uri'), client: q.get('client_id') })
+      res.writeHead(302, { Location: `${q.get('redirect_uri')}?code=${code}&state=${encodeURIComponent(q.get('state'))}` })
+      return res.end()
+    }
+    if (p === '/auth/token') {
+      const f = new URLSearchParams(body)
+      const grant = f.get('grant_type')
+      const issue = () => { const n = auth.rotate++; validTokens.add(`tok-oauth-${n}`); return json({ access_token: `tok-oauth-${n}`, refresh_token: `ref-${n}`, expires_in: 300, token_type: 'Bearer' }) }
+      if (grant === 'urn:ietf:params:oauth:grant-type:device_code') {
+        auth.polls++
+        if (f.get('device_code') !== 'dev-1') return json({ error: 'invalid_grant' }, 400)
+        if (!auth.approved) return json({ error: auth.polls === 1 ? 'slow_down' : 'authorization_pending' }, 400)
+        return issue()
+      }
+      if (grant === 'authorization_code') {
+        const c = auth.codes.get(f.get('code'))
+        const s256 = require('crypto').createHash('sha256').update(String(f.get('code_verifier'))).digest('base64url')
+        if (!c || c.method !== 'S256' || c.challenge !== s256 || c.redirect !== f.get('redirect_uri')) return json({ error: 'invalid_grant' }, 400)
+        return issue()
+      }
+      if (grant === 'refresh_token') {
+        auth.refreshes++
+        auth.lastRefresh = Object.fromEntries(f)
+        if (!auth.refreshOk || !/^ref-\d+$/.test(f.get('refresh_token') || '')) return json({ error: 'invalid_grant' }, 400)
+        return issue()
+      }
+    }
     res.writeHead(404); res.end()
   })
 })
@@ -123,7 +177,7 @@ test.before(async () => {
     OPENLEX_RIS_API: `${base}/ris`, OPENLEX_RIS_DOCS: `${base}/risdocs`,
     OPENLEX_CELLAR_SPARQL: `${base}/eu/sparql`, OPENLEX_CELLAR_BASE: `${base}/eu/celex`,
     OPENLEX_NEURIS_API: `${base}/neuris`, OPENLEX_SLOVLEX_BASE: `${base}/sk`,
-    OPENLEX_ESBIRKA_PUBLIC: `${base}/cz`, OPENLEX_ESBIRKA_API: `${base}/czkey`,
+    OPENLEX_ESBIRKA_API: `${base}/czkey`, OPENLEX_NO_BROWSER: '1',
     OPENLEX_ANSVAR_URL: `${base}/ansvar/mcp`, OPENLEX_ANSVAR_TOKEN_URL: `${base}/ansvar/token`,
   })
   require('../src/workspace').setBase(path.join(DATA, 'workspace'))
@@ -133,10 +187,13 @@ test.before(async () => {
   perms = require('../src/permissions')
   explain = require('../src/explain')
   harness = require('../src/harness')
+  const secrets = require('../src/secrets')
+  ls._setStore({ get: async (name) => (mem.has(name) ? mem.get(name) : secrets.envKey(name)), set: async (name, v) => { if (v == null || v === '') mem.delete(name); else mem.set(name, String(v)) } })
 })
 test.after(() => { fake.close(); fs.rmSync(DATA, { recursive: true, force: true }) })
 test.beforeEach(() => {
-  down = new Set(); ansvarCap = false
+  down = new Set(); ansvarCap = false; mem.clear()
+  Object.assign(auth, { register: 'open', device: 'ok', approved: false, polls: 0, registrations: 0, refreshes: 0, refreshOk: true })
   delete process.env.OPENLEX_KEY_SOURCE_ANSVAR; delete process.env.OPENLEX_KEY_SOURCE_ESBIRKA
   require('../src/connectors/ansvar')._reset()
   try { fs.rmSync(path.join(DATA, 'openlex.json')) } catch { /* none */ }
@@ -155,7 +212,9 @@ test('status: one plain list; local-only keeps sources offline; the gateway asks
   setPolicy(null)
   let st = await ls.status()
   assert.match(st.find((s) => s.id === 'ris').status, /^RIS Austria: free, but your client-data rule keeps OpenLex offline$/)
-  assert.strictEqual(st.find((s) => s.id === 'ansvar').status, 'Ansvar: paste your key')
+  assert.strictEqual(st.find((s) => s.id === 'ansvar').status, 'Ansvar: sign in or paste your key: how to get it')
+  assert.strictEqual(st.find((s) => s.id === 'esbirka').status, 'e-Sbírka Czechia: needs your free key from the Czech agency: how to get it')
+  assert.strictEqual(st.find((s) => s.id === 'esbirka').guide, 'https://github.com/N9394/openlex/blob/main/docs/SOURCES.md#esbirka')
   setPolicy(['web'])
   st = await ls.status()
   assert.strictEqual(st.find((s) => s.id === 'ris').status, 'RIS Austria: connected, free')
@@ -275,14 +334,24 @@ test('Slov-Lex (Slovakia): by number or common name; free text explains itself; 
   assert.ok(!/kontakt|menu/.test(doc.text), 'page furniture left out')
 })
 
-test('e-Sbírka (Czechia): full-text search and § text without a key; the registered API with one', async () => {
+test('e-Sbírka (Czechia): the registered API only, with the lawyer\'s free key; without it, how to get one', async () => {
   setPolicy(['web'])
+  const before = seen.length
   let r = await ls.search({ query: 'občanský zákoník', jurisdiction: 'CZ' })
+  assert.deepStrictEqual([r.results, r.searched], [[], []])
+  assert.strictEqual(r.skipped[0].reason, 'e-Sbírka Czechia needs your free key from the Czech agency (how to get it: https://github.com/N9394/openlex/blob/main/docs/SOURCES.md#esbirka)')
+  await assert.rejects(ls.get({ source: 'esbirka', ref: '89/2012' }), (err) => /needs your free key from the Czech agency \(how to get it: https:\/\/github\.com\/N9394\/openlex\/blob\/main\/docs\/SOURCES\.md#esbirka\)/.test(err.plain))
+  assert.strictEqual(seen.length, before, 'without a key nothing is contacted (no unofficial service)')
+  await assert.rejects(require('../src/connectors/esbirka').search('89/2012'), /needs your free key/)
+  // With the key: the registered API, key in the header.
+  process.env.OPENLEX_KEY_SOURCE_ESBIRKA = 'dia-key'
+  r = await ls.search({ query: 'občanský zákoník', jurisdiction: 'CZ' })
   assert.strictEqual(r.results[0].ref, '/sb/2012/89')
   assert.strictEqual(r.results[0].citation, 'č. 89/2012 Sb. (e-Sbírka)')
   assert.strictEqual(r.results[0].inForce, true)
   assert.match(r.results[0].url, /^https:\/\/e-sbirka\.gov\.cz\/sb\/2012\/89/)
-  const post = seen.filter((s) => s.path === '/cz/rozsirena-vyhledavani').at(-1)
+  assert.strictEqual(r.notice, 'Check the official version before relying on it.')
+  const post = seen.filter((s) => s.path === '/czkey/rozsirena-vyhledavani').at(-1)
   assert.strictEqual(JSON.parse(post.body).fulltextVsechnaSlova, 'občanský zákoník')
   r = await ls.search({ query: '89/2012', sources: ['esbirka'] })
   assert.strictEqual(r.results[0].title, 'Zákon č. 89/2012 Sb., občanský zákoník')
@@ -290,19 +359,19 @@ test('e-Sbírka (Czechia): full-text search and § text without a key; the regis
   assert.match(doc.text, /^§ 2\n\(1\) Každé ustanovení soukromého práva/)
   assert.ok(!/§ 3/.test(doc.text))
   assert.strictEqual(doc.citation, '§ 2 zákona č. 89/2012 Sb. (e-Sbírka)')
-  // With the agency's free key: the registered API, key in the header.
-  process.env.OPENLEX_KEY_SOURCE_ESBIRKA = 'dia-key'
+  assert.strictEqual(doc.notice, 'Check the official version before relying on it.')
+  assert.ok(seen.slice(before).every((x) => x.path.startsWith('/czkey/') && x.headers['esel-api-access-key'] === 'dia-key'))
+  assert.match((await ls.status()).find((s) => s.id === 'esbirka').status, /^e-Sbírka Czechia: connected, free \(with your key\)$/)
+  // A wrong key: one plain sentence.
+  process.env.OPENLEX_KEY_SOURCE_ESBIRKA = 'wrong'
   r = await ls.search({ query: '89/2012', sources: ['esbirka'] })
-  assert.strictEqual(r.results.length, 1)
-  assert.strictEqual(seen.at(-1).headers['esel-api-access-key'], 'dia-key')
-  assert.ok(seen.at(-1).path.startsWith('/czkey/'))
-  assert.match((await ls.status()).find((s) => s.id === 'esbirka').status, /connected, free \(with your API key\)/)
+  assert.match(r.skipped[0].reason, /did not accept the key/)
 })
 
 test('Ansvar: paste-a-key gateway over MCP — service credential → token, search, full text, plain errors', async () => {
   setPolicy(['web', 'source:ansvar'])
   let r = await ls.search({ query: 'responsabilité délictuelle', sources: ['ansvar'] })
-  assert.match(r.skipped[0].reason, /needs your key/)
+  assert.match(r.skipped[0].reason, /^Ansvar sign in or paste your key \(how to get it: .*#ansvar\)$/)
   process.env.OPENLEX_KEY_SOURCE_ANSVAR = 'firm-agent:s3cret'
   r = await ls.search({ query: 'responsabilité délictuelle', jurisdiction: 'FR' })
   assert.deepStrictEqual(r.searched, ['ansvar'], 'no official source for FR: the gateway is asked')
@@ -344,6 +413,94 @@ test('key formats for Ansvar', () => {
   assert.throws(() => parseKey('  '), /needs your key/)
 })
 
+const waitFor = async (fn, what) => {
+  for (let i = 0; i < 300; i++) { const v = await fn(); if (v) return v; await new Promise((ok) => setTimeout(ok, 10)) }
+  throw new Error(`timed out waiting for ${what}`)
+}
+
+test('Ansvar browser sign-in: discovery, registration, device code, tokens in the keychain, search', async () => {
+  setPolicy(['web', 'source:ansvar'])
+  const st0 = (await ls.status()).find((s) => s.id === 'ansvar')
+  assert.strictEqual(st0.signIn, true)
+  let s = await ls.signIn('ansvar', { open: false, pollMs: 15 })
+  assert.deepStrictEqual([s.state, s.flow, s.userCode, s.url, s.pageUrl], ['pending', 'device', 'WDJB-MJHT', 'https://auth.example/device?user_code=WDJB-MJHT', 'https://auth.example/device'])
+  assert.strictEqual(auth.registrations, 1)
+  assert.deepStrictEqual([auth.lastRegistration.token_endpoint_auth_method, auth.lastRegistration.grant_types.includes('urn:ietf:params:oauth:grant-type:device_code')], ['none', true], 'a public client, no secret')
+  assert.match(auth.lastDevice.scope, /mcp:tools/)
+  assert.match(auth.lastDevice.resource, /\/ansvar\/mcp$/, 'resource indicator sent')
+  assert.ok(JSON.parse(mem.get('source-ansvar-client')).client_id, 'the registration is kept for next time')
+  await waitFor(() => auth.polls >= 2, 'polling')
+  assert.strictEqual(ls.signInStatus('ansvar').state, 'pending')
+  auth.approved = true
+  await waitFor(() => ls.signInStatus('ansvar').state === 'done', 'sign-in')
+  const cred = JSON.parse(mem.get('source-ansvar'))
+  assert.strictEqual(cred.type, 'oauth')
+  assert.ok(cred.access_token.startsWith('tok-oauth-') && cred.refresh_token.startsWith('ref-'))
+  assert.strictEqual((await ls.status()).find((x) => x.id === 'ansvar').status, 'Ansvar: connected, signed in')
+  let r = await ls.search({ query: 'responsabilité', jurisdiction: 'FR' })
+  assert.strictEqual(r.results[0].ref, 'fr-cc-1240')
+  assert.strictEqual(seen.filter((x) => x.path === '/ansvar/mcp').at(-1).headers.authorization, `Bearer ${cred.access_token}`)
+  // The token runs out: renewed with the refresh token, and the new one is kept.
+  mem.set('source-ansvar', JSON.stringify({ ...cred, expires_at: Date.now() - 1000 }))
+  require('../src/connectors/ansvar')._reset()
+  r = await ls.search({ query: 'responsabilité', jurisdiction: 'FR' })
+  assert.strictEqual(r.results.length, 1)
+  assert.strictEqual(auth.refreshes, 1)
+  assert.deepStrictEqual([auth.lastRefresh.refresh_token, auth.lastRefresh.client_id], [cred.refresh_token, cred.client_id])
+  const renewed = JSON.parse(mem.get('source-ansvar'))
+  assert.notStrictEqual(renewed.access_token, cred.access_token)
+  assert.notStrictEqual(renewed.refresh_token, cred.refresh_token, 'a rotated refresh token is saved')
+  // The gateway refuses a token before its time: renewed once.
+  validTokens.delete(renewed.access_token)
+  require('../src/connectors/ansvar')._reset()
+  r = await ls.search({ query: 'x', sources: ['ansvar'] })
+  assert.strictEqual(r.results.length, 1)
+  assert.strictEqual(auth.refreshes, 2)
+  // The refresh token is no longer good: one plain sentence.
+  auth.refreshOk = false
+  mem.set('source-ansvar', JSON.stringify({ ...JSON.parse(mem.get('source-ansvar')), expires_at: 0 }))
+  require('../src/connectors/ansvar')._reset()
+  r = await ls.search({ query: 'x', sources: ['ansvar'] })
+  assert.strictEqual(r.skipped[0].reason, 'Your Ansvar sign-in has run out: sign in again under Law sources (/law)')
+  // Signing in again reuses OpenLex's registration.
+  s = await ls.signIn('ansvar', { open: false, pollMs: 15 })
+  assert.strictEqual(auth.registrations, 1)
+  assert.strictEqual(ls.cancelSignIn('ansvar').state, 'pending')
+  await waitFor(() => ls.signInStatus('ansvar').state === 'cancelled', 'cancel')
+})
+
+test('Ansvar browser sign-in: no device codes → browser redirect with PKCE; registration closed → "not available yet"', async () => {
+  auth.device = 'refused'
+  const s = await ls.signIn('ansvar', { open: false })
+  assert.strictEqual(s.flow, 'browser')
+  const u = new URL(s.url)
+  assert.deepStrictEqual([u.pathname, u.searchParams.get('code_challenge_method'), u.searchParams.get('response_type')], ['/auth/authorize', 'S256', 'code'])
+  assert.match(u.searchParams.get('redirect_uri'), /^http:\/\/127\.0\.0\.1:\d+\/callback$/)
+  assert.ok(!u.searchParams.has('code_verifier'))
+  // A forged callback (wrong state) is ignored.
+  const back = new URL(u.searchParams.get('redirect_uri'))
+  await (await fetch(`${back.href}?code=code-x&state=forged`)).text()
+  assert.strictEqual(ls.signInStatus('ansvar').state, 'pending')
+  // The browser: Ansvar's page redirects back to this computer.
+  const page = await fetch(s.url)
+  assert.match(await page.text(), /Signed in/)
+  await waitFor(() => ls.signInStatus('ansvar').state === 'done', 'sign-in')
+  assert.strictEqual(JSON.parse(mem.get('source-ansvar')).type, 'oauth')
+  // Registration closed: plain words, the service credential still works.
+  mem.clear()
+  require('../src/connectors/ansvar')._reset()
+  auth.register = 'closed'
+  await assert.rejects(ls.signIn('ansvar', { open: false }), (err) => err.plain === 'Ansvar\'s browser sign-in is not available for OpenLex yet. Use a service credential (paste your key) for now.')
+})
+
+test('sign-in addresses must be https (http only on this computer)', () => {
+  const { safeUrl } = require('../src/connectors/oauth')
+  assert.strictEqual(safeUrl('https://auth.ansvar.eu/x', 'A'), 'https://auth.ansvar.eu/x')
+  assert.strictEqual(safeUrl('http://127.0.0.1:5/x', 'A'), 'http://127.0.0.1:5/x')
+  assert.throws(() => safeUrl('http://auth.ansvar.eu/x', 'A'), /not secure/)
+  assert.throws(() => safeUrl('javascript:alert(1)', 'A'), /not secure/)
+})
+
 test('offline or a source down: a plain sentence, the others still answer, no crash', async () => {
   setPolicy(['web'])
   down = new Set(['ris'])
@@ -368,9 +525,10 @@ test('agent tools: search_law_sources and get_law_source cite with provenance; p
   assert.match(out.output, /^LAW SOURCES \(neuris\):\n\[1\] German federal law \(NeuRIS\) · ref eli\/bund\//)
   assert.match(out.output, /Cite as: FlErwV § 10 \(NeuRIS/)
   assert.match(out.output, /retrieved \d{4}-\d\d-\d\d; Official works/)
+  assert.match(out.output, /\nCheck the official version before relying on it\.$/)
   assert.strictEqual(out.webSources[0].source, 'neuris')
   const g = await tools.dispatch({}, 'get_law_source', { source: 'slovlex', ref: '513/1991', article: '2' })
-  assert.match(g.output, /^Slov-Lex Slovakia: Obchodný zákonník, č\. 513\/1991 Zb\. \(version from 2026-08-17\)\nCite as: § 2 zákona č\. 513\/1991 Zb\. \(Slov-Lex\)/)
+  assert.match(g.output, /^Slov-Lex Slovakia: Obchodný zákonník, č\. 513\/1991 Zb\. \(version from 2026-08-17\)\nCite as: § 2 zákona č\. 513\/1991 Zb\. \(Slov-Lex\)\nSource: .*\nCheck the official version before relying on it\.\n/)
   const bad = await tools.dispatch({}, 'get_law_source', { source: 'nowhere', ref: 'x' })
   assert.match(bad.output, /^LAW SOURCE ERROR: There is no law source called "nowhere"/)
   // Official sources: allowed like RIS; a paid gateway: asked first; deny wins.
@@ -414,9 +572,13 @@ test('terminal /law: the engine\'s words, one list; Enter offers only what appli
   const st = await ls.status()
   const items = ui.sourceItems(st)
   assert.deepStrictEqual(items.map((i) => i.label.replace(/^\S+ /, '')), st.map((s) => s.status))
-  assert.ok(items.find((i) => i.value === 'ansvar').label.endsWith('Ansvar: paste your key'))
+  assert.ok(items.find((i) => i.value === 'ansvar').label.endsWith('Ansvar: sign in or paste your key: how to get it'))
+  assert.strictEqual(items.find((i) => i.value === 'esbirka').hint, 'How to get it: https://github.com/N9394/openlex/blob/main/docs/SOURCES.md#esbirka')
   const ansvar = ui.sourceChoices(st.find((s) => s.id === 'ansvar')).map((c) => c.label)
-  assert.deepStrictEqual(ansvar, ['Paste your key', 'Switch it off', 'Back to the list'])
+  assert.deepStrictEqual(ansvar, ['Sign in with your browser', 'Paste a service credential', 'How to get it', 'Switch it off', 'Back to the list'])
+  const cz = ui.sourceChoices(st.find((s) => s.id === 'esbirka'))
+  assert.deepStrictEqual(cz.map((c) => c.label), ['Paste your key', 'How to get it', 'Switch it off', 'Back to the list'])
+  assert.strictEqual(cz[1].hint, 'https://github.com/N9394/openlex/blob/main/docs/SOURCES.md#esbirka')
   const ris = ui.sourceChoices(st.find((s) => s.id === 'ris')).map((c) => c.label)
   assert.deepStrictEqual(ris, ['Switch it off', 'Back to the list'])
   assert.deepStrictEqual(ui.sourceChoices({ ...st[0], managedByFirm: true }).map((c) => c.value), ['back'])
@@ -434,10 +596,11 @@ test('terminal /law screen renders the engine\'s list in plain words', async () 
   const r = ink.render(React.createElement(LawSources, { api }))
   try {
     let f = ''
-    for (let i = 0; i < 500 && !/Ansvar: paste your key/.test(f); i++) { await new Promise((ok) => setTimeout(ok, 20)); f = (r.lastFrame() || '').replace(/\s+/g, ' ') }
+    for (let i = 0; i < 500 && !/Ansvar: sign in or paste your key/.test(f); i++) { await new Promise((ok) => setTimeout(ok, 20)); f = (r.lastFrame() || '').replace(/\s+/g, ' ') }
     assert.match(f, /Where OpenLex looks up the law/)
     assert.match(f, /RIS Austria: free, but your client-data rule keeps OpenLex offline/)
-    assert.match(f, /Ansvar: paste your key/)
+    assert.match(f, /Ansvar: sign in or paste your key: how to get it/)
+    assert.match(f, /e-Sbírka Czechia: needs your free key from the Czech agency: how to get it/)
     assert.match(f, /Allow online look-ups \(only search words leave this computer\)/)
     assert.match(f, /Only your search words are sent, never your documents/)
   } finally { r.unmount() }
@@ -465,7 +628,8 @@ live('Slov-Lex', async () => {
   const r = await require('../src/connectors/slovlex').search('513/1991')
   assert.strictEqual(r[0].ref, '1991/513')
 })
-live('e-Sbírka', async () => {
-  const r = await require('../src/connectors/esbirka').search('89/2012')
+test('live: e-Sbírka (with OPENLEX_KEY_SOURCE_ESBIRKA)', { skip: !NET || !process.env.OPENLEX_KEY_SOURCE_ESBIRKA }, async () => {
+  for (const k of Object.keys(process.env)) if (/^OPENLEX_ESBIRKA_/.test(k)) delete process.env[k]
+  const r = await require('../src/connectors/esbirka').search('89/2012', {}, { key: process.env.OPENLEX_KEY_SOURCE_ESBIRKA })
   assert.strictEqual(r[0].ref, '/sb/2012/89')
 })

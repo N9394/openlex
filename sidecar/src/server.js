@@ -504,9 +504,13 @@ async function handle(req, res) {
         // Law sources (connectors/): one plain list for every front end.
         if (req.method === 'GET' && p === '/api/sources/law') return sendJson(res, 200, { sources: await law.status({ matterId: url.searchParams.get('matterId') || null }) })
         if (req.method === 'GET' && p === '/api/sources') return sendJson(res, 200, { law: await law.status({ matterId: url.searchParams.get('matterId') || null }), sources: src.list(), presets: Object.keys(src.PRESETS), kinds: src.KINDS, types: src.TYPES })
+        if (req.method === 'GET' && p === '/api/sources/law/signin') return sendJson(res, 200, law.signInStatus(url.searchParams.get('name')))
         if (req.method !== 'POST') return sendJson(res, 404, { error: 'not found' })
         const body = await readBody(req)
         const matterId = body.matterId || null
+        // Browser sign-in (Ansvar): start (code + page), then poll the GET above.
+        if (p === '/api/sources/law/signin') return sendJson(res, 200, await law.signIn(body.name, { open: body.open !== false }))
+        if (p === '/api/sources/law/signin/cancel') return sendJson(res, 200, law.cancelSignIn(body.name))
         const isLaw = law.IDS.includes(String(body.name || body.source || '').toLowerCase())
         if (p === '/api/sources/law/search') return sendJson(res, 200, await policy.withMatter(matterId, () => law.search(body)))
         if (p === '/api/sources/law/get') return sendJson(res, 200, await policy.withMatter(matterId, () => law.get(body)))

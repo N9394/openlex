@@ -5,29 +5,25 @@
  * act metadata and the consolidated text as fragments. Czech legislation is
  * an official work without copyright (§ 3 of Act 121/2000 Sb.).
  *
- * Two ways in, same paths and answers:
- *   - with a free API key from the agency (header esel-api-access-key):
- *     the registered open-data API, api.e-sbirka.gov.cz;
- *   - without a key: the public JSON service behind the e-Sbírka website.
+ * Official path only: the registered public REST API, api.e-sbirka.gov.cz,
+ * with the lawyer's own free access key from the state (header
+ * esel-api-access-key; requested by data box, see docs/SOURCES.md#esbirka).
+ * OpenLex does not use the JSON service behind the e-Sbírka website: it is
+ * not a published interface. Without a key the source says how to get one.
  */
 
 const { getJson, strip, SourceError } = require('./http')
 
 const LABEL = 'e-Sbírka'
-const KEYED = () => (process.env.OPENLEX_ESBIRKA_API || 'https://api.e-sbirka.gov.cz').replace(/\/+$/, '')
-const PUBLIC = () => (process.env.OPENLEX_ESBIRKA_PUBLIC || 'https://e-sbirka.gov.cz/sbr-cache').replace(/\/+$/, '')
+const API = () => (process.env.OPENLEX_ESBIRKA_API || 'https://api.e-sbirka.gov.cz').replace(/\/+$/, '')
 const SITE = 'https://e-sbirka.gov.cz'
 const MAX_PAGES = 30
 
-function channel(key) {
-  return key ? { base: KEYED(), headers: { 'esel-api-access-key': key }, redirect: 'manual' } : { base: PUBLIC(), headers: {}, redirect: 'follow' }
-}
-
 async function call(path, key, { method = 'GET', body } = {}) {
-  const c = channel(key)
-  const opts = { label: LABEL, headers: { ...c.headers, ...(body ? { 'Content-Type': 'application/json' } : {}) }, method, redirect: c.redirect }
+  if (!key) throw new SourceError(`${LABEL} needs your free key from the Czech agency`, 'key')
+  const opts = { label: LABEL, headers: { 'esel-api-access-key': key, ...(body ? { 'Content-Type': 'application/json' } : {}) }, method, redirect: 'manual' }
   if (body) opts.body = JSON.stringify(body)
-  return getJson(`${c.base}${path}`, opts)
+  return getJson(`${API()}${path}`, opts)
 }
 
 /** "/sb/2012/89" for "89/2012", "č. 89/2012 Sb.", "/sb/2012/89/2026-01-01"; null otherwise. */
@@ -53,10 +49,11 @@ const connector = {
   licence: 'Official works, free of copyright (§ 3 of Act 121/2000 Sb.); published by the Digital and Information Agency',
   licenceUrl: 'https://e-sbirka.gov.cz',
   homepage: 'https://e-sbirka.gov.cz',
-  needsKey: false,
-  optionalKey: true,
-  keyHelp: 'Optional: a free key for the registered e-Sbírka API from the Digital and Information Agency (DIA). Without it OpenLex uses the public e-Sbírka service.',
-  hosts: ['e-sbirka.gov.cz', 'api.e-sbirka.gov.cz'],
+  needsKey: true,
+  keyHelp: 'Your free access key for the official e-Sbírka API. You request it once from the Czech state by data box; the answer comes within 10 working days.',
+  needsKeyWords: 'needs your free key from the Czech agency',
+  guide: 'esbirka',
+  hosts: ['api.e-sbirka.gov.cz'],
 
   async search(query, { limit = 8 } = {}, { key = null } = {}) {
     const ref = parseRef(query)
