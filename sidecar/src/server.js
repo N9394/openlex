@@ -511,6 +511,7 @@ async function handle(req, res) {
         // Browser sign-in (Ansvar): start (code + page), then poll the GET above.
         if (p === '/api/sources/law/signin') return sendJson(res, 200, await law.signIn(body.name, { open: body.open !== false }))
         if (p === '/api/sources/law/signin/cancel') return sendJson(res, 200, law.cancelSignIn(body.name))
+        if (p === '/api/sources/law/nightcopy') return sendJson(res, 200, law.setNightCopy(body.name, body.on !== false))
         const isLaw = law.IDS.includes(String(body.name || body.source || '').toLowerCase())
         if (p === '/api/sources/law/search') return sendJson(res, 200, await policy.withMatter(matterId, () => law.search(body)))
         if (p === '/api/sources/law/get') return sendJson(res, 200, await policy.withMatter(matterId, () => law.get(body)))
@@ -1475,6 +1476,7 @@ server.listen(config.PORT, '127.0.0.1', () => {
   } catch (err) { console.warn('[record] startup failed:', err.message) }
   // Monitors (Phase 7.4): check due watches every 15 minutes while the engine runs.
   if (process.env.OPENLEX_MONITORS !== '0') require('./monitors').startScheduler()
+  if (process.env.OPENLEX_MONITORS !== '0') require('./web/ris').startNightly() // RIS local copy, only in the hours the RIS terms allow (opt-in)
   console.log(`[sidecar] OpenLex engine on https://localhost:${config.PORT}${httpsServer ? '' : ' (http fallback)'}`)
   console.log(`[sidecar] serving add-in from ${config.ADDIN_ROOT}`)
   console.log(`[sidecar] model: ${config.LLM_MODEL} (llama.cpp at ${config.LLM_BASE})`)

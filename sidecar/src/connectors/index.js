@@ -3,9 +3,12 @@
  * Law sources — OpenLex connects lawyers to existing law databases instead
  * of keeping its own copy. One list, plain words:
  *
- *   official, free, no key:     RIS Austria, EUR-Lex, German federal law
- *                               (NeuRIS, test phase), Slov-Lex Slovakia
- *   official, free, own key:    e-Sbírka Czechia (the registered API only)
+ *   official, free, no key:     RIS Austria (live only in the hours the RIS
+ *                               terms allow, else the local copy), EUR-Lex
+ *                               (Cellar), German federal law (NeuRIS, test
+ *                               phase), Slov-Lex Slovakia, e-Sbírka Czechia
+ *                               (CC0 open data; the lawyer's free REST key
+ *                               is an optional upgrade)
  *   gateways (own account):     Ansvar (browser sign-in or a service credential)
  *
  * Official paths only: a published API or an official static edition, never
@@ -20,7 +23,12 @@
  *     search(query, { limit, lang, jurisdiction }, { key, saveKey }) → [{ ref, title, citation, url, snippet, date, inForce }]
  *     get(ref, { article, lang }, { key, saveKey })                  → { ref, title, citation, url, text }
  *     citation(ref) → string,
- *     needsKeyWords?, keyWords?(key), signIn?({ store }) }
+ *     needsKeyWords?, keyWords?(key), signIn?({ store }), statusNote?(),
+ *     nightCopy?: { get(), set(on) } }
+ *
+ * search() may return { items, note } instead of the list, and get() a
+ * note: a plain sentence shown with the answer (for example "using your
+ * local copy from …").
  *
  * and every result leaves here with its provenance: source, URL, retrieval
  * time and licence.
@@ -104,11 +112,12 @@ async function status({ matterId = null } = {}) {
     if (!enabled) { state = 'off'; words = firmOff ? 'off (your firm turned it off)' : 'off' }
     else if (x.needsKey && !hasKey) { state = 'needs_key'; words = `${x.needsKeyWords || 'paste your key'}: how to get it` }
     else if (!online) { state = 'offline'; words = `${keyWords || (x.needsKey ? 'key saved' : 'free')}, but your client-data rule keeps OpenLex offline` }
-    else { state = 'ready'; words = keyWords ? `connected, ${keyWords}` : x.gateway ? 'connected with your key' : x.needsKey ? 'connected, free (with your key)' : `connected, free${x.testPhase ? ' (test phase)' : ''}` }
+    else { state = 'ready'; words = keyWords ? `connected, ${keyWords}` : x.gateway ? 'connected with your key' : x.needsKey || (x.optionalKey && hasKey) ? 'connected, free (with your key)' : `connected, free${x.testPhase ? ` (${x.testPhase === true ? 'test phase' : x.testPhase})` : ''}` }
+    if (state === 'ready' && x.statusNote) words += x.statusNote()
     return {
       id: x.id, label: x.label, country: x.country, kind: x.kind, description: x.description,
       licence: x.licence, licenceUrl: x.licenceUrl, homepage: x.homepage,
-      needsKey: !!x.needsKey, keyHelp: x.keyHelp || null, guide: guideUrl(x), signIn: !!x.signIn, gateway: !!x.gateway, testPhase: !!x.testPhase,
+      needsKey: !!x.needsKey, optionalKey: !!x.optionalKey, keyHelp: x.keyHelp || null, guide: guideUrl(x), signIn: !!x.signIn, nightCopy: x.nightCopy ? !!x.nightCopy.get() : null, gateway: !!x.gateway, testPhase: !!x.testPhase,
       enabled, hasKey, managedByFirm: c.locked, state, status: `${x.label}: ${words}`,
     }
   }))
@@ -148,6 +157,14 @@ const withProvenance = (c, item, at) => ({
   licence: c.licence,
   retrieved: at,
 })
+
+/** Keep a local copy, fetched in the hours the source allows (RIS Austria). */
+function setNightCopy(id, on) {
+  const c = connector(id)
+  if (!c.nightCopy) throw new SourceError(`${c.label} has no local copy to keep`, 'bad')
+  c.nightCopy.set(!!on)
+  return { id: c.id, nightCopy: !!on }
+}
 
 const timeout = (p, label) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new SourceError(`${label} took too long to answer; try again later`, 'down')), TIMEOUT_MS).unref())])
 
@@ -206,9 +223,12 @@ async function search({ query, sources, jurisdiction, lang, limit = 5 } = {}) {
     ready.push({ c, key })
   }
   const at = new Date().toISOString()
+  const notes = []
   const runs = await Promise.all(ready.map(async ({ c, key }) => {
     try {
-      const items = await run(c, () => c.search(q, { limit, lang, jurisdiction }, { key, saveKey: saverOf(c.id) }))
+      const out = await run(c, () => c.search(q, { limit, lang, jurisdiction }, { key, saveKey: saverOf(c.id) }))
+      const items = Array.isArray(out) ? out : out?.items || []
+      if (out?.note) notes.push({ source: c.id, note: out.note })
       return items.map((it) => withProvenance(c, it, at))
     } catch (err) {
       skipped.push({ source: c.id, reason: plainError(c, err) })
@@ -217,7 +237,7 @@ async function search({ query, sources, jurisdiction, lang, limit = 5 } = {}) {
   }))
   const results = []
   for (let i = 0; i < Math.max(0, ...runs.map((r) => r.length)); i++) for (const r of runs) if (r[i]) results.push(r[i])
-  return { results, searched: ready.map(({ c }) => c.id), skipped, ...(results.length ? { notice: NOTICE } : {}) }
+  return { results, searched: ready.map(({ c }) => c.id), skipped, ...(notes.length ? { notes } : {}), ...(results.length ? { notice: NOTICE } : {}) }
 }
 
 /** One document (or one section of it) with provenance. */
@@ -290,6 +310,6 @@ function cancelSignIn(id) {
 }
 
 module.exports = {
-  CONNECTORS, IDS, NOTICE, GUIDE, status, setEnabled, setKey, search, get, citation, test, planned, connector, signIn, signInStatus, cancelSignIn, SourceError,
+  CONNECTORS, IDS, NOTICE, GUIDE, status, setEnabled, setKey, setNightCopy, search, get, citation, test, planned, connector, signIn, signInStatus, cancelSignIn, SourceError,
   _setStore: (s) => { store = s; signins.clear() },
 }

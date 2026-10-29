@@ -97,6 +97,7 @@ export function createApi(c = client) {
     startSourceSignIn: (name) => call('POST', '/api/sources/law/signin', { name }),
     sourceSignInStatus: (name) => call('GET', `/api/sources/law/signin${q({ name })}`),
     cancelSourceSignIn: (name) => call('POST', '/api/sources/law/signin/cancel', { name }),
+    setSourceNightCopy: (name, on) => call('POST', '/api/sources/law/nightcopy', { name, on }),
   }
 }
 

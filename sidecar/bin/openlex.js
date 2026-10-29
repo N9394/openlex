@@ -35,7 +35,7 @@
  *   openlex models [MODEL] [--local]   model profiles, and which one each role's model gets
  *   openlex prompts ["message"] [--after TOOL]   which instruction blocks and tools each step would get (the prompt roadmap)
  *   openlex sources                    law sources (RIS, EUR-Lex, NeuRIS, Slov-Lex, e-Sbírka, Ansvar) and the firm's own, in plain words
- *   openlex sources on|off SOURCE | key SOURCE [KEY] [--remove] | signin SOURCE [--no-browser] | test SOURCE | search "q" --law [--jurisdiction AT | --source ris,eurlex]  (without --law: the firm's own, [--kind k])
+ *   openlex sources on|off SOURCE | key SOURCE [KEY] [--remove] | signin SOURCE [--no-browser] | nightcopy SOURCE on|off | test SOURCE | search "q" --law [--jurisdiction AT | --source ris,eurlex]  (without --law: the firm's own, [--kind k])
  *   openlex sources add PRESET|NAME --file def.json | remove NAME     the firm's own sources (sources.js)
  *   openlex plan "goal" --matter ID | plan list | plan show ID | plan run ID (approves) | plan decide ID STEP continue|stop [--note text]
  *   openlex serve                      run the engine in the foreground
@@ -536,6 +536,8 @@ async function main() {
         for (const s of r.law || []) {
           console.log(`  ${s.state === 'ready' ? '✓' : s.state === 'off' ? '–' : '·'} ${s.status}`)
           if (s.state === 'needs_key') console.log(`      how to get it: ${s.guide}\n      then: ${s.signIn ? `openlex sources signin ${s.id}  (or a service credential: openlex sources key ${s.id})` : `openlex sources key ${s.id}`}`)
+          else if (s.optionalKey && !s.hasKey && s.state !== 'off') console.log(`      optional free key: ${s.guide}`)
+          if (s.nightCopy === false && s.state !== 'off') console.log(`      keep a local copy (fetched at night): openlex sources nightcopy ${s.id} on`)
         }
         const offline = (r.law || []).some((s) => s.state === 'offline')
         if (offline) console.log('  Online look-ups are off in your client-data rule. Allow "web" (keep your AI service in the list too): openlex policy allow web[,anthropic]')
@@ -560,6 +562,11 @@ async function main() {
         await request('POST', '/api/sources/key', { name, key })
         return console.log(key ? `key for ${name} stored in the OS keychain` : `key for ${name} removed`)
       }
+      if (sub === 'nightcopy') {
+        if (!name || !['on', 'off'].includes(val)) throw new Error('usage: openlex sources nightcopy SOURCE on|off')
+        const r = await request('POST', '/api/sources/law/nightcopy', { name, on: val === 'on' })
+        return console.log(r.nightCopy ? `${r.id}: OpenLex keeps a local copy, fetched in the hours the source allows` : `${r.id}: no local copy`)
+      }
       if (sub === 'signin') {
         if (!name) throw new Error('usage: openlex sources signin SOURCE')
         let st = await request('POST', '/api/sources/law/signin', { name, open: a.browser !== false })
@@ -581,6 +588,7 @@ async function main() {
           ? await request('POST', '/api/sources/law/search', { query, jurisdiction: a.jurisdiction, sources: a.source ? String(a.source).split(',') : undefined, matterId: a.matter })
           : await request('POST', '/api/sources/search', { query, kind: a.kind, jurisdiction: a.jurisdiction, matterId: a.matter })
         if (a.json) return console.log(JSON.stringify(r, null, 2))
+        if (lawSearch) for (const n of r.notes || []) console.log(`note (${n.source}): ${n.note}`)
         if (lawSearch && r.notice) console.log(r.notice)
         if (lawSearch) r.results.forEach((x, i) => console.log(`[${i + 1}] ${x.sourceLabel} · ${x.title}\n    cite as: ${x.citation || x.title}${x.snippet ? `\n    ${x.snippet.slice(0, 200)}` : ''}${x.url ? `\n    ${x.url}` : ''}\n    retrieved ${String(x.retrieved).slice(0, 10)} · ${x.licence}`))
         else r.results.forEach((x, i) => console.log(`[${i + 1}] ${x.source} · ${x.title}${x.citation ? ` — ${x.citation}` : ''}\n    ${x.text.slice(0, 200)}${x.url ? `\n    ${x.url}` : ''}`))

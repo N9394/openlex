@@ -74,7 +74,7 @@ const TOOLS = {
     input: { celex: 'string (e.g. 32016R0679)', article: 'string (optional — article number)', language: 'string (optional)' },
   },
   search_law_sources: {
-    description: 'Live search of the law sources the lawyer has connected: official ones (RIS Austria, EUR-Lex, German federal law, Slov-Lex Slovakia by law number, e-Sbírka Czechia with the lawyer\'s free key) and paid gateways with the lawyer\'s own account (Ansvar). Law-source results are look-ups, not advice: tell the lawyer to check the official version before relying on it. Pick by jurisdiction (AT, EU, DE, SK, CZ) or name sources. Only the search words leave this computer. Every result names its source, citation, URL, retrieval date and licence; cite exactly that.',
+    description: 'Live search of the law sources the lawyer has connected: official ones (RIS Austria, EUR-Lex, German federal law, Slov-Lex Slovakia by law number, e-Sbírka Czechia) and paid gateways with the lawyer\'s own account (Ansvar). Law-source results are look-ups, not advice: tell the lawyer to check the official version before relying on it. Pick by jurisdiction (AT, EU, DE, SK, CZ) or name sources. Only the search words leave this computer. Every result names its source, citation, URL, retrieval date and licence; cite exactly that.',
     input: { query: 'string (statutory terms in the law\'s language, or a law number like 513/1991)', jurisdiction: 'string (optional — AT, EU, DE, SK, CZ, …)', sources: 'array (optional — ris, eurlex, neuris, slovlex, esbirka, ansvar)' },
   },
   get_law_source: {
@@ -315,12 +315,13 @@ async function dispatch({ doc, memory, search, embeddings, packStore }, rawName,
       if (blocked) return { output: blocked }
       try {
         const r = await require('./web/ris').searchBundesrecht(query, { limit: Math.min(20, parseInt(args.limit, 10) || 8) })
-        if (!r.results.length) return { output: `RIS: no results for "${query}".` }
+        if (!r.results.length) return { output: `RIS: no results for "${query}".${r.note ? ` (${r.note})` : ''}` }
         return {
-          output: `RIS (official, ${r.total} hits):\n` + r.results.map((x) => `- ${x.title}${x.abbreviation ? ` (${x.abbreviation})` : ''} — ${x.inForce ? 'in force' : `NOT in force since ${x.inForceUntil}`}${x.inForceFrom ? `, version from ${x.inForceFrom}` : ''}\n  ${x.url}`).join('\n'),
+          output: `RIS (official, ${r.total} hits${r.note ? `; ${r.note}` : ''}):\n` + r.results.map((x) => `- ${x.title}${x.abbreviation ? ` (${x.abbreviation})` : ''} — ${x.inForce ? 'in force' : `NOT in force since ${x.inForceUntil}`}${x.inForceFrom ? `, version from ${x.inForceFrom}` : ''}\n  ${x.url}`).join('\n'),
           webSources: r.results.map((x) => ({ title: x.title, url: x.url, inForce: x.inForce })),
         }
       } catch (err) {
+        if (err.code === 'window') return { output: `RIS: not looked up. ${err.plain}.` }
         return { output: `RIS ERROR: ${err.message}` }
       }
     }
@@ -368,8 +369,9 @@ async function dispatch({ doc, memory, search, embeddings, packStore }, rawName,
       const day = (t) => String(t || '').slice(0, 10)
       const lines = r.results.slice(0, 12).map((x, i) => `[${i + 1}] ${x.sourceLabel} · ref ${x.ref}\n    ${x.title}${x.inForce === false ? ' (NOT in force)' : ''}\n    Cite as: ${x.citation || x.title}${x.snippet ? `\n    ${x.snippet.slice(0, 400)}` : ''}\n    ${x.url || ''} (retrieved ${day(x.retrieved)}; ${x.licence})`)
       const skipped = r.skipped.map((s) => `${s.source}: ${s.reason}`)
+      const notes = (r.notes || []).map((n) => `\nNote (${n.source}): ${n.note}`).join('')
       return {
-        output: (lines.length ? `LAW SOURCES (${r.searched.join(', ')}):\n${lines.join('\n')}\n${ls.NOTICE}` : `NO RESULTS${r.searched.length ? ` in ${r.searched.join(', ')}` : ' (no law source could be searched)'}.`) + (skipped.length ? `\nNot searched: ${skipped.join('; ')}` : ''),
+        output: (lines.length ? `LAW SOURCES (${r.searched.join(', ')}):\n${lines.join('\n')}${notes}\n${ls.NOTICE}` : `NO RESULTS${r.searched.length ? ` in ${r.searched.join(', ')}` : ' (no law source could be searched)'}.`) + (skipped.length ? `\nNot searched: ${skipped.join('; ')}` : ''),
         webSources: r.results.slice(0, 12).map((x) => ({ title: x.citation || x.title, url: x.url, inForce: x.inForce, source: x.source, licence: x.licence, retrieved: x.retrieved })),
       }
     }
@@ -380,7 +382,7 @@ async function dispatch({ doc, memory, search, embeddings, packStore }, rawName,
         const r = await ls.get({ source: String(args.source || ''), ref: String(args.ref || ''), article: args.article ? String(args.article) : null, lang: euLang(args.language, doc) })
         const max = args.article ? 12000 : 8000
         return {
-          output: `${r.sourceLabel}: ${r.title}\nCite as: ${r.citation}\nSource: ${r.url || '—'} (retrieved ${String(r.retrieved).slice(0, 10)}; ${r.licence})\n${ls.NOTICE}\n\n${String(r.text || '').slice(0, max)}${String(r.text || '').length > max ? '\n…[truncated — ask for one section or article]' : ''}`,
+          output: `${r.sourceLabel}: ${r.title}\nCite as: ${r.citation}\nSource: ${r.url || '—'} (retrieved ${String(r.retrieved).slice(0, 10)}; ${r.licence})\n${r.note ? `Note: ${r.note}\n` : ''}${ls.NOTICE}\n\n${String(r.text || '').slice(0, max)}${String(r.text || '').length > max ? '\n…[truncated — ask for one section or article]' : ''}`,
           webSources: [{ title: r.citation, url: r.url, inForce: true, source: r.source, licence: r.licence, retrieved: r.retrieved }],
         }
       } catch (err) {

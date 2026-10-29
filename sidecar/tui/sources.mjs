@@ -24,8 +24,9 @@ export function sourceChoices(s) {
   if (!s) return []
   const out = []
   if (s.signIn) out.push({ value: 'signin', label: s.hasKey ? 'Sign in again with your browser' : 'Sign in with your browser', hint: 'Your own account, any plan. OpenLex shows a code to type on the sign-in page.' })
-  if (s.needsKey) out.push({ value: 'key', label: s.hasKey ? 'Replace the key' : s.signIn ? 'Paste a service credential' : 'Paste your key', hint: s.keyHelp || '' })
-  if (s.needsKey && s.guide) out.push({ value: 'guide', label: 'How to get it', hint: s.guide })
+  if (s.needsKey || s.optionalKey) out.push({ value: 'key', label: s.hasKey ? 'Replace the key' : s.signIn ? 'Paste a service credential' : s.optionalKey ? 'Add your free key (optional)' : 'Paste your key', hint: s.keyHelp || '' })
+  if ((s.needsKey || s.optionalKey) && s.guide) out.push({ value: 'guide', label: 'How to get it', hint: s.guide })
+  if (s.nightCopy === true || s.nightCopy === false) out.push(s.nightCopy ? { value: 'nocopy', label: 'Stop keeping a local copy' } : { value: 'copy', label: 'Keep a local copy (fetched at night)', hint: 'RIS only allows live look-ups 20:00–05:00 and at weekends; OpenLex then fetches what you asked for during the day.' })
   if (s.hasKey) out.push({ value: 'nokey', label: s.signIn ? 'Sign out (remove the key)' : 'Remove the key' })
   if (!s.managedByFirm) out.push(s.enabled ? { value: 'off', label: 'Switch it off', hint: 'OpenLex will not look anything up there.' } : { value: 'on', label: 'Switch it on' })
   out.push({ value: 'back', label: 'Back to the list' })
@@ -105,6 +106,7 @@ export function LawSources({ api, matterId = null, onNote }) {
       <${Box} marginTop=${1}><${Menu} items=${sourceChoices(picked)} describe onSelect=${(it) => {
         if (it.value === 'back') return setPicked(null)
         if (it.value === 'key') return setKeyMode(true)
+        if (it.value === 'copy' || it.value === 'nocopy') return act('Saving…', () => api.setSourceNightCopy(picked.id, it.value === 'copy'), it.value === 'copy' ? `OpenLex keeps a local copy of ${picked.label}, fetched in the hours it allows.` : `No more local copy of ${picked.label}.`)
         if (it.value === 'guide') { say({ kind: 'info', text: `How to get a key for ${picked.label}: ${picked.guide}` }); return setPicked(null) }
         if (it.value === 'signin') {
           setBusy('Starting the sign-in…')
