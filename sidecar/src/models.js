@@ -114,7 +114,7 @@ function fits(p, kind, model) {
 function profileFor(target = {}) {
   const kind = target.kind === 'local' ? 'local' : 'hosted'
   // The local provider usually carries no model name: use the configured GGUF.
-  const model = target.model || (kind === 'local' ? require('./config').LLM_MODEL_NAME : null)
+  const model = target.model || (kind === 'local' ? require('./local_models').currentName() : null)
   const hit = all().find((p) => fits(p, kind, model))
   return { ...GENERIC[kind], ...(hit || {}), model: model || null }
 }
@@ -139,7 +139,7 @@ function explain({ matterId = null, agent = null } = {}) {
   const routing = require('./routing')
   return routing.ROLES.map((role) => {
     const p = routing.primary({ role, matterId, agent })
-    const prof = profileFor({ kind: p.kind, model: p.model })
+    const prof = profileFor({ kind: p.local ? 'local' : p.kind, model: p.model })
     return { role, provider: p.id, model: prof.model, profile: prof.name, thinking: prof.thinking, tools: prof.tools }
   })
 }

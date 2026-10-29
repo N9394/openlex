@@ -361,7 +361,23 @@ export function Matter({ matterId = null }) {
   }
   const nextNote = () => (streaming ? ' This applies from your next question; the answer being written keeps the current model.' : '')
 
+  // "/model local qwen3:8b": one of the models on this computer (Ollama's, or a GGUF file).
+  const useLocalModel = async (name) => {
+    setBusy(`Switching the AI on this computer to ${name}…`)
+    try {
+      const r = await ctx.api.useLocalModel(name)
+      await ctx.refresh().catch(() => {})
+      sys(`Now using ${r.model.title} on this computer. Nothing leaves this computer.${r.restarted ? ' It is starting; the first answer can take about 20 seconds longer.' : ''}`)
+    } catch (err) {
+      let names = ''
+      try { names = ((await ctx.api.localModels()).models || []).map((m) => m.name).join(', ') } catch { /* engine busy */ }
+      sys(`${err.message}.${names ? ` On this computer: ${names}.` : ' There is no model on this computer yet: download one in the desktop app, or with Ollama ("ollama pull qwen3:8b").'}`, 'bad')
+    } finally { setBusy('') }
+  }
+
   const switchModel = async (arg) => {
+    const loc = /^(local|computer|this-computer)(?:\s+|:)(.+)$/i.exec(arg.trim())
+    if (loc) return useLocalModel(loc[2].trim())
     const i = arg.indexOf(':')
     const word = (i < 0 ? arg : arg.slice(0, i)).trim().toLowerCase()
     const id = PROVIDER_WORDS[word] || word

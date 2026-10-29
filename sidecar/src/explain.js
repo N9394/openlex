@@ -29,6 +29,7 @@ const lower = (s) => s.charAt(0).toLowerCase() + s.slice(1)
 const NAMES = {
   local: 'this computer', anthropic: 'Anthropic', openai: 'OpenAI', azure: 'Azure OpenAI', mistral: 'Mistral',
   openrouter: 'OpenRouter', bedrock: 'AWS Bedrock', vertex: 'Google Vertex', custom: 'your firm server', web: 'web search',
+  scaleway: 'Scaleway', ovhcloud: 'OVHcloud', stackit: 'STACKIT', ionos: 'IONOS', 'local-server': 'this computer',
 }
 
 /** Jurisdiction codes → the law in words ("Austrian law"). */

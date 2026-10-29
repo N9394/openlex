@@ -97,7 +97,12 @@ test('Bedrock: API key as bearer; native toolUse → text-JSON tool call', async
 })
 
 test('approved regions: a non-EU region or an unpinned provider is blocked before any request', async () => {
-  settings.update({ provider: 'bedrock', overrides: { region: 'us-east-1' } })
+  // The picker only accepts EU regions for Bedrock; an older saved setting is still blocked.
+  assert.throws(() => settings.update({ provider: 'bedrock', overrides: { region: 'us-east-1' } }), /EU region/)
+  assert.throws(() => settings.update({ provider: 'bedrock', overrides: { region: 'eu-west-2' } }), /EU region/)
+  const saved = settings.load()
+  saved.overrides.bedrock = { ...(saved.overrides.bedrock || {}), region: 'us-east-1' }
+  fs.writeFileSync(settings.SETTINGS_PATH, JSON.stringify(saved))
   const before = seen.length
   await assert.rejects(llm.chat([{ role: 'user', content: 'x' }]), (e) => e.code === 'POLICY_BLOCKED' && /us-east-1/.test(e.message))
   settings.update({ provider: 'openai', overrides: { baseUrl: base } })

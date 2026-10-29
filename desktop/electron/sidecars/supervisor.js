@@ -48,6 +48,10 @@ const PORTS = {
   backend: 18000,
 }
 
+// The engine's data folder (shared with the Word pane and the terminal app).
+const LEXVAULT_DATA = process.env.LEXVAULT_DATA_DIR || path.join(require('os').homedir(), '.lexvault')
+const LOCAL_CHOICE = path.join(LEXVAULT_DATA, 'local-model.json')
+
 class Supervisor {
   // modelPath: the GGUF main.js settled on; null = no local model (community
   // mode without a download — own API key / custom endpoint only). Omitted =
@@ -104,7 +108,35 @@ class Supervisor {
     }, 3000)
   }
 
+  // ── the model picker's choice (engine: src/local_models.js) ──────────────
+  // The lawyer picks a GGUF file in the model picker; the engine writes it
+  // to ~/.lexvault/local-model.json. Use it when it is one of the model
+  // files here, and unload the running llama-server: the next question
+  // starts it with the new model (no App restart).
+  _applyLocalChoice() {
+    let file = null
+    try { file = JSON.parse(fs.readFileSync(LOCAL_CHOICE, 'utf8')).file } catch { return }
+    if (typeof file !== 'string' || !/\.gguf$/i.test(file)) return
+    file = path.resolve(file)
+    const allowed = [path.resolve(path.join(this.paths.models, 'llm')), path.resolve(path.join(LEXVAULT_DATA, 'models'))]
+    if (!allowed.includes(path.dirname(file)) || !fs.existsSync(file) || file === this._llmModelPath) return
+    console.log(`[llm-proxy] model picker chose ${path.basename(file)} — switching`)
+    this._llmModelPath = file
+    if (this._llmChild && !this._llmChild.killed) {
+      try { this._llmChild.kill('SIGTERM') } catch {}
+      this._llmChild = null
+      this._llmReadyPromise = null
+    }
+  }
+
+  _watchLocalChoice() {
+    if (this._choiceWatching) return
+    this._choiceWatching = true
+    fs.watchFile(LOCAL_CHOICE, { interval: 1500, persistent: false }, () => this._applyLocalChoice())
+  }
+
   async stop() {
+    if (this._choiceWatching) { fs.unwatchFile(LOCAL_CHOICE); this._choiceWatching = false }
     // Tear down the LLM idle watchdog + proxy + lazy-spawned child first
     if (this._llmIdleTimer) { clearInterval(this._llmIdleTimer); this._llmIdleTimer = null }
     if (this._llmChild && !this._llmChild.killed) {
@@ -295,6 +327,8 @@ log_level: WARN
     this._llmChild        = null
     this._llmBinary       = binary
     this._llmModelPath    = modelPath
+    this._applyLocalChoice()
+    this._watchLocalChoice()
 
     this._spawnLLMProxy()
 

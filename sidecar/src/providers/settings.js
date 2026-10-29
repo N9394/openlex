@@ -32,7 +32,10 @@ function save(next) {
   return next
 }
 
-const OVERRIDE_FIELDS = ['baseUrl', 'model', 'ctx', 'local', 'apiVersion', 'nativeTools', 'region', 'project']
+const OVERRIDE_FIELDS = ['baseUrl', 'model', 'ctx', 'local', 'apiVersion', 'nativeTools', 'region', 'project', 'plan', 'euProviders', 'controlUrl']
+const LOOPBACK = new Set(['127.0.0.1', 'localhost', '[::1]'])
+// EU member-state AWS regions (no London eu-west-2, no Zurich eu-central-2).
+const BEDROCK_EU = ['eu-central-1', 'eu-west-1', 'eu-west-3', 'eu-north-1', 'eu-south-1', 'eu-south-2']
 
 /** Set the active provider and/or merge overrides for one provider. */
 function update({ active, provider, overrides } = {}) {
@@ -49,6 +52,30 @@ function update({ active, provider, overrides } = {}) {
       const u = new URL(clean.baseUrl) // throws on garbage
       if (!['http:', 'https:'].includes(u.protocol)) throw new Error('baseUrl must be http(s)')
       clean.baseUrl = clean.baseUrl.replace(/\/+$/, '')
+      // An AI program "on this computer" must really be on this computer.
+      if (provider === 'local-server' && !LOOPBACK.has(u.hostname)) throw new Error('an AI program on this computer must use a 127.0.0.1 or localhost address')
+    }
+    // Bedrock: called from an EU member region only, so the "eu." profile
+    // stays in EU regions (London or Zurich would add themselves).
+    if (provider === 'bedrock' && clean.region !== undefined && clean.region !== null && !BEDROCK_EU.includes(String(clean.region))) {
+      throw new Error(`AWS Bedrock must be called from an EU region (eu-central-1 Frankfurt recommended), not ${clean.region}`)
+    }
+    if (clean.controlUrl !== undefined) {
+      if (provider !== 'bedrock') delete clean.controlUrl
+      else if (clean.controlUrl !== null) {
+        const c = new URL(clean.controlUrl)
+        if (c.protocol !== 'https:' && !LOOPBACK.has(c.hostname)) throw new Error('controlUrl must be https')
+        clean.controlUrl = clean.controlUrl.replace(/\/+$/, '')
+      }
+    }
+    // OpenRouter: the firm's plan decides the gateway (Business: EU).
+    if (clean.plan !== undefined) {
+      if (provider !== 'openrouter') delete clean.plan
+      else if (!['standard', 'business'].includes(clean.plan)) throw new Error('plan must be standard or business')
+    }
+    if (clean.euProviders !== undefined) {
+      if (provider !== 'openrouter') delete clean.euProviders
+      else clean.euProviders = !!clean.euProviders
     }
     if (clean.ctx !== undefined) clean.ctx = Math.max(2048, parseInt(clean.ctx, 10) || 0)
     // Only custom endpoints may declare themselves local; a hosted API is
@@ -67,7 +94,19 @@ function resolve(id) {
   const { active, overrides } = load()
   const pid = id || active
   const base = getProvider(pid)
-  return { ...base, ...(overrides[pid] || {}), id: pid }
+  const out = { ...base, ...(overrides[pid] || {}), id: pid }
+  if (pid === 'openrouter') {
+    // Business plan: the EU gateway (decrypted and routed in the EU, fails
+    // closed). Standard plan: the US gateway, no region (an "EU only" rule
+    // blocks it, which is right: requests pass through the US).
+    out.plan = out.plan === 'business' ? 'business' : 'standard'
+    if (out.plan === 'business') {
+      if (!overrides[pid]?.baseUrl) out.baseUrl = base.euBaseUrl
+      out.region = 'eu'
+    } else out.region = null
+    out.euProviders = out.euProviders !== false
+  }
+  return out
 }
 
-module.exports = { load, update, resolve, SETTINGS_PATH }
+module.exports = { load, update, resolve, SETTINGS_PATH, BEDROCK_EU }

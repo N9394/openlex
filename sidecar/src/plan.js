@@ -214,7 +214,7 @@ async function run(id, { signal, onProgress } = {}) {
   if (['done', 'stopped'].includes(plan.status)) return plan
   plan.status = 'running'
   save(plan)
-  const local = require('./llm').providerFor('extract').kind === 'local'
+  const local = ((p) => p.kind === 'local' || p.id === 'local-server')(require('./llm').providerFor('extract'))
   const width = local ? 1 : 3
   const running = new Map()
   const doneOk = (s) => s.status === 'done'

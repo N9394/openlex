@@ -23,7 +23,7 @@ const ALL = SURFACES
 
 /** In the order they are shown. `args` is what the command takes (empty: nothing). */
 const COMMANDS = [
-  { name: 'model', args: '[local | anthropic | openrouter:MODEL]', en: 'where the AI runs', de: 'wo die KI läuft', surfaces: ALL },
+  { name: 'model', args: '[local | anthropic | openrouter:MODEL]', en: 'where the AI runs: on this computer, with an EU provider or in the cloud', de: 'wo die KI läuft: auf diesem Computer, bei einem EU-Anbieter oder in der Cloud', surfaces: ALL },
   { name: 'key', args: '[service]', en: 'add or replace a key, then check it', de: 'Schlüssel hinzufügen oder ersetzen, dann prüfen', surfaces: ['tui'] },
   { name: 'data', args: '', en: 'where client data may go', de: 'wohin Mandantendaten gehen dürfen', surfaces: ALL },
   { name: 'matter', args: '[name]', en: 'choose the matter you work on', de: 'die Akte wählen, an der Sie arbeiten', surfaces: ['app'] },

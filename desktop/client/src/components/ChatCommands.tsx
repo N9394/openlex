@@ -13,18 +13,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Check, Cpu, Download, Folder, Lock, X } from 'lucide-react'
+import i18n from '../i18n'
+import { Check, Download, Folder, Lock, X } from 'lucide-react'
+import { ModelPicker, PickerProvider } from './ModelPicker'
 import { useWordLink } from '../lib/hub'
 import { ChatCommand, PROVIDER_WORDS, didYouMean, engine, filterCommands, loadCommands, matterFolderName, menuQuery, parseCommand } from '../lib/commands'
 import { Basis, friendly, patternWords } from '../lib/turn'
 
 interface Matter { id: string; title: string; number?: string; client?: string; privileged?: boolean; agent?: string | null }
 interface Agent { name: string; title: string; description?: string }
-interface Provider { id: string; label: string; local: boolean; needsKey: boolean; hasKey: boolean | null; model: string | null }
 interface RecordEntry { at: string; title: string; window?: string; left?: boolean; outcome?: string; lines?: string[] }
 type Dialog =
   | { kind: 'help' }
-  | { kind: 'model' }
+  | { kind: 'model'; pick?: string }
   | { kind: 'matter' }
   | { kind: 'record'; all: boolean }
   | { kind: 'activity' }
@@ -120,11 +121,24 @@ export function useChatCommands(opts: {
       case 'help': return setDialog({ kind: 'help' })
       case 'model': {
         if (!arg) return setDialog({ kind: 'model' })
+        // "/model local qwen3:8b": one of the models on this computer.
+        const loc = /^(local|computer|this-computer)(?:\s+|:)(.+)$/i.exec(arg)
+        if (loc) {
+          try {
+            say(t('modelPicker.switching', 'Switching to {{name}}…', { name: loc[2] }), 'warn')
+            const r = await e.call('POST', '/api/local/use', { name: loc[2].trim() })
+            if (r?.error) return say(friendly(r.error), 'bad')
+            window.dispatchEvent(new CustomEvent('openlex:setup-changed'))
+            return say(t('modelPicker.nowLocal', 'Now using {{name}} on this computer. Nothing leaves this computer.', { name: r.model.title }))
+          } catch (err) { return say(friendly(err), 'bad') }
+        }
         const id = PROVIDER_WORDS[arg.toLowerCase()] || arg.toLowerCase()
         try {
           const pv = await e.call('GET', '/api/providers')
-          const p = (pv.providers || []).find((x: Provider) => x.id === id)
+          const p = (pv.providers || []).find((x: PickerProvider) => x.id === id) as PickerProvider | undefined
           if (!p) return say(t('commands.noService', 'There is no AI service called "{{name}}". Type /model to choose one.', { name: arg }), 'bad')
+          // A key to add, a model never used for client data, or the cloud notice first: the picker asks.
+          if (p.blocked || (p.needsKey && !p.hasKey) || (!p.local && !p.noticeSeen)) return setDialog({ kind: 'model', pick: id })
           await e.call('POST', '/api/providers', { active: id })
           window.dispatchEvent(new CustomEvent('openlex:setup-changed'))
           return say(t('commands.nowUsing', 'Now using {{name}}. This applies from your next question.', { name: p.local ? t('commands.thisComputer', 'the AI on this computer') : p.label }))
@@ -325,14 +339,14 @@ function CommandDialog({ dialog, commands, onClose, onRun, onSaveOnce, say, quic
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-[12vh]">
       <div className="fixed inset-0 bg-ink/70" onClick={onClose} />
-      <div ref={boxRef} role="dialog" aria-modal="true" aria-label={titles[dialog.kind]} className="relative w-full max-w-lg rounded-card border border-tobacco bg-deep-brown shadow-2xl animate-fade-in">
+      <div ref={boxRef} role="dialog" aria-modal="true" aria-label={titles[dialog.kind]} className={`relative w-full ${dialog.kind === 'model' ? 'max-w-2xl' : 'max-w-lg'} rounded-card border border-tobacco bg-deep-brown shadow-2xl animate-fade-in`}>
         <div className="flex items-center justify-between px-4 py-3 border-b border-tobacco">
           <h2 className="font-serif text-lg text-parchment">{titles[dialog.kind]}</h2>
           <button type="button" onClick={onClose} className="text-antique hover:text-cream" aria-label={t('common.close', 'Close')}><X size={18} /></button>
         </div>
-        <div className="max-h-[60vh] overflow-y-auto p-4 text-sm">
+        <div className={`${dialog.kind === 'model' ? 'max-h-[72vh]' : 'max-h-[60vh]'} overflow-y-auto p-4 text-sm`}>
           {dialog.kind === 'help' && <HelpList commands={commands} onRun={onRun} />}
-          {dialog.kind === 'model' && <ModelChoice onDone={(text) => { say(text); onClose() }} />}
+          {dialog.kind === 'model' && <ModelPicker pick={dialog.pick} onDone={(text) => { say(text); onClose() }} />}
           {dialog.kind === 'matter' && <MatterChoice onDone={(text) => { say(text); onClose() }} />}
           {(dialog.kind === 'record' || dialog.kind === 'activity') && <RecordList all={dialog.kind === 'record' && dialog.all} recent={dialog.kind === 'activity'} say={say} />}
           {dialog.kind === 'as' && <AgentChoice quickAgent={quickAgent} setQuickAgent={setQuickAgent} onDone={(text) => { say(text); onClose() }} />}
@@ -379,44 +393,6 @@ function HelpList({ commands, onRun }: { commands: ChatCommand[]; onRun: (name: 
           </li>
         ))}
       </ul>
-    </div>
-  )
-}
-
-/** /model: choose where the AI runs (engine providers). */
-function ModelChoice({ onDone }: { onDone: (text: string) => void }) {
-  const { t } = useTranslation()
-  const navigate = useNavigate()
-  const [list, setList] = useState<Provider[] | null>(null)
-  const [active, setActive] = useState('')
-  const [error, setError] = useState('')
-  useEffect(() => {
-    engine()?.call('GET', '/api/providers').then((r) => { setList(r.providers || []); setActive(r.active) }).catch((err) => setError(String(err.message || err)))
-  }, [])
-  const choose = async (p: Provider) => {
-    try {
-      await engine()!.call('POST', '/api/providers', { active: p.id })
-      onDone(t('commands.nowUsing', 'Now using {{name}}. This applies from your next question.', { name: p.local ? t('commands.thisComputer', 'the AI on this computer') : p.label }))
-    } catch (err) { setError((err as Error).message) }
-  }
-  if (error) return <p className="text-red-400">{error}</p>
-  if (!list) return <p className="text-antique">{t('common.loading', 'Loading…')}</p>
-  return (
-    <div className="space-y-1">
-      {list.map((p) => {
-        const noKey = p.needsKey && !p.hasKey
-        return (
-          <button key={p.id} type="button" disabled={noKey} onClick={() => choose(p)} className="w-full flex items-center gap-3 rounded px-2 py-2 text-left hover:bg-leather/40 focus:bg-leather/40 outline-none disabled:opacity-50">
-            <Cpu size={15} className="text-antique shrink-0" />
-            <span className="flex-1">
-              <span className="text-cream">{p.local ? t('commands.thisComputerTitle', 'On this computer') : p.label}</span>
-              <span className="block text-xs text-antique">{p.local ? t('commands.staysHere', 'Nothing leaves this computer') : noKey ? t('commands.needsKey', 'Needs a key first (OpenLex hub page)') : t('commands.online', 'Online AI service')}{p.model ? ` · ${p.model}` : ''}</span>
-            </span>
-            {p.id === active && <Check size={16} className="text-forest" />}
-          </button>
-        )
-      })}
-      <button type="button" onClick={() => navigate('/hub')} className="mt-2 text-xs text-antique underline">{t('commands.moreSettings', 'Keys and more settings: OpenLex hub page')}</button>
     </div>
   )
 }
@@ -509,10 +485,10 @@ async function chooseAgent(a: Agent, setQuickAgent?: (name: string) => void): Pr
     if (b?.update) await b.update(m.id, patch)
     else await engine()!.call('POST', '/api/matters/update', { id: m.id, patch })
     window.dispatchEvent(new CustomEvent('openlex:matter-changed'))
-    return `Now working as ${a.title} for this matter.`
+    return String(i18n.t('commands.nowAsMatter', { defaultValue: 'Now working as {{who}} for this matter.', who: a.title }))
   }
   setQuickAgent?.(a.name)
-  return `Now working as ${a.title}.`
+  return String(i18n.t('commands.nowAs', { defaultValue: 'Now working as {{who}}.', who: a.title }))
 }
 
 async function setPrivileged(m: Matter, on: boolean) {
@@ -581,7 +557,7 @@ function PermissionRules({ say }: { say: (text: string, kind?: 'ok' | 'warn' | '
   const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
   const mine: { pattern: string; where: string; mark: string; matterId?: string }[] = [
     ...(u.allow || []).map((p: string) => ({ pattern: p, where: t('commands.everywhere', 'allowed everywhere'), mark: '✓' })),
-    ...Object.entries(u.matters || {}).filter(([id]) => !matterId || id === matterId).flatMap(([id, m]: [string, any]) => (m.allow || []).map((p: string) => ({ pattern: p, where: id === matterId ? t('commands.thisMatterRule', 'this matter') : `matter ${id}`, mark: '✓', matterId: id }))),
+    ...Object.entries(u.matters || {}).filter(([id]) => !matterId || id === matterId).flatMap(([id, m]: [string, any]) => (m.allow || []).map((p: string) => ({ pattern: p, where: id === matterId ? t('commands.thisMatterRule', 'this matter') : t('commands.matterId', 'matter {{id}}', { id }), mark: '✓', matterId: id }))),
     ...(u.deny || []).map((p: string) => ({ pattern: p, where: t('commands.never', 'never allowed'), mark: '✗' })),
   ]
   const firm: { pattern: string; where: string; mark: string }[] = [
@@ -679,7 +655,7 @@ function LawSources({ say }: { say: (text: string, kind?: 'ok' | 'warn' | 'bad')
   if (!list) return <p className="text-antique">{t('common.loading', 'Loading…')}</p>
   if (keyFor) {
     return (
-      <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); if (secret.trim()) act(() => engine()!.call('POST', '/api/sources/key', { name: keyFor.id, key: secret.trim() }), `Saved the ${keyFor.label} key.`) }}>
+      <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); if (secret.trim()) act(() => engine()!.call('POST', '/api/sources/key', { name: keyFor.id, key: secret.trim() }), t('commands.keySavedFor', 'Saved the {{name}} key.', { name: keyFor.label })) }}>
         <label className="block text-cream">{t('commands.yourKey', 'Your {{name}} key', { name: keyFor.label })}</label>
         <input type="password" autoFocus value={secret} onChange={(e) => setSecret(e.target.value)} className="input w-full" autoComplete="off" />
         <p className="text-xs text-antique">{keyFor.keyHelp ? `${keyFor.keyHelp} ` : ''}{t('commands.keyKept', 'It is kept in this computer\'s keychain and only sent to {{name}}.', { name: keyFor.label })}</p>
@@ -701,7 +677,7 @@ function LawSources({ say }: { say: (text: string, kind?: 'ok' | 'warn' | 'bad')
               <span className="flex-1 text-cream">{s.status}</span>
               {(s.needsKey || s.optionalKey) && <button type="button" disabled={busy} className="text-xs text-antique underline hover:text-cream" onClick={() => setKeyFor(s)}>{s.hasKey ? t('commands.replaceKey', 'Replace the key') : t('commands.pasteKey', 'Paste your key')}</button>}
               {!s.managedByFirm && (
-                <button type="button" disabled={busy} className="text-xs text-antique underline hover:text-cream" onClick={() => act(() => engine()!.call('POST', '/api/sources/enable', { name: s.id, on: !s.enabled }), `${s.label} is now ${s.enabled ? 'off' : 'on'}.`)}>
+                <button type="button" disabled={busy} className="text-xs text-antique underline hover:text-cream" onClick={() => act(() => engine()!.call('POST', '/api/sources/enable', { name: s.id, on: !s.enabled }), s.enabled ? t('commands.nowOff', '{{name}} is now off.', { name: s.label }) : t('commands.nowOn', '{{name}} is now on.', { name: s.label }))}>
                   {s.enabled ? t('commands.switchOff', 'Switch off') : t('commands.switchOn', 'Switch on')}
                 </button>
               )}

@@ -101,7 +101,7 @@ test('on the wire: temperature, tool protocol, output cap', async () => {
   assert.strictEqual(requests[0].max_completion_tokens ?? requests[0].max_tokens, 300)
 
   writeUser({})
-  useModel('mistral-large-latest')
+  useModel('mistral-medium-latest')
   requests.length = 0
   await call({ temperature: 0.3 })
   assert.strictEqual(requests[0].temperature, 0.3)

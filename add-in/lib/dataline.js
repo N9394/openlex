@@ -50,6 +50,8 @@
   /** The header label: where the AI runs ("AI: this computer"). `status` = GET /api/status. */
   function aiLabel(status) {
     const m = (status && status.model) || {}
+    // The engine's words, the same label as the desktop app: "Claude · AWS Bedrock (EU)".
+    if (m.display && m.display.en) return { text: `${m.display.en} ▾`, local: !!m.display.local }
     if (m.local !== false) return { text: 'AI: this computer', local: true }
     return { text: `AI: ${words.serviceName({ provider: m.provider, model: m.name, region: m.region, label: m.label })}`, local: false }
   }

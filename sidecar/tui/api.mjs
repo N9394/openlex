@@ -30,6 +30,7 @@ export function log(what, err) {
 export const NAMES = {
   local: 'this computer', anthropic: 'Anthropic', openai: 'OpenAI', azure: 'Azure OpenAI', mistral: 'Mistral',
   openrouter: 'OpenRouter', bedrock: 'AWS Bedrock', vertex: 'Google Vertex', custom: 'your firm server', web: 'web search',
+  scaleway: 'Scaleway', ovhcloud: 'OVHcloud', stackit: 'STACKIT', ionos: 'IONOS', 'local-server': 'this computer',
 }
 export const nameOf = (id) => NAMES[id] || (String(id).startsWith('mcp:') ? `connector ${String(id).slice(4)}` : String(id).startsWith('source:') ? `source ${String(id).slice(7)}` : id)
 
@@ -55,6 +56,8 @@ export function createApi(c = client) {
     providers: () => call('GET', '/api/providers'),
     useProvider: (id, overrides) => call('POST', '/api/providers', { active: id, ...(overrides && Object.keys(overrides).length ? { provider: id, overrides } : {}) }),
     saveKey: (provider, key) => call('POST', '/api/providers/key', { provider, key }),
+    localModels: () => call('GET', '/api/local/models'),
+    useLocalModel: (name) => call('POST', '/api/local/use', { name }),
     testProvider: (provider, matterId) => call('POST', '/api/providers/test', { provider, ...(matterId ? { matterId } : {}) }),
     policy: () => call('GET', '/api/policy'),
     setPolicy: (rule) => call('POST', '/api/policy', { rule }),

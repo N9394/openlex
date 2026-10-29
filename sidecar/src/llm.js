@@ -41,7 +41,7 @@ const hooks = require('./hooks')
 /** Errors worth trying the next candidate for: network, timeouts, 429, 5xx, missing key. */
 function retryable(err) {
   if (!err) return false
-  if (err.code === 'POLICY_BLOCKED' || err.code === 'NO_KEY' || err.code === 'HOOK_BLOCKED') return true
+  if (err.code === 'POLICY_BLOCKED' || err.code === 'NO_KEY' || err.code === 'HOOK_BLOCKED' || err.code === 'SPEND_CAP' || err.code === 'MODEL_BLOCKED') return true
   const m = String(err.message || err)
   return /ECONN|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|socket hang up|fetch failed|timed? ?out|aborted due to timeout|HTTP (429|5\d\d)|\b(429|50[0-4])\b|overloaded|rate limit|returned no content/i.test(m) && !/AbortError|cancel/i.test(m)
 }
@@ -93,8 +93,19 @@ async function prepare(p, kind) {
     err.code = 'POLICY_BLOCKED'
     throw err
   }
+  // Models that keep or train on what they get, or run outside the EU (providers/blocked.js).
+  const blocked = require('./providers/blocked').reason(p)
+  if (blocked) {
+    policy.audit({ provider: p.id, model: p.model || null, matter, call: kind, decision: 'blocked', reason: 'model not allowed for client data' })
+    const e = new Error(blocked.en); e.code = 'MODEL_BLOCKED'; e.de = blocked.de; throw e
+  }
   const key = await secrets.getKey(p.id)
   if (p.needsKey && !key) { const e = new Error(`${p.label}: no API key set (Settings → Model provider)`); e.code = 'NO_KEY'; throw e }
+  // The monthly limit for online AI (spend.js): stop before anything is sent.
+  try { require('./spend').check(p) } catch (err) {
+    policy.audit({ provider: p.id, model: p.model || null, matter, call: kind, decision: 'blocked', reason: 'monthly spending limit reached' })
+    throw err
+  }
   return { key, matter }
 }
 
@@ -122,7 +133,8 @@ async function cloudCall(kind, messages, opts, run, provider, routeReason) {
   // The model's profile (models.js) can switch a model to the text-JSON
   // protocol, drop the temperature it rejects, cap output, or turn off
   // its native thinking.
-  const profile = require('./models').profileFor({ kind: p.kind, model: p.model })
+  // An AI program on this computer (Ollama, llama.cpp) gets the local model's profile.
+  const profile = require('./models').profileFor({ kind: p.local ? 'local' : p.kind, model: p.model })
   const wantTools = p.nativeTools !== false && profile.tools === 'native' && opts.phase && opts.tools !== false &&
     (opts.phase === 'planning' || opts.phase === 'analyzing' || !opts.onContent)
   const callOpts = {
@@ -140,6 +152,7 @@ async function cloudCall(kind, messages, opts, run, provider, routeReason) {
       restorer?.flush()
       r = { ...r, content: red.restore(r.content), reasoning: red.restore(r.reasoning) }
     }
+    try { require('./spend').record({ provider: p.id, model: p.model || null, matterId: matter, usage: r.usage || null, inChars: chars(messagesOut), outChars: (r.content || '').length + (r.reasoning || '').length, local: !!p.local }) } catch (err) { console.warn('[spend] not recorded:', err.message) }
     policy.audit({ provider: p.id, model: p.model || null, ...(p.region ? { region: p.region } : {}), matter, call: kind, ...(opts.role || opts.phase ? { role: opts.role || routing.PHASE_ROLE[opts.phase] || opts.phase } : {}), ...(routeReason ? { route: routeReason } : {}), decision: 'allowed', ok: true, ms: Date.now() - t0, inChars: chars(messagesOut), outChars: (r.content || '').length, ...(red ? { redacted: red.replaced } : {}) })
     return r
   } catch (err) {
@@ -213,17 +226,31 @@ async function* chatStream(messages, opts = {}) {
   if (failure) throw failure
 }
 
-/** Settings → Test: one tiny call against a provider (policy still applies). */
+/**
+ * Settings → Test: is the service reachable and does it accept the key?
+ * Sends no client data (a key check or the model list; only an Azure
+ * deployment gets "Reply with OK."), so it works before the client-data
+ * rule allows the service — the lawyer can set up a key first and allow
+ * it for a matter later. Audited like every call.
+ */
 async function testProvider(id) {
   const p = settings.resolve(id)
   if (p.kind === 'local') {
     const r = await local.ping()
     return { ok: r.ok, sample: r.models?.[0] || null, error: r.error || null }
   }
-  const { key } = await prepare(p, 'test')
-  const r = await ADAPTERS[p.kind].test(p, key)
-  policy.audit({ provider: p.id, model: p.model || null, matter: policy.currentMatter(), call: 'test', decision: 'allowed', ok: true })
-  return r
+  const key = await secrets.getKey(p.id)
+  if (p.needsKey && !key) { const e = new Error(`${p.label}: no API key set (Settings → Model provider)`); e.code = 'NO_KEY'; throw e }
+  const adapter = ADAPTERS[p.kind]
+  if (!adapter) throw new Error(`provider kind not supported: ${p.kind}`)
+  try {
+    const r = await adapter.test(p, key)
+    policy.audit({ provider: p.id, model: p.model || null, matter: policy.currentMatter(), call: 'test', decision: 'allowed', reason: 'connection check, no client data', ok: true })
+    return r
+  } catch (err) {
+    policy.audit({ provider: p.id, model: p.model || null, matter: policy.currentMatter(), call: 'test', decision: 'allowed', reason: 'connection check, no client data', ok: false, error: String(err.message).slice(0, 200) })
+    throw err
+  }
 }
 
 /** The provider a call for this role would try first (for concurrency and display). */

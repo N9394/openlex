@@ -19,14 +19,190 @@
  * the audit entry and shown in the pane.
  */
 
+// The order below is the order the picker shows (recommended first):
+//   local       on this computer — the only option without third-party disclosure
+//   recommended Claude on AWS Bedrock, EU profile from Frankfurt, retention "none"
+//   eu          EU providers without a US parent (OpenAI-compatible base URLs)
+//   firm-cloud  big models through the firm's own cloud account, EU region
+//   gateway     OpenRouter, strict preset (ZDR, no data collection, no fallbacks)
+//   direct      the model makers' own APIs (US companies)
+//   other       a server the firm names itself
+// `about` is the one plain line under each choice (English and German; the
+// windows fall back to English). `company` names who receives the data
+// (the cloud notice, cloud_notice.js); `usParent` marks US companies
+// (CLOUD Act exposure even in an EU region).
 const PROVIDERS = {
   local: {
-    label: 'Local (llama.cpp / Ollama)',
+    label: 'Local (llama.cpp / Ollama)', labelDe: 'Lokal (llama.cpp / Ollama)',
     kind: 'local',
     local: true,
     needsKey: false,
     ctx: null, // RAM-tier + depth preset (agent-config.js)
     defaultModel: null, // config.LLM_MODEL
+    group: 'local',
+    about: { en: 'OpenLex\'s own AI on this computer. Nothing leaves it.', de: 'Die KI von OpenLex auf diesem Computer. Nichts verlässt ihn.' },
+  },
+  'local-server': {
+    // An AI program the lawyer runs on this computer: Ollama (default
+    // address) or llama.cpp's llama-server (http://127.0.0.1:8080/v1).
+    // Loopback only — settings.js refuses any other host for it.
+    label: 'Ollama or llama.cpp on this computer', labelDe: 'Ollama oder llama.cpp auf diesem Computer',
+    kind: 'openai',
+    local: true,
+    needsKey: false,
+    baseUrl: 'http://127.0.0.1:11434/v1',
+    ctx: 8192,
+    defaultModel: null, // the model pulled or named in the picker
+    group: 'local',
+    about: { en: 'An AI program you run on this computer (Ollama or llama.cpp). Nothing leaves it.', de: 'Ein KI-Programm auf diesem Computer (Ollama oder llama.cpp). Nichts verlässt ihn.' },
+  },
+  // Recommended cloud (research 2026-10-29): Claude through the firm's own
+  // AWS account, EU geo inference profile called from Frankfurt, so the
+  // request is processed only in EU regions (from London or Zurich those
+  // regions would be added). Data retention "none" is set through the API
+  // (bedrock_retention.js). https://docs.aws.amazon.com/bedrock/latest/userguide/data-retention.html
+  bedrock: {
+    label: 'Claude on AWS Bedrock (EU)', labelDe: 'Claude über AWS Bedrock (EU)',
+    kind: 'bedrock',
+    local: false,
+    needsKey: true,
+    baseUrl: null, // https://bedrock-runtime.<region>.amazonaws.com
+    region: 'eu-central-1',
+    ctx: 200000,
+    defaultModel: 'eu.anthropic.claude-sonnet-5-5',
+    models: ['eu.anthropic.claude-sonnet-5-5', 'eu.anthropic.claude-opus-5-5'],
+    group: 'recommended',
+    usParent: true,
+    company: { en: 'Amazon Web Services, through your firm\'s AWS account (Anthropic does not receive your text)', de: 'Amazon Web Services, über das AWS-Konto Ihrer Kanzlei (Anthropic erhält Ihre Texte nicht)' },
+    keyHelp: { en: 'A Bedrock API key made in Europe (Frankfurt): AWS console → Amazon Bedrock → API keys. Or ACCESS_KEY_ID:SECRET_ACCESS_KEY.', de: 'Ein Bedrock-API-Schlüssel aus der Region Europa (Frankfurt): AWS-Konsole → Amazon Bedrock → API-Schlüssel. Oder ACCESS_KEY_ID:SECRET_ACCESS_KEY.' },
+    about: { en: 'Recommended for fast, high-quality work: Claude Sonnet 5.5 (Opus 5.5 for hard tasks) in your firm\'s own AWS account, EU data centres only, storage switched off. US company.', de: 'Empfohlen für schnelle Arbeit in hoher Qualität: Claude Sonnet 5.5 (Opus 5.5 für schwierige Aufgaben) im eigenen AWS-Konto Ihrer Kanzlei, nur EU-Rechenzentren, Speicherung abgeschaltet. US-Unternehmen.' },
+  },
+  mistral: {
+    label: 'Mistral (EU)',
+    kind: 'openai',
+    local: false,
+    needsKey: true,
+    baseUrl: 'https://api.mistral.ai/v1',
+    region: 'eu', // La Plateforme is hosted in the EU
+    ctx: 128000,
+    // Runner-up (research 2026-10-29). Never Large 4 (a preview: Mistral may
+    // train on it, zero retention does not apply) — blocked in policy_models.js.
+    defaultModel: 'mistral-medium-3-5-26-04',
+    models: ['mistral-medium-3-5-26-04', 'mistral-small-4-0-26-03'],
+    group: 'eu',
+    company: { en: 'Mistral AI (France)', de: 'Mistral AI (Frankreich)' },
+    keyHelp: { en: 'Key from console.mistral.ai → API keys', de: 'Schlüssel unter console.mistral.ai → API keys' },
+    about: { en: 'Mistral Medium 3.5: French company, EU data centres. Zero retention only after Mistral approves your request; until then Mistral keeps what you send for 30 days.', de: 'Mistral Medium 3.5: französisches Unternehmen, Rechenzentren in der EU. Zero-Data-Retention erst, wenn Mistral Ihren Antrag genehmigt; bis dahin speichert Mistral Ihre Eingaben 30 Tage.' },
+  },
+  // https://www.scaleway.com/en/docs/generative-apis/quickstart/ (base_url)
+  scaleway: {
+    label: 'Scaleway (France)', labelDe: 'Scaleway (Frankreich)',
+    kind: 'openai',
+    local: false,
+    needsKey: true,
+    baseUrl: 'https://api.scaleway.ai/v1',
+    region: 'eu-fr', // Paris
+    ctx: 128000,
+    defaultModel: 'gpt-oss-120b',
+    group: 'eu',
+    company: { en: 'Scaleway (France)', de: 'Scaleway (Frankreich)' },
+    keyHelp: { en: 'Key from console.scaleway.com → IAM → API keys', de: 'Schlüssel unter console.scaleway.com → IAM → API-Schlüssel' },
+    about: { en: 'French company without a US parent, data centres in Paris. Keeps no prompts by default.', de: 'Französisches Unternehmen ohne US-Mutterkonzern, Rechenzentren in Paris. Speichert Eingaben standardmäßig nicht.' },
+  },
+  // https://www.ovhcloud.com/en/public-cloud/ai-endpoints/catalog/ (OpenAI-compatible endpoint)
+  ovhcloud: {
+    label: 'OVHcloud AI Endpoints (France)', labelDe: 'OVHcloud AI Endpoints (Frankreich)',
+    kind: 'openai',
+    local: false,
+    needsKey: true,
+    baseUrl: 'https://oai.endpoints.kepler.ai.cloud.ovh.net/v1',
+    region: 'eu-fr',
+    ctx: 128000,
+    defaultModel: 'gpt-oss-120b',
+    group: 'eu',
+    company: { en: 'OVHcloud (France)', de: 'OVHcloud (Frankreich)' },
+    keyHelp: { en: 'Key from the OVHcloud Control Panel → Public Cloud → AI Endpoints → API keys', de: 'Schlüssel im OVHcloud Control Panel → Public Cloud → AI Endpoints → API keys' },
+    about: { en: 'French company without a US parent, EU data centres. Keeps only billing data.', de: 'Französisches Unternehmen ohne US-Mutterkonzern, Rechenzentren in der EU. Speichert nur Abrechnungsdaten.' },
+  },
+  // https://docs.stackit.cloud/products/data-and-ai/ai-model-serving/basics/available-shared-models/
+  stackit: {
+    label: 'STACKIT (Germany)', labelDe: 'STACKIT (Deutschland)',
+    kind: 'openai',
+    local: false,
+    needsKey: true,
+    baseUrl: 'https://api.openai-compat.model-serving.eu01.onstackit.cloud/v1',
+    region: 'eu-de',
+    ctx: 128000,
+    defaultModel: 'openai/gpt-oss-120b',
+    group: 'eu',
+    company: { en: 'STACKIT (Germany)', de: 'STACKIT (Deutschland)' },
+    keyHelp: { en: 'An AI Model Serving token from the STACKIT portal', de: 'Ein Token für AI Model Serving aus dem STACKIT-Portal' },
+    about: { en: 'German company (Schwarz group), servers in Germany. Stores no request data.', de: 'Deutsches Unternehmen (Schwarz-Gruppe), Server in Deutschland. Speichert keine Anfragedaten.' },
+  },
+  // https://docs.ionos.com/cloud/ai/ai-model-hub/how-tos/text-generation
+  ionos: {
+    label: 'IONOS AI Model Hub (Germany)', labelDe: 'IONOS AI Model Hub (Deutschland)',
+    kind: 'openai',
+    local: false,
+    needsKey: true,
+    baseUrl: 'https://openai.inference.de-txl.ionos.com/v1',
+    region: 'eu-de', // Berlin
+    ctx: 128000,
+    defaultModel: 'openai/gpt-oss-120b',
+    group: 'eu',
+    company: { en: 'IONOS (Germany)', de: 'IONOS (Deutschland)' },
+    keyHelp: { en: 'An API token from the IONOS Data Center Designer (Token Manager)', de: 'Ein API-Token aus dem IONOS Data Center Designer (Token Manager)' },
+    about: { en: 'German company (United Internet), servers in Germany. Ask IONOS how long it keeps requests.', de: 'Deutsches Unternehmen (United Internet), Server in Deutschland. Fragen Sie IONOS, wie lange Anfragen gespeichert werden.' },
+  },
+  azure: {
+    label: 'Azure OpenAI (your tenant)', labelDe: 'Azure OpenAI (Konto Ihrer Kanzlei)',
+    kind: 'azure',
+    local: false,
+    needsKey: true,
+    // https://<resource>.openai.azure.com/openai/deployments/<deployment>
+    baseUrl: null,
+    apiVersion: '2024-10-21',
+    ctx: 128000,
+    defaultModel: null, // deployment decides the model
+    maxTokensField: 'max_completion_tokens',
+    group: 'firm-cloud',
+    usParent: true,
+    company: { en: 'Microsoft, through your firm\'s Azure account', de: 'Microsoft, über das Azure-Konto Ihrer Kanzlei' },
+    about: { en: 'GPT in your firm\'s own Microsoft account; choose a deployment in the EU Data Zone. US company.', de: 'GPT im eigenen Microsoft-Konto Ihrer Kanzlei; Bereitstellung in der EU-Datenzone wählen. US-Unternehmen.' },
+  },
+  vertex: {
+    label: 'Google Vertex AI (your project)', labelDe: 'Google Vertex AI (Projekt Ihrer Kanzlei)',
+    kind: 'vertex',
+    local: false,
+    // Service-account JSON in the keychain, or the local gcloud login.
+    needsKey: false,
+    baseUrl: null,
+    region: 'europe-west1',
+    project: null,
+    ctx: 200000,
+    defaultModel: 'claude-sonnet-4-5@20250929',
+    group: 'firm-cloud',
+    usParent: true,
+    company: { en: 'Google, through your firm\'s Google Cloud project', de: 'Google, über das Google-Cloud-Projekt Ihrer Kanzlei' },
+    about: { en: 'Gemini or Claude in your firm\'s own Google Cloud project, EU region. US company.', de: 'Gemini oder Claude im eigenen Google-Cloud-Projekt Ihrer Kanzlei, EU-Region. US-Unternehmen.' },
+  },
+  openrouter: {
+    // Strict preset (providers/openai.js): zero data retention, no data
+    // collection, EU model hosts only, no fallbacks. `plan: 'business'`
+    // switches to the EU gateway (settings.resolve).
+    label: 'OpenRouter',
+    kind: 'openai',
+    local: false,
+    needsKey: true,
+    baseUrl: 'https://openrouter.ai/api/v1',
+    euBaseUrl: 'https://eu.openrouter.ai/api/v1',
+    ctx: 128000,
+    defaultModel: 'anthropic/claude-sonnet-4.5',
+    group: 'gateway',
+    usParent: true,
+    company: { en: 'OpenRouter, Inc. (New York, USA) as the go-between, and the company that runs the model (e.g. AWS, Google, Microsoft, Mistral)', de: 'OpenRouter, Inc. (New York, USA) als Vermittler und der jeweilige Modellanbieter (z. B. AWS, Google, Microsoft, Mistral)' },
+    keyHelp: { en: 'Key from openrouter.ai → Keys', de: 'Schlüssel unter openrouter.ai → Keys' },
+    about: { en: 'Many models with one key, with strict settings: zero data retention, no data collection, no fallbacks. US company.', de: 'Viele Modelle mit einem Schlüssel, streng eingestellt: Zero-Data-Retention, keine Datensammlung, keine Ausweichanbieter. US-Unternehmen.' },
   },
   anthropic: {
     label: 'Anthropic (Claude)',
@@ -37,6 +213,11 @@ const PROVIDERS = {
     ctx: 200000,
     defaultModel: 'claude-sonnet-5-5',
     models: ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-4-5-20251001'],
+    group: 'direct',
+    usParent: true,
+    company: { en: 'Anthropic (USA)', de: 'Anthropic (USA)' },
+    keyHelp: { en: 'Key from console.anthropic.com → API keys', de: 'Schlüssel unter console.anthropic.com → API keys' },
+    about: { en: 'Claude directly from Anthropic. No EU option; data is stored in the US.', de: 'Claude direkt von Anthropic. Keine EU-Option; Daten werden in den USA gespeichert.' },
   },
   openai: {
     label: 'OpenAI',
@@ -48,62 +229,14 @@ const PROVIDERS = {
     defaultModel: 'gpt-5.1',
     // Official OpenAI rejects max_tokens on reasoning models.
     maxTokensField: 'max_completion_tokens',
-  },
-  azure: {
-    label: 'Azure OpenAI (your tenant)',
-    kind: 'azure',
-    local: false,
-    needsKey: true,
-    // https://<resource>.openai.azure.com/openai/deployments/<deployment>
-    baseUrl: null,
-    apiVersion: '2024-10-21',
-    ctx: 128000,
-    defaultModel: null, // deployment decides the model
-    maxTokensField: 'max_completion_tokens',
-  },
-  mistral: {
-    label: 'Mistral (EU)',
-    kind: 'openai',
-    local: false,
-    needsKey: true,
-    baseUrl: 'https://api.mistral.ai/v1',
-    region: 'eu', // La Plateforme is hosted in the EU
-    ctx: 128000,
-    defaultModel: 'mistral-large-latest',
-  },
-  openrouter: {
-    label: 'OpenRouter',
-    kind: 'openai',
-    local: false,
-    needsKey: true,
-    baseUrl: 'https://openrouter.ai/api/v1',
-    ctx: 128000,
-    defaultModel: 'qwen/qwen3.5-9b',
-  },
-  bedrock: {
-    label: 'AWS Bedrock (your account)',
-    kind: 'bedrock',
-    local: false,
-    needsKey: true,
-    baseUrl: null, // https://bedrock-runtime.<region>.amazonaws.com
-    region: 'eu-central-1',
-    ctx: 200000,
-    defaultModel: 'eu.anthropic.claude-sonnet-4-5-20250929-v1:0',
-  },
-  vertex: {
-    label: 'Google Vertex AI (your project)',
-    kind: 'vertex',
-    local: false,
-    // Service-account JSON in the keychain, or the local gcloud login.
-    needsKey: false,
-    baseUrl: null,
-    region: 'europe-west1',
-    project: null,
-    ctx: 200000,
-    defaultModel: 'claude-sonnet-4-5@20250929',
+    group: 'direct',
+    usParent: true,
+    company: { en: 'OpenAI (USA)', de: 'OpenAI (USA)' },
+    keyHelp: { en: 'Key from platform.openai.com → API keys', de: 'Schlüssel unter platform.openai.com → API keys' },
+    about: { en: 'GPT directly from OpenAI. US company; EU processing only with zero retention approved by OpenAI\'s sales team.', de: 'GPT direkt von OpenAI. US-Unternehmen; Verarbeitung in der EU nur mit Zero-Data-Retention, die der OpenAI-Vertrieb genehmigt.' },
   },
   custom: {
-    label: 'Custom OpenAI-compatible endpoint',
+    label: 'Custom OpenAI-compatible endpoint', labelDe: 'Eigener OpenAI-kompatibler Server',
     kind: 'openai',
     // A firm gateway may be on-prem (vLLM, LM Studio, LiteLLM) or cloud —
     // the user declares which in Settings; default to NOT local so the
@@ -113,8 +246,14 @@ const PROVIDERS = {
     baseUrl: null,
     ctx: 32768,
     defaultModel: null,
+    group: 'other',
+    company: { en: 'the server you entered', de: 'der Server, den Sie eingetragen haben' },
+    about: { en: 'A server your firm runs or chooses (OpenAI-compatible).', de: 'Ein Server, den Ihre Kanzlei betreibt oder auswählt (OpenAI-kompatibel).' },
   },
 }
+
+/** The picker's sections, in the recommended order. */
+const GROUPS = ['local', 'recommended', 'eu', 'firm-cloud', 'gateway', 'direct', 'other']
 
 function getProvider(id) {
   const p = PROVIDERS[id]
@@ -122,4 +261,4 @@ function getProvider(id) {
   return { id, ...p }
 }
 
-module.exports = { PROVIDERS, getProvider }
+module.exports = { PROVIDERS, GROUPS, getProvider }

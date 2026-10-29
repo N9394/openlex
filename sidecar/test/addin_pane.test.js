@@ -112,6 +112,8 @@ test('data line: symbol + words for each case', () => {
   assert.deepStrictEqual(pick(onlyWeb), { symbol: '!', text: 'Looked up online: RIS', left: true })
   assert.deepStrictEqual(dataline.aiLabel({ model: { local: true, name: 'lotus' } }), { text: 'AI: this computer', local: true })
   assert.strictEqual(dataline.aiLabel({ model: { local: false, provider: 'mistral', name: 'mistral-large' } }).text, 'AI: Mistral')
+  // The engine's label (the same words as the desktop app), with the ▾ that opens /model.
+  assert.deepStrictEqual(dataline.aiLabel({ model: { local: false, display: { en: 'Claude · AWS Bedrock (EU)', de: 'Claude · AWS Bedrock (EU)', local: false } } }), { text: 'Claude · AWS Bedrock (EU) ▾', local: false })
   function pick(x) { return { symbol: x.symbol, text: x.text, left: x.left } }
 })
 

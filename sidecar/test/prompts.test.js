@@ -41,7 +41,7 @@ const sys = (body) => body.messages.find((m) => m.role === 'system').content
 test.before(async () => {
   await new Promise((r) => fake.listen(0, '127.0.0.1', r))
   const settings = require('../src/providers/settings')
-  settings.update({ provider: 'openai', overrides: { baseUrl: `http://127.0.0.1:${fake.address().port}/v1`, model: 'mistral-large-latest' } })
+  settings.update({ provider: 'openai', overrides: { baseUrl: `http://127.0.0.1:${fake.address().port}/v1`, model: 'mistral-medium-latest' } })
   settings.update({ active: 'openai' })
   require('../src/workspace').setBase(path.join(DATA, 'workspace'))
   prompts = require('../src/prompts')
