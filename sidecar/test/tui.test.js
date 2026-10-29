@@ -1097,7 +1097,7 @@ test('files dropped into the question: chips, Backspace removes, sent with the q
   // A path typed by hand and sent alone is attached too, not asked.
   await waitFor(r, 'Yes: the warranty covers all shares.')
   const n = posted('/api/chat').length
-  await press(r, `'${b}'`, 'enter')
+  await press(r, `${q}${b}${q}`, 'enter')
   await waitFor(r, 'Your question will be about Side letter.txt.')
   assert.strictEqual(posted('/api/chat').length, n)
   fs.rmSync(src, { recursive: true, force: true })
