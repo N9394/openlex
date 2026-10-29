@@ -54,6 +54,8 @@ export function useChatCommands(opts: {
   /** What the last answer is based on (/sources). */
   lastBasis?: () => Basis[]
   newConversation: () => void
+  /** /analyse [document]: the full document analysis of the attached (or named) document. */
+  analyse?: (arg: string) => void
   /** Who OpenLex works as for questions without a matter (a matter keeps its own). */
   quickAgent?: string
   setQuickAgent?: (name: string) => void
@@ -197,6 +199,7 @@ export function useChatCommands(opts: {
         return setDialog({ kind: 'sources', items })
       }
       case 'law': return setDialog({ kind: 'law' })
+      case 'analyse': return opts.analyse ? opts.analyse(arg) : say(t('commands.notHere', 'This command does not work here.'), 'warn')
       default: return say(t('commands.unknown', 'There is no command /{{name}}. Type /help to see the commands.', { name }), 'warn')
     }
   }, [lastAnswer, lastBasis, navigate, newConversation, running, save, say, setInput, setQuickAgent, t, word])

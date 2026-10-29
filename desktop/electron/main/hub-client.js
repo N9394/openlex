@@ -105,7 +105,9 @@ class HubClient {
         'X-OpenLex-Client': 'app',
         ...(payload ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) } : {}),
       },
-      timeout: 10000,
+      // Reading a long scanned PDF (OCR on this computer) or sizing a whole
+      // folder takes longer than an ordinary call.
+      timeout: /^\/api\/(document\/read|batch\/(estimate|start)|analysis\/export)\b/.test(pathname) ? 600000 : 10000,
     }
     // Trust the sidecar's own localhost cert (self-signed) — and only it.
     if (u.protocol === 'https:' && sc.ca) { try { opts.ca = fs.readFileSync(sc.ca) } catch { /* fall through to system CAs */ } }

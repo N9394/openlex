@@ -285,6 +285,18 @@ test('Bedrock zero retention: read, switch on with PUT {"mode":"none"}, remember
   } finally { ctl.close(); settings.update({ provider: 'bedrock', overrides: { controlUrl: null } }) }
 })
 
+test('Bedrock EU preset works with the prompt-cache points (eu. profile, Frankfurt runtime)', () => {
+  const bedrock = require('../src/providers/bedrock')
+  const { CACHE_MARK } = require('../src/providers/common')
+  const p = settings.resolve('bedrock')
+  const body = bedrock.buildBody({ ...p, model: p.model || p.defaultModel }, [{ role: 'system', content: `Stable instructions and a long document${CACHE_MARK}Question-specific part` }, { role: 'user', content: 'hi' }], { maxTokens: 10 })
+  assert.deepStrictEqual(body.system.map((b) => Object.keys(b)[0]), ['text', 'cachePoint', 'text'])
+  const r = require('../src/providers/bedrock')
+  assert.ok(typeof r.complete === 'function')
+  assert.strictEqual(p.region, 'eu-central-1')
+  assert.strictEqual(require('../src/providers/blocked').reason({ ...p, model: 'eu.anthropic.claude-sonnet-5-5' }), null)
+})
+
 // ── the engine's routes, with fake programs on a fake PATH and a fake Ollama ──
 
 function startEngine(env) {

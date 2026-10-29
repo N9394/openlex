@@ -3,17 +3,32 @@
  * Law sources — OpenLex connects lawyers to existing law databases instead
  * of keeping its own copy. One list, plain words:
  *
- *   official, free, no key:  RIS Austria, EUR-Lex, German federal law
- *                            (NeuRIS), Slov-Lex Slovakia, e-Sbírka Czechia
- *   paste-a-key gateways:    Ansvar (the lawyer's own subscription)
+ *   official, free, no key:     RIS Austria (live only in the hours the RIS
+ *                               terms allow, else the local copy), EUR-Lex
+ *                               (Cellar), German federal law (NeuRIS, test
+ *                               phase), Slov-Lex Slovakia, e-Sbírka Czechia
+ *                               (CC0 open data; the lawyer's free REST key
+ *                               is an optional upgrade)
+ *   gateways (own account):     Ansvar (browser sign-in or a service credential)
+ *
+ * Official paths only: a published API or an official static edition, never
+ * the private service behind a website. Where the official path needs a
+ * registration or key, OpenLex requires it and says how to get it (the
+ * guide in docs/SOURCES.md, one section per source).
  *
  * Every connector has the same shape:
  *
  *   { id, label, country, jurisdictions, kind, description, licence,
  *     licenceUrl, homepage, needsKey, hosts, gateway?,
- *     search(query, { limit, lang, jurisdiction }, { key }) → [{ ref, title, citation, url, snippet, date, inForce }]
- *     get(ref, { article, lang }, { key })                  → { ref, title, citation, url, text }
- *     citation(ref) → string }
+ *     search(query, { limit, lang, jurisdiction }, { key, saveKey }) → [{ ref, title, citation, url, snippet, date, inForce }]
+ *     get(ref, { article, lang }, { key, saveKey })                  → { ref, title, citation, url, text }
+ *     citation(ref) → string,
+ *     needsKeyWords?, keyWords?(key), signIn?({ store }), statusNote?(),
+ *     nightCopy?: { get(), set(on) } }
+ *
+ * search() may return { items, note } instead of the list, and get() a
+ * note: a plain sentence shown with the answer (for example "using your
+ * local copy from …").
  *
  * and every result leaves here with its provenance: source, URL, retrieval
  * time and licence.
@@ -38,6 +53,12 @@ const CONNECTORS = [require('./ris'), require('./eurlex'), require('./neuris'), 
 const BY_ID = Object.fromEntries(CONNECTORS.map((c) => [c.id, c]))
 const IDS = CONNECTORS.map((c) => c.id)
 const TIMEOUT_MS = 60000
+const GUIDE = 'https://github.com/N9394/openlex/blob/main/docs/SOURCES.md'
+/** Short, on every law-source answer: this is a look-up, not legal advice. */
+const NOTICE = 'Check the official version before relying on it.'
+const guideUrl = (c) => `${GUIDE}#${c.guide || c.id}`
+/** "needs your free key from the Czech agency (how to get it: …)". */
+const keyReason = (c) => `${c.label} ${c.needsKeyWords || 'needs your key'} (how to get it: ${guideUrl(c)})`
 
 function cfg() {
   try {
@@ -48,7 +69,14 @@ function cfg() {
 }
 
 const isOn = (id, c = cfg()) => c.sources[id]?.enabled !== false
-const keyOf = async (id) => { try { return await require('../secrets').getKey(`source-${id}`) } catch { return null } }
+
+/** The keychain, as the connectors see it (tests swap it for a map). */
+let store = {
+  get: async (name) => require('../secrets').getKey(name),
+  set: async (name, value) => (value == null || value === '' ? require('../secrets').deleteKey(name) : require('../secrets').setKey(name, String(value))),
+}
+const keyOf = async (id) => { try { return await store.get(`source-${id}`) } catch { return null } }
+const saverOf = (id) => (value) => store.set(`source-${id}`, value)
 
 /** null when this connector may be contacted for the current matter, else a plain reason. */
 async function gate(c) {
@@ -80,14 +108,16 @@ async function status({ matterId = null } = {}) {
     const online = policyAllows(x, matterId)
     let state
     let words
+    const keyWords = hasKey && x.keyWords ? x.keyWords(await keyOf(x.id)) : null
     if (!enabled) { state = 'off'; words = firmOff ? 'off (your firm turned it off)' : 'off' }
-    else if (x.needsKey && !hasKey) { state = 'needs_key'; words = 'paste your key' }
-    else if (!online) { state = 'offline'; words = `${x.needsKey ? 'key saved' : 'free'}, but your client-data rule keeps OpenLex offline` }
-    else { state = 'ready'; words = x.needsKey ? 'connected with your key' : `connected, free${x.optionalKey && hasKey ? ' (with your API key)' : ''}${x.testPhase ? ' (test phase)' : ''}` }
+    else if (x.needsKey && !hasKey) { state = 'needs_key'; words = `${x.needsKeyWords || 'paste your key'}: how to get it` }
+    else if (!online) { state = 'offline'; words = `${keyWords || (x.needsKey ? 'key saved' : 'free')}, but your client-data rule keeps OpenLex offline` }
+    else { state = 'ready'; words = keyWords ? `connected, ${keyWords}` : x.gateway ? 'connected with your key' : x.needsKey || (x.optionalKey && hasKey) ? 'connected, free (with your key)' : `connected, free${x.testPhase ? ` (${x.testPhase === true ? 'test phase' : x.testPhase})` : ''}` }
+    if (state === 'ready' && x.statusNote) words += x.statusNote()
     return {
       id: x.id, label: x.label, country: x.country, kind: x.kind, description: x.description,
       licence: x.licence, licenceUrl: x.licenceUrl, homepage: x.homepage,
-      needsKey: !!x.needsKey, optionalKey: !!x.optionalKey, keyHelp: x.keyHelp || null, gateway: !!x.gateway, testPhase: !!x.testPhase,
+      needsKey: !!x.needsKey, optionalKey: !!x.optionalKey, keyHelp: x.keyHelp || null, guide: guideUrl(x), signIn: !!x.signIn, nightCopy: x.nightCopy ? !!x.nightCopy.get() : null, gateway: !!x.gateway, testPhase: !!x.testPhase,
       enabled, hasKey, managedByFirm: c.locked, state, status: `${x.label}: ${words}`,
     }
   }))
@@ -113,10 +143,9 @@ function setEnabled(id, on) {
 
 async function setKey(id, key) {
   const c = connector(id)
-  const secrets = require('../secrets')
-  if (key === null || key === undefined || key === '') { await secrets.deleteKey(`source-${c.id}`); return { id: c.id, hasKey: false } }
+  if (key === null || key === undefined || key === '') { await store.set(`source-${c.id}`, null); return { id: c.id, hasKey: false } }
   if (c.gateway) require('./ansvar').parseKey(key) // throws a plain message for an empty key
-  await secrets.setKey(`source-${c.id}`, String(key))
+  await store.set(`source-${c.id}`, String(key).trim())
   return { id: c.id, hasKey: true }
 }
 
@@ -128,6 +157,14 @@ const withProvenance = (c, item, at) => ({
   licence: c.licence,
   retrieved: at,
 })
+
+/** Keep a local copy, fetched in the hours the source allows (RIS Austria). */
+function setNightCopy(id, on) {
+  const c = connector(id)
+  if (!c.nightCopy) throw new SourceError(`${c.label} has no local copy to keep`, 'bad')
+  c.nightCopy.set(!!on)
+  return { id: c.id, nightCopy: !!on }
+}
 
 const timeout = (p, label) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new SourceError(`${label} took too long to answer; try again later`, 'down')), TIMEOUT_MS).unref())])
 
@@ -180,15 +217,18 @@ async function search({ query, sources, jurisdiction, lang, limit = 5 } = {}) {
   for (const c of picked) {
     if (c.canSearch && !c.canSearch(q)) { if (named || jurisdiction) skipped.push({ source: c.id, reason: c.searchHint }); continue }
     const key = await keyOf(c.id)
-    if (c.needsKey && !key) { if (named) skipped.push({ source: c.id, reason: `${c.label} needs your key (add it under Law sources: /law)` }); continue }
+    if (c.needsKey && !key) { if (named || jurisdiction) skipped.push({ source: c.id, reason: keyReason(c) }); continue }
     const blocked = await gate(c)
     if (blocked) { skipped.push({ source: c.id, reason: blocked }); continue }
     ready.push({ c, key })
   }
   const at = new Date().toISOString()
+  const notes = []
   const runs = await Promise.all(ready.map(async ({ c, key }) => {
     try {
-      const items = await run(c, () => c.search(q, { limit, lang, jurisdiction }, { key }))
+      const out = await run(c, () => c.search(q, { limit, lang, jurisdiction }, { key, saveKey: saverOf(c.id) }))
+      const items = Array.isArray(out) ? out : out?.items || []
+      if (out?.note) notes.push({ source: c.id, note: out.note })
       return items.map((it) => withProvenance(c, it, at))
     } catch (err) {
       skipped.push({ source: c.id, reason: plainError(c, err) })
@@ -197,7 +237,7 @@ async function search({ query, sources, jurisdiction, lang, limit = 5 } = {}) {
   }))
   const results = []
   for (let i = 0; i < Math.max(0, ...runs.map((r) => r.length)); i++) for (const r of runs) if (r[i]) results.push(r[i])
-  return { results, searched: ready.map(({ c }) => c.id), skipped }
+  return { results, searched: ready.map(({ c }) => c.id), skipped, ...(notes.length ? { notes } : {}), ...(results.length ? { notice: NOTICE } : {}) }
 }
 
 /** One document (or one section of it) with provenance. */
@@ -206,11 +246,11 @@ async function get({ source, ref, article = null, lang = 'en' } = {}) {
   if (!isOn(c.id)) throw new SourceError(`${c.label} is switched off`, 'off')
   if (!String(ref || '').trim()) throw new SourceError(`Say which document of ${c.label} to open`, 'bad')
   const key = await keyOf(c.id)
-  if (c.needsKey && !key) throw new SourceError(`${c.label} needs your key (add it under Law sources: /law)`, 'key')
+  if (c.needsKey && !key) throw new SourceError(keyReason(c), 'key')
   const blocked = await gate(c)
   if (blocked) throw new SourceError(`Not looked up: ${blocked}`, 'blocked')
-  const doc = await run(c, () => c.get(String(ref).trim(), { article, lang }, { key }))
-  return withProvenance(c, doc, new Date().toISOString())
+  const doc = await run(c, () => c.get(String(ref).trim(), { article, lang }, { key, saveKey: saverOf(c.id) }))
+  return { ...withProvenance(c, doc, new Date().toISOString()), notice: NOTICE }
 }
 
 /** A citation for a reference, without going online. */
@@ -227,4 +267,49 @@ async function test(id, query) {
   return { ok: true, source: c.id, results: r.results.length, sample: r.results[0] ? { title: r.results[0].title, citation: r.results[0].citation, url: r.results[0].url } : null }
 }
 
-module.exports = { CONNECTORS, IDS, status, setEnabled, setKey, search, get, citation, test, planned, connector, SourceError }
+// ── Browser sign-in (Ansvar) ──────────────────────────────────────────────
+const signins = new Map() // id → { state, flow, url, userCode, expiresAt, error, cancel }
+const view = (id, e) => (e ? { source: id, state: e.state, flow: e.flow, url: e.url, pageUrl: e.pageUrl, userCode: e.userCode, expiresAt: e.expiresAt, opened: !!e.opened, ...(e.error ? { error: e.error } : {}) } : { source: id, state: 'none' })
+
+/**
+ * Start a browser sign-in: returns the code to type and the page to open
+ * (and opens it, unless open is false). The engine waits for the sign-in in
+ * the background and keeps the tokens in the keychain; signInStatus says
+ * when it is done.
+ */
+async function signIn(id, { open = true, pollMs } = {}) {
+  const c = connector(id)
+  if (!c.signIn) throw new SourceError(`${c.label} has no browser sign-in; paste a key instead`, 'bad')
+  signins.get(c.id)?.cancel?.()
+  const s = await c.signIn({ store, pollMs })
+  const e = { state: 'pending', flow: s.flow, url: s.url, pageUrl: s.pageUrl, userCode: s.userCode, expiresAt: new Date(Date.now() + s.expiresIn * 1000).toISOString(), cancel: s.cancel }
+  signins.set(c.id, e)
+  s.done.then(async (cred) => {
+    if (signins.get(c.id) !== e) return
+    await store.set(`source-${c.id}`, cred)
+    e.state = 'done'
+  }).catch((err) => {
+    if (signins.get(c.id) !== e) return
+    e.state = err?.code === 'cancelled' ? 'cancelled' : 'failed'
+    e.error = err instanceof SourceError ? err.plain : `The ${c.label} sign-in did not work`
+  })
+  if (open) e.opened = require('./oauth').openBrowser(s.url)
+  return view(c.id, e)
+}
+
+function signInStatus(id) {
+  const c = connector(id)
+  return view(c.id, signins.get(c.id))
+}
+
+function cancelSignIn(id) {
+  const c = connector(id)
+  const e = signins.get(c.id)
+  if (e && e.state === 'pending') e.cancel?.()
+  return view(c.id, e)
+}
+
+module.exports = {
+  CONNECTORS, IDS, NOTICE, GUIDE, status, setEnabled, setKey, setNightCopy, search, get, citation, test, planned, connector, signIn, signInStatus, cancelSignIn, SourceError,
+  _setStore: (s) => { store = s; signins.clear() },
+}

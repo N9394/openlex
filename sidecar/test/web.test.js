@@ -54,7 +54,7 @@ test('agent tools refuse local URLs before any policy or network step', async ()
   assert.match(r.output, /ERROR: refusing private network address/)
 })
 
-test('RIS live search returns in-force metadata', { skip: !NET }, async () => {
+test('RIS live search returns in-force metadata', { skip: !NET || !require('../src/web/ris').liveAllowed() }, async () => { // RIS terms: only 20:00–05:00 Vienna time, weekends, holidays
   const r = await require('../src/web/ris').searchBundesrecht('Verjährung Schadenersatz', { limit: 5 })
   assert.ok(r.total > 0)
   const x = r.results[0]

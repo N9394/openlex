@@ -3,7 +3,10 @@
  * NeuRIS — German federal law from the federal government's new legal
  * information portal (rechtsinformationen.bund.de), still in its public
  * test phase. Documented open API, no key, 600 requests a minute per IP.
- * Federal statutes are official works without copyright (§ 5 UrhG).
+ * Federal statutes are official works without copyright (§ 5 UrhG); a
+ * licence for the portal's data has not been published yet, so the source
+ * says "(test phase, licence not yet published)". Statutes only here (case
+ * law moved from /v1/case-law to /v1/rechtsprechung; not used yet).
  *
  *   GET /v1/legislation?searchTerm=…&size=N   search (with text matches)
  *   GET /v1/legislation/{eli expression}      metadata + encodings (HTML, XML)
@@ -26,11 +29,11 @@ const connector = {
   jurisdictions: ['DE'],
   kind: 'law',
   description: 'German federal statutes and regulations from the federal government\'s new legal information portal (public test phase: coverage may be incomplete)',
-  licence: 'Official works, free of copyright (§ 5 UrhG); test service of the Federal Ministry of Justice',
+  licence: 'Statutes are official works, free of copyright (§ 5 UrhG); test service of the Federal Ministry of Justice, data licence not yet published',
   licenceUrl: 'https://docs.rechtsinformationen.bund.de/',
   homepage: 'https://testphase.rechtsinformationen.bund.de',
   needsKey: false,
-  testPhase: true,
+  testPhase: 'test phase, licence not yet published',
   hosts: ['testphase.rechtsinformationen.bund.de'],
 
   async search(query, { limit = 8 } = {}) {

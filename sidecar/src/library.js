@@ -24,7 +24,7 @@ const { pdfText } = require('./pdf_text')
 const STATE_PATH = path.join(DATA_DIR, 'library.json')
 const COLLECTION = process.env.OPENLEX_LIBRARY_COLLECTION || 'firm_library'
 const EXTS = new Set(['.docx', '.pdf', '.txt', '.md'])
-const MAX_FILE_BYTES = 20 * 1024 * 1024
+const limits = require('./limits') // the one size rule (~100 MB)
 const CHUNK_CHARS = 1200
 const CHUNK_OVERLAP = 150
 const EMBED_BATCH = 16
@@ -194,7 +194,7 @@ async function sync({ onProgress } = {}) {
       seen.add(file)
       try {
         const st = fs.statSync(file)
-        if (st.size > MAX_FILE_BYTES) { stats.errors.push(`${file}: larger than 20 MB, skipped`); continue }
+        if (st.size > limits.maxFileBytes()) { stats.errors.push(`${file}: ${limits.tooLargeMessage(require('path').basename(file), st.size)} Skipped.`); continue }
         const hash = crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')
         const prev = s.files[file]
         if (prev && prev.hash === hash && prev.matterId === folder.matterId) { stats.unchanged++; continue }

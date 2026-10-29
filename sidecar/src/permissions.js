@@ -77,6 +77,9 @@ const BUILTIN = {
   // Reads the document and writes only its own report files into the matter
   // folder (earlier versions are kept); its law lookups follow the data policy.
   analyse_document: 'allow',
+  // A file the lawyer attached in a chat (chose it themselves): read on this
+  // computer into text; where that text may go is the data policy's call.
+  read_attachment: 'allow',
 
   // Proposed changes: each suggestion card is reviewed by the lawyer anyway.
   propose_suggestions: 'allow',
@@ -407,6 +410,7 @@ function summarize(tool, args = {}) {
     case 'append_file': return `Add to ${path.posix.basename(cleanPath(a.path)) || 'a file'} in ${where(a.path)}`
     case 'export_document': return `Export the document as ${String(a.format || 'a file').toUpperCase()} into ${a.matter ? `${short(a.matter, 40)}/` : 'the matter folder'}`
     case 'sync_calendar': return 'Add the contract\'s deadlines to your calendar'
+    case 'read_attachment': return `Read the attached file ${short(a.name, 60)}`
     case 'run_bash': return `Run the command: ${short(a.command, 100)}`
     case 'web_fetch': return `Read the web page ${hostOf(a.url) || short(a.url, 60)}`
     case 'web_save': return `Save the web page from ${hostOf(a.url) || short(a.url, 60)} into the matter folder`

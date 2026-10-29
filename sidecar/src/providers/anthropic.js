@@ -13,14 +13,25 @@ const native = require('./native_tools')
 const API_VERSION = '2023-06-01'
 
 function buildBody(p, messages, opts, stream) {
-  const { system, turns } = normalizeMessages(messages)
+  const { system, systemBlocks, turns } = normalizeMessages(messages)
   const body = {
     model: p.model,
     max_tokens: opts.maxTokens || 1024,
     messages: turns,
     stream,
   }
-  if (system) body.system = system
+  if (systemBlocks.some((b) => b.cache)) {
+    // A long document read in full: cache it, so follow-up questions read it
+    // from the provider's cache (about a tenth of the input price). Long
+    // documents get the 1-hour cache: a lawyer's next question often comes
+    // later than five minutes.
+    let cachedChars = 0
+    body.system = systemBlocks.map((b) => {
+      if (!b.cache) return { type: 'text', text: b.text }
+      cachedChars += b.text.length
+      return { type: 'text', text: b.text, cache_control: { type: 'ephemeral', ...(cachedChars >= 200000 ? { ttl: '1h' } : {}) } }
+    })
+  } else if (system) body.system = system
   if (p.vertex) {
     // Claude on Vertex AI: model is in the URL, version in the body.
     delete body.model

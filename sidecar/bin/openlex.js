@@ -35,7 +35,7 @@
  *   openlex models [MODEL] [--local]   model profiles, and which one each role's model gets
  *   openlex prompts ["message"] [--after TOOL]   which instruction blocks and tools each step would get (the prompt roadmap)
  *   openlex sources                    law sources (RIS, EUR-Lex, NeuRIS, Slov-Lex, e-Sbírka, Ansvar) and the firm's own, in plain words
- *   openlex sources on|off SOURCE | key SOURCE [KEY] [--remove] | test SOURCE | search "q" --law [--jurisdiction AT | --source ris,eurlex]  (without --law: the firm's own, [--kind k])
+ *   openlex sources on|off SOURCE | key SOURCE [KEY] [--remove] | signin SOURCE [--no-browser] | nightcopy SOURCE on|off | test SOURCE | search "q" --law [--jurisdiction AT | --source ris,eurlex]  (without --law: the firm's own, [--kind k])
  *   openlex sources add PRESET|NAME --file def.json | remove NAME     the firm's own sources (sources.js)
  *   openlex plan "goal" --matter ID | plan list | plan show ID | plan run ID (approves) | plan decide ID STEP continue|stop [--note text]
  *   openlex serve                      run the engine in the foreground
@@ -66,6 +66,7 @@ function parseArgs(argv) {
     else if (a === '--clear') out.clear = true
     else if (['--local', '--remove', '--redact', '--privileged', '--off', '--yes', '--ascii', '--summary', '--left', '--verify', '--law'].includes(a)) out[a.slice(2)] = true
     else if (a === '--no-folder') out.folder = false
+    else if (a === '--no-browser') out.browser = false
     else if (a === '--allow') out.allow = [...(out.allow || []), ...String(argv[++i] || '').split(',').map((x) => x.trim()).filter(Boolean)]
     else if (a === '--save' && (i + 1 >= argv.length || argv[i + 1].startsWith('--'))) out.save = true
     else if (a.startsWith('--')) out[a.slice(2)] = argv[++i]
@@ -532,10 +533,13 @@ async function main() {
         const r = await request('GET', `/api/sources${a.matter ? `?matterId=${encodeURIComponent(a.matter)}` : ''}`)
         if (a.json) return console.log(JSON.stringify(r, null, 2))
         console.log('Law sources')
-        for (const s of r.law || []) console.log(`  ${s.state === 'ready' ? '✓' : s.state === 'off' ? '–' : '·'} ${s.status}`)
-        const needKey = (r.law || []).filter((s) => s.state === 'needs_key').map((s) => s.id)
+        for (const s of r.law || []) {
+          console.log(`  ${s.state === 'ready' ? '✓' : s.state === 'off' ? '–' : '·'} ${s.status}`)
+          if (s.state === 'needs_key') console.log(`      how to get it: ${s.guide}\n      then: ${s.signIn ? `openlex sources signin ${s.id}  (or a service credential: openlex sources key ${s.id})` : `openlex sources key ${s.id}`}`)
+          else if (s.optionalKey && !s.hasKey && s.state !== 'off') console.log(`      optional free key: ${s.guide}`)
+          if (s.nightCopy === false && s.state !== 'off') console.log(`      keep a local copy (fetched at night): openlex sources nightcopy ${s.id} on`)
+        }
         const offline = (r.law || []).some((s) => s.state === 'offline')
-        if (needKey.length) console.log(`  Add a key: openlex sources key ${needKey[0]}`)
         if (offline) console.log('  Online look-ups are off in your client-data rule. Allow "web" (keep your AI service in the list too): openlex policy allow web[,anthropic]')
         console.log('  Switch one off or on: openlex sources off ris · openlex sources on ris')
         if (r.sources.length) {
@@ -558,6 +562,24 @@ async function main() {
         await request('POST', '/api/sources/key', { name, key })
         return console.log(key ? `key for ${name} stored in the OS keychain` : `key for ${name} removed`)
       }
+      if (sub === 'nightcopy') {
+        if (!name || !['on', 'off'].includes(val)) throw new Error('usage: openlex sources nightcopy SOURCE on|off')
+        const r = await request('POST', '/api/sources/law/nightcopy', { name, on: val === 'on' })
+        return console.log(r.nightCopy ? `${r.id}: OpenLex keeps a local copy, fetched in the hours the source allows` : `${r.id}: no local copy`)
+      }
+      if (sub === 'signin') {
+        if (!name) throw new Error('usage: openlex sources signin SOURCE')
+        let st = await request('POST', '/api/sources/law/signin', { name, open: a.browser !== false })
+        console.log(st.userCode ? `Type this code on the sign-in page: ${st.userCode}` : 'Sign in on the page in your browser.')
+        console.log(`${st.opened ? 'If no page opened, go to' : 'Open'}: ${st.pageUrl || st.url}`)
+        console.log('Waiting for the sign-in… (Ctrl+C to stop)')
+        while (st.state === 'pending') {
+          await new Promise((ok) => setTimeout(ok, 2000))
+          st = await request('GET', `/api/sources/law/signin?name=${encodeURIComponent(name)}`)
+        }
+        if (st.state !== 'done') { process.exitCode = 1; return console.log(st.error || 'The sign-in did not finish.') }
+        return console.log(`Signed in. The tokens are kept in this computer's keychain.`)
+      }
       if (sub === 'test') { const r = await request('POST', '/api/sources/test', { name, query: val, matterId: a.matter }); if (!r.ok) process.exitCode = 1; return console.log(r.ok ? `ok: ${r.results} results${r.sample ? ` — ${r.sample.citation || r.sample.title}` : ''}` : `failed: ${r.error}`) }
       if (sub === 'search') {
         const query = [name, val].filter(Boolean).join(' ')
@@ -566,6 +588,8 @@ async function main() {
           ? await request('POST', '/api/sources/law/search', { query, jurisdiction: a.jurisdiction, sources: a.source ? String(a.source).split(',') : undefined, matterId: a.matter })
           : await request('POST', '/api/sources/search', { query, kind: a.kind, jurisdiction: a.jurisdiction, matterId: a.matter })
         if (a.json) return console.log(JSON.stringify(r, null, 2))
+        if (lawSearch) for (const n of r.notes || []) console.log(`note (${n.source}): ${n.note}`)
+        if (lawSearch && r.notice) console.log(r.notice)
         if (lawSearch) r.results.forEach((x, i) => console.log(`[${i + 1}] ${x.sourceLabel} · ${x.title}\n    cite as: ${x.citation || x.title}${x.snippet ? `\n    ${x.snippet.slice(0, 200)}` : ''}${x.url ? `\n    ${x.url}` : ''}\n    retrieved ${String(x.retrieved).slice(0, 10)} · ${x.licence}`))
         else r.results.forEach((x, i) => console.log(`[${i + 1}] ${x.source} · ${x.title}${x.citation ? ` — ${x.citation}` : ''}\n    ${x.text.slice(0, 200)}${x.url ? `\n    ${x.url}` : ''}`))
         if (!r.results.length) console.log('nothing found')

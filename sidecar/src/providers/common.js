@@ -14,13 +14,24 @@
  *   - tool messages           → user turn prefixed "[Tool result]"
  *   - consecutive same-role   → merged
  */
+/**
+ * Prompt caching: text before CACHE_MARK in the system prompt is a stable
+ * prefix (a long document read in full). Providers with explicit caching
+ * (Anthropic, Bedrock) put a cache breakpoint there; every other provider
+ * gets the text without the mark (OpenAI, DeepSeek, Mistral … cache stable
+ * prefixes on their own, which is why the document comes first).
+ */
+const CACHE_MARK = '\n\u0001openlex:cache\u0001\n'
+const stripCache = (s) => String(s ?? '').split(CACHE_MARK).join('\n')
+
 function normalizeMessages(messages) {
   const systemParts = []
   const turns = []
   let seenNonSystem = false
   for (const m of messages) {
-    const content = typeof m.content === 'string' ? m.content : JSON.stringify(m.content ?? '')
-    if (m.role === 'system' && !seenNonSystem) { systemParts.push(content); continue }
+    const raw = typeof m.content === 'string' ? m.content : JSON.stringify(m.content ?? '')
+    if (m.role === 'system' && !seenNonSystem) { systemParts.push(raw); continue }
+    const content = stripCache(raw)
     seenNonSystem = true
     let role = m.role
     let text = content
@@ -33,7 +44,11 @@ function normalizeMessages(messages) {
   }
   if (turns.length && turns[0].role !== 'user') turns.unshift({ role: 'user', content: '(continue)' })
   if (!turns.length) turns.push({ role: 'user', content: '(continue)' })
-  return { system: systemParts.join('\n\n'), turns }
+  const joined = systemParts.join('\n\n')
+  // systemBlocks: [{ text, cache }] — the last block before a mark is cached.
+  const pieces = joined.split(CACHE_MARK)
+  const systemBlocks = pieces.map((text, i) => ({ text, cache: i < pieces.length - 1 })).filter((b) => b.text)
+  return { system: stripCache(joined), systemBlocks, turns }
 }
 
 /** Error with the HTTP status + a short body excerpt (never the request). */
@@ -70,4 +85,4 @@ function timeoutSignal(ms, outer) {
   return AbortSignal.any(signals)
 }
 
-module.exports = { normalizeMessages, httpError, sseEvents, timeoutSignal }
+module.exports = { CACHE_MARK, stripCache, normalizeMessages, httpError, sseEvents, timeoutSignal }

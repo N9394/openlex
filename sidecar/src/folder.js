@@ -37,7 +37,8 @@ const VISIT_MAX = 5000 // files looked at by one listing or search
 const DEPTH_MAX = 8
 const SEARCH_HITS = 20
 const SEARCH_DOCS_MAX = 40 // Word/PDF files opened by one search
-const DOC_MAX_BYTES = 10 * 1024 * 1024
+// Word/PDF files above the one size rule (limits.js, ~100 MB) are skipped by searches.
+const DOC_MAX_BYTES = () => require('./limits').maxFileBytes()
 const READ_MAX = 8000
 
 /** Word, PDF and text files a lawyer would call "documents". */
@@ -199,6 +200,7 @@ async function textOf(abs) {
   const ext = path.extname(abs).toLowerCase()
   if (ext === '.docx') return require('./docx_text').docxText(abs)
   if (ext === '.pdf') return require('./pdf_text').pdfText(abs, { ocr: false })
+  if (['.xlsx', '.eml', '.html', '.htm', '.rtf'].includes(ext)) return (await require('./read').readDocument({ file: abs }, { ocr: false })).text
   const buf = fs.readFileSync(abs)
   if (buf.subarray(0, 8000).includes(0)) throw new FolderError(`${path.basename(abs)} is not a text, Word or PDF file, so OpenLex cannot read it (save it as Word or PDF)`)
   return buf.toString('utf8')
@@ -210,7 +212,7 @@ async function read(p, { start = 0, max = READ_MAX } = {}) {
   let st
   try { st = fs.statSync(loc.abs) } catch { fail(`${tilde(loc.abs)} was not found`) }
   if (st.isDirectory()) fail(`${tilde(loc.abs)} is a folder; list it instead`)
-  if (st.size > 50 * 1024 * 1024) fail(`${path.basename(loc.abs)} is too large to read (${Math.round(st.size / 1048576)} MB)`)
+  if (st.size > require('./limits').maxFileBytes()) fail(require('./limits').tooLargeMessage(path.basename(loc.abs), st.size))
   const text = String(await textOf(loc.abs) || '')
   const from = Math.max(0, Math.min(Number(start) || 0, text.length))
   const slice = text.slice(from, from + max)
@@ -279,7 +281,7 @@ async function search(query, dir = '') {
     const ext = path.extname(f.path).toLowerCase()
     const isDoc = ext === '.docx' || ext === '.pdf'
     if (!isDoc && !TEXT_EXT.has(ext)) continue
-    if (f.size > (isDoc ? DOC_MAX_BYTES : 1024 * 1024)) continue
+    if (f.size > (isDoc ? DOC_MAX_BYTES() : 1024 * 1024)) continue
     if (isDoc && ++opened > SEARCH_DOCS_MAX) { truncated = true; continue }
     let text
     try { text = await textOf(f.abs) } catch { continue }

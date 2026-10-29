@@ -34,14 +34,14 @@ test('one list: names unique, every command described in plain words in English 
 
 test('per window: only what that window can run, in its language', () => {
   const tui = commands.list({ surface: 'tui' }).map((c) => c.name)
-  assert.deepStrictEqual(tui, ['model', 'key', 'data', 'as', 'privileged', 'permissions', 'folder', 'sources', 'law', 'copy', 'save', 'transcript', 'activity', 'record', 'clear', 'help'])
+  assert.deepStrictEqual(tui, ['model', 'key', 'data', 'as', 'privileged', 'permissions', 'folder', 'sources', 'law', 'analyse', 'copy', 'save', 'transcript', 'activity', 'record', 'clear', 'help'])
   const app = commands.list({ surface: 'app' })
   for (const n of ['help', 'model', 'data', 'matter', 'copy', 'save', 'word', 'activity', 'record', 'clear']) assert.ok(app.some((c) => c.name === n), `app has /${n}`)
   // The app's chat runs on the engine, so these work there too (as in the terminal app).
   for (const n of ['as', 'sources', 'privileged', 'permissions', 'law']) assert.ok(app.some((c) => c.name === n), `app has /${n}`)
   assert.ok(!app.some((c) => c.name === 'transcript'), 'no terminal-only commands in the app')
   const word = commands.list({ surface: 'word' }).map((c) => c.name)
-  assert.deepStrictEqual(word, ['model', 'data', 'as', 'record', 'clear', 'help'])
+  assert.deepStrictEqual(word, ['model', 'data', 'as', 'analyse', 'record', 'clear', 'help'])
 
   assert.strictEqual(commands.find('model').description.en, 'where the AI runs: on this computer, with an EU provider or in the cloud')
   assert.strictEqual(commands.list({ surface: 'app', lang: 'de' }).find((c) => c.name === 'model').help, 'wo die KI läuft: auf diesem Computer, bei einem EU-Anbieter oder in der Cloud')
@@ -63,7 +63,7 @@ test('GET /api/commands', () => {
   assert.ok(ok.json.commands.every((c) => c.surfaces.includes('app')))
   assert.strictEqual(ok.json.commands.find((c) => c.name === 'help').help, 'diese Befehle')
   assert.strictEqual(commands.handle('GET', '/api/commands', new URLSearchParams()).json.commands.length, commands.list().length)
-  assert.strictEqual(commands.handle('GET', '/api/commands', { surface: 'word' }).json.commands.length, 6, 'plain object params')
+  assert.strictEqual(commands.handle('GET', '/api/commands', { surface: 'word' }).json.commands.length, 7, 'plain object params')
   assert.strictEqual(commands.handle('GET', '/api/commands', new URLSearchParams('surface=fax')).status, 400)
   assert.strictEqual(commands.handle('POST', '/api/commands', new URLSearchParams()).status, 405)
   assert.strictEqual(commands.handle('GET', '/api/agents', new URLSearchParams()), null, 'other paths are left to the server')
@@ -86,5 +86,7 @@ test('every window reads the one list (no private copies)', async () => {
   for (const p of ['/api/commands?surface=app&lang=en', '/api/record?limit=50', '/api/record/export', '/api/folder/save']) assert.ok(allowed.test(p), `the app may call ${p}`)
   // The chat on the engine: asking, conversations, permission answers, law sections, /permissions, /law.
   for (const p of ['/api/chat', '/api/sessions?matterId=m_1', '/api/session?id=app_m_1_x', '/api/session/clear', '/api/permissions', '/api/permissions/answer', '/api/permissions/rules', '/api/law/section?chunk_id=c1', '/api/agents', '/api/sources/law?matterId=m_1', '/api/sources/enable', '/api/sources/key']) assert.ok(allowed.test(p), `the app may call ${p}`)
+  // Documents: attach, analyse, export, the memory setting, batches.
+  for (const p of ['/api/document/read', '/api/document/attachment?id=att_1', '/api/analyse', '/api/analysis?id=an_1', '/api/analysis/export', '/api/config/local-memory', '/api/batch/estimate', '/api/batch/start', '/api/batch?id=batch_1', '/api/batch/stop', '/api/batch/resume', '/api/batches?matterId=m_1', '/api/workspace/reveal']) assert.ok(allowed.test(p), `the app may call ${p}`)
   for (const p of ['/api/hub/events', '/api/config/token', '/api/sources/add', '/api/download/model']) assert.ok(!allowed.test(p), `the app may not call ${p}`)
 })

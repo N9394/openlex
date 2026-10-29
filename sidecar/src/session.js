@@ -108,6 +108,8 @@ class Session {
           ...(data.length ? { data } : {}),
           ...(online.length ? { online } : {}),
           ...(meta.stopped ? { stopped: true } : {}),
+          // Results a window shows as a card again (e.g. { kind: 'analysis', id, name }).
+          ...(Array.isArray(meta.results) && meta.results.length ? { results: meta.results.slice(0, 20).map((r) => ({ kind: str(r.kind, 20), id: str(r.id, 60), name: str(r.name, 200) })) } : {}),
         },
       ]
       fs.appendFileSync(this.path, entry.map((m) => JSON.stringify(m)).join('\n') + '\n', 'utf8')
@@ -159,10 +161,11 @@ function matterOf(id, msgs, forDoc) {
 const clip = (s, n) => { const t = String(s || '').replace(/\s+/g, ' ').trim(); return t.length > n ? `${t.slice(0, n - 1)}…` : t }
 
 /**
- * The conversations of a matter (with matterId null: those without one),
- * newest first: [{ id, title, matterId, clients, turns, updatedAt }].
+ * The conversations of a matter (with matterId null: those without one;
+ * all: every conversation, e.g. the dashboard's recent ones), newest first:
+ * [{ id, title, matterId, clients, turns, updatedAt }].
  */
-function list({ matterId = null, forDoc = null, limit = 50 } = {}) {
+function list({ matterId = null, forDoc = null, limit = 50, all = false } = {}) {
   let files = []
   try { files = fs.readdirSync(DIR()).filter((f) => f.endsWith('.jsonl')) } catch { return [] }
   const out = []
@@ -172,7 +175,7 @@ function list({ matterId = null, forDoc = null, limit = 50 } = {}) {
     const msgs = readLines(file)
     if (!msgs.length) continue
     const mid = matterOf(id, msgs, forDoc)
-    if ((matterId || null) !== (mid || null)) continue
+    if (!all && (matterId || null) !== (mid || null)) continue
     let updatedAt = [...msgs].reverse().find((m) => m.at)?.at
     if (!updatedAt) { try { updatedAt = fs.statSync(file).mtime.toISOString() } catch { updatedAt = null } }
     const first = msgs.find((m) => m.role === 'user')
@@ -204,7 +207,7 @@ function handle(method, p, params, body = {}, { forDoc = null } = {}) {
   const get = (k) => (params && typeof params.get === 'function' ? params.get(k) : params?.[k]) || null
   if (p === '/api/sessions') {
     if (method !== 'GET') return { status: 405, json: { error: 'use GET' } }
-    return { status: 200, json: { sessions: list({ matterId: get('matterId'), forDoc, limit: +(get('limit') || 50) }) } }
+    return { status: 200, json: { sessions: list({ matterId: get('matterId'), forDoc, limit: +(get('limit') || 50), all: get('all') === '1' }) } }
   }
   if (p === '/api/session') {
     if (method !== 'GET') return { status: 405, json: { error: 'use GET' } }
