@@ -102,7 +102,8 @@ const LICENSE_SERVER = process.env.LEXVAULT_LICENSE_SERVER || (DISTRIBUTION.serv
 
 let supervisor = null
 let mainWindow = null
-let backendUrl = DEV_BACKEND || null
+let backendUrl = DEV_BACKEND || null // the old desktop server: null unless switched on (main/legacy.js)
+let booted = false // the window may be reopened (macOS activate) once boot is done
 
 // --- License -----------------------------------------------------------------
 
@@ -294,7 +295,7 @@ function focusMain() {
 }
 
 // Engine API paths the renderer may use (via IPC, never directly).
-const ENGINE_PATHS = /^\/api\/(status|providers(\/key|\/test|\/notice|\/retention)?|local\/(detect|pull|models|use|remove)|spend(\/cap)?|policy|matters(\/update|\/bind|\/policy)?|library(\/folders(\/remove)?|\/sync)?|mcp(\/servers(\/remove)?|\/reconnect)?|workflows\/(playbooks(\/draft)?|run|documents)|skills(\/get|\/suggest|\/draft|\/delete)?|plans(\/get|\/update|\/approve|\/decide|\/run)?|lists(\/get|\/sources|\/rename|\/delete|\/items(\/update|\/delete)?|\/seed|\/export)?|monitors(\/update|\/delete|\/check|\/alerts(\/read|\/file)?)?|agents|commands|record(\/export|\/verify)?|folder\/save|chat|sessions|session(\/clear)?|permissions(\/answer|\/rules)?|law\/section|activity|sources\/law|sources\/(enable|key)|clauses|grids(\/view|\/update|\/cell|\/delete|\/export|\/run)?|decide(\/config|\/key|\/test)?|web\/login|document\/(read|attachment)|analyse|analysis(\/export)?|config\/local-memory|batch(\/estimate|\/start|\/stop|\/resume)?|batches|workspace\/reveal|saved(\/item|\/update|\/delete|\/export)?|investigation(\/export)?|investigate\/presets|diligence(\/export)?|drafts|draft(\/variables|\/fill|\/revise|\/suggest|\/check|\/edit|\/restore|\/export)?|find)(\?.*)?$/
+const ENGINE_PATHS = /^\/api\/(status|providers(\/key|\/test|\/notice|\/retention)?|local\/(detect|pull|models|use|remove)|spend(\/cap)?|policy|matters(\/update|\/bind|\/policy)?|library(\/folders(\/remove)?|\/sync)?|mcp(\/servers(\/remove)?|\/reconnect)?|workflows\/(playbooks(\/draft)?|run|documents)|skills(\/get|\/suggest|\/draft|\/delete)?|plans(\/get|\/update|\/approve|\/decide|\/run)?|lists(\/get|\/sources|\/rename|\/delete|\/items(\/update|\/delete)?|\/seed|\/export)?|monitors(\/update|\/delete|\/check|\/alerts(\/read|\/file)?)?|agents|commands|record(\/export|\/verify)?|folder\/save|chat|sessions|session(\/clear)?|permissions(\/answer|\/rules)?|law\/section|activity|sources\/law|sources\/(enable|key)|clauses|grids(\/view|\/update|\/cell|\/delete|\/export|\/run)?|decide(\/config|\/key|\/test)?|web\/login|document\/(read|attachment)|analyse|analysis(\/export)?|config\/(local-memory|agent)|batch(\/estimate|\/start|\/stop|\/resume)?|batches|workspace\/reveal|saved(\/item|\/update|\/delete|\/export)?|investigation(\/export)?|investigate\/presets|diligence(\/export)?|drafts|draft(\/variables|\/fill|\/revise|\/suggest|\/check|\/edit|\/restore|\/export)?|find)(\?.*)?$/
 
 async function startEngine() {
   const { ensureEngine } = require('./engine')
@@ -410,10 +411,10 @@ async function createWindow() {
   })
 
   if (DEV_FRONTEND) {
-    await mainWindow.loadURL(DEV_FRONTEND + '?backend=' + encodeURIComponent(backendUrl || ''))
+    await mainWindow.loadURL(DEV_FRONTEND + (backendUrl ? `?${require('./legacy').windowSearch(backendUrl)}` : ''))
   } else {
     const indexPath = path.join(PATHS.client, 'index.html')
-    await mainWindow.loadFile(indexPath, { search: 'backend=' + encodeURIComponent(backendUrl || '') })
+    await mainWindow.loadFile(indexPath, backendUrl ? { search: require('./legacy').windowSearch(backendUrl) } : {})
   }
 
   if (process.env.LEXVAULT_DEVTOOLS) mainWindow.webContents.openDevTools({ mode: 'right' })
@@ -844,7 +845,7 @@ function registerIpc(license) {
       probe('http://127.0.0.1:11435/'),
       probe('http://127.0.0.1:16333/'),
       probe('http://127.0.0.1:11434/healthz'),
-      probe('http://127.0.0.1:18000/health'),
+      backendUrl ? probe('http://127.0.0.1:18000/health') : Promise.resolve(null),
     ])
     out.embeddings.reachable = !!(emb && emb.ok)
     out.qdrant.reachable = !!(q && q.ok)
@@ -852,6 +853,7 @@ function registerIpc(license) {
     if (out.llm.reachable) {
       try { const j = await llm.json(); out.llm.llmRunning = !!j.llmRunning; out.llm.lastUsedAt = j.lastUsedAt; out.llm.idleMs = j.idleMs } catch {}
     }
+    out.backend.off = !backendUrl
     out.backend.reachable = !!backend
     if (backend) {
       out.backend.status = backend.status
@@ -1007,6 +1009,7 @@ async function boot() {
   if (isDev && DEV_BACKEND) {
     console.log(`[boot] dev mode — using backend at ${DEV_BACKEND}, frontend at ${DEV_FRONTEND}`)
     backendUrl = DEV_BACKEND
+    booted = true
     await createWindow()
     await startEngine()
     startHub()
@@ -1099,7 +1102,8 @@ async function boot() {
     return
   }
 
-  supervisor = new Supervisor({ paths: PATHS, license, modelPath: _bootModelPath })
+  // The old desktop server stays off unless OPENLEX_LEGACY_SERVER=1 (main/legacy.js).
+  supervisor = new Supervisor({ paths: PATHS, license, modelPath: _bootModelPath, legacyBackend: require('./legacy').legacyServerWanted() })
   try {
     emitBoot('starting-services')
     await supervisor.start((evt) => {
@@ -1107,7 +1111,8 @@ async function boot() {
       emitBoot('service-stage', evt)
     })
     backendUrl = supervisor.backendUrl
-    console.log(`[boot] all sidecars + backend up; backend at ${backendUrl}`)
+    console.log(backendUrl ? `[boot] all sidecars + the old desktop server up (${backendUrl})` : '[boot] all sidecars up (the old desktop server is off)')
+    booted = true
     emitBoot('ready')
     // Brief pause so the user sees the "Ready" state, then transition to main window
     await new Promise(r => setTimeout(r, 600))
@@ -1322,7 +1327,7 @@ app.on('window-all-closed', () => {
 })
 
 app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0 && backendUrl) createWindow()
+  if (BrowserWindow.getAllWindows().length === 0 && booted) createWindow()
 })
 
 app.on('before-quit', async () => {
