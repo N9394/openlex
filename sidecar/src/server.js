@@ -259,6 +259,74 @@ function folderFor(body) {
   return c.path
 }
 
+/**
+ * POST /api/panel/run — agents working together (panel.js), streamed: lanes,
+ * turns, the moderator's summary, the result. A panel that uses online AI
+ * needs `confirmed: true` (the lawyer saw the estimate); without it the
+ * stream carries the estimate only.
+ */
+async function runPanel(req, res) {
+  const body = await readBody(req, 20)
+  res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' })
+  const panel = require('./panel')
+  const matterId = body.matterId || null
+  let folderDir
+  try { folderDir = folderFor(body) } catch (err) { sendSse(res, { type: 'error', message: err.message }); return res.end() }
+  const question = String(body.question || '').trim()
+  // The documents the panel works on: attached (read on this computer) or given as text.
+  let docText = typeof body.text === 'string' ? body.text : ''
+  let names = []
+  if (Array.isArray(body.attachments) && body.attachments.length) {
+    try {
+      const att = require('./attachments').combined(body.attachments.filter((x) => typeof x === 'string'))
+      docText = att.text
+      names = att.names
+    } catch (err) { sendSse(res, { type: 'error', message: `The attached document is no longer available (${err.message}); attach it again.` }); return res.end() }
+  }
+  const spec = { mode: body.mode, agents: body.agents, rounds: body.rounds, moderator: body.moderator || null, matterId, docChars: docText.length }
+  let est
+  try { est = policy.withMatter(matterId, () => panel.estimate(spec)) } catch (err) { sendSse(res, { type: 'error', message: err.message }); return res.end() }
+  if (est.cloudCalls && est.capReached) { sendSse(res, { type: 'panel_estimate', estimate: est }); sendSse(res, { type: 'error', message: `This month's limit for online AI is reached (€${est.spending.total.toFixed(2)} of €${est.spending.cap.toFixed(2)}). Use agents on this computer, or raise the limit.` }); return res.end() }
+  if (est.needsConfirm && body.confirmed !== true) { sendSse(res, { type: 'panel_estimate', estimate: est }); sendSse(res, { type: 'done', needsConfirm: true }); return res.end() }
+  if (!question) { sendSse(res, { type: 'error', message: 'What should the panel answer? Type the question.' }); return res.end() }
+  const ready = await engineReady()
+  if (!ready?.ok) { sendSse(res, { type: 'error', message: `model unavailable: ${ready.reason}` }); return res.end() }
+  const ac = new AbortController()
+  res.on('close', () => ac.abort())
+  const asked = String(body.message || `/team ${body.mode} ${question}`).slice(0, 2000)
+  const rec = require('./activity').start({ matterId, kind: 'panel', asked, client: clientOf(req), files: names })
+  const turn = { data: [], sources: [] }
+  const out = (e) => {
+    rec.see(e)
+    if (e.type === 'model') {
+      const hit = turn.data.find((m) => m.provider === e.provider && m.region === (e.region || null) && m.redacted === !!e.redacted && m.local === !!e.local)
+      if (hit) hit.calls++
+      else turn.data.push({ provider: e.provider, label: e.label, model: e.model || null, local: !!e.local, region: e.region || null, redacted: !!e.redacted, calls: 1 })
+    } else if (e.type === 'law') for (const s of e.sources || []) { if (!turn.sources.some((x) => (x.chunk_id && x.chunk_id === s.chunk_id) || (x.source_name === s.source_name && x.section === s.section))) turn.sources.push(s) }
+    sendSse(res, e)
+  }
+  sendSse(res, { type: 'panel_estimate', estimate: est })
+  const makeContext = () => { const doc = new Document(docText, `panel:${matterId || 'quick'}`); return { doc, memory: null, session: null, search, embeddings, summary: () => doc.summary() } }
+  try {
+    const r = await rec.run(() => require('./folder').run(folderDir, () => require('./permissions').session(permissionSession(body, res, ac.signal), () => policy.withMatter(matterId, () => panel.run({
+      mode: body.mode, agents: body.agents, question, rounds: body.rounds, moderator: body.moderator || null, matterId, makeContext, signal: ac.signal, onEvent: out, concurrency: body.concurrency,
+    })))))
+    const md = panel.toMarkdown(r)
+    out({ type: 'text', text: md })
+    if (body.sessionId) {
+      const { Session } = require('./session')
+      new Session(String(body.sessionId)).append(asked, md, { matterId, client: clientOf(req), data: turn.data, sources: turn.sources, stopped: !!r.stopped, results: [{ kind: 'panel', id: r.id, name: question.slice(0, 200) }] })
+    }
+    out({ type: 'done', stopped: !!r.stopped, panelId: r.id })
+    const svc = (lane) => (r.usage[lane]?.services || [])
+    rec.finish({ aborted: ac.signal.aborted, extra: { panel: { mode: r.mode, rounds: r.rounds, agents: r.members.map((m) => ({ name: m.name, title: m.title, ...(m.skipped ? { skipped: true } : {}), services: svc(m.lane) })), ...(r.moderator ? { moderator: { title: r.moderator.title, services: svc('moderator') } } : {}) } } })
+  } catch (err) {
+    out({ type: 'error', message: err.message })
+    rec.finish({ error: err.message })
+  }
+  return res.end()
+}
+
 function readBody(req, limitMb = 5) {
   return new Promise((resolve, reject) => {
     const chunks = []
@@ -495,9 +563,28 @@ async function handle(req, res) {
       const r = require('./commands').handle(req.method, p, url.searchParams)
       return sendJson(res, r.status, r.json)
     }
-    if (req.method === 'GET' && p === '/api/agents') {
+    // Agent profiles: the list, and making one in the app (agents.js).
+    if (p === '/api/agents' || p.startsWith('/api/agents/')) {
       require('./workspace').setBase(require('./agent-config').load().workspace)
-      return sendJson(res, 200, { agents: require('./agents').list() })
+      const body = req.method === 'POST' ? await readBody(req) : {}
+      const r = await require('./agents').handle(req.method, p, url.searchParams, body)
+      if (r) return sendJson(res, r.status, r.json)
+    }
+    // The second pass on answers: on by default, the lawyer's switch, the firm's lock (judge.js).
+    if (p === '/api/config/judge') {
+      const judge = require('./judge')
+      require('./workspace').setBase(require('./agent-config').load().workspace)
+      if (req.method === 'GET') return sendJson(res, 200, judge.settings())
+      const body = await readBody(req)
+      try { const st = judge.setEnabled(body.enabled !== false); hub.publish('provider-changed', {}, clientOf(req)); return sendJson(res, 200, st) } catch (err) { return sendJson(res, err.code === 'LOCKED' ? 403 : 400, { error: err.message, ...judge.settings() }) }
+    }
+    // Panel: agents working together (panel.js) — estimate, run (streamed), result, export.
+    if (p === '/api/panel' || p.startsWith('/api/panel/') || p === '/api/panels') {
+      require('./workspace').setBase(require('./agent-config').load().workspace)
+      if (req.method === 'POST' && p === '/api/panel/run') return runPanel(req, res)
+      const body = req.method === 'POST' ? await readBody(req) : {}
+      const r = await require('./panel').handle(req.method, p, url.searchParams, body)
+      if (r) return sendJson(res, r.status, r.json)
     }
     // ── Data sources (the firm's databases and subscriptions) ──────────
     if (p === '/api/sources' || p.startsWith('/api/sources/')) {
@@ -1537,6 +1624,7 @@ async function handle(req, res) {
           if (hit) hit.calls++
           else turn.data.push({ provider: e.provider, label: e.label, model: e.model || null, local: !!e.local, region: e.region || null, redacted: !!e.redacted, calls: 1 })
         } else if (e.type === 'step' && e.online && e.onlineTo && !turn.online.includes(e.onlineTo)) turn.online.push(e.onlineTo)
+        else if (e.type === 'judge') turn.judge = { ran: !!e.ran, ok: e.ok, reason: e.reason, notes: e.notes }
       }
       if (attached) {
         // How the attached document will be read (in full, or part by part), in words.

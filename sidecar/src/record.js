@@ -40,7 +40,7 @@ const GRACE_MS = 3000
 
 // ── words ────────────────────────────────────────────────────────────────
 const WINDOWS = { word: 'Word', outlook: 'Outlook', tui: 'Terminal app', cli: 'Command line', desktop: 'Desktop app', app: 'Desktop app', local: 'Another program on this computer' }
-const KIND_WORDS = { question: 'Question', review: 'Checklist review', chronology: 'Chronology', translate: 'Translation', compare: 'Comparison', grid: 'Review grid', plan: 'Plan', analyse: 'Analysis' }
+const KIND_WORDS = { panel: 'Panel', question: 'Question', review: 'Checklist review', chronology: 'Chronology', translate: 'Translation', compare: 'Comparison', grid: 'Review grid', plan: 'Plan', analyse: 'Analysis' }
 const ACTIONS = {
   write_file: 'save a file', append_file: 'add to a file', delete_file: 'delete a file', rename_file: 'rename a file',
   read_file: 'read a file', list_directory: 'look into a folder', search_local_files: 'search files', search_docs: 'search the matter\'s documents',
@@ -172,6 +172,13 @@ function detailLines(x) {
   if (x.window) lines.push(`Asked in: ${x.window}`)
   if (x.matter) lines.push(`Matter: ${x.matter}`)
   if (x.documents) lines.push(`Documents given: ${x.documents}`)
+  if (x.panel) {
+    const p = x.panel
+    const svc = (list) => (list || []).map((s) => `${s.label} (${plural(s.calls, 'call')})`).join(', ') || 'no AI call'
+    lines.push(`Panel: ${{ parallel: 'agents side by side', debate: `a debate, ${plural(p.rounds, 'round')}`, review: 'draft and review' }[p.mode] || p.mode}`)
+    for (const a of p.agents || []) lines.push(`Agent ${a.title}: ${a.skipped ? 'did not take part (not allowed for this matter)' : svc(a.services)}`)
+    if (p.moderator) lines.push(`Moderator ${p.moderator.title}: ${svc(p.moderator.services)}`)
+  }
   for (const s of x.ai) {
     lines.push(s.local
       ? `AI: on this computer · ${plural(s.calls, 'call')}${s.failed ? ` (${s.failed} failed)` : ''}`
@@ -234,6 +241,7 @@ function requestEntry(r, lines) {
     matterId: r.matter || null,
     matter: matterTitle(r.matter),
     documents: (r.files || []).length,
+    ...(r.panel ? { panel: r.panel } : {}),
     files: (r.saved || []).slice(0, 10),
     outcome: r.result || 'done',
     result: resultText(r),

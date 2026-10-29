@@ -268,5 +268,5 @@ test('path patterns: "~/…/**" covers the folder and below; "*:folder/**" forbi
 test('the server refuses the home folder unless confirmed, and a folder that does not exist', () => {
   const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'server.js'), 'utf8')
   assert.match(src, /folderConfirmed !== true/)
-  assert.strictEqual((src.match(/require\('\.\/folder'\)\.run\(folderDir/g) || []).length, 5, 'chat, workflows, grids, plans and the document analysis run in the working folder')
+  assert.strictEqual((src.match(/require\('\.\/folder'\)\.run\(folderDir/g) || []).length, 6, 'chat, workflows, grids, plans, the document analysis and panels run in the working folder')
 })

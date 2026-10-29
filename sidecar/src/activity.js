@@ -106,7 +106,8 @@ function start({ matterId = null, kind = 'question', asked = '', client = null, 
     else if (e.type === 'done' && e.stopped) stopped = true
     else if (e.type === 'error') failed = clip(e.message, 200)
   }
-  const finish = ({ aborted = false, files: out = [], error = '' } = {}) => {
+  // extra: metadata a kind of request adds (a panel: which agents, which AI services — never what was said).
+  const finish = ({ aborted = false, files: out = [], error = '', extra = null } = {}) => {
     try {
       const record = {
         ...rec,
@@ -115,6 +116,7 @@ function start({ matterId = null, kind = 'question', asked = '', client = null, 
         result: error || failed ? 'failed' : (aborted || stopped) ? 'stopped' : 'done',
         ...(error || failed ? { error: clip(error || failed, 200) } : {}),
         ...(out.length ? { saved: out.filter(Boolean).map((f) => path.basename(String(f)).slice(0, 80)).slice(0, 10) } : {}),
+        ...(extra && extra.panel ? { panel: panelMeta(extra.panel) } : {}),
       }
       require('./chain').append(fileFor(matterId), record)
       return record
@@ -126,6 +128,16 @@ function start({ matterId = null, kind = 'question', asked = '', client = null, 
   /** Run the request's work: audit lines written inside carry this request's id. */
   const run = (fn) => require('./policy').withRequest(rid, fn)
   return { see, finish, run, rid }
+}
+
+/** A panel's metadata for the record: mode, rounds, each agent and the AI services it used. */
+function panelMeta(p) {
+  const svc = (list) => (Array.isArray(list) ? list.slice(0, 6).map((s) => ({ label: clip(s.label, 60), calls: Math.max(0, +s.calls || 0) })) : [])
+  return {
+    mode: clip(p.mode, 12), rounds: Math.max(1, +p.rounds || 1),
+    agents: (Array.isArray(p.agents) ? p.agents : []).slice(0, 8).map((a) => ({ name: clip(a.name, 32), title: clip(a.title, 60), ...(a.skipped ? { skipped: true } : {}), services: svc(a.services) })),
+    ...(p.moderator ? { moderator: { title: clip(p.moderator.title, 60), services: svc(p.moderator.services) } } : {}),
+  }
 }
 
 /** The last `limit` records of a matter, newest first. */

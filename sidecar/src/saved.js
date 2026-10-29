@@ -7,7 +7,7 @@
  *
  *   ~/.lexvault/saved/<matter>.json   { items: [item] }   (<matter> = matter id, or "_none")
  *   item = { id, matterId, kind, title, content, tags[], source?, favorite, createdAt, updatedAt }
- *     kind    answer | note | clause | template | draft | document | analysis | investigation | diligence
+ *     kind    answer | note | clause | template | draft | document | analysis | investigation | diligence | panel
  *     source  where it came from: { kind: 'session'|'attachment'|'analysis'|'investigation'|'diligence'|'draft', id, sessionId?, name? }
  *
  * Everything stays on this computer. What the old Vault did and this keeps:
@@ -29,7 +29,7 @@ const crypto = require('crypto')
 const { DATA_DIR } = require('./config')
 
 const DIR = path.join(DATA_DIR, 'saved')
-const KINDS = ['answer', 'note', 'clause', 'template', 'draft', 'document', 'analysis', 'investigation', 'diligence']
+const KINDS = ['answer', 'note', 'clause', 'template', 'draft', 'document', 'analysis', 'investigation', 'diligence', 'panel']
 const ID_RE = /^sv_[a-f0-9]{12}$/
 const MAX_CONTENT = 2000000
 const MAX_ITEMS = 5000
@@ -158,7 +158,7 @@ function search(q, { matterId, limit = 8 } = {}) {
 }
 
 // ── exports ──────────────────────────────────────────────────────────────
-const KIND_WORDS = { answer: 'Answer', note: 'Note', clause: 'Clause', template: 'Template', draft: 'Draft', document: 'Document', analysis: 'Analysis', investigation: 'Investigation', diligence: 'Due diligence' }
+const KIND_WORDS = { answer: 'Answer', note: 'Note', clause: 'Clause', template: 'Template', draft: 'Draft', document: 'Document', analysis: 'Analysis', investigation: 'Investigation', diligence: 'Due diligence', panel: 'Panel' }
 
 function reportOf(item) {
   const meta = [KIND_WORDS[item.kind] || item.kind, item.createdAt.slice(0, 10), item.tags.length ? item.tags.map((t) => `#${t}`).join(' ') : ''].filter(Boolean).join(' · ')
@@ -177,12 +177,13 @@ function reportOf(item) {
 function exportItem(id, format) {
   const item = get(id)
   // A saved tool result exports as that tool's own report.
-  if (item.source && ['analysis', 'investigation', 'diligence', 'draft'].includes(item.source.kind) && format !== 'md') {
+  if (item.source && ['analysis', 'investigation', 'diligence', 'draft', 'panel'].includes(item.source.kind) && format !== 'md') {
     try {
       if (item.source.kind === 'analysis') return require('./analysis').exportAnalysis(item.source.id, format)
       if (item.source.kind === 'investigation') return require('./investigate').exportInvestigation(item.source.id, format)
       if (item.source.kind === 'diligence') return require('./diligence').exportDiligence(item.source.id, format)
       if (item.source.kind === 'draft') return require('./draft').exportDraft(item.source.id, format)
+      if (item.source.kind === 'panel') return require('./panel').exportPanel(item.source.id, format)
     } catch { /* the result is gone: export the saved text */ }
   }
   return require('./report').save({ report: reportOf(item), format, matterId: item.matterId, base: `saved-${item.title}` })

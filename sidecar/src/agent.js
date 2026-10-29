@@ -375,8 +375,9 @@ async function runAction(ctx, userMessage, onEvent, opts = {}) {
     return { text: '⏹ Stopped — partial results kept.', suggestions, log, streamed: false, stopped: true }
   }
 
-  const wantsSuggestions = /suggest|analy|risk|favor|favou|flag/i.test(userMessage)
-  const wantsRewrite = EDIT_INTENT_RE.test(userMessage) // deliverable = suggestion card
+  // opts.prose: the answer is prose only (a panel's turn, panel.js) — never suggestion cards.
+  const wantsSuggestions = !opts.prose && /suggest|analy|risk|favor|favou|flag/i.test(userMessage)
+  const wantsRewrite = !opts.prose && EDIT_INTENT_RE.test(userMessage) // deliverable = suggestion card
   // Token streaming: prose answers stream to the pane as they generate —
   // BATCHED: deltas accumulate and flush every ~150ms / ≥80 chars, so the
   // pane gets a handful of text events instead of one per token (the
@@ -488,6 +489,7 @@ async function runAction(ctx, userMessage, onEvent, opts = {}) {
   let suggestionsAreFinal = false // summary is the deliverable, not prose
   const readSections = [] // clause sections the model read (anchor backfill)
   const lawUsed = [] // laws pulled from the local packs (pane surfacing)
+  const evidence = [] // what the sources said (tool outputs), for the second pass and a panel's checks
   const toolHistory = [] // compressed hop results — caps context growth
   const analysisSummary = [] // running findings across hops (compact)
   const toolCache = new Map() // tool:args → output (breaks analysis loops)
@@ -703,6 +705,9 @@ async function runAction(ctx, userMessage, onEvent, opts = {}) {
     if (r?.lawSources?.length) {
       emit('law', { sources: r.lawSources, tool: call.tool })
       lawUsed.push(...r.lawSources)
+    }
+    if (EVIDENCE_TOOLS.has(toolName) && output && !/^(ERROR|BLOCKED|NO RESULTS|SEARCH ERROR)/.test(String(output))) {
+      evidence.push({ tool: toolName, text: String(output).slice(0, 6000), sources: r?.lawSources || [] })
     }
 
     // Compress tool output at the boundary (tooltrim-style).
@@ -950,7 +955,11 @@ ANCHOR RULE: never quote more than ONE sentence (≤220 chars) in an anchor — 
   }
 
   // 4. JUDGE — proofread every suggestion against its anchor + cited law
-  if (suggestions.length) {
+  // (unless the lawyer switched the second pass off: then cards say "not double-checked").
+  if (suggestions.length && !require('./judge').enabled()) {
+    suggestions.splice(0, suggestions.length, ...suggestions.map((s, i) => ({ ...s, id: `s-${Date.now().toString(36)}-${i}`, verdict: { status: 'unchecked', note: 'second pass switched off' } })))
+    for (const s of suggestions) ctx.memory?.registerSuggestion?.(s)
+  } else if (suggestions.length) {
     if (aborted()) return stopEarly()
     emit('step', { text: `judge: verifying ${suggestions.length} suggestion(s)…`, kind: 'judge', total: suggestions.length })
     // Give the judge the FULL text of the clauses the model read — a
@@ -1047,14 +1056,31 @@ ANCHOR RULE: never quote more than ONE sentence (≤220 chars) in an anchor — 
     finalText = suggestions.length ? suggestionsSummary(suggestions) : 'Analysis complete — no changes proposed.'
   }
 
-  emit('done', {})
   // Never surface an empty answer: fall back to the suggestion summary or
   // a neutral completion line if every write path came up blank.
   if (!finalText || !finalText.trim()) {
     finalText = suggestions.length ? suggestionsSummary(suggestions) : 'Analysis complete.'
   }
-  return { text: finalText, suggestions, log, streamed }
+  // 5. SECOND PASS on a prose answer (judge.js): checked against what the
+  // sources it used actually say. On by default; the lawyer (or the firm)
+  // can switch it off. The turn always says whether it ran.
+  if (opts.judge !== false && !aborted()) {
+    const judgeMod = require('./judge')
+    if (!judgeMod.enabled()) emit('judge', { ran: false, reason: 'off' })
+    else if (suggestions.length) emit('judge', { ran: true, ok: true, kind: 'suggestions', notes: [] })
+    else if (!evidence.length && !readSections.length) emit('judge', { ran: false, reason: 'no-sources' })
+    else {
+      emit('step', { text: 'judge: checking the answer…', kind: 'judge_answer' })
+      const v = await judgeMod.checkAnswer({ question: userMessage, answer: finalText, evidence: [...evidence, ...readSections.map((x) => ({ tool: 'get_range_text', text: String(x.text || '') }))] }, { signal: opts.signal })
+      emit('judge', { ran: true, kind: 'answer', ok: v.ok, notes: v.notes, unavailable: !!v.unavailable })
+    }
+  }
+  emit('done', {})
+  return { text: finalText, suggestions, log, streamed, evidence, sources: lawUsed }
 }
+
+// Tools whose output is a source an answer can rest on (the second pass checks against them).
+const EVIDENCE_TOOLS = new Set(['search_law', 'get_law_section', 'search_ris', 'search_eurlex', 'get_eu_law', 'search_law_sources', 'get_law_source', 'search_firm_library', 'search_sources', 'find_clause', 'web_fetch', 'get_range_text', 'get_clause_analysis', 'search_docs', 'read_file'])
 
 /**
  * Repair the model's JSON before declaring it truncated. Lotus commonly
