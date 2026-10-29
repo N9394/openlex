@@ -12,8 +12,11 @@ export interface ChatCommand {
   surfaces: string[]
 }
 
-interface Engine {
+export interface Engine {
   call: (method: string, path: string, body?: unknown) => Promise<any>
+  /** SSE endpoint (POST): onEvent per event; resolves when the stream ends. `id` lets stop() end it. */
+  stream?: (path: string, body: unknown, onEvent: (ev: any) => void, id?: string) => Promise<{ ok: boolean; stopped?: boolean }>
+  stop?: (id: string) => Promise<{ ok: boolean }>
 }
 
 /** The engine bridge (Electron preload), or null in a plain browser build. */

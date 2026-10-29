@@ -294,7 +294,7 @@ function focusMain() {
 }
 
 // Engine API paths the renderer may use (via IPC, never directly).
-const ENGINE_PATHS = /^\/api\/(status|providers(\/key|\/test)?|policy|matters(\/update|\/bind|\/policy)?|library(\/folders(\/remove)?|\/sync)?|mcp(\/servers(\/remove)?|\/reconnect)?|workflows\/(playbooks(\/draft)?|run|documents)|skills(\/get|\/suggest|\/draft|\/delete)?|plans(\/get|\/update|\/approve|\/decide|\/run)?|lists(\/get|\/sources|\/rename|\/delete|\/items(\/update|\/delete)?|\/seed|\/export)?|monitors(\/update|\/delete|\/check|\/alerts(\/read|\/file)?)?|agents|commands|record(\/export|\/verify)?|folder\/save|clauses|grids(\/view|\/update|\/cell|\/delete|\/export|\/run)?|decide(\/config|\/key|\/test)?|web\/login)(\?.*)?$/
+const ENGINE_PATHS = /^\/api\/(status|providers(\/key|\/test)?|policy|matters(\/update|\/bind|\/policy)?|library(\/folders(\/remove)?|\/sync)?|mcp(\/servers(\/remove)?|\/reconnect)?|workflows\/(playbooks(\/draft)?|run|documents)|skills(\/get|\/suggest|\/draft|\/delete)?|plans(\/get|\/update|\/approve|\/decide|\/run)?|lists(\/get|\/sources|\/rename|\/delete|\/items(\/update|\/delete)?|\/seed|\/export)?|monitors(\/update|\/delete|\/check|\/alerts(\/read|\/file)?)?|agents|commands|record(\/export|\/verify)?|folder\/save|chat|sessions|session(\/clear)?|permissions(\/answer|\/rules)?|law\/section|activity|sources\/law|sources\/(enable|key)|clauses|grids(\/view|\/update|\/cell|\/delete|\/export|\/run)?|decide(\/config|\/key|\/test)?|web\/login)(\?.*)?$/
 
 async function startEngine() {
   const { ensureEngine } = require('./engine')
@@ -342,10 +342,22 @@ function startHub() {
     if (!ENGINE_PATHS.test(String(p))) throw new Error(`engine path not allowed: ${p}`)
     return hub.request(method, p, body)
   })
+  // Streams the renderer may stop (Stop in the chat): closing the request
+  // makes the engine stop the run and keep what it has.
+  const streams = new Map()
   ipcMain.handle('lexvault:engineStream', async (e, { path: p, body, streamId } = {}) => {
     if (!ENGINE_PATHS.test(String(p))) throw new Error(`engine path not allowed: ${p}`)
-    await hub.stream(p, body, (ev) => { if (!e.sender.isDestroyed()) e.sender.send('lexvault:engine-stream', { streamId, ev }) })
-    return { ok: true }
+    const ac = new AbortController()
+    if (streamId) streams.set(String(streamId), ac)
+    try {
+      await hub.stream(p, body, (ev) => { if (!e.sender.isDestroyed()) e.sender.send('lexvault:engine-stream', { streamId, ev }) }, ac.signal)
+    } finally { if (streamId) streams.delete(String(streamId)) }
+    return { ok: true, stopped: ac.signal.aborted }
+  })
+  ipcMain.handle('lexvault:engineStop', (_e, { streamId } = {}) => {
+    const ac = streams.get(String(streamId))
+    if (ac) ac.abort()
+    return { ok: !!ac }
   })
 
   // Matters live in the shared OpenLex engine (~/.lexvault/matters.json),

@@ -55,6 +55,8 @@ export default function MatterPicker() {
   const onSelect = async (id: string) => {
     setActive(id)
     await bridge()!.setActive(id || null)
+    // The chat opens this matter's conversation.
+    window.dispatchEvent(new CustomEvent('openlex:matter-changed'))
   }
   const onCreate = async () => {
     setError('')
@@ -64,6 +66,7 @@ export default function MatterPicker() {
       setAdding(false)
       await refresh()
       setActive(m.id)
+      window.dispatchEvent(new CustomEvent('openlex:matter-changed'))
     } catch (err) {
       setError((err as Error).message)
     }
