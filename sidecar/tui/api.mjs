@@ -103,6 +103,15 @@ export function createApi(c = client) {
     sourceSignInStatus: (name) => call('GET', `/api/sources/law/signin${q({ name })}`),
     cancelSourceSignIn: (name) => call('POST', '/api/sources/law/signin/cancel', { name }),
     setSourceNightCopy: (name, on) => call('POST', '/api/sources/law/nightcopy', { name, on }),
+    // The tools that moved from the old desktop app: saved items, investigation, due diligence, drafts.
+    saved: (matterId) => call('GET', `/api/saved${q({ matterId })}`),
+    saveItem: (body) => call('POST', '/api/saved', body),
+    batchStart: (body) => call('POST', '/api/batch/start', body),
+    batch: (id) => call('GET', `/api/batch${q({ id })}`),
+    batchStop: (id) => call('POST', '/api/batch/stop', { id }),
+    exportResult: (kind, id, format) => call('POST', `/api/${kind}/export`, { id, format }),
+    getResult: (kind, id) => call('GET', `/api/${kind}${q({ id })}`),
+    draftCreate: (body) => call('POST', '/api/draft', body),
   }
 }
 

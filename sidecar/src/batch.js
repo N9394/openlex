@@ -19,6 +19,17 @@
  * Cost: only an estimate (documented prices per million tokens, below; the
  * firm can add its own in the harness map, "prices"). Unknown services show
  * the token count without a price.
+ *
+ * Kinds of job (`kind`, default "analyse"): the same machinery runs every
+ * tool that goes through many documents one by one —
+ *   analyse      the full analysis per document (analysis.js)
+ *   investigate  the first pass of an investigation per document, then the
+ *                cross-document comparison and the check (investigate.js)
+ *   diligence    the due-diligence grid per document, then the red-flag
+ *                summary (diligence.js)
+ * A kind supplies `one` (one document → { resultId, ... }), optionally
+ * `finish` (after the last document → { kind, id } of the overall result),
+ * and its per-document token use for the estimate.
  */
 
 const fs = require('fs')
@@ -102,7 +113,8 @@ const fmtInt = (n) => Math.round(n).toLocaleString('en-US')
  * How big a batch is, and what a cloud run would send and cost.
  * @returns {{ files, documents, pages, tokens, service: {kind,label,model,region}, cost, needsConfirm, sentence, skipped }}
  */
-async function estimate({ files, folder, attachments, matterId = null } = {}) {
+async function estimate({ files, folder, attachments, matterId = null, kind = 'analyse' } = {}) {
+  const K = kindOf(kind)
   const list = resolveFiles({ files, folder, attachments, matterId })
   if (!list.length) throw new Error('no documents found to analyse')
   const sizes = []
@@ -110,9 +122,9 @@ async function estimate({ files, folder, attachments, matterId = null } = {}) {
   const ok = sizes.filter((s) => !s.tooLarge && !s.unreadable)
   const pages = ok.reduce((n, s) => n + s.pages, 0)
   const docTokens = ok.reduce((n, s) => n + s.tokens, 0)
-  // Per document: instructions, the second check and the answer (~3,500 in, ~2,500 out).
-  const inTokens = docTokens + ok.length * 3500
-  const outTokens = ok.length * 2500
+  // Per document: the document (read once, or more often for some kinds), instructions, the answer.
+  const inTokens = Math.round(docTokens * (K.reads || 1)) + ok.length * K.perDoc[0] + (K.finish ? K.extra?.[0] || 0 : 0)
+  const outTokens = ok.length * K.perDoc[1] + (K.finish ? K.extra?.[1] || 0 : 0)
   const strategy = require('./strategy')
   const t = strategy.target({ role: 'analyze', matterId })
   const service = { kind: t.kind, label: t.kind === 'local' ? 'this computer' : t.label, model: t.model, region: t.region }
@@ -139,13 +151,40 @@ async function estimate({ files, folder, attachments, matterId = null } = {}) {
 const running = new Map() // id → AbortController
 let runner = (o) => require('./analysis').runAnalyse(o) // tests swap it
 
+/**
+ * The kinds of batch. `one(o)` gets { matterId, file | attachments, focus,
+ * options, signal } and returns what is kept per file; `finish(job, signal)`
+ * makes the overall result. perDoc: [tokens in, tokens out] besides the document.
+ */
+const KINDS = {
+  analyse: {
+    perDoc: [3500, 2500],
+    async one(o) {
+      const r = await runner(o)
+      const a = r.analyses?.[0]
+      return { analysisId: a?.id || null, resultId: a?.id || null, risks: a ? { high: a.stats.high, medium: a.stats.medium, low: a.stats.low } : null }
+    },
+  },
+}
+/** A tool registers its kind (investigate.js, diligence.js). */
+function registerKind(name, k) { KINDS[name] = k }
+function kindOf(name) {
+  const k = name || 'analyse'
+  if (!KINDS[k]) {
+    // Kinds register when their module loads.
+    try { require({ investigate: './investigate', diligence: './diligence' }[k] || `./${k}`) } catch { /* unknown */ }
+  }
+  if (!KINDS[k]) throw new Error(`unknown kind of batch "${k}"`)
+  return KINDS[k]
+}
+
 const jobFile = (id) => path.join(DIR, `${id}.json`)
 function save(job) { fs.mkdirSync(DIR, { recursive: true }); job.updatedAt = new Date().toISOString(); fs.writeFileSync(jobFile(job.id), JSON.stringify(job, null, 2)) }
 function load(id) {
   if (!ID_RE.test(String(id || ''))) throw new Error('unknown batch')
   const job = JSON.parse(fs.readFileSync(jobFile(id), 'utf8'))
   // A run cut short (the engine stopped) can be resumed.
-  if (job.state === 'running' && !running.has(id)) { job.state = 'stopped'; job.note = 'The run was interrupted (OpenLex closed). Resume to go on.' }
+  if ((job.state === 'running' || job.state === 'finishing') && !running.has(id)) { job.state = 'stopped'; job.note = 'The run was interrupted (OpenLex closed). Resume to go on.' }
   return job
 }
 
@@ -155,8 +194,8 @@ function summary(job) {
 }
 
 /** Start a batch. A cloud run above the estimate threshold needs confirmed: true (the window asked). */
-async function start({ files, folder, attachments, matterId = null, confirmed = false, focus = '' } = {}) {
-  const est = await estimate({ files, folder, attachments, matterId })
+async function start({ files, folder, attachments, matterId = null, confirmed = false, focus = '', kind = 'analyse', options = {}, sessionId = null, message = '' } = {}) {
+  const est = await estimate({ files, folder, attachments, matterId, kind })
   if (est.needsConfirm && confirmed !== true) {
     const e = new Error(`Please confirm first: ${est.sentence}`)
     e.code = 'CONFIRM'
@@ -165,11 +204,23 @@ async function start({ files, folder, attachments, matterId = null, confirmed = 
   }
   const job = {
     id: `batch_${crypto.randomBytes(6).toString('hex')}`,
+    kind, options: options && typeof options === 'object' ? options : {}, sessionId: sessionId ? String(sessionId).slice(0, 200) : null,
     matterId, focus: String(focus || '').slice(0, 300), createdAt: new Date().toISOString(), state: 'running',
     estimate: { pages: est.pages, tokens: est.tokens, cost: est.cost, service: est.service, sentence: est.sentence },
     files: est.files.map((f) => ({ file: f.file, name: f.name, pages: f.pages, status: f.skip ? 'skipped' : 'waiting', ...(f.note ? { note: f.note } : {}) })),
   }
+  // A kind may prepare the run (diligence: the review grid for these documents).
+  const K = kindOf(kind)
+  if (K.prepare) await K.prepare(job)
   save(job)
+  // The job comes back as a card when the conversation is opened again.
+  if (sessionId) {
+    try {
+      const { Session } = require('./session')
+      const names = job.files.map((f) => f.name)
+      new Session(String(sessionId)).append(String(message || `/${kind} ${names.slice(0, 5).join(', ')}${names.length > 5 ? ` (+${names.length - 5})` : ''}`).slice(0, 2000), `${est.sentence}`, { matterId, client: 'app', results: [{ kind: 'batch', id: job.id, name: kind }] })
+    } catch { /* best effort */ }
+  }
   run(job.id)
   return summary(job)
 }
@@ -184,8 +235,29 @@ function run(id) {
     try {
       for (;;) {
         const job = load(id)
+        const K = kindOf(job.kind)
         const next = job.files.find((f) => f.status === 'waiting' || f.status === 'reading')
         if (!next || ac.signal.aborted) {
+          if (!ac.signal.aborted && K.finish && !job.result && job.files.some((f) => f.status === 'done')) {
+            // After the last document: the overall result (comparison, summary).
+            job.state = 'finishing'
+            save(job)
+            try {
+              const result = await policy.withMatter(job.matterId, () => K.finish(job, ac.signal))
+              const fresh = load(id)
+              if (ac.signal.aborted) { fresh.state = 'stopped'; save(fresh); break }
+              fresh.result = result
+              fresh.state = 'done'
+              fresh.finishedAt = new Date().toISOString()
+              save(fresh)
+            } catch (err) {
+              const fresh = load(id)
+              fresh.state = ac.signal.aborted ? 'stopped' : 'failed'
+              fresh.note = String(err.message).split('\n')[0].slice(0, 300)
+              save(fresh)
+            }
+            break
+          }
           job.state = ac.signal.aborted ? 'stopped' : 'done'
           if (job.state === 'done') job.finishedAt = new Date().toISOString()
           save(job)
@@ -196,13 +268,12 @@ function run(id) {
         job.state = 'running'
         save(job)
         try {
-          const r = await policy.withMatter(job.matterId, () => runner({ matterId: job.matterId, ...(next.file.startsWith('att:') ? { attachments: [next.file.slice(4)] } : { file: next.file }), focus: job.focus, signal: ac.signal }))
-          const a = r.analyses?.[0]
+          const r = await policy.withMatter(job.matterId, () => K.one({ matterId: job.matterId, ...(next.file.startsWith('att:') ? { attachments: [next.file.slice(4)] } : { file: next.file }), name: next.name, focus: job.focus, options: job.options || {}, job, signal: ac.signal }))
           const fresh = load(id)
           const f = fresh.files.find((x) => x.file === next.file)
           // Stopped while this document was read: it is read again on resume (a partial analysis is not "done").
           if (ac.signal.aborted) { f.status = 'waiting'; delete f.startedAt; save(fresh); continue }
-          Object.assign(f, { status: 'done', analysisId: a?.id || null, risks: a ? { high: a.stats.high, medium: a.stats.medium, low: a.stats.low } : null, finishedAt: new Date().toISOString() })
+          Object.assign(f, { status: 'done', ...(r || {}), finishedAt: new Date().toISOString() })
           save(fresh)
         } catch (err) {
           const fresh = load(id)
@@ -234,6 +305,7 @@ function stop(id) {
 function resume(id) {
   const job = load(id)
   if (job.state === 'done') return summary(job)
+  for (const f of job.files) if (job.state === 'failed' && f.status === 'failed') f.status = 'waiting'
   for (const f of job.files) if (f.status === 'reading') f.status = 'waiting'
   job.state = 'running'
   delete job.note
@@ -280,4 +352,4 @@ async function handle(method, p, params, body = {}) {
   }
 }
 
-module.exports = { estimate, start, stop, resume, get, list, settle, setRunner, handle, priceFor, resolveFiles, CONFIRM_TOKENS }
+module.exports = { estimate, start, stop, resume, get, list, settle, setRunner, handle, priceFor, resolveFiles, registerKind, kindOf, CONFIRM_TOKENS }
