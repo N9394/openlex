@@ -53,6 +53,20 @@ const fileWord = (d) => (d?.file ? `“${clip(d.file, 40)}”` : 'a file')
 const placeWord = (d) => (d?.where === 'folder' ? 'in this folder' : 'in your files folder')
 const FORMATS = { csv: 'a spreadsheet (CSV)', xml: 'an XML', json: 'a data', md: 'a text', dat: 'a data', ics: 'a calendar', pdf: 'a PDF', docx: 'a Word', xlsx: 'an Excel' }
 
+/** Law sources (connectors/): who receives the search words. */
+const LAW_SOURCES = {
+  ris: 'RIS (Austria\'s federal law database)', eurlex: 'EUR-Lex (the EU\'s law database)', neuris: 'NeuRIS (Germany\'s federal law portal)',
+  slovlex: 'Slov-Lex (Slovakia\'s law portal)', esbirka: 'e-Sbírka (Czechia\'s Collection of Laws)', ansvar: 'Ansvar (a law-research service you subscribe to)',
+}
+const LAW_SOURCE_FOR = { AT: 'ris', EU: 'eurlex', DE: 'neuris', SK: 'slovlex', CZ: 'esbirka' }
+function lawSourcesOf(d = {}) {
+  const ids = (Array.isArray(d.sources) ? d.sources : []).filter((id) => LAW_SOURCES[id])
+  if (ids.length) return ids.map((id) => LAW_SOURCES[id])
+  const j = String(d.jurisdiction || '').toUpperCase()
+  if (!j) return []
+  return [LAW_SOURCE_FOR[j] ? LAW_SOURCES[LAW_SOURCE_FOR[j]] : 'a law-research service you connected']
+}
+
 /**
  * Engine tool → what the lawyer reads. `online` names who received
  * something (search words or a web address) outside this computer.
@@ -65,6 +79,8 @@ export const TOOL_WORDS = {
   get_law_section: () => ({ text: 'Reading the full text of a law section' }),
   search_ris: (d) => ({ text: `Checking the official source (RIS, Austria's federal law database)${quoted(d.query, 40)}`, online: 'RIS (Austria\'s federal law database)' }),
   search_eurlex: (d) => ({ text: `Checking the official source (EUR-Lex, the EU's law database)${quoted(d.query, 40)}`, online: 'EUR-Lex (the EU\'s law database)' }),
+  search_law_sources: (d) => { const who = lawSourcesOf(d); return { text: `Looking up the law in ${who.length ? who.join(', ') : 'the official law databases'}${quoted(d.query, 40)}`, online: who.length ? who.join(', ') : 'official law databases' } },
+  get_law_source: (d) => { const who = lawSourcesOf(d); return { text: `Reading a law text from ${who[0] || 'an official law database'}${d.article ? `, section ${clip(d.article, 12)}` : ''}`, online: who[0] || 'an official law database' } },
   get_eu_law: (d) => ({ text: `Reading EU law on EUR-Lex${d.article ? `, Article ${d.article}` : ''}`, online: 'EUR-Lex (the EU\'s law database)' }),
   web_fetch: (d) => ({ text: `Opening a web page: ${d.host || 'a website'}`, online: d.host || 'a website' }),
   web_save: (d) => ({ text: `Saving a web page into the matter: ${d.host || 'a website'}`, online: d.host || 'a website' }),
@@ -108,6 +124,7 @@ const lower = (s) => s.charAt(0).toLowerCase() + s.slice(1)
 
 /** What a failed step means for the answer. */
 export function failedSentence(tool, detail = {}, offline = false) {
+  if (tool === 'search_law_sources' || tool === 'get_law_source') return `Couldn't reach ${lawSourcesOf(detail)[0] || 'the law source'}${offline ? ' (no connection)' : ''}; the answer goes on without it.`
   if (tool === 'search_ris') return 'Couldn\'t reach RIS (Austria\'s federal law database); the answer uses the copy of the law on this computer instead.'
   if (tool === 'search_eurlex' || tool === 'get_eu_law') return 'Couldn\'t reach EUR-Lex; the answer uses the copy of EU law on this computer instead.'
   if (tool === 'search_law' || tool === 'get_law_section') return 'Couldn\'t search the law on this computer (the law collection may not be installed); the answer may cite less law than usual.'

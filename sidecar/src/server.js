@@ -500,10 +500,19 @@ async function handle(req, res) {
       const src = require('./sources')
       require('./workspace').setBase(require('./agent-config').load().workspace)
       try {
-        if (req.method === 'GET' && p === '/api/sources') return sendJson(res, 200, { sources: src.list(), presets: Object.keys(src.PRESETS), kinds: src.KINDS, types: src.TYPES })
+        const law = require('./connectors')
+        // Law sources (connectors/): one plain list for every front end.
+        if (req.method === 'GET' && p === '/api/sources/law') return sendJson(res, 200, { sources: await law.status({ matterId: url.searchParams.get('matterId') || null }) })
+        if (req.method === 'GET' && p === '/api/sources') return sendJson(res, 200, { law: await law.status({ matterId: url.searchParams.get('matterId') || null }), sources: src.list(), presets: Object.keys(src.PRESETS), kinds: src.KINDS, types: src.TYPES })
         if (req.method !== 'POST') return sendJson(res, 404, { error: 'not found' })
         const body = await readBody(req)
         const matterId = body.matterId || null
+        const isLaw = law.IDS.includes(String(body.name || body.source || '').toLowerCase())
+        if (p === '/api/sources/law/search') return sendJson(res, 200, await policy.withMatter(matterId, () => law.search(body)))
+        if (p === '/api/sources/law/get') return sendJson(res, 200, await policy.withMatter(matterId, () => law.get(body)))
+        if (p === '/api/sources/enable') return sendJson(res, 200, law.setEnabled(body.name, body.on !== false))
+        if (p === '/api/sources/test' && isLaw) return sendJson(res, 200, await policy.withMatter(matterId, () => law.test(body.name, body.query)))
+        if (p === '/api/sources/key' && isLaw) return sendJson(res, 200, await law.setKey(body.name, body.key))
         if (p === '/api/sources/search') return sendJson(res, 200, await policy.withMatter(matterId, () => src.search(body)))
         if (p === '/api/sources/test') return sendJson(res, 200, await policy.withMatter(matterId, () => src.test(body.name, body.query)))
         if (p === '/api/sources/add') return sendJson(res, 200, { source: src.add(body.name, body.source) })
@@ -515,7 +524,7 @@ async function handle(req, res) {
         }
         return sendJson(res, 404, { error: 'not found' })
       } catch (err) {
-        return sendJson(res, 400, { error: err.message })
+        return sendJson(res, 400, { error: err.plain || err.message })
       }
     }
     // ── Permissions: what the agent may do without asking ───────────────

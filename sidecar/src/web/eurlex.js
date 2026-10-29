@@ -14,8 +14,8 @@
  *                    article; consolidated version preferred.
  */
 
-const SPARQL = process.env.OPENLEX_CELLAR_SPARQL || 'https://publications.europa.eu/webapi/rdf/sparql'
-const CELLAR = process.env.OPENLEX_CELLAR_BASE || 'http://publications.europa.eu/resource/celex'
+const SPARQL = () => process.env.OPENLEX_CELLAR_SPARQL || 'https://publications.europa.eu/webapi/rdf/sparql'
+const CELLAR = () => process.env.OPENLEX_CELLAR_BASE || 'http://publications.europa.eu/resource/celex'
 const UA = 'OpenLex (+https://openlex.dev)'
 const STR = '^^<http://www.w3.org/2001/XMLSchema#string>'
 
@@ -42,7 +42,7 @@ const ALIASES = {
 }
 
 async function sparql(query, timeoutMs = 60000) {
-  const url = `${SPARQL}?${new URLSearchParams({ query })}`
+  const url = `${SPARQL()}?${new URLSearchParams({ query })}`
   const res = await fetch(url, { headers: { Accept: 'application/sparql-results+json', 'User-Agent': UA }, signal: AbortSignal.timeout(timeoutMs) })
   if (!res.ok) throw new Error(`EU Publications Office SPARQL → HTTP ${res.status}`)
   const json = await res.json()
@@ -174,7 +174,7 @@ async function text(celex, { lang = 'en', article = null, preferConsolidated = t
     try { target = (await describe([target], lang))[0]?.consolidated?.celex || target } catch { /* fall back to the OJ text */ }
   }
   const L3 = (LANG3[lang] || 'ENG').toLowerCase()
-  const res = await fetch(`${CELLAR}/${encodeURIComponent(target)}`, {
+  const res = await fetch(`${CELLAR()}/${encodeURIComponent(target)}`, {
     headers: { Accept: 'application/xhtml+xml, text/html;q=0.9', 'Accept-Language': L3, 'User-Agent': UA },
     redirect: 'follow',
     signal: AbortSignal.timeout(60000),

@@ -1,0 +1,143 @@
+{
+ "@type": "hydra:Collection",
+ "@context": "https://testphase.rechtsinformationen.bund.de/v1/context.jsonld",
+ "@id": "/v1/legislation?pageIndex=0&size=2",
+ "totalItems": 36,
+ "member": [
+  {
+   "@type": "SearchResult",
+   "item": {
+    "@type": "Legislation",
+    "@id": "/v1/legislation/eli/bund/bgbl-1/1995/s2072/2021-08-10/1/deu",
+    "name": "Verordnung über den Erwerb land- und forstwirtschaftlicher Flächen und das Verfahren nach dem Ausgleichsleistungsgesetz",
+    "legislationIdentifier": "eli/bund/bgbl-1/1995/s2072/2021-08-10/1/deu",
+    "exampleOfWork": {
+     "@type": "Legislation",
+     "@id": "/v1/legislation/eli/bund/bgbl-1/1995/s2072",
+     "legislationIdentifier": "eli/bund/bgbl-1/1995/s2072",
+     "legislationDate": "1995-12-20",
+     "datePublished": "1995-12-20",
+     "isPartOf": {
+      "@type": "PublicationIssue",
+      "name": "BGBl I, 1995 2072"
+     }
+    },
+    "temporalCoverage": null,
+    "abbreviation": "FlErwV",
+    "alternateName": "Flächenerwerbsverordnung",
+    "legislationLegalForce": "InForce",
+    "encoding": [
+     {
+      "@type": "LegislationObject",
+      "@id": "/v1/legislation/eli/bund/bgbl-1/1995/s2072/2021-08-10/1/deu/2021-08-17/regelungstext-1/html",
+      "contentUrl": "/v1/legislation/eli/bund/bgbl-1/1995/s2072/2021-08-10/1/deu/2021-08-17/regelungstext-1.html",
+      "encodingFormat": "text/html",
+      "inLanguage": "de"
+     },
+     {
+      "@type": "LegislationObject",
+      "@id": "/v1/legislation/eli/bund/bgbl-1/1995/s2072/2021-08-10/1/deu/2021-08-17/regelungstext-1/xml",
+      "contentUrl": "/v1/legislation/eli/bund/bgbl-1/1995/s2072/2021-08-10/1/deu/2021-08-17/regelungstext-1.xml",
+      "encodingFormat": "application/xml",
+      "inLanguage": "de"
+     },
+     {
+      "@type": "LegislationObject",
+      "@id": "/v1/legislation/eli/bund/bgbl-1/1995/s2072/2021-08-10/1/deu/2021-08-17/zip",
+      "contentUrl": "/v1/legislation/eli/bund/bgbl-1/1995/s2072/2021-08-10/1/deu/2021-08-17.zip",
+      "encodingFormat": "application/zip",
+      "inLanguage": "de"
+     }
+    ]
+   },
+   "textMatches": [
+    {
+     "@type": "SearchResultMatch",
+     "name": "§ 10 Verkaufsangebot",
+     "text": "Kaufbewerber nach § 3 Abs. 5 des Ausgleichsleistungsgesetzes werden aufgefordert, den Entschädigungs- oder Ausgleichsleistungsbescheid als Voraussetzung für den Abschluß des <mark>Kaufvertrages</mark> vorzulegen.",
+     "location": "art-z10"
+    },
+    {
+     "@type": "SearchResultMatch",
+     "name": "§ 7 Inhalt des Kaufantrages",
+     "text": "Vor Abschluss des notariell beurkundeten <mark>Kaufvertrages</mark> ist der Privatisierungsstelle ein den Anlagen entsprechender aktueller Finanzierungsnachweis vorzulegen.",
+     "location": "art-z7"
+    },
+    {
+     "@type": "SearchResultMatch",
+     "name": "§ 13 Grundbuchvollzug",
+     "text": "Enthält der <mark>Kaufvertrag</mark> die Feststellung nach Satz 1 nicht, gilt das Grundstück als von dem Veräußerungsverbot nicht erfaßt. (2) Das Veräußerungsverbot besteht für die Dauer von 15 Jahren nach Abschluss des <mark>Kaufvertrages</mark>.",
+     "location": "art-z13"
+    }
+   ]
+  },
+  {
+   "@type": "SearchResult",
+   "item": {
+    "@type": "Legislation",
+    "@id": "/v1/legislation/eli/bund/bgbl-1/2001/s2716/2021-06-02/1/deu",
+    "name": "Gesetz zur Bereinigung der Rechtsverhältnisse an Verkehrsflächen und anderen öffentlich genutzten privaten Grundstücken",
+    "legislationIdentifier": "eli/bund/bgbl-1/2001/s2716/2021-06-02/1/deu",
+    "exampleOfWork": {
+     "@type": "Legislation",
+     "@id": "/v1/legislation/eli/bund/bgbl-1/2001/s2716",
+     "legislationIdentifier": "eli/bund/bgbl-1/2001/s2716",
+     "legislationDate": "2001-10-26",
+     "datePublished": "2001-10-26",
+     "isPartOf": {
+      "@type": "PublicationIssue",
+      "name": "BGBl I, 2001 2716"
+     }
+    },
+    "temporalCoverage": null,
+    "abbreviation": "VerkFlBerG",
+    "alternateName": "Verkehrsflächenbereinigungsgesetz",
+    "legislationLegalForce": "InForce",
+    "encoding": [
+     {
+      "@type": "LegislationObject",
+      "@id": "/v1/legislation/eli/bund/bgbl-1/2001/s2716/2021-06-02/1/deu/2022-05-27/regelungstext-1/html",
+      "contentUrl": "/v1/legislation/eli/bund/bgbl-1/2001/s2716/2021-06-02/1/deu/2022-05-27/regelungstext-1.html",
+      "encodingFormat": "text/html",
+      "inLanguage": "de"
+     },
+     {
+      "@type": "LegislationObject",
+      "@id": "/v1/legislation/eli/bund/bgbl-1/2001/s2716/2021-06-02/1/deu/2022-05-27/regelungstext-1/xml",
+      "contentUrl": "/v1/legislation/eli/bund/bgbl-1/2001/s2716/2021-06-02/1/deu/2022-05-27/regelungstext-1.xml",
+      "encodingFormat": "application/xml",
+      "inLanguage": "de"
+     },
+     {
+      "@type": "LegislationObject",
+      "@id": "/v1/legislation/eli/bund/bgbl-1/2001/s2716/2021-06-02/1/deu/2022-05-27/zip",
+      "contentUrl": "/v1/legislation/eli/bund/bgbl-1/2001/s2716/2021-06-02/1/deu/2022-05-27.zip",
+      "encodingFormat": "application/zip",
+      "inLanguage": "de"
+     }
+    ]
+   },
+   "textMatches": [
+    {
+     "@type": "SearchResultMatch",
+     "name": "§ 3 Rechte bei öffentlicher Nutzung",
+     "text": "Das Erwerbsrecht wird durch Abgabe eines notariell beurkundeten Angebots zum Abschluss eines <mark>Kaufvertrages</mark> nach diesem Gesetz ausgeübt.",
+     "location": "art-z3"
+    },
+    {
+     "@type": "SearchResultMatch",
+     "name": "§ 7 Weiterer Inhalt des <mark>Kaufvertrages</mark>; dingliche Rechte",
+     "text": "Der für den Vollzug des <mark>Kaufvertrages</mark> zuständige Notar darf eine Auflassung auf Grund der vorgenannten Vollmacht erst beurkunden, wenn ihm die Zahlung eines Betrages in Höhe des Kaufpreises nachgewiesen ist.",
+     "location": "art-z7"
+    }
+   ]
+  }
+ ],
+ "view": {
+  "@type": "hydra:PartialCollectionView",
+  "first": "/v1/legislation?pageIndex=0&size=2",
+  "previous": null,
+  "next": "/v1/legislation?pageIndex=1&size=2",
+  "last": "/v1/legislation?pageIndex=17&size=2"
+ }
+}
