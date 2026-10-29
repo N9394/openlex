@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # OpenLex installer (macOS, Linux; Windows: WSL or Git Bash).
 #
-#   curl -fsSL https://<site>/install | bash
-#   curl -fsSL https://<site>/install | bash -s -- --version 0.2.0
+#   curl -fsSL https://github.com/N9394/openlex/releases/latest/download/install.sh | bash
+#   curl -fsSL https://github.com/N9394/openlex/releases/latest/download/install.sh | bash -s -- --version 0.2.0
 #
 # Installs the OpenLex engine + CLI into ~/.openlex (no root, no system
 # changes) and links `openlex` into ~/.local/bin. Needs Node.js >= 20.
 # The package is downloaded from the GitHub release and checked against
-# its published sha256 before anything is unpacked.
+# its published sha256 before anything is unpacked; with cosign or gh
+# installed, also its signature / build attestation (docs/VERIFY.md).
 set -euo pipefail
 
 REPO="N9394/openlex"
@@ -20,7 +21,7 @@ while [ $# -gt 0 ]; do
     --version) VERSION="${2#v}"; shift 2 ;;
     --prefix) PREFIX="$2"; shift 2 ;;
     --bin-dir) BIN_DIR="$2"; shift 2 ;;
-    -h|--help) sed -n '2,12p' "$0" 2>/dev/null || true; exit 0 ;;
+    -h|--help) sed -n '2,13p' "$0" 2>/dev/null || true; exit 0 ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
 done
@@ -55,6 +56,42 @@ curl -fsSL "$URL.sha256" -o "$TMP/$NAME.tar.gz.sha256" || die "checksum download
 EXPECTED=$(cut -d' ' -f1 "$TMP/$NAME.tar.gz.sha256")
 ACTUAL=$(cd "$TMP" && $SHA "$NAME.tar.gz" | cut -d' ' -f1)
 [ "$EXPECTED" = "$ACTUAL" ] || die "checksum mismatch (expected $EXPECTED, got $ACTUAL) — not installing"
+say "${dim}✓ sha256 matches the release's checksum file${reset}"
+
+# Origin check (see docs/VERIFY.md). The checksum only proves the download
+# is intact; it comes from the same release. Releases built by the release
+# workflow are also signed (Sigstore) and attested by GitHub. If cosign or
+# gh is installed, check that the tarball was built by this repository's
+# release workflow. A failed check stops the install; a missing tool does not.
+IDENTITY="https://github.com/$REPO/.github/workflows/release.yml@refs/tags/v$VERSION"
+ISSUER="https://token.actions.githubusercontent.com"
+CHECKED=""
+if curl -fsSL "$URL.bundle" -o "$TMP/$NAME.tar.gz.bundle" 2>/dev/null; then
+  if command -v cosign >/dev/null; then
+    if cosign verify-blob --bundle "$TMP/$NAME.tar.gz.bundle" --certificate-identity "$IDENTITY" \
+        --certificate-oidc-issuer "$ISSUER" "$TMP/$NAME.tar.gz" >"$TMP/cosign.log" 2>&1; then
+      say "${dim}✓ signature (cosign): built by $REPO's release workflow for v$VERSION${reset}"; CHECKED="cosign"
+    else
+      cat "$TMP/cosign.log" >&2
+      die "the signature does not match (cosign verify-blob failed) — not installing"
+    fi
+  fi
+  if command -v gh >/dev/null; then
+    if ! gh auth status >/dev/null 2>&1; then
+      say "${dim}· gh is installed but not logged in (gh auth login), so the GitHub attestation was not checked${reset}"
+    elif gh attestation verify "$TMP/$NAME.tar.gz" --repo "$REPO" >"$TMP/gh.log" 2>&1; then
+      say "${dim}✓ attestation (gh): GitHub build provenance from $REPO${reset}"; CHECKED="$CHECKED gh"
+    else
+      cat "$TMP/gh.log" >&2
+      die "the GitHub attestation does not match (gh attestation verify failed) — not installing"
+    fi
+  fi
+  if [ -z "$CHECKED" ]; then
+    say "Only the checksum was checked. To also check who built it, install cosign or gh and run this again (docs/VERIFY.md)."
+  fi
+else
+  say "Only the checksum was checked: no signature was found for v$VERSION (releases from before signed builds have none)."
+fi
 
 mkdir -p "$PREFIX/versions" "$BIN_DIR"
 rm -rf "$PREFIX/versions/$NAME"
