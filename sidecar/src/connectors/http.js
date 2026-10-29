@@ -48,9 +48,9 @@ async function getText(url, opts = {}) {
   return res.text()
 }
 
-/** HTML → readable text (shared with the EUR-Lex adapter). */
+/** HTML → readable text (shared with the EUR-Lex adapter); Windows line ends count as one. */
 function htmlToText(html) {
-  return require('../web/eurlex').htmlToText(html)
+  return require('../web/eurlex').htmlToText(String(html).replace(/\r\n?/g, '\n'))
 }
 
 const strip = (s) => String(s ?? '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim()
