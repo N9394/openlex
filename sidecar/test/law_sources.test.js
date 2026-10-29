@@ -607,7 +607,7 @@ test('Ansvar browser sign-in: no device codes → browser redirect with PKCE; re
   mem.clear()
   require('../src/connectors/ansvar')._reset()
   auth.register = 'closed'
-  await assert.rejects(ls.signIn('ansvar', { open: false }), (err) => err.plain === 'Ansvar\'s browser sign-in is not available for OpenLex yet (OpenLex has asked Ansvar for a client id). Use a service credential (paste your key) for now.')
+  await assert.rejects(ls.signIn('ansvar', { open: false }), (err) => err.plain === 'Ansvar\'s browser sign-in is not available for OpenLex yet. Use a service credential (paste your key) for now.')
 })
 
 test('sign-in addresses must be https (http only on this computer)', () => {

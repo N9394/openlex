@@ -100,7 +100,7 @@ Ansvar is a law-research service with its own plans (see [ansvar.eu/pricing](htt
 3. Ansvar's sign-in page opens. Type the code OpenLex shows, sign in, and allow access.
 4. Back in OpenLex, Ansvar shows "connected, signed in". OpenLex renews the sign-in by itself; when Ansvar ends it, OpenLex says "sign in again".
 
-If OpenLex says "Ansvar's browser sign-in is not available for OpenLex yet", Ansvar has not opened its sign-in to OpenLex: we have asked Ansvar for a client id for OpenLex. Until then, use a service credential (Premium plan), or one of the free official sources below.
+If OpenLex says "Ansvar's browser sign-in is not available for OpenLex yet", Ansvar has not opened its sign-in to OpenLex yet. Until then, use a service credential (Premium plan), or one of the free official sources below.
 
 Hungary and Cyprus: Ansvar is not suggested there, because the official sites forbid automated access and a copy's provenance would need checking with Ansvar first.
 

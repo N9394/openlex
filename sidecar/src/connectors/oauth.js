@@ -126,7 +126,7 @@ const REDIRECT = 'http://127.0.0.1/callback'
  * available yet" and the lawyer uses a service credential.
  */
 async function register(meta, { label = 'The source', clientName = 'OpenLex', scope = '' } = {}) {
-  const notYet = new SourceError(`${label}'s browser sign-in is not available for OpenLex yet (OpenLex has asked ${label} for a client id). Use a service credential (paste your key) for now.`, 'unavailable')
+  const notYet = new SourceError(`${label}'s browser sign-in is not available for OpenLex yet. Use a service credential (paste your key) for now.`, 'unavailable')
   if (!meta.registration_endpoint) throw notYet
   const body = {
     client_name: clientName,
