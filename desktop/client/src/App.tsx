@@ -6,23 +6,17 @@ import Login from './pages/Login'
 import Signup from './pages/Signup'
 import Dashboard from './pages/Dashboard'
 import Research from './pages/Research'
-import Upload from './pages/Upload'
-import Vault from './pages/Vault'
-import Workshop from './pages/Workshop'
-import Audit from './pages/Audit'
 import Settings from './pages/Settings'
-import DocumentView from './pages/DocumentView'
-import Investigate from './pages/Investigate'
 import ResetPassword from './pages/ResetPassword'
 import Admin from './pages/Admin'
 import AcceptInvite from './pages/AcceptInvite'
-import MaDashboard from './pages/MaDashboard'
-import MaDealSetup from './pages/MaDealSetup'
-import MaDeal from './pages/MaDeal'
 import Hub from './pages/Hub'
 import Grid from './pages/Grid'
 import Plans from './pages/Plans'
 import Desk from './pages/Desk'
+import Saved from './pages/Saved'
+import Record from './pages/Record'
+import Moved from './pages/Moved'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -42,6 +36,11 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+// The pages of the old desktop server (Upload, Vault, Investigate, Workshop,
+// M&A, Audit, DocumentView, Navigator) moved into the chat and onto the
+// engine; their old addresses show where they went. Their code stays in the
+// repository for now (pages/*.tsx, desktop/server) but nothing calls it.
+
 // The desktop App has no accounts (identity is the license or the local
 // community user), so its sign-in / sign-up routes go straight to the app.
 const isElectron = typeof window !== 'undefined' && !!(window as any).lexvault?.isElectron
@@ -51,29 +50,30 @@ function App() {
     <Routes>
       <Route path="/login" element={isElectron ? <Navigate to="/dashboard" replace /> : <Login />} />
       <Route path="/signup" element={isElectron ? <Navigate to="/dashboard" replace /> : <Signup />} />
-      <Route path="/forgot-password" element={<ResetPassword />} />
-      <Route path="/reset-password" element={<ResetPassword />} />
-      <Route path="/invite/:invitationId" element={<AcceptInvite />} />
+      <Route path="/forgot-password" element={isElectron ? <Navigate to="/dashboard" replace /> : <ResetPassword />} />
+      <Route path="/reset-password" element={isElectron ? <Navigate to="/dashboard" replace /> : <ResetPassword />} />
+      <Route path="/invite/:invitationId" element={isElectron ? <Navigate to="/dashboard" replace /> : <AcceptInvite />} />
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
       <Route element={<ProtectedRoute><ErrorBoundary><Layout /></ErrorBoundary></ProtectedRoute>}>
-        <Route path="/workshop" element={<Workshop />} />
+        <Route path="/workshop" element={<Moved command="draft" what="Workshop" />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/research" element={<Research />} />
         <Route path="/hub" element={<Hub />} />
         <Route path="/grid" element={<Grid />} />
         <Route path="/plans" element={<Plans />} />
         <Route path="/desk" element={<Desk />} />
-        <Route path="/upload" element={<Upload />} />
-        <Route path="/vault" element={<Vault />} />
-        <Route path="/investigate" element={<Investigate />} />
-        <Route path="/audit" element={<Audit />} />
+        <Route path="/upload" element={<Moved command="analyse" what="Analyse" />} />
+        <Route path="/vault" element={<Saved />} />
+        <Route path="/investigate" element={<Moved command="investigate" what="Investigate" />} />
+        <Route path="/audit" element={<Record />} />
         <Route path="/settings" element={<Settings />} />
-        <Route path="/admin" element={<Admin />} />
-        <Route path="/documents/:id" element={<DocumentView />} />
-        <Route path="/ma" element={<MaDashboard />} />
-        <Route path="/ma/:dealId/setup" element={<MaDealSetup />} />
-        <Route path="/ma/:dealId" element={<MaDeal />} />
+        <Route path="/admin" element={isElectron ? <Navigate to="/dashboard" replace /> : <Admin />} />
+        <Route path="/documents/:id" element={<Moved command="analyse" what="Document analysis" />} />
+        <Route path="/navigator" element={<Moved command="draft" what="Navigator" />} />
+        <Route path="/ma" element={<Moved command="diligence" what="M&A" />} />
+        <Route path="/ma/:dealId/setup" element={<Moved command="diligence" what="M&A" />} />
+        <Route path="/ma/:dealId" element={<Moved command="diligence" what="M&A" />} />
       </Route>
     </Routes>
   )

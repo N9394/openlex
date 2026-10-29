@@ -35,14 +35,16 @@ export default function Layout() {
     localStorage.setItem('sidebar-collapsed', String(sidebarCollapsed))
   }, [sidebarCollapsed])
 
-  const navItems = [
+  // Analyse, Investigate, Draft and Due diligence are chat tools now: these
+  // entries open the chat and run the command (/analyse, /investigate …).
+  const navItems: { to: string; icon: any; label: string; command?: string; badge?: string }[] = [
     { to: '/dashboard', icon: LayoutDashboard, label: t('nav.home') },
-    { to: '/upload', icon: FileSearch, label: t('nav.analyse') },
+    { to: '/research', icon: FileSearch, label: t('nav.analyse'), command: 'analyse' },
     { to: '/research', icon: Search, label: t('nav.research') },
-    { to: '/investigate', icon: ScanSearch, label: t('nav.investigate') },
-    { to: '/vault', icon: Archive, label: t('nav.vault') },
-    { to: '/workshop', icon: Wrench, label: t('nav.workshop'), badge: 'BETA' },
-    { to: '/ma', icon: Briefcase, label: t('nav.ma'), badge: 'NEW' },
+    { to: '/research', icon: ScanSearch, label: t('nav.investigate'), command: 'investigate' },
+    { to: '/research', icon: Wrench, label: t('nav.draft', 'Draft'), command: 'draft' },
+    { to: '/research', icon: Briefcase, label: t('nav.diligence', 'Due diligence'), command: 'diligence' },
+    { to: '/vault', icon: Archive, label: t('nav.saved', 'Saved') },
     ...((window as any).lexvault?.engine ? [{ to: '/hub', icon: Network, label: t('nav.hub', 'OpenLex hub') }, { to: '/grid', icon: Table2, label: t('nav.grid', 'Review grid') }, { to: '/plans', icon: Route, label: t('nav.plans', 'Plans') }, { to: '/desk', icon: ListTodo, label: t('nav.desk', 'Matter desk') }] : []),
   ]
 
@@ -51,7 +53,7 @@ export default function Layout() {
   const isElectron = typeof window !== 'undefined' && (window as any).lexvault?.isElectron
   const bottomItems = [
     ...(isElectron ? [] : [{ to: '/admin', icon: Users, label: t('nav.team') }]),
-    { to: '/audit', icon: ClipboardList, label: t('nav.audit') },
+    { to: '/audit', icon: ClipboardList, label: t('nav.record', 'AI record') },
     { to: '/settings', icon: Settings, label: t('nav.settings') },
   ]
 
@@ -131,13 +133,14 @@ export default function Layout() {
         <nav className="flex-1 p-2">
           <ul className="space-y-1">
             {navItems.map((item) => (
-              <li key={item.to}>
+              <li key={`${item.to}:${item.command || ''}`}>
                 <NavLink
                   to={item.to}
+                  state={item.command ? { command: item.command } : undefined}
                   className={({ isActive }) =>
                     `flex items-center gap-3 px-3 py-3 rounded-button transition-all duration-200 focus:outline-none
                     ${sidebarCollapsed ? 'justify-center' : ''}
-                    ${isActive
+                    ${isActive && !item.command
                       ? 'bg-accent/10 text-accent'
                       : 'text-cream hover:bg-leather hover:text-parchment'
                     }`
