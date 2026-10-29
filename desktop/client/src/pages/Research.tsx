@@ -27,6 +27,7 @@ import {
 import { Attachment, attachFile, chipDetail, refusal } from '../lib/attach'
 import AnalysisCard from '../components/AnalysisCard'
 import BatchCard from '../components/BatchCard'
+import ToolCard, { ResultCard, Result, ToolRun } from '../components/ToolCard'
 
 interface Matter { id: string; title: string; number?: string; client?: string; privileged?: boolean; agent?: string | null }
 interface Conversation { id: string; title: string; matterId: string | null; clients: string[]; turns: number; updatedAt: string | null }
@@ -51,6 +52,8 @@ interface Message {
   analyses?: any[] // full document analyses (POST /api/analyse), shown as cards
   analysisIds?: string[] // from a stored turn: loaded by the card
   batch?: { attachments: string[] } // several documents: analysed one by one in the background
+  tool?: ToolRun // /investigate, /diligence, /draft just asked for (the card starts it)
+  results?: Result[] // tool results kept in the conversation (investigation, due diligence, draft, a batch)
   reading?: string // how an attached document is read ("in full by Claude (EU)" / "part by part")
 }
 
@@ -64,7 +67,8 @@ function storedMessage(m: any): Message {
   const at = m.at ? Date.parse(m.at) : Date.now()
   const act: Activity = { ...startActivity(at), steps: [], endedAt: at, models: (m.data || []) as ModelUse[], online: m.online || [], sources: (m.sources || []) as LawSource[], stopped: !!m.stopped }
   const analysisIds = (m.results || []).filter((r: any) => r && r.kind === 'analysis' && r.id).map((r: any) => r.id)
-  return { id: nextId(), role: 'assistant', content: m.content, at: m.at, client: m.client, as: m.agent || '', act, stored: true, ...(analysisIds.length ? { analysisIds } : {}) }
+  const results = (m.results || []).filter((r: any) => r && r.kind !== 'analysis' && r.id)
+  return { id: nextId(), role: 'assistant', content: m.content, at: m.at, client: m.client, as: m.agent || '', act, stored: true, ...(analysisIds.length ? { analysisIds } : {}), ...(results.length ? { results } : {}) }
 }
 
 function when(iso?: string | null) {
@@ -143,10 +147,16 @@ export default function Research() {
     return () => { window.removeEventListener('openlex:matter-changed', on); window.removeEventListener('openlex:setup-changed', on) }
   }, [refreshSetup])
 
+  // From elsewhere in the app: a question to fill in, a command to run (the
+  // sidebar's Analyse, Investigate, Draft …), a conversation to open (search).
+  const wantSession = useRef<string | null>(null)
   useEffect(() => {
-    const prefill = (location.state as { prefill?: string } | null)?.prefill
-    if (prefill) setInput(prefill)
-  }, [location.state])
+    const st = (location.state as { prefill?: string; command?: string; arg?: string; sessionId?: string } | null) || {}
+    if (st.prefill) setInput(st.prefill)
+    if (st.sessionId) { wantSession.current = st.sessionId; openConversation(st.sessionId) }
+    if (st.command) { const c = st.command; const a = st.arg || ''; setTimeout(() => commandsRef.current?.run(c, a), 0) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.key])
 
   // ── conversations of this matter (any window) ──
   const loadList = useCallback(async (matterId: string | null) => {
@@ -183,7 +193,7 @@ export default function Research() {
     if (running) return
     let alive = true
     setLoadingList(true)
-    loadList(matterId).then((list) => { if (alive) openConversation(list[0]?.id || null) })
+    loadList(matterId).then((list) => { if (alive) { openConversation(wantSession.current || list[0]?.id || null); wantSession.current = null } })
     return () => { alive = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matterId])
@@ -227,10 +237,52 @@ export default function Research() {
     lastBasis: () => basedOn([...messagesRef.current].reverse().find((m) => m.role === 'assistant' && m.act)?.act),
     newConversation: startNew,
     analyse: (arg: string) => { analyseRef.current(arg) },
+    tool: (name: string, arg: string) => { toolRef.current(name, arg) },
     quickAgent,
     setQuickAgent,
     running: !!running,
   })
+
+  const commandsRef = useRef(commands)
+  commandsRef.current = commands
+
+  // ── the tools from the old desktop app: /investigate, /diligence, /draft ──
+  const toolRef = useRef<(name: string, arg: string) => void>(() => {})
+  const toolAfterAttach = useRef<{ name: string; arg: string } | null>(null)
+  const runTool = (name: string, arg: string, only?: Attachment[]) => {
+    if (!engine()) return sys(t('chat.noEngine', 'The chat needs the OpenLex engine, which runs with the desktop app.'), 'warn')
+    // The documents: just attached, else the ones this conversation is about.
+    const att = only || (files.length ? files : convDocs)
+    if (name !== 'draft' && !att.length) {
+      toolAfterAttach.current = { name, arg }
+      sys(name === 'diligence'
+        ? t('tools.chooseRoom', 'Choose the data room folder (or attach its documents): OpenLex reads them on this computer, then starts the review.')
+        : t('tools.chooseDocs', 'Choose the documents to investigate (or a folder, or drop them here): then the investigation starts.'), 'info')
+      ;(name === 'diligence' ? folderRef : fileRef).current?.click()
+      return
+    }
+    if (name === 'investigate' && !arg.trim()) {
+      setInput('/investigate ')
+      return sys(t('tools.askQuestion', 'Type your question after /investigate — or one of: liability, exit, obligations, advantages.'), 'info')
+    }
+    const sid = sessionId || `app:${matterId || 'quick'}:${Date.now().toString(36)}`
+    if (!sessionId) setSessionId(sid)
+    const message = `/${name}${arg ? ` ${arg}` : ''}`
+    const lang = /^de/i.test(i18n.language || '') ? 'de' : 'en'
+    const options = name === 'investigate' ? { question: arg, lang } : name === 'diligence' ? {
+      perspective: /seller|verkäufer/i.test(arg) ? 'seller' : 'buyer',
+      dealType: /asset/i.test(arg) ? 'asset_purchase' : /merger|verschmelz/i.test(arg) ? 'merger' : /joint|jv/i.test(arg) ? 'joint_venture' : 'share_purchase',
+      ...(arg.replace(/\b(buyer|seller|käufer|verkäufer|share|asset|merger|joint|venture|jv)\b/gi, '').trim() ? { focus: arg.replace(/\b(buyer|seller|käufer|verkäufer|share|asset|merger|joint|venture|jv)\b/gi, '').trim() } : {}),
+    } : undefined
+    setInput('')
+    if (!only && files.length) { setConvDocs((cur) => [...cur.filter((d) => !files.some((f) => f.id === d.id)), ...files]); setFiles([]) }
+    nearBottom.current = true
+    setMessages((m) => [...m,
+      { id: nextId(), role: 'user', content: message, files: att.map((f) => f.name), client: 'app' },
+      { id: nextId(), role: 'assistant', content: '', tool: { name: name as ToolRun['name'], arg, attachments: att.map((f) => f.id), matterId, sessionId: sid, message, options } },
+    ])
+  }
+  useEffect(() => { toolRef.current = (name: string, arg: string) => runTool(name, arg) })
 
   // ── asking ──
   const send = async (raw: string) => {
@@ -361,6 +413,9 @@ export default function Research() {
     }
     if (analyseAfterAttach.current && done.length) { analyseAfterAttach.current = false; runAnalyse('', done) }
     else analyseAfterAttach.current = false
+    const pending = toolAfterAttach.current
+    toolAfterAttach.current = null
+    if (pending && done.length) runTool(pending.name, pending.arg, done)
     inputRef.current?.focus()
   }
 
@@ -710,9 +765,11 @@ function Answer({ m, now, live, openSteps, toggleSteps, onCopy, copied, onWord, 
         <div className="px-5 py-4 space-y-3">
           {m.reading && <div className="text-xs text-antique">· {m.reading}</div>}
           {m.batch && <BatchCard attachments={m.batch.attachments} matterId={matterId} />}
+          {m.tool && <ToolCard tool={m.tool} />}
+          {(m.results || []).map((r) => <ResultCard key={`${r.kind}:${r.id}`} result={r} matterId={matterId} />)}
           {(m.analyses || []).map((a) => <AnalysisCard key={a.id} analysis={a} />)}
           {(m.analysisIds || []).map((id) => <AnalysisCard key={id} id={id} />)}
-          {m.content && !(m.analysisIds?.length) ? <div className="prose-custom max-w-none"><ReactMarkdown>{m.content}</ReactMarkdown></div> : null}
+          {m.content && !(m.analysisIds?.length) && !(m.results?.length) ? <div className="prose-custom max-w-none"><ReactMarkdown>{m.content}</ReactMarkdown></div> : null}
 
           {/* What OpenLex is doing right now (≤3 recent steps, the current one marked) */}
           {running && act && (

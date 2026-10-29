@@ -10,17 +10,20 @@ import { BookOpen, ChevronDown, ChevronUp, Download, FileSpreadsheet, FileText, 
 import { engine } from '../lib/commands'
 import { download, findQuote } from '../lib/attach'
 import { clip, friendly } from '../lib/turn'
+import i18n from '../i18n'
 
 type Level = 'high' | 'medium' | 'low'
 const LEVEL_MARK: Record<Level, string> = { high: '!!', medium: '!', low: '·' }
 const LEVEL_CLASS: Record<Level, string> = { high: 'text-red-400 border-red-400/50', medium: 'text-amber-400 border-amber-400/50', low: 'text-forest border-forest/50' }
 const LEVEL_WORD: Record<Level, string> = { high: 'High risk', medium: 'Medium risk', low: 'Low risk' }
+const levelWord = (l: Level) => i18n.t(`analysis.levelWord.${l}`, LEVEL_WORD[l])
+const lv = (l: string) => i18n.t(`tools.level.${l}`, l)
 const HIGHLIGHT: Record<string, string> = { high: 'bg-red-500/25', medium: 'bg-amber-500/25', low: 'bg-forest/25', date: 'bg-sky-500/20', other: 'bg-accent/20' }
 
 function fixText(r: any) {
-  if (r.fixCheck === 'removed') return { text: 'No safe fix suggested — a second check rejected the first proposal. Decide how to handle this.', mark: '!', ok: false }
+  if (r.fixCheck === 'removed') return { text: i18n.t('analysis.fixRemoved', 'No safe fix suggested — a second check rejected the first proposal. Decide how to handle this.'), mark: '!', ok: false }
   if (!r.fix) return null
-  const how = r.fixCheck === 'checked' ? 'checked by a second pass' : r.fixCheck === 'corrected' ? 'corrected by a second pass' : 'not double-checked'
+  const how = r.fixCheck === 'checked' ? i18n.t('analysis.fixChecked', 'checked by a second pass') : r.fixCheck === 'corrected' ? i18n.t('analysis.fixCorrected', 'corrected by a second pass') : i18n.t('analysis.fixUnchecked', 'not double-checked')
   return { text: `${r.fix} (${how})`, mark: r.fixCheck === 'checked' || r.fixCheck === 'corrected' ? '✓' : '!', ok: r.fixCheck === 'checked' || r.fixCheck === 'corrected' }
 }
 
@@ -76,12 +79,12 @@ export default function AnalysisCard({ id, analysis: given }: { id?: string; ana
           <div className="text-xs uppercase tracking-wide text-accent">{t('analysis.title', 'Document analysis')}</div>
           <div className="font-serif text-lg text-parchment truncate" title={a.document?.name}>{a.document?.name}</div>
           <div className="text-xs text-antique">
-            {[s.type, a.document?.pages ? `${a.document.pages} ${a.document.pages === 1 ? 'page' : 'pages'}` : '', st.strategy ? (st.strategy.mode === 'full' ? 'read in full' : `read in ${st.parts} parts`) : '', a.document?.languageName].filter(Boolean).join(' · ')}
+            {[s.type, a.document?.pages ? t('analysis.pages', '{{count}} pages', { count: a.document.pages }) : '', st.strategy ? (st.strategy.mode === 'full' ? t('analysis.readFull', 'read in full') : t('analysis.readParts', 'read in {{n}} parts', { n: st.parts })) : '', a.document?.languageName].filter(Boolean).join(' · ')}
           </div>
         </div>
         {overall && (
           <div className={`shrink-0 rounded-button border px-2.5 py-1 text-xs ${LEVEL_CLASS[overall.level]}`} title={overall.explanation}>
-            <span aria-hidden="true">{LEVEL_MARK[overall.level]} </span>{t('analysis.overall', 'Overall risk')}: {overall.level} · {overall.score}/100
+            <span aria-hidden="true">{LEVEL_MARK[overall.level]} </span>{t('analysis.overall', 'Overall risk')}: {lv(overall.level)} · {overall.score}/100
           </div>
         )}
       </div>
@@ -97,14 +100,14 @@ export default function AnalysisCard({ id, analysis: given }: { id?: string; ana
 
       {/* Risks: always shown, highest first */}
       <div className="border-t border-tobacco/50 pt-2">
-        <div className="text-sm font-medium text-parchment mb-1">{t('analysis.risks', 'Risks')} <span className="text-antique font-normal">({st.high || 0} high, {st.medium || 0} medium, {st.low || 0} low)</span></div>
+        <div className="text-sm font-medium text-parchment mb-1">{t('analysis.risks', 'Risks')} <span className="text-antique font-normal">({t('analysis.riskCounts', '{{high}} high, {{medium}} medium, {{low}} low', { high: st.high || 0, medium: st.medium || 0, low: st.low || 0 })})</span></div>
         {!a.risks?.length && <div className="text-xs text-antique">{t('analysis.noRisks', 'No risks found.')}</div>}
         <ul className="space-y-2">
           {(a.risks || []).map((r: any) => {
             const fix = fixText(r)
             return (
               <li key={r.id} className={`border-l-2 pl-3 ${LEVEL_CLASS[r.level as Level]}`}>
-                <div><span className="font-semibold text-xs uppercase">{LEVEL_WORD[r.level as Level]}</span> <span className="text-parchment">{r.title}</span>{r.location?.text && <span className="text-antique text-xs"> · {r.location.text}</span>}</div>
+                <div><span className="font-semibold text-xs uppercase">{levelWord(r.level as Level)}</span> <span className="text-parchment">{r.title}</span>{r.location?.text && <span className="text-antique text-xs"> · {r.location.text}</span>}</div>
                 {r.why && <div className="text-xs text-parchment/80">{r.why}</div>}
                 {fix && <div className={`text-xs ${fix.ok ? 'text-forest' : 'text-amber-400'}`}>{fix.mark} {t('analysis.fix', 'Suggested fix')}: <span className="text-parchment/90">{fix.text}</span></div>}
                 <div className="text-xs text-antique italic">“{clip(r.quote, 220)}”</div>
@@ -120,9 +123,9 @@ export default function AnalysisCard({ id, analysis: given }: { id?: string; ana
           <tbody>
             {a.deadlines.map((d: any, i: number) => (
               <tr key={i} className="align-top border-b border-tobacco/30">
-                <td className="py-1 pr-2 whitespace-nowrap text-parchment">{d.date || `${d.when} (period)`}</td>
+                <td className="py-1 pr-2 whitespace-nowrap text-parchment">{d.date || `${d.when} (${t('analysis.period', 'period')})`}</td>
                 <td className="py-1 pr-2 text-parchment/90">{d.what}</td>
-                <td className="py-1 pr-2 text-antique">{d.importance}</td>
+                <td className="py-1 pr-2 text-antique">{lv(d.importance)}</td>
                 <td className="py-1 text-antique">{d.location?.text}</td>
               </tr>
             ))}
@@ -148,7 +151,7 @@ export default function AnalysisCard({ id, analysis: given }: { id?: string; ana
           {a.clauses.map((c: any, i: number) => (
             <li key={i}>
               {c.kind === 'missing'
-                ? <><span className="text-amber-400">{t('analysis.missing', 'Possibly missing')}{c.importance ? ` (${c.importance})` : ''}:</span> <span className="text-parchment">{c.title}</span> <span className="text-antique">— {c.note} ({t('analysis.pleaseCheck', 'not found in the text — please check')})</span></>
+                ? <><span className="text-amber-400">{t('analysis.missing', 'Possibly missing')}{c.importance ? ` (${t(`analysis.importance.${c.importance}`, c.importance)})` : ''}:</span> <span className="text-parchment">{c.title}</span> <span className="text-antique">— {c.note} ({t('analysis.pleaseCheck', 'not found in the text — please check')})</span></>
                 : <><span className="text-parchment">{c.title}</span>{c.note ? <span className="text-parchment/80"> — {c.note}</span> : null}{c.location?.text ? <span className="text-antique"> ({c.location.text})</span> : null}</>}
             </li>
           ))}
@@ -163,7 +166,7 @@ export default function AnalysisCard({ id, analysis: given }: { id?: string; ana
       <div className="text-[11px] text-antique border-t border-tobacco/50 pt-2 space-y-0.5">
         <div>✓ {st.verified || 0} {t('analysis.verified', 'findings checked word for word against the document')}{st.dropped ? ` · ${st.dropped} ${t('analysis.dropped', 'removed because their quote was not in the document')}` : ''} · {st.lawSearches || 0} {t('analysis.lawSearches', 'law searches')}</div>
         {!!a.document?.ocrPages && <div>! {a.document.ocrPages} {t('analysis.ocr', 'pages were scans, read by text recognition on this computer — check quotes from them')}</div>}
-        {a.readability?.avgSentenceWords ? <div>{t('analysis.readability', 'Readability')}: {a.readability.grade} ({a.readability.avgSentenceWords} {t('analysis.wordsPerSentence', 'words per sentence on average')})</div> : null}
+        {a.readability?.avgSentenceWords ? <div>{t('analysis.readability', 'Readability')}: {t(`analysis.grade.${a.readability.grade}`, a.readability.grade)} ({a.readability.avgSentenceWords} {t('analysis.wordsPerSentence', 'words per sentence on average')})</div> : null}
         <div>{t('analysis.aiNote', 'Summaries and fixes are written by AI — check them before relying on them.')}</div>
       </div>
 
@@ -171,7 +174,7 @@ export default function AnalysisCard({ id, analysis: given }: { id?: string; ana
       <div className="flex flex-wrap items-center gap-2 pt-1">
         <button type="button" disabled={!!busy} onClick={() => exportAs('docx')} className="btn-secondary !px-3 !py-1.5 text-xs inline-flex items-center gap-1"><FileText size={13} /> {busy === 'docx' ? '…' : 'Word'}</button>
         <button type="button" disabled={!!busy} onClick={() => exportAs('pdf')} className="btn-secondary !px-3 !py-1.5 text-xs inline-flex items-center gap-1"><Download size={13} /> {busy === 'pdf' ? '…' : 'PDF'}</button>
-        <button type="button" disabled={!!busy} onClick={() => exportAs('csv')} className="btn-secondary !px-3 !py-1.5 text-xs inline-flex items-center gap-1"><FileSpreadsheet size={13} /> {busy === 'csv' ? '…' : 'CSV (Excel)'}</button>
+        <button type="button" disabled={!!busy} onClick={() => exportAs('csv')} className="btn-secondary !px-3 !py-1.5 text-xs inline-flex items-center gap-1"><FileSpreadsheet size={13} /> {busy === 'csv' ? '…' : t('analysis.csv', 'CSV (Excel)')}</button>
         {a.document?.attachmentId && <button type="button" onClick={() => setReading(true)} className="btn-secondary !px-3 !py-1.5 text-xs inline-flex items-center gap-1"><BookOpen size={13} /> {t('analysis.read', 'Read the document')}</button>}
       </div>
       {saved && (
@@ -206,7 +209,7 @@ function DocumentReader({ attachmentId, analysis, onClose }: { attachmentId: str
     if (!text) return []
     const all: { start: number; end: number; kind: string; label: string }[] = []
     const add = (quote: string, kind: string, label: string) => { const at = findQuote(text, quote); if (at) all.push({ start: at[0], end: at[1], kind, label }) }
-    for (const r of analysis.risks || []) add(r.quote, r.level, `${LEVEL_WORD[r.level as Level]}: ${r.title}`)
+    for (const r of analysis.risks || []) add(r.quote, r.level, `${levelWord(r.level as Level)}: ${r.title}`)
     for (const d of analysis.deadlines || []) add(d.quote, 'date', `${d.date || d.when}: ${d.what}`)
     for (const o of analysis.obligations || []) add(o.quote, 'other', `${o.party}: ${o.duty}`)
     for (const c of analysis.clauses || []) if (c.quote) add(c.quote, 'other', c.title)
