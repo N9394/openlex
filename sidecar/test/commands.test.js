@@ -80,6 +80,6 @@ test('every window reads the one list (no private copies)', async () => {
   const app = fs.readFileSync(path.join(ROOT, 'desktop', 'client', 'src', 'lib', 'commands.ts'), 'utf8')
   assert.match(app, /\/api\/commands\?surface=app/, 'the desktop app asks the engine')
   const main = fs.readFileSync(path.join(ROOT, 'desktop', 'electron', 'main', 'main.js'), 'utf8')
-  const allowed = new RegExp(main.match(/const ENGINE_PATHS = \/(.+)\/\n/)[1])
+  const allowed = new RegExp(main.match(/const ENGINE_PATHS = \/(.+)\/\r?\n/)[1])
   for (const p of ['/api/commands?surface=app&lang=en', '/api/record?limit=50', '/api/record/export', '/api/folder/save']) assert.ok(allowed.test(p), `the app may call ${p}`)
 })
