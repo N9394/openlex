@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../contexts/AuthContext'
-import { api } from '../lib/api'
 import { engine } from '../lib/commands'
 
 /** Recent conversations from the OpenLex engine (GET /api/sessions): every window's, newest first. */
@@ -37,7 +36,7 @@ export default function Dashboard() {
   const { t } = useTranslation()
   const features = [
     {
-      to: '/upload',
+      to: '/research', command: 'analyse',
       icon: FileSearch,
       title: t('nav.analyse'),
       description: t('upload.title'),
@@ -46,7 +45,7 @@ export default function Dashboard() {
       bgAccent: 'bg-emerald-500/10',
     },
     {
-      to: '/investigate',
+      to: '/research', command: 'investigate',
       icon: ScanSearch,
       title: t('nav.investigate'),
       description: t('investigate.subtitle'),
@@ -66,17 +65,17 @@ export default function Dashboard() {
     {
       to: '/vault',
       icon: Archive,
-      title: t('nav.vault'),
-      description: t('vault.subtitle'),
+      title: t('nav.saved', 'Saved'),
+      description: t('dashboard.savedHint', 'Answers, notes, clauses, documents and drafts of the matter'),
       color: 'from-rose-500/10 to-rose-500/5',
       accent: 'text-rose-400',
       bgAccent: 'bg-rose-500/10',
     },
     {
-      to: '/ma',
+      to: '/research', command: 'diligence',
       icon: Briefcase,
-      title: t('ma.title'),
-      description: t('ma.subtitle'),
+      title: t('nav.diligence', 'Due diligence'),
+      description: t('dashboard.diligenceHint', 'A data room: review grid, red flags, what is missing'),
       color: 'from-purple-500/10 to-purple-500/5',
       accent: 'text-purple-400',
       bgAccent: 'bg-purple-500/10',
@@ -92,40 +91,26 @@ export default function Dashboard() {
     loadStats()
   }, [])
 
+  // Everything from the engine (the old desktop server is off): the
+  // conversations of every window and what is saved with the matters.
+  const savedItems = async (): Promise<any[]> => {
+    const e = (window as any).lexvault?.engine
+    if (!e) return []
+    let matterId = ''
+    try { matterId = (await (window as any).lexvault?.matters?.list())?.active || '' } catch { /* none */ }
+    try { return (await e.call('GET', `/api/saved${matterId ? `?matterId=${encodeURIComponent(matterId)}` : ''}`)).items || [] } catch { return [] }
+  }
+
   const loadRecentActivity = async () => {
     try {
-      // Fetch recent documents
-      const docs = await api.get('/docs?limit=3').catch(() => ({ documents: [] }))
-      const conversations = await engineSessions(3)
-
+      const [conversations, saved] = await Promise.all([engineSessions(3), savedItems()])
       const activities: RecentActivity[] = []
-
-      // Add documents
-      const docList = docs.documents || docs || []
-      if (Array.isArray(docList)) {
-        docList.slice(0, 2).forEach((doc: { id: string; filename: string; createdAt: string }) => {
-          activities.push({
-            id: `doc-${doc.id}`,
-            type: 'document',
-            title: doc.filename,
-            timestamp: doc.createdAt,
-            link: `/documents/${doc.id}`,
-          })
-        })
-      }
-
-      // Add conversations (the engine's, from every window)
-      conversations.filter((c) => c.updatedAt).slice(0, 2).forEach((conv) => {
-        activities.push({
-          id: `conv-${conv.id}`,
-          type: 'research',
-          title: conv.title,
-          timestamp: conv.updatedAt as string,
-          link: '/research',
-        })
+      saved.slice(0, 2).forEach((it: { id: string; title: string; createdAt: string }) => {
+        activities.push({ id: `saved-${it.id}`, type: 'document', title: it.title, timestamp: it.createdAt, link: '/vault' })
       })
-
-      // Sort by timestamp
+      conversations.filter((c) => c.updatedAt).slice(0, 3).forEach((conv) => {
+        activities.push({ id: `conv-${conv.id}`, type: 'research', title: conv.title, timestamp: conv.updatedAt as string, link: '/research' })
+      })
       activities.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
       setRecentActivity(activities.slice(0, 4))
     } catch (err) {
@@ -137,17 +122,11 @@ export default function Dashboard() {
 
   const loadStats = async () => {
     try {
-      const docs = await api.get('/docs').catch(() => ({ documents: [] }))
-      const vault = await api.get('/vault').catch(() => [])
-      const convList = await engineSessions(200)
-
-      const docList = docs.documents || docs || []
-      const vaultList = Array.isArray(vault) ? vault : vault.items || []
-
+      const [convList, saved] = await Promise.all([engineSessions(200), savedItems()])
       setStats({
-        documents: Array.isArray(docList) ? docList.length : 0,
+        documents: saved.filter((x: { kind: string }) => ['document', 'analysis', 'investigation', 'diligence', 'draft'].includes(x.kind)).length,
         research: Array.isArray(convList) ? convList.length : 0,
-        vault: Array.isArray(vaultList) ? vaultList.length : 0,
+        vault: saved.length,
       })
     } catch (err) {
       console.error('Failed to load stats:', err)
@@ -198,8 +177,9 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
         {features.map((feature, index) => (
           <Link
-            key={feature.to}
+            key={`${feature.to}:${(feature as { command?: string }).command || ''}`}
             to={feature.to}
+            state={(feature as { command?: string }).command ? { command: (feature as { command?: string }).command } : undefined}
             className="group"
             style={{ animationDelay: `${index * 100}ms` }}
           >

@@ -1,320 +1,152 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+// The App's search (Ctrl+K / ⌘K outside the chat; in the chat the same keys
+// open the "/" commands). Pages and chat tools are listed at once; typing
+// searches the engine (GET /api/find): matters, conversations from every
+// window, saved items, drafts, documents in the matter folders, commands.
+// The old palette searched the legacy server's documents and vault.
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { createPortal } from 'react-dom'
-import { useAuth } from '../contexts/AuthContext'
-import { api } from '../lib/api'
-import {
-  Search,
-  FileText,
-  LayoutDashboard,
-  Upload,
-  Archive,
-  Settings,
-  Sparkles,
-  ClipboardList,
-  FilePlus,
-  ScanSearch,
-} from 'lucide-react'
+import { Archive, Briefcase, ClipboardList, FileSearch, FileText, Folder, LayoutDashboard, MessageSquare, ScanSearch, Search, Settings, Slash, Wrench } from 'lucide-react'
+import { engine } from '../lib/commands'
 
-interface CommandItem {
-  id: string
-  type: 'action' | 'navigation' | 'document' | 'vault'
-  title: string
-  subtitle?: string
-  icon: React.ReactNode
-  href?: string
+interface Target { page?: string; matterId?: string | null; sessionId?: string; id?: string; draftId?: string; command?: string; file?: string }
+interface Entry { key: string; group: string; title: string; detail?: string; icon: React.ReactNode; target: Target }
+
+const ICON: Record<string, React.ReactNode> = {
+  matter: <Folder size={16} />, conversation: <MessageSquare size={16} />, saved: <Archive size={16} />, draft: <Wrench size={16} />,
+  document: <FileText size={16} />, command: <Slash size={16} />,
 }
-
-// Ordered by visual group: navigation first, then actions (matches rendering order)
-const defaultCommands: CommandItem[] = [
-  { id: 'nav-dashboard', type: 'navigation', title: 'Go to Dashboard', subtitle: 'View your overview', icon: <LayoutDashboard size={16} />, href: '/dashboard' },
-  { id: 'nav-research', type: 'navigation', title: 'Research', subtitle: 'Legal research assistant', icon: <Sparkles size={16} />, href: '/research' },
-  { id: 'nav-vault', type: 'navigation', title: 'Vault', subtitle: 'Saved clauses & templates', icon: <Archive size={16} />, href: '/vault' },
-  { id: 'nav-audit', type: 'navigation', title: 'Audit Log', subtitle: 'View AI activity', icon: <ClipboardList size={16} />, href: '/audit' },
-  { id: 'nav-settings', type: 'navigation', title: 'Settings', subtitle: 'Configure your account', icon: <Settings size={16} />, href: '/settings' },
-  { id: 'nav-upload', type: 'action', title: 'Analyse Document', subtitle: 'Upload and analyze', icon: <Upload size={16} />, href: '/upload' },
-  { id: 'nav-create', type: 'action', title: 'Create Document', subtitle: 'Draft with AI guidance', icon: <FilePlus size={16} />, href: '/navigator' },
-  { id: 'nav-investigate', type: 'action', title: 'Investigate', subtitle: 'Deep search for case-critical details', icon: <ScanSearch size={16} />, href: '/investigate' },
-]
+const mattersBridge = () => (typeof window !== 'undefined' && (window as any).lexvault?.matters) || null
 
 export default function CommandPalette() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
-  const { user } = useAuth()
-
   const [isOpen, setIsOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const [selectedIndex, setSelectedIndex] = useState(0)
-  const [results, setResults] = useState<CommandItem[]>(defaultCommands)
-  const [isSearching, setIsSearching] = useState(false)
-
+  const [selected, setSelected] = useState(0)
+  const [found, setFound] = useState<Entry[]>([])
+  const [searching, setSearching] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
 
-  // Filter commands by query
-  const filterCommands = useCallback((searchQuery: string): CommandItem[] => {
-    if (!searchQuery.trim()) return defaultCommands
-    const lowerQuery = searchQuery.toLowerCase()
-    return defaultCommands.filter(
-      (cmd) =>
-        cmd.title.toLowerCase().includes(lowerQuery) ||
-        cmd.subtitle?.toLowerCase().includes(lowerQuery)
-    )
-  }, [])
+  const pages: Entry[] = useMemo(() => [
+    { key: 'p-home', group: 'go', title: t('palette.home', 'Home'), icon: <LayoutDashboard size={16} />, target: { page: '/dashboard' } },
+    { key: 'p-chat', group: 'go', title: t('palette.chat', 'Chat'), detail: t('palette.chatHint', 'questions, documents, the law'), icon: <MessageSquare size={16} />, target: { page: '/research' } },
+    { key: 'p-analyse', group: 'go', title: t('palette.analyse', 'Analyse a document'), detail: '/analyse', icon: <FileSearch size={16} />, target: { page: '/research', command: 'analyse' } },
+    { key: 'p-investigate', group: 'go', title: t('palette.investigate', 'Investigate several documents'), detail: '/investigate', icon: <ScanSearch size={16} />, target: { page: '/research', command: 'investigate' } },
+    { key: 'p-draft', group: 'go', title: t('palette.draft', 'Write a draft'), detail: '/draft', icon: <Wrench size={16} />, target: { page: '/research', command: 'draft' } },
+    { key: 'p-diligence', group: 'go', title: t('palette.diligence', 'Due diligence of a data room'), detail: '/diligence', icon: <Briefcase size={16} />, target: { page: '/research', command: 'diligence' } },
+    { key: 'p-saved', group: 'go', title: t('palette.saved', 'Saved'), detail: t('palette.savedHint', 'answers, notes, clauses, documents, drafts'), icon: <Archive size={16} />, target: { page: '/vault' } },
+    { key: 'p-record', group: 'go', title: t('palette.record', 'AI record'), icon: <ClipboardList size={16} />, target: { page: '/audit' } },
+    { key: 'p-settings', group: 'go', title: t('palette.settings', 'Settings'), icon: <Settings size={16} />, target: { page: '/settings' } },
+  ], [t])
 
-  // Search vault items from backend
-  const searchBackend = useCallback(
-    async (searchQuery: string) => {
-      if (!searchQuery.trim() || searchQuery.length < 2) return
-      setIsSearching(true)
+  const shownPages = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    return q ? pages.filter((p) => `${p.title} ${p.detail || ''}`.toLowerCase().includes(q)) : pages
+  }, [pages, query])
+  const results = useMemo(() => [...shownPages, ...found], [shownPages, found])
+
+  // Search the engine (debounced).
+  useEffect(() => {
+    const q = query.trim()
+    if (q.length < 2 || !engine()) { setFound([]); return }
+    let alive = true
+    const timer = setTimeout(async () => {
+      setSearching(true)
       try {
-        // Search vault items
-        const vaultData = await api.get(`/vault?search=${encodeURIComponent(searchQuery)}&limit=5`).catch(() => [])
-        const vaultItems = Array.isArray(vaultData) ? vaultData : vaultData.items || []
+        let matterId = ''
+        try { matterId = (await mattersBridge()?.list())?.active || '' } catch { /* none */ }
+        const lang = /^de/i.test(i18n.language || '') ? 'de' : 'en'
+        const r = await engine()!.call('GET', `/api/find?q=${encodeURIComponent(q)}&lang=${lang}${matterId ? `&matterId=${encodeURIComponent(matterId)}` : ''}`)
+        if (!alive) return
+        setFound((r.groups || []).flatMap((g: any) => g.items.map((it: any) => ({ key: `${g.kind}:${it.id}`, group: g.kind, title: it.title, detail: it.detail, icon: ICON[g.kind] || <Search size={16} />, target: it.target || {} }))))
+      } catch { if (alive) setFound([]) } finally { if (alive) setSearching(false) }
+    }, 250)
+    return () => { alive = false; clearTimeout(timer) }
+  }, [query, i18n.language])
 
-        // Search documents
-        const docsData = await api.get(`/docs?limit=5`).catch(() => ({ documents: [] }))
-        const docs = docsData.documents || docsData || []
-
-        const newResults: CommandItem[] = []
-
-        // Add vault items
-        vaultItems.slice(0, 3).forEach((item: { id: string; title: string; type: string }) => {
-          newResults.push({
-            id: `vault-${item.id}`,
-            type: 'vault',
-            title: item.title,
-            subtitle: `Vault - ${item.type}`,
-            icon: <Archive size={16} />,
-            href: '/vault',
-          })
-        })
-
-        // Add documents
-        if (Array.isArray(docs)) {
-          docs
-            .filter((doc: { filename: string }) =>
-              doc.filename.toLowerCase().includes(searchQuery.toLowerCase())
-            )
-            .slice(0, 3)
-            .forEach((doc: { id: string; filename: string; status: string }) => {
-              newResults.push({
-                id: `doc-${doc.id}`,
-                type: 'document',
-                title: doc.filename,
-                subtitle: `Document - ${doc.status}`,
-                icon: <FileText size={16} />,
-                href: `/documents/${doc.id}`,
-              })
-            })
-        }
-
-        const typeOrder = ['navigation', 'action', 'vault', 'document']
-        const merged = [...filterCommands(searchQuery), ...newResults]
-        merged.sort((a, b) => typeOrder.indexOf(a.type) - typeOrder.indexOf(b.type))
-        setResults(merged)
-      } catch (error) {
-        console.error('[CommandPalette] Search error:', error)
-      } finally {
-        setIsSearching(false)
-      }
-    },
-    [filterCommands]
-  )
-
-  // Keyboard shortcut to open/close
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault()
-        setIsOpen((prev) => !prev)
-      }
-      if (e.key === 'Escape' && isOpen) {
-        e.preventDefault()
-        setIsOpen(false)
-      }
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); setIsOpen((v) => !v) }
+      if (e.key === 'Escape' && isOpen) { e.preventDefault(); setIsOpen(false) }
     }
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
   }, [isOpen])
-
-  // Focus input when opened
   useEffect(() => {
-    if (isOpen) {
-      setTimeout(() => inputRef.current?.focus(), 50)
-      setQuery('')
-      setResults(defaultCommands)
-      setSelectedIndex(0)
-    }
+    if (!isOpen) return
+    setTimeout(() => inputRef.current?.focus(), 50)
+    setQuery('')
+    setFound([])
+    setSelected(0)
   }, [isOpen])
+  useEffect(() => { setSelected(0) }, [query, found.length])
+  useEffect(() => { listRef.current?.querySelector(`[data-index="${selected}"]`)?.scrollIntoView({ block: 'nearest' }) }, [selected])
 
-  // Update results on query change
-  useEffect(() => {
-    setResults(filterCommands(query))
-    setSelectedIndex(0)
-    const timeoutId = setTimeout(() => searchBackend(query), 300)
-    return () => clearTimeout(timeoutId)
-  }, [query, filterCommands, searchBackend])
-
-  // Handle keyboard navigation
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'ArrowDown') {
-      e.preventDefault()
-      setSelectedIndex((prev) => Math.min(prev + 1, results.length - 1))
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault()
-      setSelectedIndex((prev) => Math.max(prev - 1, 0))
-    } else if (e.key === 'Enter') {
-      e.preventDefault()
-      const item = results[selectedIndex]
-      if (item?.href) {
-        navigate(item.href)
-        setIsOpen(false)
-      }
+  const go = useCallback(async (e: Entry) => {
+    setIsOpen(false)
+    const tg = e.target
+    // A result of another matter: that matter becomes the active one first.
+    if (tg.matterId && ['matter', 'conversation', 'saved', 'draft'].includes(e.group)) {
+      try { await mattersBridge()?.setActive(tg.matterId); window.dispatchEvent(new CustomEvent('openlex:matter-changed')) } catch { /* keep */ }
     }
+    if (tg.file) { engine()?.call('POST', '/api/workspace/reveal', { path: tg.file }).catch(() => {}); return }
+    const state = tg.command ? { command: tg.command } : tg.sessionId ? { sessionId: tg.sessionId } : tg.id || tg.draftId ? { id: tg.id, draftId: tg.draftId } : undefined
+    navigate(tg.page || '/research', state ? { state } : undefined)
+  }, [navigate])
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); setSelected((i) => Math.min(i + 1, results.length - 1)) }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setSelected((i) => Math.max(i - 1, 0)) }
+    else if (e.key === 'Enter') { e.preventDefault(); if (results[selected]) go(results[selected]) }
   }
 
-  // Scroll selected into view
-  useEffect(() => {
-    if (listRef.current) {
-      const el = listRef.current.querySelector(`[data-index="${selectedIndex}"]`)
-      el?.scrollIntoView({ block: 'nearest' })
-    }
-  }, [selectedIndex])
-
-  if (!user || !isOpen) return null
+  if (!isOpen) return null
+  const GROUPS: Record<string, string> = {
+    go: t('palette.groupGo', 'Go to'), matter: t('palette.groupMatters', 'Matters'), conversation: t('palette.groupConversations', 'Conversations'),
+    saved: t('palette.groupSaved', 'Saved'), draft: t('palette.groupDrafts', 'Drafts'), document: t('palette.groupDocuments', 'Documents (opens the folder)'), command: t('palette.groupCommands', 'Chat commands'),
+  }
+  const groups = [...new Set(results.map((r) => r.group))]
 
   return createPortal(
-    <div className="fixed inset-0 z-50 overflow-y-auto">
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-ink/70 backdrop-blur-sm"
-        onClick={() => setIsOpen(false)}
-      />
-
-      {/* Modal */}
+    <div className="fixed inset-0 z-50 overflow-y-auto" data-testid="palette">
+      <div className="fixed inset-0 bg-ink/70 backdrop-blur-sm" onClick={() => setIsOpen(false)} />
       <div className="flex items-start justify-center min-h-screen p-4 pt-[15vh]">
-        <div className="relative w-full max-w-xl rounded-card shadow-2xl overflow-hidden bg-deep-brown border border-tobacco animate-fade-in">
-          {/* Search Input */}
+        <div className="relative w-full max-w-xl rounded-card shadow-2xl overflow-hidden bg-deep-brown border border-tobacco animate-fade-in" role="dialog" aria-modal="true" aria-label={t('palette.title', 'Search')}>
           <div className="flex items-center gap-3 px-4 py-4 border-b border-tobacco">
             <Search size={20} className="text-antique flex-shrink-0" />
-            <input
-              ref={inputRef}
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder={t('common.search')}
-              className="flex-1 bg-transparent text-cream outline-none text-base placeholder:text-antique"
-            />
-            {isSearching && (
-              <div className="w-5 h-5 border-2 border-accent/30 border-t-accent rounded-full animate-spin" />
-            )}
+            <input ref={inputRef} type="text" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={onKeyDown}
+              placeholder={t('palette.placeholder', 'Search matters, conversations, saved items, documents, commands')}
+              className="flex-1 bg-transparent text-cream outline-none text-base placeholder:text-antique" data-testid="palette-input" />
+            {searching && <div className="w-5 h-5 border-2 border-accent/30 border-t-accent rounded-full animate-spin" />}
           </div>
-
-          {/* Results */}
           <div ref={listRef} className="max-h-96 overflow-y-auto py-2">
-            {results.length === 0 ? (
-              <div className="px-4 py-8 text-center text-sm text-antique">
-                No results found for "{query}"
-              </div>
-            ) : (
-              <>
-                {/* Group by type */}
-                {['navigation', 'action', 'vault', 'document'].map((type) => {
-                  const typeResults = results.filter((r) => r.type === type)
-                  if (typeResults.length === 0) return null
-
-                  const typeLabels: Record<string, string> = {
-                    navigation: 'Navigate',
-                    action: 'Actions',
-                    vault: 'Vault Items',
-                    document: 'Documents',
-                  }
-
+            {!results.length && <div className="px-4 py-8 text-center text-sm text-antique">{t('palette.nothing', 'Nothing found for “{{q}}”.', { q: query })}</div>}
+            {groups.map((g) => (
+              <div key={g}>
+                <div className="px-4 py-1.5 text-xs font-medium text-antique/60 uppercase tracking-wider">{GROUPS[g] || g}</div>
+                {results.filter((r) => r.group === g).map((item) => {
+                  const i = results.indexOf(item)
                   return (
-                    <div key={type}>
-                      <div className="px-4 py-1.5 text-xs font-medium text-antique/60 uppercase tracking-wider">
-                        {typeLabels[type]}
+                    <button key={item.key} type="button" data-index={i} onClick={() => go(item)} onMouseMove={() => setSelected(i)}
+                      className={`w-full flex items-center gap-3 px-4 py-2 text-left transition-colors ${i === selected ? 'bg-accent/10' : 'hover:bg-leather/30'}`} data-testid="palette-item">
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${i === selected ? 'bg-accent/20 text-accent' : 'bg-obsidian text-antique'}`}>{item.icon}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-cream truncate">{item.title}</div>
+                        {item.detail && <div className="text-xs text-antique truncate">{item.detail}</div>}
                       </div>
-                      {typeResults.map((item) => {
-                        const globalIndex = results.indexOf(item)
-                        return (
-                          <button
-                            key={item.id}
-                            data-index={globalIndex}
-                            onClick={() => {
-                              if (item.href) {
-                                navigate(item.href)
-                                setIsOpen(false)
-                              }
-                            }}
-                            className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
-                              globalIndex === selectedIndex
-                                ? 'bg-accent/10'
-                                : 'hover:bg-leather/30'
-                            }`}
-                          >
-                            <div
-                              className={`w-9 h-9 rounded-lg flex items-center justify-center ${
-                                globalIndex === selectedIndex
-                                  ? 'bg-accent/20 text-accent'
-                                  : 'bg-obsidian text-antique'
-                              }`}
-                            >
-                              {item.icon}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-sm font-medium text-cream truncate">
-                                {item.title}
-                              </div>
-                              {item.subtitle && (
-                                <div className="text-xs text-antique truncate">
-                                  {item.subtitle}
-                                </div>
-                              )}
-                            </div>
-                            {globalIndex === selectedIndex && (
-                              <kbd className="px-2 py-1 text-xs rounded bg-obsidian/60 text-antique">
-                                ↵
-                              </kbd>
-                            )}
-                          </button>
-                        )
-                      })}
-                    </div>
+                    </button>
                   )
                 })}
-              </>
-            )}
-          </div>
-
-          {/* Footer */}
-          <div className="px-4 py-2.5 border-t border-tobacco bg-obsidian/30">
-            <div className="flex items-center justify-between text-xs text-antique/60">
-              <div className="flex items-center gap-4">
-                <span className="flex items-center gap-1.5">
-                  <kbd className="px-1.5 py-0.5 rounded bg-obsidian/50 text-antique/80">↑↓</kbd>
-                  <span>navigate</span>
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <kbd className="px-1.5 py-0.5 rounded bg-obsidian/50 text-antique/80">↵</kbd>
-                  <span>select</span>
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <kbd className="px-1.5 py-0.5 rounded bg-obsidian/50 text-antique/80">esc</kbd>
-                  <span>close</span>
-                </span>
               </div>
-              <span className="flex items-center gap-1.5">
-                <kbd className="px-1.5 py-0.5 rounded bg-obsidian/50 text-antique/80">⌘K</kbd>
-              </span>
-            </div>
+            ))}
           </div>
+          <div className="px-4 py-2.5 border-t border-tobacco bg-obsidian/30 text-xs text-antique/60">{t('palette.keys', '↑↓ choose · ↵ open · esc close')}</div>
         </div>
       </div>
     </div>,
-    document.body
+    document.body,
   )
 }

@@ -2,6 +2,7 @@
 // questions, every cell an answer with a verbatim quote from its document.
 // Runs in the shared OpenLex engine (sidecar/src/grid.js) under the
 // matter's data policy; the same grids are reachable from the CLI and API.
+import { useLocation } from 'react-router-dom'
 import { useCallback, useEffect, useState } from 'react'
 import { Table2, Play, RotateCcw, Download, Plus, Trash2, Lock, Unlock, X } from 'lucide-react'
 
@@ -92,6 +93,12 @@ export default function Grid() {
     setGrids(r.grids)
   }, [e])
   useEffect(() => { loadList().catch((err) => setMsg(String(err.message || err))) }, [loadList])
+  // Opened from a due-diligence card: show that grid.
+  const location = useLocation()
+  useEffect(() => {
+    const id = (location.state as { gridId?: string } | null)?.gridId
+    if (id && e) e.call('GET', `/api/grids/view?id=${encodeURIComponent(id)}`).then(setView).catch(() => {})
+  }, [location.state, e])
 
   const open = async (id: string) => {
     if (!e) return

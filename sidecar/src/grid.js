@@ -116,8 +116,13 @@ function levels(columns) {
 }
 
 // ── create / update ──────────────────────────────────────────────────────
-function create({ matterId = null, title, columns = [], documents } = {}) {
-  const docs = documents?.length ? documents.map((d) => path.resolve(String(d))) : wf.listDocs(wf.matterFolders(matterId))
+// A document attached in a chat stays "att:<id>" (attachments.js); a file is an absolute path.
+const docPath = (d) => (String(d).startsWith('att:') ? String(d) : path.resolve(String(d)))
+/** The name a row shows: the attachment's file name, else the file's. */
+const nameOf = (grid, d) => grid.names?.[d] || path.basename(d)
+
+function create({ matterId = null, title, columns = [], documents, names } = {}) {
+  const docs = documents?.length ? documents.map(docPath) : wf.listDocs(wf.matterFolders(matterId))
   const grid = {
     id: crypto.randomBytes(6).toString('hex'),
     matterId: matterId || null,
@@ -125,6 +130,7 @@ function create({ matterId = null, title, columns = [], documents } = {}) {
     documents: [...new Set(docs)],
     columns: cleanColumns(columns),
     cells: {},
+    ...(names && typeof names === 'object' ? { names: Object.fromEntries(Object.entries(names).map(([k, v]) => [docPath(k), String(v).slice(0, 200)])) } : {}),
     createdAt: new Date().toISOString(),
   }
   return save(grid)
@@ -137,7 +143,7 @@ function update(id, patch = {}) {
   if (patch.columns !== undefined) {
     grid.columns = cleanColumns(patch.columns)
   }
-  if (patch.documents !== undefined) grid.documents = [...new Set(patch.documents.map((d) => path.resolve(String(d))))]
+  if (patch.documents !== undefined) grid.documents = [...new Set(patch.documents.map(docPath))]
   const colIds = new Set(grid.columns.map((c) => c.id))
   const docSet = new Set(grid.documents)
   for (const key of Object.keys(grid.cells)) {
@@ -153,7 +159,7 @@ const splitKey = (k) => { const i = k.lastIndexOf('::'); return [k.slice(0, i), 
 /** The lawyer's own value for a cell (locks it), or just lock/unlock. */
 function setCell(id, { document, column, value, locked } = {}) {
   const grid = get(id)
-  const doc = grid.documents.find((d) => d === document || path.basename(d) === document)
+  const doc = grid.documents.find((d) => d === document || path.basename(d) === document || nameOf(grid, d) === document)
   if (!doc) throw new Error(`document "${document}" is not in this grid`)
   if (!grid.columns.some((c) => c.id === column)) throw new Error(`no column "${column}"`)
   const k = key(doc, column)
@@ -255,7 +261,7 @@ function needsRun(grid, doc, col, force) {
  */
 async function run(id, { documents, columns, force = false, onProgress, signal } = {}) {
   const grid = get(id)
-  const docs = grid.documents.filter((d) => !documents?.length || documents.some((x) => x === d || path.basename(d) === x))
+  const docs = grid.documents.filter((d) => !documents?.length || documents.some((x) => x === d || path.basename(d) === x || nameOf(grid, d) === x))
   const wanted = new Set(columns?.length ? columns : grid.columns.map((c) => c.id))
   const lv = levels(grid.columns)
   const stats = { documents: docs.length, cells: 0, ok: 0, unverified: 0, invalid: 0, not_found: 0, errors: [] }
@@ -265,7 +271,7 @@ async function run(id, { documents, columns, force = false, onProgress, signal }
   let done = 0
 
   async function doDoc(doc) {
-    const name = path.basename(doc)
+    const name = nameOf(grid, doc)
     let text
     try { text = String(await wf.readDoc(doc)) } catch (err) {
       stats.errors.push(`${name}: ${err.message}`)
@@ -341,7 +347,7 @@ const STATUS_LABEL = { ok: '', unverified: 'UNVERIFIED', invalid: 'CHECK', not_f
 
 function rowsFor(grid) {
   const header = ['Document', ...grid.columns.map((c) => c.label)]
-  const values = grid.documents.map((d) => [path.basename(d), ...grid.columns.map((c) => {
+  const values = grid.documents.map((d) => [nameOf(grid, d), ...grid.columns.map((c) => {
     const cell = grid.cells[key(d, c.id)]
     if (!cell) return ''
     const flag = STATUS_LABEL[cell.status]
@@ -351,7 +357,7 @@ function rowsFor(grid) {
   for (const d of grid.documents) {
     for (const c of grid.columns) {
       const cell = grid.cells[key(d, c.id)]
-      if (cell && cell.status !== 'not_found') sources.push([path.basename(d), c.label, cell.value, cell.status, cell.quote || '', cell.location || ''])
+      if (cell && cell.status !== 'not_found') sources.push([nameOf(grid, d), c.label, cell.value, cell.status, cell.quote || '', cell.location || ''])
     }
   }
   return { table: [header, ...values], sources }
@@ -375,8 +381,8 @@ function view(id) {
   const grid = get(id)
   return {
     id: grid.id, title: grid.title, matterId: grid.matterId, columns: grid.columns, updatedAt: grid.updatedAt,
-    rows: grid.documents.map((d) => ({ document: d, name: path.basename(d), cells: grid.columns.map((c) => grid.cells[key(d, c.id)] || null) })),
+    rows: grid.documents.map((d) => ({ document: d, name: nameOf(grid, d), cells: grid.columns.map((c) => grid.cells[key(d, c.id)] || null) })),
   }
 }
 
-module.exports = { create, get, list, update, remove, setCell, run, exportGrid, view, typed, levels, cleanColumns, rowsFor, TYPES, GRID_DIR }
+module.exports = { nameOf, key, create, get, list, update, remove, setCell, run, exportGrid, view, typed, levels, cleanColumns, rowsFor, TYPES, GRID_DIR }

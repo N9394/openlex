@@ -64,6 +64,8 @@ function listDocs(folders) {
 
 /** The text of a document (read.js: Word, PDF with OCR, Excel, e-mail, text; the one size rule applies). */
 async function readDoc(file) {
+  // A document attached in a chat (attachments.js), already read: "att:<id>".
+  if (String(file).startsWith('att:')) return require('./attachments').text(String(file).slice(4))
   return (await require('./read').readDocument({ file })).text
 }
 

@@ -1441,6 +1441,16 @@ async function handle(req, res) {
       const r = require('./local_memory').handle(req.method, p, url.searchParams, body)
       return sendJson(res, r.status, r.json)
     }
+    // The tools that moved from the old desktop server into the chat:
+    // saved items (the old Vault), the investigation, due diligence (the old
+    // M&A pages), drafts (the old Workshop) and the app's search.
+    if (p === '/api/saved' || p.startsWith('/api/saved/') || p === '/api/investigation' || p.startsWith('/api/investigat') || p === '/api/diligence' || p.startsWith('/api/diligence/') || p === '/api/drafts' || p === '/api/draft' || p.startsWith('/api/draft/') || p === '/api/find') {
+      const body = req.method === 'POST' ? await readBody(req, 20) : {}
+      require('./workspace').setBase(require('./agent-config').load().workspace)
+      const mod = p === '/api/find' ? require('./find') : p.startsWith('/api/saved') ? require('./saved') : p.startsWith('/api/investigat') ? require('./investigate') : p.startsWith('/api/diligence') ? require('./diligence') : require('./draft')
+      const r = await mod.handle(req.method, p, url.searchParams, body)
+      if (r) return sendJson(res, r.status, r.json)
+    }
     if (p === '/api/batches' || p === '/api/batch' || p.startsWith('/api/batch/')) {
       const body = req.method === 'POST' ? await readBody(req) : {}
       require('./workspace').setBase(require('./agent-config').load().workspace)
