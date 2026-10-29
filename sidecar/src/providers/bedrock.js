@@ -62,12 +62,14 @@ function endpoint(p) {
 }
 
 function buildBody(p, messages, opts) {
-  const { system, turns } = normalizeMessages(messages)
+  const { system, systemBlocks, turns } = normalizeMessages(messages)
   const body = {
     messages: turns.map((t) => ({ role: t.role, content: [{ text: t.content }] })),
     inferenceConfig: { maxTokens: opts.maxTokens || 1024 },
   }
-  if (system) body.system = [{ text: system }]
+  // A long document read in full: a cache point after it (Converse API prompt caching).
+  if (systemBlocks.some((b) => b.cache)) body.system = systemBlocks.flatMap((b) => (b.cache ? [{ text: b.text }, { cachePoint: { type: 'default' } }] : [{ text: b.text }]))
+  else if (system) body.system = [{ text: system }]
   if (opts.temperature !== undefined) body.inferenceConfig.temperature = opts.temperature
   if (opts.nativeTools?.tools.length) {
     body.toolConfig = {

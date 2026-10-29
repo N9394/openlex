@@ -26,6 +26,10 @@ const ADAPTERS = {
   vertex: require('./providers/vertex'),
 }
 
+// The local model gets the prompt without the cache mark (providers/common.js).
+const { stripCache } = require('./providers/common')
+const plain = (messages) => messages.map((m) => (typeof m.content === 'string' && m.content.includes('openlex:cache') ? { ...m, content: stripCache(m.content) } : m))
+
 function active() {
   return settings.resolve()
 }
@@ -169,7 +173,7 @@ async function ping() {
 
 /** Non-streaming chat → string. */
 async function chat(messages, opts = {}) {
-  return routed('chat', messages, opts, (o) => local.chat(messages, o), async (p, o, why) => {
+  return routed('chat', messages, opts, (o) => local.chat(plain(messages), o), async (p, o, why) => {
     const r = await cloudCall('chat', messages, o, (a, pp, key, msgs, oo) => a.complete(pp, key, msgs, oo), p, why)
     if (!r.content) throw new Error(`${p.label} returned no content`)
     return r.content
@@ -178,7 +182,7 @@ async function chat(messages, opts = {}) {
 
 /** Streaming chat with reasoning callbacks → { content, reasoning }. */
 async function chatWithReasoning(messages, opts = {}) {
-  return routed('chatWithReasoning', messages, opts, (o) => local.chatWithReasoning(messages, o),
+  return routed('chatWithReasoning', messages, opts, (o) => local.chatWithReasoning(plain(messages), o),
     (p, o, why) => cloudCall('chatWithReasoning', messages, o, (a, pp, key, msgs, oo) => a.stream(pp, key, msgs, oo), p, why))
 }
 
@@ -188,7 +192,7 @@ async function* chatStream(messages, opts = {}) {
   if (first.kind === 'local') {
     auditLocal('chatStream', opts.role || opts.phase, 'primary')
     reportModel({ provider: 'local', label: first.label || 'this computer', model: first.model || null, local: true, region: null, redacted: false }, opts)
-    yield* local.chatStream(messages, opts)
+    yield* local.chatStream(plain(messages), opts)
     return
   }
   const queue = []

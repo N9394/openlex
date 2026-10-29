@@ -51,13 +51,9 @@ export function attachSentence(files) {
   return `All ${files.length} files are included in this question. Backspace removes the last one.`
 }
 
-/** The text of a Word, PDF or text file (no OCR here: keeps memory low). */
+/** The text of a Word, PDF, Excel, e-mail or text file (the engine's reader, read.js; no OCR here: keeps memory low). */
 export async function readAttachment(file) {
-  const ext = path.extname(file).toLowerCase()
-  if (ext === '.docx') return require('../src/docx_text.js').docxText(file)
-  if (ext === '.pdf') return require('../src/pdf_text.js').pdfText(file, { ocr: false })
-  if (['.doc', '.xlsx', '.xls', '.pptx', '.zip', '.png', '.jpg', '.jpeg', '.msg'].includes(ext)) throw new Error('this kind of file cannot be read here; save it as Word or PDF')
-  return fs.readFileSync(file, 'utf8')
+  return (await require('../src/read.js').readDocument({ file }, { ocr: false })).text
 }
 
 /** One text for several files, each under its name. */

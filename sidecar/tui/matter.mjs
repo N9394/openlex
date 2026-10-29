@@ -222,7 +222,9 @@ export function Matter({ matterId = null }) {
     if (!pastes.length && /^(help|\?)$/i.test(typed)) { setInput(''); return command('help', '') }
     if (!pastes.length && /^(exit|quit)$/i.test(typed)) { setInput(''); return ctx.quit() }
     const cmd = typed.match(/^\/([\w-]+)(?:\s+([\s\S]*))?$/)
-    if (cmd && COMMANDS.some((c) => c.name === cmd[1].toLowerCase())) {
+    // /analyse runs as a question: the engine's analyse skill reads the attached
+    // (or named) document with the full analysis (analysis.js) and saves the report.
+    if (cmd && cmd[1].toLowerCase() !== 'analyse' && COMMANDS.some((c) => c.name === cmd[1].toLowerCase())) {
       setInput('')
       setScroll(0)
       return command(cmd[1].toLowerCase(), (cmd[2] || '').trim())
@@ -407,6 +409,10 @@ export function Matter({ matterId = null }) {
       return sys('Anything else after "/" uses your firm\'s instructions of that name.', 'info')
     }
     if (name === 'model') { if (arg) return switchModel(arg); return setMode('model') }
+    if (name === 'analyse') {
+      setInput(`/analyse ${arg}`.trimEnd() + ' ')
+      return sys('Drop or paste a document\'s path (or name a document of the matter after /analyse), then press Enter: OpenLex analyses it in full and saves the report (Word, Markdown) in the matter folder.', 'info')
+    }
     if (name === 'key') {
       const active = ctx.info.providers?.providers?.find((p) => p.id === ctx.info.providers?.active)
       const id = arg ? (PROVIDER_WORDS[arg.toLowerCase()] || arg.toLowerCase()) : active?.needsKey ? active.id : null

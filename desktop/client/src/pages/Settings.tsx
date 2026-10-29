@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { api } from '../lib/api'
 import { setUiLanguage } from '../i18n'
 import DependenciesTab from '../components/DependenciesTab'
+import LocalMemorySetting from '../components/LocalMemorySetting'
 import {
   User,
   Bell,
@@ -974,6 +975,8 @@ export default function Settings() {
               >
                 {savingAI ? t('common.saving') : <><Save size={16} /> {t('settings.ai.saveSettings')}</>}
               </button>
+
+              <LocalMemorySetting />
             </div>
           )}
 

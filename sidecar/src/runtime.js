@@ -46,7 +46,8 @@ function tierConfig() {
       const budget = agentBudget()
       const depthCtx = DEPTH_PRESETS[budget.depth]?.ctx
       return {
-        ctx: Math.min(depthCtx || ramCtx, ramCtx),
+        // "Memory for the local AI" (local_memory.js) wins when the lawyer set it.
+        ctx: require('./local_memory').chosenCtx() || Math.min(depthCtx || ramCtx, ramCtx),
         n_gpu_layers: typeof tier.n_gpu_layers === 'number' ? tier.n_gpu_layers : (process.platform === 'darwin' ? 999 : 0),
         cache_type_k: tier.cache_type_k || 'iq4_nl',
         cache_type_v: tier.cache_type_v || 'q4_0',
@@ -54,7 +55,7 @@ function tierConfig() {
       }
     }
   } catch { /* registry not fetched yet — defaults below */ }
-  return { ctx: ramCtx, n_gpu_layers: process.platform === 'darwin' ? 999 : 0, cache_type_k: 'iq4_nl', cache_type_v: 'q4_0', depth: 'balanced' }
+  return { ctx: require('./local_memory').chosenCtx() || ramCtx, n_gpu_layers: process.platform === 'darwin' ? 999 : 0, cache_type_k: 'iq4_nl', cache_type_v: 'q4_0', depth: 'balanced' }
 }
 
 /**
@@ -386,4 +387,4 @@ function stop() {
   }
 }
 
-module.exports = { ensureLlama, isOwned, stop, resolveModelPath, serverBuild }
+module.exports = { ensureLlama, isOwned, stop, resolveModelPath, serverBuild, tierConfig }

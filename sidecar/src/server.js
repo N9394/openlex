@@ -1234,9 +1234,130 @@ async function handle(req, res) {
     if (req.method === 'GET' && p === '/api/activity') {
       return sendJson(res, 200, { activity: require('./activity').list(url.searchParams.get('matterId') || null, +(url.searchParams.get('limit') || 20)) })
     }
+    // ── documents: attach (read on this computer), analyse, export ──────────
+    // Attach a file to the chat: { name, data (base64) } from the window, or
+    // { file } (a document in the matter's folders). The one size rule
+    // (limits.js) applies; the body may be that large plus base64 overhead.
+    if (req.method === 'POST' && p === '/api/document/read') {
+      const limits = require('./limits')
+      let body
+      try { body = await readBody(req, limits.maxFileMB() * 1.37 + 1) } catch (err) {
+        return sendJson(res, 413, { error: /too large/.test(err.message) ? limits.tooLargeMessage('This file', +(req.headers['content-length'] || 0) / 1.37) : err.message, code: 'FILE_TOO_LARGE' })
+      }
+      try {
+        require('./workspace').setBase(require('./agent-config').load().workspace)
+        const matterId = body.matterId || null
+        const att = await policy.withMatter(matterId, () => require('./attachments').add({
+          name: body.name, file: body.file, buffer: typeof body.data === 'string' ? Buffer.from(body.data, 'base64') : undefined,
+          matterId, sessionId: body.sessionId || null, ocr: body.ocr !== false,
+        }))
+        return sendJson(res, 200, { attachment: att })
+      } catch (err) {
+        return sendJson(res, err.code === 'FILE_TOO_LARGE' ? 413 : 400, { error: err.message, ...(err.code ? { code: err.code } : {}) })
+      }
+    }
+    // An attached document's text (DocumentView): ?id=&offset=&limit= (characters).
+    if (req.method === 'GET' && p === '/api/document/attachment') {
+      try {
+        const at = require('./attachments')
+        const id = url.searchParams.get('id')
+        const text = at.text(id)
+        const offset = Math.max(0, +(url.searchParams.get('offset') || 0))
+        const limit = Math.min(2000000, Math.max(1000, +(url.searchParams.get('limit') || 400000)))
+        return sendJson(res, 200, { attachment: at.meta(id), text: text.slice(offset, offset + limit), offset, total: text.length, more: offset + limit < text.length })
+      } catch (err) { return sendJson(res, 404, { error: err.message }) }
+    }
+    // The full document analysis as a chat turn (the app's /analyse and
+    // drop-a-document): live steps, then an `analysis` event with the
+    // result; the turn is kept in the matter's conversation.
+    if (req.method === 'POST' && p === '/api/analyse') {
+      const body = await readBody(req, 20)
+      res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' })
+      let folderDir
+      try { folderDir = folderFor(body) } catch (err) { sendSse(res, { type: 'error', message: err.message }); return res.end() }
+      const ready = await engineReady()
+      if (!ready?.ok) { sendSse(res, { type: 'error', message: `model unavailable: ${ready.reason}` }); return res.end() }
+      const ac = new AbortController()
+      res.on('close', () => ac.abort())
+      const matterId = body.matterId || null
+      require('./workspace').setBase(require('./agent-config').load().workspace)
+      const attachments = Array.isArray(body.attachments) ? body.attachments.filter((x) => typeof x === 'string').slice(0, 20) : []
+      const files = Array.isArray(body.files) ? body.files : body.file ? [body.file] : []
+      let names = []
+      try { names = [...attachments.map((id) => require('./attachments').meta(id).name), ...files.map((f) => path.basename(String(f)))] } catch (err) { sendSse(res, { type: 'error', message: err.message }); return res.end() }
+      if (!names.length && !body.text) { sendSse(res, { type: 'error', message: 'Attach a document (or name one of the matter) to analyse.' }); return res.end() }
+      const asked = String(body.message || `/analyse ${names.join(', ')}`).slice(0, 2000)
+      const rec = require('./activity').start({ matterId, kind: 'analyse', asked, client: clientOf(req), files: names })
+      const turn = { data: [], sources: [] }
+      const out = (e) => {
+        rec.see(e)
+        if (e.type === 'model') {
+          const hit = turn.data.find((m) => m.provider === e.provider && m.region === (e.region || null) && m.redacted === !!e.redacted && m.local === !!e.local)
+          if (hit) hit.calls++
+          else turn.data.push({ provider: e.provider, label: e.label, model: e.model || null, local: !!e.local, region: e.region || null, redacted: !!e.redacted, calls: 1 })
+        }
+        sendSse(res, e)
+      }
+      const steps = require('./analysis').stepWords
+      try {
+        const r = await rec.run(() => require('./folder').run(folderDir, () => require('./permissions').session(permissionSession(body, res, ac.signal), () => policy.observeModels((m) => out({ type: 'model', ...m }), () => policy.withMatter(matterId, () => require('./analysis').runAnalyse({
+          matterId, attachments, files, text: body.text, name: body.name, focus: body.focus, signal: ac.signal,
+          onProgress: (ev) => out({ type: 'step', kind: 'analyse', plain: steps(ev), ...ev }),
+        }))))))
+        for (const a of r.analyses) out({ type: 'analysis', analysis: a })
+        const text = r.analyses.map((a) => require('./analysis').brief(a)).join('\n\n')
+        if (body.sessionId && r.analyses.length) {
+          const { Session } = require('./session')
+          new Session(String(body.sessionId)).append(asked, text, { matterId, client: clientOf(req), data: turn.data, stopped: ac.signal.aborted, results: r.analyses.map((a) => ({ kind: 'analysis', id: a.id, name: a.document.name })) })
+        }
+        out({ type: 'done', stopped: ac.signal.aborted, files: r.files, stats: r.stats })
+        rec.finish({ aborted: ac.signal.aborted, files: r.files || [] })
+      } catch (err) {
+        out({ type: 'error', message: err.message })
+        rec.finish({ error: err.message })
+      }
+      return res.end()
+    }
+    if (req.method === 'GET' && p === '/api/analysis') {
+      try { return sendJson(res, 200, { analysis: require('./analysis').get(url.searchParams.get('id')) }) } catch (err) { return sendJson(res, 404, { error: err.message }) }
+    }
+    if (req.method === 'POST' && p === '/api/analysis/export') {
+      const body = await readBody(req)
+      try {
+        require('./workspace').setBase(require('./agent-config').load().workspace)
+        return sendJson(res, 200, require('./analysis').exportAnalysis(body.id, body.format))
+      } catch (err) { return sendJson(res, 400, { error: err.message }) }
+    }
+    if (p === '/api/config/local-memory') {
+      const body = req.method === 'POST' ? await readBody(req) : {}
+      const r = require('./local_memory').handle(req.method, p, url.searchParams, body)
+      return sendJson(res, r.status, r.json)
+    }
+    if (p === '/api/batches' || p === '/api/batch' || p.startsWith('/api/batch/')) {
+      const body = req.method === 'POST' ? await readBody(req) : {}
+      require('./workspace').setBase(require('./agent-config').load().workspace)
+      const r = await require('./batch').handle(req.method, p, url.searchParams, body)
+      if (r) return sendJson(res, r.status, r.json)
+    }
+
     if (req.method === 'POST' && p === '/api/chat') {
       const body = await readBody(req, 20)
       const entry = getDoc(body)
+      // Attached documents (POST /api/document/read): their text becomes the
+      // conversation's document; how it is read follows the model (strategy.js).
+      let attached = null
+      if (Array.isArray(body.attachments) && body.attachments.length) {
+        try {
+          attached = require('./attachments').combined(body.attachments.filter((x) => typeof x === 'string'))
+          entry.doc = new Document(attached.text, body.docId)
+          entry.memory = null
+          body.files = [...new Set([...(Array.isArray(body.files) ? body.files : []), ...attached.names])]
+        } catch (err) {
+          res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' })
+          sendSse(res, { type: 'error', message: `The attached document is no longer available (${err.message}); attach it again.` })
+          return res.end()
+        }
+      }
       if (!entry.doc && body.text) entry.doc = new Document(body.text, body.docId, body.styles)
       if (!entry.doc) entry.doc = new Document('', body.docId)
       if (!entry.memory) entry.memory = new (require('./memory').DocMemory)(entry.doc.docId)
@@ -1298,6 +1419,13 @@ async function handle(req, res) {
           if (hit) hit.calls++
           else turn.data.push({ provider: e.provider, label: e.label, model: e.model || null, local: !!e.local, region: e.region || null, redacted: !!e.redacted, calls: 1 })
         } else if (e.type === 'step' && e.online && e.onlineTo && !turn.online.includes(e.onlineTo)) turn.online.push(e.onlineTo)
+      }
+      if (attached) {
+        // How the attached document will be read (in full, or part by part), in words.
+        const st = require('./strategy')
+        const pages = attached.list.reduce((n, a) => n + (a.meta.pages || 0), 0)
+        const plan = st.forModel({ tokens: require('./read').tokensFor(attached.text), role: 'plan', matterId: matterIdFor(body, entry), outputTokens: config.AGENT.WRITE_MAX_TOKENS })
+        sendSse(res, { type: 'strategy', mode: plan.mode, kind: plan.kind, cache: plan.cache, ctx: plan.ctx, tokens: plan.tokens, text: st.explain(plan, { name: attached.names.join(', '), pages }) })
       }
       if (agent && agent.name !== 'associate') sendSse(res, { type: 'agent', name: agent.name, title: agent.title })
       if (skill) sendSse(res, { type: 'skill', name: skill.name, title: skill.title })

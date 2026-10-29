@@ -565,6 +565,14 @@ log_level: WARN
     if (!this._llmModelPath) {
       throw new Error(`No local model installed. Choose a provider with your own API key (or a custom llama-server / Ollama endpoint) in the model settings, or put a .gguf file in ${path.join(this.paths.models, 'llm')} and restart OpenLex.`)
     }
+    // The memory setting changed since the model was loaded: restart it with the new context.
+    if (this._llmChild && !this._llmChild.killed && this._llmUp && this._llmCtx && this._desiredCtx() !== this._llmCtx) {
+      console.log(`[llm-proxy] memory setting changed (ctx ${this._llmCtx} → ${this._desiredCtx()}) — restarting llama-server`)
+      try { this._llmChild.kill('SIGTERM') } catch {}
+      this._llmChild = null
+      this._llmReadyPromise = null
+      this._llmUp = false
+    }
     if (this._llmChild && !this._llmChild.killed) return
     if (this._llmReadyPromise) return this._llmReadyPromise
 
@@ -634,7 +642,8 @@ log_level: WARN
         console.log('[llm-proxy] llama-server ready (CPU fallback)')
       }
     })()
-    try { await this._llmReadyPromise }
+    this._llmUp = false
+    try { await this._llmReadyPromise; this._llmUp = true }
     finally { /* keep promise around; cleared on kill */ }
   }
 
@@ -655,8 +664,22 @@ log_level: WARN
     }
   }
 
+  /**
+   * Context size for the local model: the lawyer's "Memory for the local AI"
+   * (engine local_memory.js, shared ~/.lexvault/agent-config.json) when set,
+   * else the hardware tier's default.
+   */
+  _desiredCtx(hw = this._readHardware()) {
+    try {
+      const lm = require(path.join(this.paths.engine, 'local_memory.js'))
+      return lm.chosenCtx() || hw.ctx || 8192
+    } catch { return hw.ctx ?? 8192 }
+  }
+
   _spawnLLMChild({ forceCpu = false, variant = 'vulkan' } = {}) {
     const hw = this._readHardware()
+    const ctx = this._desiredCtx(hw)
+    this._llmCtx = ctx
     const cores = require('os').cpus().length
     const threadPct = hw.threads_pct ?? 0.5
     const cacheTypeK = hw.cache_type_k ?? 'q8_0'
@@ -666,7 +689,7 @@ log_level: WARN
       '-m', this._llmModelPath,
       '--host', '127.0.0.1',
       '--port', String(this._llmInternalPort),
-      '--ctx-size', String(hw.ctx ?? 8192),
+      '--ctx-size', String(ctx),
       '--threads', String(Math.max(2, Math.floor(cores * threadPct))),
       '--api-prefix', '/api',
       '--cache-type-k', cacheTypeK,
@@ -682,7 +705,7 @@ log_level: WARN
       '--parallel', '1',
     ]
     if (gpuLayers > 0) args.push('--n-gpu-layers', String(gpuLayers))
-    console.log(`[llm] spawning tier=${hw.tier} variant=${variant} model=${hw.model} ctx=${hw.ctx} gpu_layers=${gpuLayers}${forceCpu ? ' (CPU fallback)' : ''} kv=${cacheTypeK}/${cacheTypeV}`)
+    console.log(`[llm] spawning tier=${hw.tier} variant=${variant} model=${hw.model} ctx=${ctx} gpu_layers=${gpuLayers}${forceCpu ? ' (CPU fallback)' : ''} kv=${cacheTypeK}/${cacheTypeV}`)
 
     const platform = process.platform === 'darwin' ? 'darwin' : process.platform === 'win32' ? 'win32' : 'linux'
     const arch = process.arch === 'arm64' ? 'arm64' : 'x64'

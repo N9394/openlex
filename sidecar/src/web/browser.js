@@ -130,7 +130,8 @@ async function saveToMatter(url, matterFolder) {
   }
 }
 
-const MAX_DOWNLOAD = 50 * 1024 * 1024
+// The one size rule (limits.js, ~100 MB).
+const maxDownload = () => require('../limits').maxFileBytes()
 
 /**
  * Download a file (PDF, Word, …) into the matter folder with provenance,
@@ -153,9 +154,9 @@ async function downloadToMatter(url, matterFolder) {
   if (!resp) throw new Error('too many redirects')
   if (!resp.ok()) throw new Error(`HTTP ${resp.status()} for ${target}`)
   const len = parseInt(resp.headers()['content-length'] || '0', 10)
-  if (len > MAX_DOWNLOAD) throw new Error(`file too large (${Math.round(len / 1048576)} MB > 50 MB)`)
+  if (len > maxDownload()) throw new Error(require('../limits').tooLargeMessage('The file', len))
   const body = await resp.body()
-  if (body.length > MAX_DOWNLOAD) throw new Error('file too large (> 50 MB)')
+  if (body.length > maxDownload()) throw new Error(require('../limits').tooLargeMessage('The file', body.length))
   const type = (resp.headers()['content-type'] || '').split(';')[0].trim()
   const disp = resp.headers()['content-disposition'] || ''
   const fromDisp = disp.match(/filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i)

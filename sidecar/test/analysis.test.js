@@ -186,7 +186,7 @@ test('analysis: verified findings only, locations from the text, risks rated and
 
   assert.deepStrictEqual(a.obligations.map((o) => o.party), ['Landlord', 'Tenant'], 'in document order')
   assert.deepStrictEqual(a.clauses.map((c) => [c.kind, c.title]), [['notable', 'Governing law'], ['missing', 'Rent indexation']])
-  assert.deepStrictEqual(progress.filter((s, i) => s !== progress[i - 1]), ['read', 'analyse', 'verify', 'law', 'judge', 'write'])
+  assert.deepStrictEqual(progress.filter((s, i) => s !== progress[i - 1]), ['read', 'plan', 'analyse', 'verify', 'law', 'judge', 'write'])
 
   // Outputs in the matter folder.
   assert.strictEqual(r.files.length, 3)
