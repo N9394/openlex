@@ -300,9 +300,11 @@
   <div class="composer">
     <label for="input" class="sr-only">Your question</label>
     <textarea id="input" rows="1" placeholder="Ask about this document…" aria-describedby="inputHelp"></textarea>
-    <span id="inputHelp" class="sr-only">Enter sends, Shift+Enter for a new line. Type / for your firm's instructions.</span>
+    <span id="inputHelp" class="sr-only">Enter sends, Shift+Enter for a new line. Type / for commands and your firm's instructions.</span>
     <button id="send" class="btn" type="button">Send</button>
   </div>
+  <!-- One quiet line, like the terminal app's: hidden once there is text. -->
+  <div id="cmdHint" class="cmd-hint" aria-hidden="true">Type / for commands · ⌘K (Ctrl+K on Windows) · /help</div>
   <div class="mainrow">
     <button class="btn btn-primary" id="reviewBtn" type="button">Review this contract</button>
     <button class="btn btn-ghost btn-small" id="reviewOptsBtn" type="button" aria-expanded="false" aria-controls="reviewOpts">Options</button>

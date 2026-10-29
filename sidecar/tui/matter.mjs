@@ -33,6 +33,7 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
+import { createRequire } from 'node:module'
 import { useEffect, useRef, useState } from 'react'
 import { Box, Text, useInput } from 'ink'
 import { html, Frame, Menu, TextField, Field, Spinner, Note, color, sym, look, useSize, fitPath } from './ui.mjs'
@@ -44,6 +45,8 @@ import { clock, startActivity, applyEvent, activityLines, doneLines, basedOnLine
 import { pastedFiles, chipLabel, attachSentence, readAttachment, joinTexts } from './attach.mjs'
 import { FolderPicker } from './folder.mjs'
 import { copyText, onExit } from './clip.mjs'
+
+const require = createRequire(import.meta.url)
 
 // Conversations survive going back to the matter list (for this session).
 const conversations = new Map()
@@ -64,24 +67,12 @@ export const ACTIONS = [
   { value: 'skill', label: 'Use your firm\'s instructions', hint: 'Instructions your firm wrote for recurring tasks.' },
 ]
 
-/** Commands in the chat ("/model …"). They win over firm skills with the same name. */
-export const COMMANDS = [
-  { name: 'model', args: '[local | anthropic | openrouter:MODEL]', help: 'where the AI runs' },
-  { name: 'key', args: '[service]', help: 'add or replace a key, then check it' },
-  { name: 'data', args: '', help: 'where client data may go' },
-  { name: 'as', args: '[role]', help: 'who OpenLex works as' },
-  { name: 'privileged', args: 'on|off', help: 'keep this matter on this computer' },
-  { name: 'permissions', args: '', help: 'what OpenLex may do without asking' },
-  { name: 'folder', args: '[path | none]', help: 'the folder OpenLex works in' },
-  { name: 'sources', args: '', help: 'what the last answer is based on, in full' },
-  { name: 'copy', args: '', help: 'copy the last answer' },
-  { name: 'save', args: '[name]', help: 'save the last answer as a file (asks first)' },
-  { name: 'transcript', args: '', help: 'print this conversation in the terminal when you quit' },
-  { name: 'activity', args: '', help: 'what OpenLex did recently, and where data went' },
-  { name: 'record', args: '[all]', help: 'the AI record: what the AI did, to show a client' },
-  { name: 'clear', args: '', help: 'start a new conversation' },
-  { name: 'help', args: '', help: 'these commands' },
-]
+/**
+ * Commands in the chat ("/model …"): the terminal app's share of the one
+ * list every window uses (src/commands.js, also GET /api/commands). They
+ * win over firm skills with the same name.
+ */
+export const COMMANDS = require('../src/commands.js').list({ surface: 'tui' }).map(({ name, args, help }) => ({ name, args, help }))
 
 /** The closest command or skill name to a mistyped one (null when nothing is close). */
 export function didYouMean(word, names) {

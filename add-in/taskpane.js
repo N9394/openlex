@@ -416,7 +416,11 @@
       ta.style.height = Math.min(ta.scrollHeight, 140) + 'px'
       ta.classList.toggle('multi', ta.scrollHeight > 42)
     }
-    ta.addEventListener('input', () => { autoGrow(); store.set('openlex-draft', ta.value) })
+    // The quiet hint under the box: the right shortcut for this computer, gone once there is text.
+    const isMac = /Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent || '')
+    $('#cmdHint').textContent = `Type / for commands · ${isMac ? '⌘K' : 'Ctrl+K'} · /help`
+    syncHint()
+    ta.addEventListener('input', () => { autoGrow(); store.set('openlex-draft', ta.value); syncHint() })
     ta.addEventListener('focus', autoGrow)
     ta.addEventListener('keydown', (e) => {
       if (skillMenuKey(e)) return
@@ -429,16 +433,30 @@
     setBusy(null)
   }
 
+  /** The hint line under the question box shows only while the box is empty. */
+  function syncHint() { const h = $('#cmdHint'); if (h) h.hidden = !!$('#input').value }
+
   function sendFromInput() {
     const ta = $('#input')
     const text = ta.value.trim()
     if (!text) { ta.focus(); return }
+    // A built-in command ("/model", "/record" …) runs here, it is not a question.
+    const cmd = text.match(/^\/([a-z-]+)$/i)
+    if (cmd && commandNamed(cmd[1])) {
+      ta.value = ''
+      store.set('openlex-draft', '')
+      hideSkillMenu()
+      syncHint()
+      runCommand(cmd[1].toLowerCase())
+      return
+    }
     if (busy) { announce('OpenLex is still working. Stop it first, or wait — your question stays in the box.', true); return }
     lastSent = ta.value
     ta.value = ''
     store.set('openlex-draft', '')
     ta.style.height = ''
     ta.classList.remove('multi')
+    syncHint()
     ask(text)
   }
 
@@ -448,6 +466,7 @@
     if (ta.value.trim() || !lastSent) return false
     ta.value = lastSent
     store.set('openlex-draft', lastSent)
+    syncHint()
     return true
   }
 
@@ -711,22 +730,40 @@
     if (row.children.length) box.appendChild(row)
   }
 
-  // ── "/" menu: your firm's instructions and "@" working as … ─────────────
+  // ── "/" menu: the commands, your firm's instructions, "@" working as … ──
+  // The commands are the engine's one list for every window (GET
+  // /api/commands, src/commands.js): the same /model, /record, /clear,
+  // /help as in the terminal app and the desktop app.
   let skillCache = null
   let skillPick = 0
   let agentCache = null
+  let cmdCache = null
+  /** What each command does in this pane (the menu entry it opens). */
+  const COMMAND_ACTIONS = {
+    model: () => ACTIONS.settingsAI(),
+    data: () => ACTIONS.settingsData(),
+    record: () => (available.record ? ACTIONS.record() : announce('The AI record needs a newer OpenLex engine.', true)),
+    clear: () => ACTIONS.clear(),
+    help: () => openMenu(),
+    as: () => { const ta = $('#input'); ta.value = '@'; ta.focus(); updateSkillMenu() },
+  }
   async function loadSkills() {
-    if (skillCache && agentCache) return skillCache
+    if (skillCache && agentCache && cmdCache) return skillCache
     try { skillCache = (await (await fetch(SIDECAR + '/api/skills')).json()).skills.filter((s) => !s.error) } catch { skillCache = [] }
     try { agentCache = (await (await fetch(SIDECAR + '/api/agents')).json()).agents.filter((a) => !a.error).map((a) => ({ ...a, agent: true })) } catch { agentCache = [] }
-    setTimeout(() => { skillCache = null; agentCache = null }, 60000)
+    try { cmdCache = (await (await fetch(SIDECAR + '/api/commands?surface=word')).json()).commands.filter((c) => COMMAND_ACTIONS[c.name]).map((c) => ({ name: c.name, title: '/' + c.name, description: c.help, command: true })) } catch { cmdCache = [] }
+    setTimeout(() => { skillCache = null; agentCache = null; cmdCache = null }, 60000)
     return skillCache
   }
+  function commandNamed(name) { return (cmdCache || []).find((c) => c.name === String(name).toLowerCase()) || null }
+  function runCommand(name) { if (COMMAND_ACTIONS[name]) COMMAND_ACTIONS[name]() }
   const MENU_RE = /^(@[a-z0-9-]+\s+)?([/@])([a-z0-9-]*)$/
   function skillMatches() {
     const m = $('#input').value.match(MENU_RE)
     if (!m || !skillCache) return []
-    const pool = m[2] === '@' ? (m[1] ? [] : agentCache || []) : skillCache
+    // Commands first (they win over a firm skill of the same name), then the firm's instructions.
+    const cmds = m[1] ? [] : cmdCache || []
+    const pool = m[2] === '@' ? (m[1] ? [] : agentCache || []) : [...cmds, ...skillCache.filter((s) => !cmds.some((c) => c.name === s.name))]
     return pool.filter((s) => s.name.startsWith(m[3]) || String(s.title || '').toLowerCase().includes(m[3])).slice(0, 8)
   }
   async function updateSkillMenu() {
@@ -739,7 +776,7 @@
       menu = el('div', 'skill-menu')
       menu.id = 'skillMenu'
       menu.setAttribute('role', 'listbox')
-      menu.setAttribute('aria-label', $('#input').value.includes('@') ? 'Work as' : 'Your firm\'s instructions')
+      menu.setAttribute('aria-label', $('#input').value.includes('@') ? 'Work as' : 'Commands and your firm\'s instructions')
       $('.composer').before(menu)
     }
     skillPick = Math.min(skillPick, list.length - 1)
@@ -750,13 +787,21 @@
       item.setAttribute('role', 'option')
       item.setAttribute('aria-selected', i === skillPick ? 'true' : 'false')
       item.append(el('b', null, s.agent ? `Work as: ${s.title || s.name}` : (s.title || s.name)), el('span', null, s.description || ''))
-      item.addEventListener('mousedown', (e) => { e.preventDefault(); chooseSkill(s.name, s.agent) })
+      item.addEventListener('mousedown', (e) => { e.preventDefault(); chooseSkill(s.name, s.agent, s.command) })
       menu.appendChild(item)
     })
   }
   function hideSkillMenu() { const m = $('#skillMenu'); if (m) m.remove(); skillPick = 0 }
-  function chooseSkill(name, isAgent) {
+  function chooseSkill(name, isAgent, isCommand) {
     const ta = $('#input')
+    if (isCommand) {
+      ta.value = ''
+      store.set('openlex-draft', '')
+      hideSkillMenu()
+      syncHint()
+      ta.focus()
+      return runCommand(name)
+    }
     const prefix = (ta.value.match(MENU_RE) || [])[1] || ''
     ta.value = `${prefix}${isAgent ? '@' : '/'}${name} `
     hideSkillMenu()
@@ -766,7 +811,7 @@
     if (!$('#skillMenu')) return false
     const list = skillMatches()
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); skillPick = (skillPick + (e.key === 'ArrowDown' ? 1 : list.length - 1)) % list.length; updateSkillMenu(); return true }
-    if ((e.key === 'Enter' || e.key === 'Tab') && list[skillPick]) { e.preventDefault(); chooseSkill(list[skillPick].name, list[skillPick].agent); return true }
+    if ((e.key === 'Enter' || e.key === 'Tab') && list[skillPick]) { e.preventDefault(); chooseSkill(list[skillPick].name, list[skillPick].agent, list[skillPick].command); return true }
     if (e.key === 'Escape') { hideSkillMenu(); return true }
     return false
   }
