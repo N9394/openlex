@@ -1,0 +1,77 @@
+# Tests on every push and pull request to main.
+#
+#   - engine + CLI tests (sidecar/test) on Linux, macOS and Windows, Node 20 and 22
+#   - desktop shell tests (desktop/electron/test, no Electron needed)
+#   - packaging smoke test: build the CLI tarball and check it (Linux)
+#
+# Tests run offline: every model, API and website they need is faked on
+# 127.0.0.1. Tests that need the real network are skipped unless
+# OPENLEX_TEST_NETWORK=1, which CI never sets.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test (${{ matrix.os }}, Node ${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node: [20, 22]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: sidecar/package-lock.json
+      - name: Install engine dependencies
+        working-directory: sidecar
+        run: npm ci --no-audit --no-fund
+      - name: Engine and CLI tests
+        working-directory: sidecar
+        run: node --test test/
+      - name: Desktop shell tests
+        run: node --test desktop/electron/test/
+
+  package:
+    name: package CLI tarball (smoke test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: sidecar/package-lock.json
+      - name: Build the tarball
+        run: bash scripts/package-cli.sh
+      - name: Check the tarball (unpack, no symlinks, all bin/*.js, ./openlex help)
+        run: bash scripts/check-cli-tarball.sh
+      - name: Rebuild and compare (reproducible build)
+        run: |
+          first=$(cut -d' ' -f1 dist/*.tar.gz.sha256)
+          bash scripts/package-cli.sh
+          second=$(cut -d' ' -f1 dist/*.tar.gz.sha256)
+          echo "first $first"; echo "second $second"
+          [ "$first" = "$second" ] || { echo "::error::the CLI tarball is not reproducible"; exit 1; }
