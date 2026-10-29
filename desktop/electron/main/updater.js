@@ -250,7 +250,7 @@ class Updater {
         return { state: 'no-token' }
       }
       const platform = platformKey()
-      const headers = { Authorization: 'Bearer ' + token, 'User-Agent': 'LexVault-Updater/1' }
+      const headers = { Authorization: 'Bearer ' + token, 'User-Agent': 'OpenLex-Updater/1' }
 
       const ymlBuf = await fetchBuffer(`${this.feedBaseUrl}/${platform}`, headers)
       const manifest = parseYml(ymlBuf.toString('utf8'))
@@ -317,7 +317,7 @@ class Updater {
         buttons: ['Restart now', 'Later'],
         defaultId: 0,
         cancelId: 1,
-        message: `LexVault ${remoteVersion} is ready`,
+        message: `OpenLex ${remoteVersion} is ready`,
         detail: `An update is available (you have ${localVersion}). Restart to install — your downloaded statute packs and settings stay intact.`,
       })
       if (result.response !== 0) return { state: 'pending', artifactPath }

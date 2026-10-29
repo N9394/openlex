@@ -62,6 +62,7 @@ test('active matter per client; file is written atomically with 0600', () => {
   assert.strictEqual(matters.active('app').id, m.id)
   assert.strictEqual(matters.active('word'), null)
   assert.throws(() => matters.setActive('app', 'm_nope'), /unknown matter/)
-  assert.strictEqual(fs.statSync(matters.MATTERS_PATH).mode & 0o777, 0o600)
+  // Windows has no POSIX modes (the file sits in the user's profile, protected by its ACL).
+  if (process.platform !== 'win32') assert.strictEqual(fs.statSync(matters.MATTERS_PATH).mode & 0o777, 0o600)
   assert.deepStrictEqual(fs.readdirSync(DATA).filter((f) => f.endsWith('.tmp')), [])
 })

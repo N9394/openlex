@@ -103,7 +103,7 @@ async function discoverAvailableVersions(zbierkaNumber) {
     try {
         const response = await fetch(directoryUrl, {
             headers: {
-                'User-Agent': 'Mozilla/5.0 (compatible; LexVault/1.0; Educational)',
+                'User-Agent': 'Mozilla/5.0 (compatible; OpenLex/1.0; Educational)',
                 'Accept': 'text/html',
             },
         });
@@ -143,7 +143,7 @@ async function fetchSlovLexWithFallback(zbierkaNumber) {
         try {
             const response = await fetch(url, {
                 headers: {
-                    'User-Agent': 'Mozilla/5.0 (compatible; LexVault/1.0; Educational)',
+                    'User-Agent': 'Mozilla/5.0 (compatible; OpenLex/1.0; Educational)',
                     'Accept': 'text/html,application/xhtml+xml',
                     'Accept-Language': 'sk-SK,sk;q=0.9,en;q=0.8',
                 },
@@ -416,7 +416,7 @@ async function scrapeSlovakCourtDecisions(options = {}) {
             console.log(`[Slovak Courts] Searching: ${term}`);
             const response = await fetch(searchUrl, {
                 headers: {
-                    'User-Agent': 'Mozilla/5.0 (compatible; LexVault/1.0; Educational)',
+                    'User-Agent': 'Mozilla/5.0 (compatible; OpenLex/1.0; Educational)',
                     'Accept': 'text/html,application/xhtml+xml',
                     'Accept-Language': 'sk-SK,sk;q=0.9,en;q=0.8',
                 },
@@ -441,7 +441,7 @@ async function scrapeSlovakCourtDecisions(options = {}) {
                 try {
                     const decisionResponse = await fetch(decisionUrl, {
                         headers: {
-                            'User-Agent': 'Mozilla/5.0 (compatible; LexVault/1.0; Educational)',
+                            'User-Agent': 'Mozilla/5.0 (compatible; OpenLex/1.0; Educational)',
                             'Accept': 'text/html',
                         },
                     });
@@ -498,7 +498,7 @@ async function fetchSlovakSupremeCourtDecisions(options = {}) {
         const listResponse = await fetch(listUrl, {
             headers: {
                 'Accept': 'application/json',
-                'User-Agent': 'LexVault/1.0 (Legal Research Platform)',
+                'User-Agent': 'OpenLex/1.0 (Legal Research)',
             },
         });
         if (!listResponse.ok) {
@@ -518,7 +518,7 @@ async function fetchSlovakSupremeCourtDecisions(options = {}) {
                 const decisionResponse = await fetch(decisionUrl, {
                     headers: {
                         'Accept': 'application/json',
-                        'User-Agent': 'LexVault/1.0 (Legal Research Platform)',
+                        'User-Agent': 'OpenLex/1.0 (Legal Research)',
                     },
                 });
                 if (!decisionResponse.ok) {

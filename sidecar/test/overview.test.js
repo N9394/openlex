@@ -218,7 +218,7 @@ test('export: matter memo as docx, pdf and md in the matter folder', async () =>
   for (const format of ['docx', 'pdf', 'md']) {
     const r = await ov.handle('POST', '/api/matters/overview/export', null, { id: m.id, format })
     assert.strictEqual(r.status, 200, JSON.stringify(r.json))
-    assert.match(r.json.file, new RegExp(`2026-040_Acme_supply/matter-memo-\\d{4}-\\d{2}-\\d{2}\\.${format}$`))
+    assert.match(r.json.file, new RegExp(`2026-040_Acme_supply[\\\\/]matter-memo-\\d{4}-\\d{2}-\\d{2}\\.${format}$`))
     assert.ok(fs.statSync(r.json.file).size > 200)
   }
   const dir = ws.resolve(folder)

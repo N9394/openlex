@@ -1,6 +1,6 @@
-# LexVault Client (Vite)
+# OpenLex desktop client (Vite)
 
-Fast, lightweight frontend for LexVault built with Vite + React + Tailwind CSS.
+Fast, lightweight frontend for the OpenLex desktop app, built with Vite + React + Tailwind CSS.
 
 ## Features
 

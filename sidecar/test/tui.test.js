@@ -26,6 +26,9 @@ const { execFile } = require('child_process')
 const DATA = fs.mkdtempSync(path.join(os.tmpdir(), 'openlex-tui-'))
 process.env.OPENLEX_DATA_DIR = DATA
 process.env.NO_COLOR = '1'
+// The Unicode look everywhere, also on the old Windows console (CI has no
+// Windows Terminal); the ASCII fallback has its own test below.
+process.env.OPENLEX_ASCII = '0'
 
 // ── fake engine ──────────────────────────────────────────────────────────
 const seen = []
@@ -449,7 +452,8 @@ test('add documents: a dragged-in (quoted) file is copied into the matter folder
   await waitFor(r, 'Add documents')
   await press(r, '2')
   await waitFor(r, 'Which documents?')
-  await press(r, `'${file}' `, 'enter')
+  const q = process.platform === 'win32' ? '"' : "'" // Windows terminals quote with "…" only
+  await press(r, `${q}${file}${q} `, 'enter')
   const f = await waitFor(r, 'copied into the matter folder')
   assert.match(f, /Lease 2024\.docx/)
   const dest = path.join(DATA, 'workspace', 'Alpine_share_deal', 'documents')
@@ -1058,7 +1062,8 @@ test('files dropped into the question: chips, Backspace removes, sent with the q
   const r = show(h(App))
   await openChat(r)
   // A drop arrives as a bracketed paste (or one chunk): two quoted paths → two chips.
-  await press(r, `\u001b[200~'${a}' '${b}'\u001b[201~`)
+  const q = process.platform === 'win32' ? '"' : "'" // Windows terminals quote with "…" only
+  await press(r, `\u001b[200~${q}${a}${q} ${q}${b}${q}\u001b[201~`)
   let f = await waitFor(r, 'All 2 files are included in this question.')
   capture('two files dropped into the question', f)
   assert.match(f, /\+ SPA draft 3\.txt · 56 bytes/)
@@ -1092,7 +1097,7 @@ test('files dropped into the question: chips, Backspace removes, sent with the q
   // A path typed by hand and sent alone is attached too, not asked.
   await waitFor(r, 'Yes: the warranty covers all shares.')
   const n = posted('/api/chat').length
-  await press(r, `'${b}'`, 'enter')
+  await press(r, `${q}${b}${q}`, 'enter')
   await waitFor(r, 'Your question will be about Side letter.txt.')
   assert.strictEqual(posted('/api/chat').length, n)
   fs.rmSync(src, { recursive: true, force: true })
@@ -1417,7 +1422,7 @@ test('look: no colour with NO_COLOR, plain ASCII when asked, a screen-reader mod
     assert.match(f, /> New matter/)
     assert.match(f, /-{20}/)
     r.unmount()
-    delete process.env.OPENLEX_ASCII
+    process.env.OPENLEX_ASCII = '0'
 
     // Screen-reader mode: labelled lines, numbered menus, nothing that moves.
     process.env.OPENLEX_ACCESSIBLE = '1'

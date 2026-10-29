@@ -90,8 +90,12 @@ function keepVersion(p) {
     if (rel.startsWith('.openlex')) return null
     const dir = historyDirFor(p)
     fs.mkdirSync(dir, { recursive: true })
-    const copy = path.join(dir, new Date().toISOString().replace(/[:.]/g, '-'))
-    fs.copyFileSync(p, copy)
+    // Two saves within the same millisecond must not overwrite each other's
+    // copy: add -001, -002 … (sorts after the plain name, so order is kept).
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+    let copy = path.join(dir, stamp)
+    for (let n = 1; fs.existsSync(copy); n++) copy = path.join(dir, `${stamp}-${String(n).padStart(3, '0')}`)
+    fs.copyFileSync(p, copy, fs.constants.COPYFILE_EXCL)
     const versions = fs.readdirSync(dir).sort()
     for (const old of versions.slice(0, Math.max(0, versions.length - HISTORY_KEEP))) fs.unlinkSync(path.join(dir, old))
     return copy

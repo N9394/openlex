@@ -2,8 +2,13 @@
 
 Open-source, local-first legal AI. OpenLex reads contracts, searches the law and drafts with you, in **Microsoft Word**, in the **desktop app** or in your **terminal**. It runs on your machine, uses the model you choose, and every answer quotes its source.
 
+**OpenLex drafts, you decide.** It prepares reviews, research and suggested edits; the lawyer reviews every result and remains responsible for the advice and the documents that leave the office.
+
+> **Status: early release, not yet independently audited.** Use it with care on client matters, and report security issues as described in [SECURITY.md](SECURITY.md).
+
 - Website and downloads: https://openlex.pinemarshlands.com
-- Licence: Apache-2.0
+- Releases: https://github.com/N9394/openlex/releases ([verify your download](docs/VERIFY.md))
+- Licence: Apache-2.0 · [Changelog](CHANGELOG.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
 ```sh
 curl -fsSL https://openlex.pinemarshlands.com/install | bash    # or: brew install n9394/openlex/openlex
@@ -20,7 +25,7 @@ Start with [Getting started](docs/guides/getting-started.md). All guides: [docs/
 |---|---|---|
 | **Engine + CLI** | `sidecar/` | The local engine every front end shares (agent loop, model providers, data policy, matters, firm library, workflows, law search, MCP, local API) and the `openlex` command line. Node ≥ 20. |
 | **Word add-in** (+ Outlook) | `add-in/` | The task pane in Word (review, suggested edits as tracked changes and comments, review grid, skills) and the Outlook mail pane. Served by the engine. |
-| **Desktop app** | `desktop/` | Electron shell (`electron/`), React UI (`client/`), the app's API server (`server/`, compiled JavaScript) with newer modules in `server-fixes/`. Runs the local model, Qdrant, embeddings and the engine. |
+| **Desktop app** | `desktop/` | Electron shell (`electron/`), React UI (`client/`), the app's API server (`server/`, compiled JavaScript, with newer modules in `server-fixes/`; **legacy, being replaced by the engine**). Runs the local model, Qdrant, embeddings and the engine. |
 | Skills and playbooks | `sidecar/skills/`, `sidecar/playbooks/` | Starter skills (`SKILL.md`) and review checklists. Firms add their own as files. |
 | Docs | `docs/` | [Harness map](docs/HARNESS.md) (`openlex.json`), [Local API](docs/LOCAL_API.md). |
 | Benchmarks | `benchmarks/legalbench/` | LegalBench runner, judge and leaderboard. |
@@ -47,10 +52,12 @@ Type `openlex` (no arguments) in a terminal and a full-screen app opens: no comm
 | | |
 |---|---|
 | Script (macOS, Linux) | `curl -fsSL https://openlex.pinemarshlands.com/install \| bash` installs into `~/.openlex`, checks the release checksum and links `openlex` into `~/.local/bin`. |
-| Script (Windows) | `irm https://openlex.pinemarshlands.com/install.ps1 \| iex` in PowerShell, no admin: installs into `%USERPROFILE%\.openlex`, verifies the checksum and adds `openlex.cmd` to your user PATH. No Node yet: `winget install OpenJS.NodeJS.LTS`. Use Windows Terminal for the full-screen app. |
+| Script (Windows) — **beta, not yet tested on real Windows** | `irm https://openlex.pinemarshlands.com/install.ps1 \| iex` in PowerShell, no admin: installs into `%USERPROFILE%\.openlex`, verifies the checksum and adds `openlex.cmd` to your user PATH. No Node yet: `winget install OpenJS.NodeJS.LTS`. Use Windows Terminal for the full-screen app. |
 | Homebrew | `brew install n9394/openlex/openlex` |
-| Manual | Download `openlex-<version>.tar.gz` from [Releases](https://github.com/N9394/openlex/releases), unpack, run `./openlex`. |
+| Manual | Download `openlex-<version>.tar.gz` from [Releases](https://github.com/N9394/openlex/releases), [verify it](docs/VERIFY.md), unpack, run `./openlex`. |
 | From source | `cd sidecar && npm install && npm link` |
+
+The install scripts are also attached to every release built by the release workflow, so they can be fetched straight from GitHub: `https://github.com/N9394/openlex/releases/latest/download/install.sh` and `…/install.ps1` (the website's `/install` points there). Both check the release checksum; if [`cosign`](https://docs.sigstore.dev/cosign/system_config/installation/) or the [GitHub CLI](https://cli.github.com) (`gh`, logged in) is installed they also check that the package was built and signed by this repository's release workflow, and they say which checks were made. Details and manual checks: **[Verify your download](docs/VERIFY.md)**.
 
 A specific version: `OPENLEX_VERSION=0.2.0` (Windows: `$env:OPENLEX_VERSION = '0.2.0'`) before the line. Running it again upgrades. Uninstall: delete `~/.openlex` (Windows: `%USERPROFILE%\.openlex`, and remove its `bin` folder from your user PATH); your matters and keys in `~/.lexvault` stay.
 
@@ -118,6 +125,8 @@ Installers: `scripts/package-mac.sh` (pkg; fetches llama.cpp and Qdrant from the
 
 ## Desktop app
 
+The desktop app's API server (`desktop/server`) is **legacy and being replaced by the engine** (`sidecar/`); it only listens on 127.0.0.1.
+
 ```bash
 cd desktop/server && npm ci && npx prisma generate     # API server (once)
 cd desktop/client && npm install && npm run dev        # UI
@@ -143,8 +152,11 @@ Everything lives under `~/.lexvault` (the name is kept for compatibility): `prov
 ```bash
 cd sidecar && npm test                                    # engine (offline)
 OPENLEX_TEST_NETWORK=1 node --test test/web.test.js       # + live RIS and browser
-node --test desktop/electron/test/                        # app ↔ Word hub, engine bootstrap
+node --test desktop/electron/test/*.test.js               # app ↔ Word hub, engine bootstrap
+bash scripts/package-cli.sh && bash scripts/check-cli-tarball.sh   # build and check the CLI tarball
 ```
+
+CI runs these on Linux, macOS and Windows with Node 20 and 22 for every pull request. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Community build and distributions
 

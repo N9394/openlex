@@ -46,7 +46,7 @@ const crypto = __importStar(require("crypto"));
 const DEFAULT_SLOVLEX_CONFIG = {
     baseUrl: 'https://static.slov-lex.sk',
     timeout: 30000,
-    userAgent: 'LexVault-Crawler/1.0 (Legal Research)',
+    userAgent: 'OpenLex-Crawler/1.0 (Legal Research)',
     rateLimit: {
         maxRequests: 60,
         windowMs: 60000,
@@ -57,7 +57,7 @@ const DEFAULT_OTVORENESUDY_CONFIG = {
     baseUrl: 'https://otvorenesudy.sk',
     apiUrl: 'https://api.otvorenesudy.sk',
     timeout: 30000,
-    userAgent: 'LexVault-Crawler/1.0 (Legal Research)',
+    userAgent: 'OpenLex-Crawler/1.0 (Legal Research)',
     rateLimit: {
         maxRequests: 60,
         windowMs: 60000,

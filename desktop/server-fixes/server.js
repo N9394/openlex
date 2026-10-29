@@ -30,6 +30,9 @@ const errorHandler_1 = require("./middleware/errorHandler");
 dotenv_1.default.config();
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 8000;
+// Loopback only: this legacy server has no business being reachable from the
+// network. Every client (Electron app, dev UI) talks to http://127.0.0.1:PORT.
+const HOST = '127.0.0.1';
 app.use((0, helmet_1.default)({
     contentSecurityPolicy: {
         directives: {
@@ -177,10 +180,10 @@ async function localModeBootstrap() {
     }
 }
 
-app.listen(PORT, async () => {
+app.listen(PORT, HOST, async () => {
     console.log('');
     console.log('╔════════════════════════════════════════╗');
-    console.log('║       LexVault Server Started          ║');
+    console.log('║  OpenLex desktop server (legacy) ready ║');
     console.log('╚════════════════════════════════════════╝');
     console.log('');
     if (process.env.LEXVAULT_LOCAL_MODE === '1') {
@@ -188,10 +191,8 @@ app.listen(PORT, async () => {
         await localModeBootstrap();
     }
     console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`Server:      http://localhost:${PORT}`);
-    console.log(`Health:      http://localhost:${PORT}/health`);
-    console.log('');
-    console.log('Core features: Research | Analyse | Create | Vault | Team');
+    console.log(`Server:      http://${HOST}:${PORT}`);
+    console.log(`Health:      http://${HOST}:${PORT}/health`);
     console.log('');
     if (process.env.LLM_PROVIDER === 'ollama') {
         console.log('Warming up AI models...');

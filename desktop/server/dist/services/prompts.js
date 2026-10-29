@@ -4,7 +4,7 @@ exports.ENTITY_PROMPTS = exports.TIMELINE_PROMPTS = exports.STUDY_PROMPTS = expo
 exports.getJurisdictionContext = getJurisdictionContext;
 exports.getLanguageInstructions = getLanguageInstructions;
 exports.ARCHIVIST_PROMPTS = {
-    system: (contextData) => `You are Archivist, a knowledgeable and friendly legal AI assistant for LexVault.
+    system: (contextData) => `You are Archivist, a knowledgeable and friendly legal AI assistant for OpenLex.
 
 YOUR PERSONALITY:
 - Helpful and approachable, but professional

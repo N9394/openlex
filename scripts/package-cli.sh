@@ -9,8 +9,17 @@
 # onnxruntime, transformers — the engine runs without them), the Word add-in
 # files the engine serves, docs, LICENSE, README. Models are not included:
 # use a cloud key, or a local llama.cpp (`brew install llama.cpp`) plus a GGUF.
+#
+# Reproducible: with GNU tar (Linux, or `gtar` from Homebrew) the archive has
+# sorted entries, owner 0:0, normalised permissions and every mtime set to
+# SOURCE_DATE_EPOCH (default: the time of the last commit), and gzip writes
+# no timestamp. The same commit + lockfile gives the same bytes. The release
+# workflow (.github/workflows/release.yml) builds it this way; see docs/VERIFY.md.
 set -euo pipefail
+umask 022
 cd "$(dirname "$0")/.."
+SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-$(git log -1 --format=%ct 2>/dev/null || date +%s)}"
+export SOURCE_DATE_EPOCH
 VERSION=$(node -p "require('./sidecar/package.json').version")
 NAME="openlex-${VERSION}"
 DIST="dist"
@@ -55,7 +64,23 @@ chmod +x "$STAGE/openlex" "$STAGE/sidecar/bin/openlex.js"
 # The same for Windows (cmd.exe wants CRLF line endings).
 printf '@echo off\r\nnode "%%~dp0sidecar\\bin\\openlex.js" %%*\r\n' > "$STAGE/openlex.cmd"
 
-# Reproducible-ish archive: fixed owner, sorted entries.
-(cd "$DIST" && COPYFILE_DISABLE=1 tar --uid 0 --gid 0 --uname root --gname root -czf "$NAME.tar.gz" "$NAME" 2>/dev/null || COPYFILE_DISABLE=1 tar -czf "$NAME.tar.gz" "$NAME")
-(cd "$DIST" && shasum -a 256 "$NAME.tar.gz" > "$NAME.tar.gz.sha256")
+# Archive. GNU tar gives a byte-for-byte reproducible result; BSD tar (macOS
+# default) still gets a fixed owner but no sorted entries or fixed mtimes.
+GNUTAR=""
+for t in gtar tar; do
+  if command -v "$t" >/dev/null 2>&1 && "$t" --version 2>/dev/null | grep -q 'GNU tar'; then GNUTAR="$t"; break; fi
+done
+if [ -n "$GNUTAR" ]; then
+  (cd "$DIST" && "$GNUTAR" --format=gnu --sort=name --mtime="@$SOURCE_DATE_EPOCH" \
+     --owner=0 --group=0 --numeric-owner --mode='u+rwX,go+rX,go-w' \
+     -cf - "$NAME" | gzip -9 -n > "$NAME.tar.gz")
+else
+  echo "note: GNU tar not found, so the archive is not byte-for-byte reproducible (brew install gnu-tar)" >&2
+  (cd "$DIST" && COPYFILE_DISABLE=1 tar --uid 0 --gid 0 --uname root --gname root -cf - "$NAME" | gzip -9 -n > "$NAME.tar.gz")
+fi
+if command -v sha256sum >/dev/null 2>&1; then
+  (cd "$DIST" && sha256sum "$NAME.tar.gz" > "$NAME.tar.gz.sha256")
+else
+  (cd "$DIST" && shasum -a 256 "$NAME.tar.gz" > "$NAME.tar.gz.sha256")
+fi
 echo "$DIST/$NAME.tar.gz ($(du -h "$DIST/$NAME.tar.gz" | cut -f1)) sha256 $(cut -d' ' -f1 "$DIST/$NAME.tar.gz.sha256")"

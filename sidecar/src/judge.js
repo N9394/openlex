@@ -12,7 +12,7 @@ const { chat } = require('./llm')
 const { getChunk } = require('./search')
 const { estimateTokens } = require('./compress')
 
-const JUDGE_PROMPT = `You are a legal proofreader for LexVault — you DOUBLE-CHECK the drafting agent's work, you do not grade its proposals against the law. A drafting agent produced suggestions for a contract. Each suggestion carries its own "document_passage" — the FULL VERBATIM text of the clause it refers to (the "anchor_text" is only a short fragment used to locate the clause in Word; never judge from the fragment alone).
+const JUDGE_PROMPT = `You are a legal proofreader for OpenLex — you DOUBLE-CHECK the drafting agent's work, you do not grade its proposals against the law. A drafting agent produced suggestions for a contract. Each suggestion carries its own "document_passage" — the FULL VERBATIM text of the clause it refers to (the "anchor_text" is only a short fragment used to locate the clause in Word; never judge from the fragment alone).
 
 WHAT THE PROPOSED_TEXT IS: the agent's suggested NEW wording (a rewrite or rebalance). It is a recommendation — it does NOT need to be found in the document passage, and it does NOT need to be a statute or quote the law. Rewrites are supposed to CHANGE the clause (e.g. favor the client more). Never drop a suggestion because the proposed text is new, one-sided, or not backed by a statute.
 

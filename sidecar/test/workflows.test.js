@@ -87,7 +87,7 @@ test('matter review keeps verified findings only and writes the report', async (
   assert.strictEqual(r.stats.unverified, 1, 'the invented liability-cap quote is dropped')
   assert.strictEqual(progress.length, 2)
   const md = fs.readFileSync(r.files[0], 'utf8')
-  assert.match(r.files[0], /2026-014_Acme\/review-\d{4}-\d{2}-\d{2}\.md$/)
+  assert.match(r.files[0], /2026-014_Acme[\\/]review-\d{4}-\d{2}-\d{2}\.md$/)
   assert.match(md, /1 dropped \(quote not found/)
   assert.ok(!md.includes('EUR 1,000,000'))
   assert.match(fs.readFileSync(r.files[1], 'utf8'), /^document,check,risk,answer,quote,location\n/)

@@ -1,7 +1,7 @@
 # OpenLex installer for Windows (Windows PowerShell 5.1 and PowerShell 7).
 #
-#   irm https://<site>/install.ps1 | iex
-#   $env:OPENLEX_VERSION = '0.2.0'; irm https://<site>/install.ps1 | iex
+#   irm https://github.com/N9394/openlex/releases/latest/download/install.ps1 | iex
+#   $env:OPENLEX_VERSION = '0.2.0'; irm https://github.com/N9394/openlex/releases/latest/download/install.ps1 | iex
 #
 # Installs the OpenLex engine + CLI into %USERPROFILE%\.openlex (the same
 # folder as ~/.openlex on macOS and Linux) and puts an `openlex.cmd` into
@@ -38,6 +38,17 @@
     if ($Color) { Write-Host $Text -ForegroundColor $Color } else { Write-Host $Text }
   }
   function Fail([string]$Text) { throw "openlex install: $Text" }
+
+  # Runs a native tool and returns its exit code and output. Windows
+  # PowerShell 5.1 turns native stderr into errors under 'Stop', so relax it here.
+  function Invoke-Tool([string]$Exe, [string[]]$ToolArgs) {
+    $old = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+      $out = & $Exe @ToolArgs 2>&1 | Out-String
+      return @{ Code = $LASTEXITCODE; Out = $out }
+    } finally { $ErrorActionPreference = $old }
+  }
 
   function Remove-Dir([string]$Dir) {
     if (-not (Test-Path -LiteralPath $Dir)) { return }
@@ -95,6 +106,44 @@
       $Expected = ((Get-Content -LiteralPath "$Archive.sha256" -Raw).Trim() -split '\s+')[0].ToLowerInvariant()
       $Actual = (Get-FileHash -LiteralPath $Archive -Algorithm SHA256).Hash.ToLowerInvariant()
       if ($Expected -ne $Actual) { Fail "checksum mismatch (expected $Expected, got $Actual) - not installing" }
+      Say "  sha256 matches the release's checksum file" 'DarkGray'
+
+      # Origin check (see docs/VERIFY.md). The checksum only proves the
+      # download is intact; it comes from the same release. Releases built by
+      # the release workflow are also signed (Sigstore) and attested by GitHub.
+      # With cosign or gh installed, check that the tarball was built by this
+      # repository's release workflow. A failed check stops the install; a
+      # missing tool does not.
+      $Bundle = "$Archive.bundle"
+      $Signed = $true
+      try { Invoke-WebRequest -UseBasicParsing -Uri "$Url.bundle" -OutFile $Bundle } catch { $Signed = $false }
+      if ($Signed) {
+        $Checked = @()
+        $Identity = "https://github.com/$Repo/.github/workflows/release.yml@refs/tags/v$Version"
+        $Cosign = Get-Command cosign -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($Cosign) {
+          $r = Invoke-Tool $Cosign.Path @('verify-blob', '--bundle', $Bundle, '--certificate-identity', $Identity, '--certificate-oidc-issuer', 'https://token.actions.githubusercontent.com', $Archive)
+          if ($r.Code -ne 0) { Write-Host $r.Out; Fail 'the signature does not match (cosign verify-blob failed) - not installing' }
+          Say "  signature (cosign): built by $Repo's release workflow for v$Version" 'DarkGray'
+          $Checked += 'cosign'
+        }
+        $Gh = Get-Command gh -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($Gh) {
+          if ((Invoke-Tool $Gh.Path @('auth', 'status')).Code -ne 0) {
+            Say '  gh is installed but not logged in (gh auth login), so the GitHub attestation was not checked' 'DarkGray'
+          } else {
+            $r = Invoke-Tool $Gh.Path @('attestation', 'verify', $Archive, '--repo', $Repo)
+            if ($r.Code -ne 0) { Write-Host $r.Out; Fail 'the GitHub attestation does not match (gh attestation verify failed) - not installing' }
+            Say "  attestation (gh): GitHub build provenance from $Repo" 'DarkGray'
+            $Checked += 'gh'
+          }
+        }
+        if ($Checked.Count -eq 0) {
+          Say 'Only the checksum was checked. To also check who built it, install cosign or gh and run this again (docs/VERIFY.md).'
+        }
+      } else {
+        Say "Only the checksum was checked: no signature was found for v$Version (releases from before signed builds have none)."
+      }
 
       # Unpack next to the final place, then move: an interrupted install
       # never leaves a half-written version behind.
