@@ -1,0 +1,64 @@
+{
+ "page": 0,
+ "page_size": 2,
+ "query": {
+  "query": "expropriation"
+ },
+ "total": 341,
+ "next_page": null,
+ "previous_page": null,
+ "took": 14,
+ "max_score": 2428.1,
+ "relaxed": false,
+ "results": [
+  {
+   "score": 0.68,
+   "highlights": {
+    "motivations": [
+     "à la suite de <em>l'expropriation</em>",
+     "causé par <em>l'expropriation</em>"
+    ]
+   },
+   "id": "5fca7d162a251e6bf9c78514",
+   "jurisdiction": "cc",
+   "chamber": "civ3",
+   "number": "17-18.194",
+   "numbers": [
+    "17-18.194",
+    "16-21.165"
+   ],
+   "ecli": "ECLI:FR:CCASS:2018:C301117",
+   "formation": "fs",
+   "publication": [
+    "c",
+    "b"
+   ],
+   "decision_date": "2018-12-20",
+   "type": "arret",
+   "solution": "rejet",
+   "summary": "Le titulaire d'une autorisation temporaire d'occupation, en vigueur au moment de la procédure d'expropriation, est en droit d'obtenir l'indemnisation de son préjudice résultant de l'expropriation",
+   "themes": [
+    "Expropriation pour cause d'utilité publique"
+   ]
+  },
+  {
+   "score": 0.41,
+   "highlights": {
+    "dispositif": [
+     "indemnité d'<em>expropriation</em>"
+    ]
+   },
+   "id": "64b0f1c2e1a4b3a1c2d3e4f5",
+   "jurisdiction": "ca",
+   "location": "ca_aix_en_provence",
+   "chamber": "Chambre des expropriations",
+   "number": "22/01234",
+   "numbers": [
+    "22/01234"
+   ],
+   "decision_date": "2024-03-01",
+   "type": "arret",
+   "solution": "Infirmation"
+  }
+ ]
+}

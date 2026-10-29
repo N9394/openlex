@@ -1,0 +1,89 @@
+{
+ "structuredContent": {
+  "total": 218,
+  "total_is_lower_bound": true,
+  "results": [
+   {
+    "decision_id": "bge_115 II 83",
+    "court": "bge",
+    "court_name": "Bundesgericht (BGE)",
+    "court_level": "federal_supreme",
+    "canton": "CH",
+    "chamber": "Ire Cour civile",
+    "docket_number": "115 II 83",
+    "decision_date": "1989-01-11",
+    "language": "fr",
+    "title": null,
+    "regeste": "Regeste\n Art. 18 Abs. 3 BMM. Nichtigkeit einer Kündigung, die im Zusammenhang mit einer Mietzinserhöhung ausgesprochen wird. Die Anwendung von Art. 18 Abs. 3 BMM setzt voraus, dass die Kündigung in direkter Beziehung zu einer Mietzinserhöhung steht. Das ist der Fall, wenn die Kündigung den Zweck hat, den Mieter vor die Wahl zu stellen, entweder die Mieträume zu verlassen oder einen höheren Mietzin",
+    "snippet": "(recours en réforme) Regeste Art. 18 Abs. 3 BMM . Nichtigkeit einer Kündigung, die im Zusammenhang mit einer Mietzinserhöhung ausgesprochen wird.",
+    "source_url": "https://search.bger.ch/ext/eurospider/live/de/php/clir/http/index.php?highlight_docid=atf%3A%2F%2F115-II-83%3Ade&lang=de&zoom=&type=show_document",
+    "pdf_url": null,
+    "relevance_score": 35.0748,
+    "statutes": [
+     "Art. 18 Abs. 3 AMSL",
+     "Art. 18 Abs. 3 BMM",
+     "Art. 2 CC",
+     "Art. 63 BGE"
+    ],
+    "citation_count": 70,
+    "cited_by_results": 4,
+    "publication_date": null,
+    "canonical_decision_id": "bge_115 II 83",
+    "is_canonical": true,
+    "citation_string_de": "BGE 115 II 83",
+    "citation_string_fr": "ATF 115 II 83",
+    "citation_string_it": "DTF 115 II 83",
+    "canonical_url": "https://mcp.opencaselaw.ch/entscheid/bge_115%20II%2083",
+    "rule_statement": "Regeste\n Art. 18 Abs. 3 BMM. Nichtigkeit einer Kündigung, die im Zusammenhang mit einer Mietzinserhöhung ausgesprochen wird. Die Anwendung von Art. 18 Abs. 3 BMM setzt voraus, dass die Kündigung in direkter Beziehung zu einer Mietzinserhöhung steht. Das ist der Fall, wenn die Kündigung den Zweck hat, den Mieter vor die Wahl zu stellen, entweder die Mieträume zu verlassen oder einen höheren Mietzins zu zahlen. […]"
+   },
+   {
+    "decision_id": "zh_mietgericht_MJ210065-L",
+    "court": "zh_mietgericht",
+    "court_name": "ZH Mietgericht",
+    "court_level": "cantonal",
+    "canton": "ZH",
+    "chamber": null,
+    "docket_number": "MJ210065-L",
+    "decision_date": "2022-08-22",
+    "language": "de",
+    "title": "ZMP 2022 Nr. 3: Kündigungsschutz. Änderung der bundesgerichtlichen Rechtsprechung zur Ertragsoptimierungskündigung(?). Tragweite der relativen Methode bei einer parallel zur Kündigung ausgesprochenen Mietzinserhöhung wegen ungenügenden Ertrags. Rechtsschutzinteresse der nicht mehr in der Mietwohnung lebenden Mitmieterin. Offensichtlich übersetzter Kaufpreis. Statistische Methode.",
+    "regeste": "Zwar ist es auch erstinstanzlichen Gerichten nicht verwehrt, eine Praxisänderung aufzugleisen. Die beteiligten Gerichtspersonen haben dabei aber eine andere Rolle als im Rahmen wissenschaftlicher Beiträge. Was «bewährte Überlieferung» ist und was nicht, hat schon aufgrund der schweizerischen Justizverfassung in erster Linie das Bundesgericht zu entscheiden (MG E. 3). In einzelnen Entscheiden hat d",
+    "snippet": "- 2 - Wollte man die Rechtsprechung zur Ertragsoptimierungskündigung auf eine neue Grundlage stellen, müsste auch eine Harmonisierung von Kündigungsschutz und Mietzinsanfechtung angestrebt werden. Insbesondere wären Anpassungen nach absoluter Methode generell innert viel kürzerer Dauer zuzulassen als nach gelten- der Rechtsprechung zur sog. relativen Methode, damit dem Gedanken der Kündi- gungsfre",
+    "source_url": "https://www.gerichte-zh.ch/entscheide/entscheide-drucken.html?tx_frpentscheidsammlungextended_pi3[entscheidDrucken]=30998",
+    "pdf_url": "https://www.gerichte-zh.ch/fileadmin/user_upload/entscheide/oeffentlich/ZMP_2022_Nr_3_03.pdf",
+    "relevance_score": 34.0283,
+    "statutes": [
+     "Art. 1 Abs. 3 ZGB",
+     "Art. 1 ZGB",
+     "Art. 10 VMWG",
+     "Art. 100 Abs. 1 BGG",
+     "Art. 105 Abs. 1 BGG",
+     "Art. 105 Abs. 2 BGG",
+     "Art. 106 Abs. 1 BGG",
+     "Art. 106 Abs. 1 ZPO"
+    ],
+    "legal_area": "civil",
+    "publication_date": null,
+    "canonical_decision_id": "zh_mietgericht_MJ210065-L",
+    "is_canonical": true,
+    "citation_string_de": "Mietgericht ZH MJ210065-L vom 22. August 2022",
+    "citation_string_fr": "Mietgericht ZH MJ210065-L du 22 août 2022",
+    "citation_string_it": "Mietgericht ZH MJ210065-L del 22 agosto 2022",
+    "canonical_url": "https://mcp.opencaselaw.ch/entscheid/zh_mietgericht_MJ210065-L",
+    "rule_statement": "Zwar ist es auch erstinstanzlichen Gerichten nicht verwehrt, eine Praxisänderung aufzugleisen. Die beteiligten Gerichtspersonen haben dabei aber eine andere Rolle als im Rahmen wissenschaftlicher Beiträge. Was «bewährte Überlieferung» ist und was nicht, hat schon aufgrund der schweizerischen Justizverfassung in erster Linie das Bundesgericht zu entscheiden (MG E. 3). […]"
+   }
+  ],
+  "returned": 3,
+  "limit": 3,
+  "offset": 0,
+  "has_more": true,
+  "next_offset": 3,
+  "result_set_id": "rs_484a213f9450a872"
+ },
+ "content": [
+  {
+   "type": "text",
+   "text": "Found 218+ decisions (showing 1–2)"
+  }
+ ]
+}

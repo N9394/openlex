@@ -224,14 +224,19 @@ test('every connector has the one interface', () => {
     assert.ok(typeof c.needsKey === 'boolean' && Array.isArray(c.hosts) && c.hosts.length, c.id)
     for (const f of ['search', 'get', 'citation']) assert.strictEqual(typeof c[f], 'function', `${c.id}.${f}`)
   }
-  assert.deepStrictEqual(ls.IDS, ['ris', 'eurlex', 'neuris', 'slovlex', 'esbirka', 'ansvar'])
+  assert.deepStrictEqual(ls.IDS.slice(0, 6), ['ris', 'eurlex', 'neuris', 'slovlex', 'esbirka', 'ansvar'])
+  for (const id of ['legalize', 'opencaselaw', 'fedlex', 'openlegaldata', 'gii', 'ukleg', 'ukcaselaw', 'bwb', 'rechtspraak', 'legifrance', 'judilibre', 'ecfr', 'govinfo', 'courtlistener', 'sejm', 'saos', 'rolegis', 'rodata']) assert.ok(ls.IDS.includes(id), id)
+  for (const c of ls.CONNECTORS) {
+    assert.ok(c.de && c.de.label, `${c.id}: German words for /law`)
+    assert.ok(/^(law|caselaw|law\+caselaw)$/.test(c.kind), `${c.id}.kind`)
+  }
 })
 
 test('status: one plain list; local-only keeps sources offline; the gateway asks for a key', async () => {
   setPolicy(null)
   let st = await ls.status()
   assert.match(st.find((s) => s.id === 'ris').status, /^RIS Austria: free, but your client-data rule keeps OpenLex offline$/)
-  assert.strictEqual(st.find((s) => s.id === 'ansvar').status, 'Ansvar: sign in or paste your key: how to get it')
+  assert.strictEqual(st.find((s) => s.id === 'ansvar').status, 'Ansvar: sign in free or paste your key: how to get it')
   assert.strictEqual(st.find((s) => s.id === 'esbirka').status, 'e-Sbírka Czechia: free, but your client-data rule keeps OpenLex offline')
   assert.deepStrictEqual([st.find((s) => s.id === 'esbirka').optionalKey, st.find((s) => s.id === 'esbirka').guide], [true, 'https://github.com/N9394/openlex/blob/main/docs/SOURCES.md#esbirka'])
   setPolicy(['web'])
@@ -317,7 +322,7 @@ test('EUR-Lex through the same interface: reference search and one article', asy
 
 test('NeuRIS (Germany): search with text matches, one § of a statute', async () => {
   setPolicy(['web'])
-  const r = await ls.search({ query: 'Kaufvertrag', jurisdiction: 'DE' })
+  const r = await ls.search({ query: 'Kaufvertrag', jurisdiction: 'DE', sources: ['neuris'], kind: 'law' })
   assert.deepStrictEqual(r.searched, ['neuris'])
   const hit = r.results[0]
   assert.strictEqual(hit.ref, 'eli/bund/bgbl-1/1995/s2072/2021-08-10/1/deu')
@@ -480,7 +485,7 @@ test('RIS outside the allowed hours: the local copy with its date, else a plain 
 test('Ansvar: paste-a-key gateway over MCP — service credential → token, search, full text, plain errors', async () => {
   setPolicy(['web', 'source:ansvar'])
   let r = await ls.search({ query: 'responsabilité délictuelle', sources: ['ansvar'] })
-  assert.match(r.skipped[0].reason, /^Ansvar sign in or paste your key \(how to get it: .*#ansvar\)$/)
+  assert.match(r.skipped[0].reason, /^Ansvar sign in free or paste your key \(how to get it: .*#ansvar\)$/)
   process.env.OPENLEX_KEY_SOURCE_ANSVAR = 'firm-agent:s3cret'
   r = await ls.search({ query: 'responsabilité délictuelle', jurisdiction: 'FR' })
   assert.deepStrictEqual(r.searched, ['ansvar'], 'no official source for FR: the gateway is asked')
@@ -496,8 +501,11 @@ test('Ansvar: paste-a-key gateway over MCP — service credential → token, sea
   const doc = await ls.get({ source: 'ansvar', ref: 'fr-cc-1240' })
   assert.match(doc.text, /oblige celui par la faute .* \[fr-cc-1240\]$/)
   assert.strictEqual(doc.citation, 'Art. 1240 C. civ.')
-  // An official source is enough for AT: the gateway's quota is not used.
+  // A connected Ansvar is asked first where it covers the country; the official source answers too.
   r = await ls.search({ query: 'Gewährleistung', jurisdiction: 'AT' })
+  assert.deepStrictEqual(r.searched, ['ansvar', 'ris'])
+  // Not where it does not cover the country (no official source either: none asked but the gateway's fallback rule).
+  r = await ls.search({ query: 'Gewährleistung', jurisdiction: 'AT', sources: ['ris'] })
   assert.deepStrictEqual(r.searched, ['ris'])
   // Daily cap and a wrong key: one plain sentence each.
   ansvarCap = true
@@ -599,7 +607,7 @@ test('Ansvar browser sign-in: no device codes → browser redirect with PKCE; re
   mem.clear()
   require('../src/connectors/ansvar')._reset()
   auth.register = 'closed'
-  await assert.rejects(ls.signIn('ansvar', { open: false }), (err) => err.plain === 'Ansvar\'s browser sign-in is not available for OpenLex yet. Use a service credential (paste your key) for now.')
+  await assert.rejects(ls.signIn('ansvar', { open: false }), (err) => err.plain === 'Ansvar\'s browser sign-in is not available for OpenLex yet (OpenLex has asked Ansvar for a client id). Use a service credential (paste your key) for now.')
 })
 
 test('sign-in addresses must be https (http only on this computer)', () => {
@@ -623,14 +631,14 @@ test('offline or a source down: a plain sentence, the others still answer, no cr
   const saved = process.env.OPENLEX_NEURIS_API
   process.env.OPENLEX_NEURIS_API = 'http://127.0.0.1:9'
   try {
-    const x = await ls.search({ query: 'Kaufvertrag', jurisdiction: 'DE' })
+    const x = await ls.search({ query: 'Kaufvertrag', jurisdiction: 'DE', sources: ['neuris'] })
     assert.match(x.skipped[0].reason, /could not be reached \(no internet connection, or the service is down\)/)
   } finally { process.env.OPENLEX_NEURIS_API = saved }
 })
 
 test('agent tools: search_law_sources and get_law_source cite with provenance; permissions ask only for a gateway', async () => {
   setPolicy(['web'])
-  const out = await tools.dispatch({}, 'search_law_sources', { query: 'Kaufvertrag', jurisdiction: 'DE' })
+  const out = await tools.dispatch({}, 'search_law_sources', { query: 'Kaufvertrag', jurisdiction: 'DE', sources: ['neuris'], kind: 'law' })
   assert.match(out.output, /^LAW SOURCES \(neuris\):\n\[1\] German federal law \(NeuRIS\) · ref eli\/bund\//)
   assert.match(out.output, /Cite as: FlErwV § 10 \(NeuRIS/)
   assert.match(out.output, /retrieved \d{4}-\d\d-\d\d; Statutes are official works/)
@@ -646,12 +654,12 @@ test('agent tools: search_law_sources and get_law_source cite with provenance; p
   assert.strictEqual(perms.evaluate('get_law_source', { source: 'ansvar', ref: 'x' }).decision, 'ask')
   assert.match(perms.summarize('search_law_sources', { query: 'Haftung', sources: ['ansvar'] }), /^Look up "Haftung" in Ansvar$/)
   writeUserMap({ permissions: { deny: ['search_law_sources:neuris'] } })
-  assert.strictEqual(perms.evaluate('search_law_sources', { query: 'x', jurisdiction: 'DE' }).decision, 'deny')
+  assert.strictEqual(perms.evaluate('search_law_sources', { query: 'x', jurisdiction: 'DE', sources: ['neuris'] }).decision, 'deny')
   assert.strictEqual(perms.evaluate('search_law_sources', { query: 'x', jurisdiction: 'AT' }).decision, 'allow')
 })
 
 test('transparency: the step says which source is contacted online, in plain words', () => {
-  const detail = require('../src/activity').toolDetail('search_law_sources', { query: 'Kaufvertrag', jurisdiction: 'DE' })
+  const detail = require('../src/activity').toolDetail('search_law_sources', { query: 'Kaufvertrag', jurisdiction: 'DE', sources: ['neuris'] })
   const ev = explain.annotate({ kind: 'tool', tool: 'search_law_sources', detail })
   assert.strictEqual(ev.plain, 'Looking up the law in NeuRIS (Germany\'s federal law portal): “Kaufvertrag”')
   assert.deepStrictEqual([ev.online, ev.onlineTo], [true, 'NeuRIS (Germany\'s federal law portal)'])
@@ -664,9 +672,9 @@ test('transparency: the step says which source is contacted online, in plain wor
 
 test('AI record: a law-source lookup shows under the source\'s name, once; a blocked one as blocked', async () => {
   setPolicy(['web'])
-  await ls.search({ query: 'Kaufvertrag', jurisdiction: 'DE' })
+  await ls.search({ query: 'Kaufvertrag', jurisdiction: 'DE', sources: ['neuris'] })
   setPolicy(null)
-  await ls.search({ query: 'Kaufvertrag', jurisdiction: 'DE' })
+  await ls.search({ query: 'Kaufvertrag', jurisdiction: 'DE', sources: ['neuris'] })
   const entries = require('../src/record').build(null)
   const looked = entries.flatMap((e) => e.lookups || []).filter((l) => /NeuRIS/.test(l.name))
   assert.ok(looked.length >= 1 && looked.every((l) => l.name === 'NeuRIS (Germany\'s federal law portal)'))
@@ -681,7 +689,7 @@ test('terminal /law: the engine\'s words, one list; Enter offers only what appli
   const st = await ls.status()
   const items = ui.sourceItems(st)
   assert.deepStrictEqual(items.map((i) => i.label.replace(/^\S+ /, '')), st.map((s) => s.status))
-  assert.ok(items.find((i) => i.value === 'ansvar').label.endsWith('Ansvar: sign in or paste your key: how to get it'))
+  assert.ok(items.find((i) => i.value === 'ansvar').label.endsWith('Ansvar: sign in free or paste your key: how to get it'))
   assert.strictEqual(items.find((i) => i.value === 'ansvar').hint, 'How to get it: https://github.com/N9394/openlex/blob/main/docs/SOURCES.md#ansvar')
   const ansvar = ui.sourceChoices(st.find((s) => s.id === 'ansvar')).map((c) => c.label)
   assert.deepStrictEqual(ansvar, ['Sign in with your browser', 'Paste a service credential', 'How to get it', 'Switch it off', 'Back to the list'])
@@ -690,7 +698,7 @@ test('terminal /law: the engine\'s words, one list; Enter offers only what appli
   assert.strictEqual(cz[1].hint, 'https://github.com/N9394/openlex/blob/main/docs/SOURCES.md#esbirka')
   const ris = ui.sourceChoices(st.find((s) => s.id === 'ris')).map((c) => c.label)
   assert.deepStrictEqual(ris, ['Keep a local copy (fetched at night)', 'Switch it off', 'Back to the list'])
-  assert.deepStrictEqual(ui.sourceChoices({ ...st[0], managedByFirm: true }).map((c) => c.value), ['copy', 'back'], 'the local copy is the lawyer\'s own; switching is the firm\'s')
+  assert.deepStrictEqual(ui.sourceChoices({ ...st.find((s) => s.id === 'ris'), managedByFirm: true }).map((c) => c.value), ['copy', 'back'], 'the local copy is the lawyer\'s own; switching is the firm\'s')
   assert.deepStrictEqual(ui.withWeb({ mode: 'local-only' }), { mode: 'allow-list', providers: ['web'] })
   assert.deepStrictEqual(ui.withWeb({ mode: 'allow-list', providers: ['anthropic'], redact: true }), { mode: 'allow-list', providers: ['anthropic', 'web'], redact: true })
 })
@@ -705,11 +713,11 @@ test('terminal /law screen renders the engine\'s list in plain words', async () 
   const r = ink.render(React.createElement(LawSources, { api }))
   try {
     let f = ''
-    for (let i = 0; i < 500 && !/Ansvar: sign in or paste your key/.test(f); i++) { await new Promise((ok) => setTimeout(ok, 20)); f = (r.lastFrame() || '').replace(/\s+/g, ' ') }
+    for (let i = 0; i < 500 && !/Ansvar: sign in free or paste your key/.test(f); i++) { await new Promise((ok) => setTimeout(ok, 20)); f = (r.lastFrame() || '').replace(/\s+/g, ' ') }
     assert.match(f, /Where OpenLex looks up the law/)
     assert.match(f, /RIS Austria: free, but your client-data rule keeps OpenLex offline/)
-    assert.match(f, /Ansvar: sign in or paste your key: how to get it/)
-    assert.match(f, /e-Sbírka Czechia: free, but your client-data rule keeps OpenLex offline/)
+    assert.match(f, /Ansvar: sign in free or paste your key: how to get it/)
+    assert.match(f, /Legalize \(laws of many countries\): free: paste your free key/)
     assert.match(f, /Allow online look-ups \(only search words leave this computer\)/)
     assert.match(f, /Only your search words are sent, never your documents/)
   } finally { r.unmount() }

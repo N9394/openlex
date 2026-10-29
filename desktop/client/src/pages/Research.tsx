@@ -27,6 +27,7 @@ import {
 import { Attachment, attachFile, chipDetail, refusal } from '../lib/attach'
 import AnalysisCard from '../components/AnalysisCard'
 import BatchCard from '../components/BatchCard'
+import SourceKeyCard from '../components/SourceKeyCard'
 
 interface Matter { id: string; title: string; number?: string; client?: string; privileged?: boolean; agent?: string | null }
 interface Conversation { id: string; title: string; matterId: string | null; clients: string[]; turns: number; updatedAt: string | null }
@@ -712,6 +713,7 @@ function Answer({ m, now, live, openSteps, toggleSteps, onCopy, copied, onWord, 
           {m.batch && <BatchCard attachments={m.batch.attachments} matterId={matterId} />}
           {(m.analyses || []).map((a) => <AnalysisCard key={a.id} analysis={a} />)}
           {(m.analysisIds || []).map((id) => <AnalysisCard key={id} id={id} />)}
+          {(act?.keys || []).map((k) => <SourceKeyCard key={k.source} req={k} />)}
           {m.content && !(m.analysisIds?.length) ? <div className="prose-custom max-w-none"><ReactMarkdown>{m.content}</ReactMarkdown></div> : null}
 
           {/* What OpenLex is doing right now (≤3 recent steps, the current one marked) */}

@@ -74,12 +74,24 @@ const TOOLS = {
     input: { celex: 'string (e.g. 32016R0679)', article: 'string (optional — article number)', language: 'string (optional)' },
   },
   search_law_sources: {
-    description: 'Live search of the law sources the lawyer has connected: official ones (RIS Austria, EUR-Lex, German federal law, Slov-Lex Slovakia by law number, e-Sbírka Czechia) and paid gateways with the lawyer\'s own account (Ansvar). Law-source results are look-ups, not advice: tell the lawyer to check the official version before relying on it. Pick by jurisdiction (AT, EU, DE, SK, CZ) or name sources. Only the search words leave this computer. Every result names its source, citation, URL, retrieval date and licence; cite exactly that.',
-    input: { query: 'string (statutory terms in the law\'s language, or a law number like 513/1991)', jurisdiction: 'string (optional — AT, EU, DE, SK, CZ, …)', sources: 'array (optional — ris, eurlex, neuris, slovlex, esbirka, ansvar)' },
+    description: 'Live search of the law sources the lawyer has connected: official statutes and case law of many countries (AT, DE, CH, EU, CZ, SK, PL, RO, NL, FR, UK, US …), community sources and gateways with the lawyer\'s own account. Law-source results are look-ups, not advice: tell the lawyer to check the official version before relying on it. Pick by jurisdiction (two letters) and kind (law or caselaw), or name sources (law_sources_status lists them). Only the search words leave this computer. Every result names its source, citation, URL, retrieval date and licence; cite exactly that.',
+    input: { query: 'string (statutory terms in the law\'s language, or a law number like 513/1991)', jurisdiction: 'string (optional — AT, EU, DE, CH, CZ, SK, PL, RO, NL, FR, UK, US …)', kind: 'string (optional — law or caselaw)', sources: 'array (optional — source ids from law_sources_status)', date: 'string (optional — YYYY-MM-DD: the text on that date, where the source has history)' },
   },
   get_law_source: {
-    description: 'Text of one document from a law source (use the source and ref from search_law_sources), optionally one section ("§ 433") or article. Cite it as the citation returned.',
-    input: { source: 'string (ris, eurlex, neuris, slovlex, esbirka, ansvar)', ref: 'string (the ref from search_law_sources)', article: 'string (optional — section or article number)', language: 'string (optional — EUR-Lex only)' },
+    description: 'Text of one document from a law source (use the source and ref from search_law_sources), optionally one section ("§ 433") or article, or the text on a past date. Cite it as the citation returned.',
+    input: { source: 'string (the source id from search_law_sources)', ref: 'string (the ref from search_law_sources)', article: 'string (optional — section or article number)', date: 'string (optional — YYYY-MM-DD)', language: 'string (optional — EUR-Lex only)' },
+  },
+  law_sources_status: {
+    description: 'Which law sources are connected (per country), which are switched off, which need the lawyer\'s free key, and whether OpenLex works fully offline. Use it when a question needs a country you have no connected source for, then propose connecting the best free one (enable_law_source, or request_law_source_key for a free key).',
+    input: { jurisdiction: 'string (optional — two letters)' },
+  },
+  enable_law_source: {
+    description: 'Switch a law source on (the lawyer is asked first). Only free official or community sources; never a paid one without the lawyer asking.',
+    input: { source: 'string (the source id from law_sources_status)' },
+  },
+  request_law_source_key: {
+    description: 'Ask the lawyer for a source\'s free key: OpenLex shows a secure field (the key goes straight into this computer\'s keychain and never into this conversation) and the steps to get it. Never ask the lawyer to type or paste a key into the chat.',
+    input: { source: 'string (the source id from law_sources_status)' },
   },
   download_to_matter: {
     description: 'Download a file (PDF, Word, …) from a public or signed-in site into the matter folder with provenance (URL, time, sha256). Needs web access allowed by the data policy.',
@@ -365,7 +377,7 @@ async function dispatch({ doc, memory, search, embeddings, packStore }, rawName,
       const query = String(args.query || '').trim()
       if (!query) return { output: 'ERROR: search_law_sources requires a query' }
       const ls = require('./connectors')
-      const r = await ls.search({ query, jurisdiction: args.jurisdiction || undefined, sources: Array.isArray(args.sources) ? args.sources : typeof args.sources === 'string' && args.sources ? args.sources.split(/[\s,]+/) : undefined, lang: euLang(args.language, doc), limit: 5 })
+      const r = await ls.search({ query, jurisdiction: args.jurisdiction || undefined, kind: args.kind || undefined, date: args.date ? String(args.date).slice(0, 10) : undefined, sources: Array.isArray(args.sources) ? args.sources : typeof args.sources === 'string' && args.sources ? args.sources.split(/[\s,]+/) : undefined, lang: euLang(args.language, doc), limit: 5 })
       const day = (t) => String(t || '').slice(0, 10)
       const lines = r.results.slice(0, 12).map((x, i) => `[${i + 1}] ${x.sourceLabel} · ref ${x.ref}\n    ${x.title}${x.inForce === false ? ' (NOT in force)' : ''}\n    Cite as: ${x.citation || x.title}${x.snippet ? `\n    ${x.snippet.slice(0, 400)}` : ''}\n    ${x.url || ''} (retrieved ${day(x.retrieved)}; ${x.licence})`)
       const skipped = r.skipped.map((s) => `${s.source}: ${s.reason}`)
@@ -376,13 +388,46 @@ async function dispatch({ doc, memory, search, embeddings, packStore }, rawName,
       }
     }
 
+    case 'law_sources_status': {
+      const ls = require('./connectors')
+      const J = args.jurisdiction ? String(args.jurisdiction).toUpperCase().replace(/^GB$/, 'UK') : null
+      const all = await ls.status({ matterId: require('./policy').currentMatter() || null })
+      const covers = (s) => s.country === J || (s.jurisdictions || []).includes(J)
+      const list = (J ? all.filter(covers) : all).sort((a, b) => Number(!!b.recommended) - Number(!!a.recommended))
+      const off = await ls.offline()
+      const line = (s) => `- ${s.id} [${s.country}, ${s.kind}${s.community ? ', community' : ''}${s.recommended ? ', recommended' : ''}]: ${s.status}${s.state === 'needs_key' || (s.optionalKey && !s.hasKey) ? ` — key help: ${s.keyHelp || s.guide}` : ''}${s.manual ? ` — pages: ${(s.pages || []).map((p) => p.url).join(', ')}` : ''}`
+      const ready = list.filter((s) => s.state === 'ready')
+      const rec = list.find((s) => s.recommended && s.state !== 'ready' && s.state !== 'off')
+      const suggest = rec ? `\nSuggest first: ${rec.label} (free plan, 100 searches a day, sign in with the browser): request_law_source_key with source "${rec.id}". The official sources stay on as the second source.` : ''
+      return { output: `LAW SOURCES${J ? ` for ${J}` : ''} (${ready.length} ready${off.on ? '; OpenLex works fully offline' : ''}):\n${list.map(line).join('\n') || '- none for this country'}${suggest}\nTo connect one: enable_law_source (switched off) or request_law_source_key (needs a free key or a sign-in). Paid plans only when the lawyer asks.` }
+    }
+
+    case 'enable_law_source': {
+      const ls = require('./connectors')
+      try {
+        const r = ls.setEnabled(String(args.source || ''), true)
+        const st = (await ls.status()).find((s) => s.id === r.id)
+        return { output: `Switched on: ${st.status}${st.state === 'needs_key' ? `. It needs a key: use request_law_source_key.` : ''}` }
+      } catch (err) { return { output: `LAW SOURCE ERROR: ${err.plain || err.message}` } }
+    }
+
+    case 'request_law_source_key': {
+      const ls = require('./connectors')
+      try {
+        const c = ls.connector(String(args.source || ''))
+        if (!c.needsKey && !c.optionalKey) return { output: `${c.label} needs no key.` }
+        const keyRequest = { source: c.id, label: c.label, labelDe: c.de?.label || c.label, keyHelp: c.keyHelp || null, keyHelpDe: c.de?.keyHelp || null, guide: `${ls.GUIDE}#${c.guide || c.id}`, signIn: !!c.signIn }
+        return { output: `A secure field for the ${c.label} key is now shown to the lawyer, with these steps: ${c.keyHelp || keyRequest.guide}. The key goes straight into this computer's keychain; do not ask for it in the chat. Tell the lawyer in one or two sentences what to do, then wait.`, keyRequest }
+      } catch (err) { return { output: `LAW SOURCE ERROR: ${err.plain || err.message}` } }
+    }
+
     case 'get_law_source': {
       const ls = require('./connectors')
       try {
-        const r = await ls.get({ source: String(args.source || ''), ref: String(args.ref || ''), article: args.article ? String(args.article) : null, lang: euLang(args.language, doc) })
+        const r = await ls.get({ source: String(args.source || ''), ref: String(args.ref || ''), article: args.article ? String(args.article) : null, date: args.date ? String(args.date).slice(0, 10) : null, lang: euLang(args.language, doc) })
         const max = args.article ? 12000 : 8000
         return {
-          output: `${r.sourceLabel}: ${r.title}\nCite as: ${r.citation}\nSource: ${r.url || '—'} (retrieved ${String(r.retrieved).slice(0, 10)}; ${r.licence})\n${r.note ? `Note: ${r.note}\n` : ''}${ls.NOTICE}\n\n${String(r.text || '').slice(0, max)}${String(r.text || '').length > max ? '\n…[truncated — ask for one section or article]' : ''}`,
+          output: `${r.sourceLabel}: ${r.title}${r.version ? ` (version ${r.version})` : ''}\nCite as: ${r.citation}\nSource: ${r.url || '—'} (retrieved ${String(r.retrieved).slice(0, 10)}; ${r.licence})\n${r.note ? `Note: ${r.note}\n` : ''}${ls.NOTICE}\n\n${String(r.text || '').slice(0, max)}${String(r.text || '').length > max ? '\n…[truncated — ask for one section or article]' : ''}`,
           webSources: [{ title: r.citation, url: r.url, inForce: true, source: r.source, licence: r.licence, retrieved: r.retrieved }],
         }
       } catch (err) {

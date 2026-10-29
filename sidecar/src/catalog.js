@@ -20,8 +20,11 @@ const CATALOG = [
   { name: 'search_ris', desc: 'Live official Austrian federal law (RIS), current versions' },
   { name: 'search_eurlex', desc: 'Official EU law (EUR-Lex): find acts by number, name or title' },
   { name: 'get_eu_law', desc: 'Text of an EU act / one article by CELEX' },
-  { name: 'search_law_sources', desc: 'Connected law sources live (AT, EU, DE, SK, CZ, gateways): search with citations' },
+  { name: 'search_law_sources', desc: 'Connected law sources live (statutes and case law of many countries): search with citations' },
   { name: 'get_law_source', desc: 'Text of one law-source document or section, with citation' },
+  { name: 'law_sources_status', desc: 'Which law sources are connected per country, what is missing' },
+  { name: 'enable_law_source', desc: 'Switch a free law source on (asked first)' },
+  { name: 'request_law_source_key', desc: 'Secure field for a source\'s free key (never in the chat)' },
   { name: 'download_to_matter', desc: 'Download a file into the matter with provenance' },
   { name: 'web_fetch', desc: 'Read a public web page with the lawyer\'s saved logins' },
   { name: 'web_save', desc: 'Save a web page to the matter with provenance' },
@@ -76,8 +79,20 @@ const SCHEMAS = {
     input: { celex: 'string', article: 'string (optional)', language: 'string (optional)' },
     description: 'Text of an EU act by CELEX (consolidated when available), optionally one article.',
   },
+  law_sources_status: {
+    input: { jurisdiction: 'string (optional — two letters)' },
+    description: 'Law sources per country: connected, switched off, needing a free key; the offline mode.',
+  },
+  enable_law_source: {
+    input: { source: 'string' },
+    description: 'Switch a free law source on (the lawyer is asked).',
+  },
+  request_law_source_key: {
+    input: { source: 'string' },
+    description: 'Show the lawyer a secure field for a source\'s free key, with the steps to get it; the key never enters the chat.',
+  },
   search_law_sources: {
-    input: { query: 'string', jurisdiction: 'string (optional — AT, EU, DE, SK, CZ)', sources: 'array (optional — ris, eurlex, neuris, slovlex, esbirka, ansvar)' },
+    input: { query: 'string', jurisdiction: 'string (optional — two letters)', kind: 'string (optional — law or caselaw)', sources: 'array (optional — source ids)', date: 'string (optional — YYYY-MM-DD)' },
     description: 'Live search of the connected law sources; results carry source, citation, URL, retrieval date and licence. Needs web access in the data policy.',
   },
   get_law_source: {

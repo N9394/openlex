@@ -1,0 +1,31 @@
+{
+ "structuredContent": {
+  "decision_id": "bge_115 II 83",
+  "e_number": "2",
+  "depth": 1,
+  "parent_e_number": null,
+  "siblings": [
+   "2",
+   "3",
+   "4"
+  ],
+  "court": "bge",
+  "language": "fr",
+  "regeste": "Regeste\n Art. 18 Abs. 3 BMM. Nichtigkeit einer Kündigung, die im Zusammenhang mit einer Mietzinserhöhung ausgesprochen wird. Die Anwendung von Art. 18 Abs. 3 BMM setzt voraus, dass die Kündigung in di",
+  "text": "Aux termes de l'\nart. 18 al. 3 AMSL\n, une résiliation signifiée par le bailleur à l'occasion d'une majoration de loyer est nulle (texte allemand: \"im Zusammenhang mit\"). La Chambre d'appel considère que cette disposition vise également le congé qui précède une majoration. Examinant ensuite les circonstances de l'espèce, elle parvient à la conclusion que la résiliation a été dictée par la volonté de la défenderesse d'imposer postérieurement au demandeur une majoration du loyer.\nLa défenderesse reproche à l'autorité cantonale une interprétation extensive de l'\nart. 18 al. 3 AMSL\n. Elle conteste d'abord avoir voulu placer le demandeur devant le dilemme de devoir accepter une hausse de loyer sous la menace d'un congé et s'en prend aux critères retenus dans l'arrêt attaqué pour parvenir à cette conclusion. Elle soutient ensuite que seul un congé postérieur à une augmentation de loyer devrait ",
+  "citation_string_de": "BGE 115 II 83, E. 2",
+  "citation_string_fr": "ATF 115 II 83, consid. 2",
+  "citation_string_it": "DTF 115 II 83, consid. 2",
+  "canonical_url": "https://mcp.opencaselaw.ch/entscheid/bge_115%20II%2083#e-2",
+  "markdown_link": "[BGE 115 II 83, E. 2](https://mcp.opencaselaw.ch/entscheid/bge_115%20II%2083#e-2)",
+  "rule_statement": "Aux termes de l'\nart. 18 al. 3 AMSL\n, une résiliation signifiée par le bailleur à l'occasion d'une majoration de loyer est nulle (texte allemand: \"im Zusammenhang mit\"). La Chambre d'appel considère q",
+  "_citation_format": "BGE 115 II 83, E. 2",
+  "text_source": "structure_index"
+ },
+ "content": [
+  {
+   "type": "text",
+   "text": "E. 2"
+  }
+ ]
+}

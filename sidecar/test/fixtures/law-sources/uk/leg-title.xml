@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" xmlns:leg="http://www.legislation.gov.uk/namespaces/legislation" xmlns:ukm="http://www.legislation.gov.uk/namespaces/metadata" xmlns:theme="http://www.legislation.gov.uk/namespaces/theme" xmlns:openSearch="http://a9.com/-/spec/opensearch/1.1/" xmlns:parameters="http://a9.com/-/spec/opensearch/extensions/parameters/1.0/">
+			<id>http://www.legislation.gov.uk/title/employment%20rights/data.feed</id>
+			<link rel="self" type="application/atom+xml" href="http://www.legislation.gov.uk/title/employment%20rights/data.feed?results-count=15"/>
+			
+			<link rel="alternate" type="text/csv" href="http://www.legislation.gov.uk/title/employment%20rights/data.csv?results-count=15"/>
+			<updated>2026-10-21T23:59:59+01:00</updated>
+			<title>Search Results</title>
+			<openSearch:Query role="request" leg:type="all" leg:title="employment rights"> </openSearch:Query>
+			<openSearch:itemsPerPage>15</openSearch:itemsPerPage>
+			<openSearch:startIndex>1</openSearch:startIndex>
+			<leg:page>1</leg:page>
+			<leg:morePages>9</leg:morePages>
+			
+			<leg:title><leg:and><leg:term>employment</leg:term><leg:term>rights</leg:term></leg:and></leg:title>
+			<openSearch:totalResults>122</openSearch:totalResults>
+			<link rel="first" type="application/atom+xml" href="http://www.legislation.gov.uk/title/employment%20rights/data.feed?results-count=15"/><link rel="next" type="application/atom+xml" href="http://www.legislation.gov.uk/title/employment%20rights/data.feed?results-count=15&amp;page=2"/><entry>
+			<id>http://www.legislation.gov.uk/id/eur/2013/519</id>
+			<title>Commission Regulation (EU) No 519/2013 of 21 February 2013 adapting certain regulations and decisions in the fields of free movement of goods, freedom of movement for persons, right of establishment and freedom to provide services, company law, competition policy, agriculture, food safety, veterinary and phytosanitary policy, fisheries, transport policy, energy, taxation, statistics, social policy and employment, environment, customs union, external relations, and foreign, security and defence policy, by reason of the accession of Croatia</title>
+			<link rel="self" href="http://www.legislation.gov.uk/id/eur/2013/519"/>
+			<link href="http://www.legislation.gov.uk/eur/2013/519/2014-01-09"/>
+			<link rel="alternate" type="application/xml" href="http://www.legislation.gov.uk/eur/2013/519/2014-01-09/data.xml" title="XML"/><link rel="alternate" type="application/rdf+xml" href="http://www.legislation.gov.uk/eur/2013/519/2014-01-09/data.rdf" title="RDF/XML"/><link rel="alternate" type="application/akn+xml" href="http://www.legislation.gov.uk/eur/2013/519/2014-01-09/data.akn" title="AKN"/><link rel="alternate" type="application/xhtml+xml" href="http://www.legislation.gov.uk/eur/2013/519/2014-01-09/data.xht" title="HTML snippet"/><link rel="alternate" type="application/akn+xhtml" href="http://www.legislation.gov.uk/eur/2013/519/2014-01-09/data.html" title="HTML5"/><link rel="alternate" type="text/html" href="http://www.legislation.gov.uk/eur/2013/519/2014-01-09/data.htm" title="Website (XHTML) Default View"/><link rel="alternate" type="text/csv" href="http://www.legislation.gov.uk/eur/2013/519/2014-01-09/data.csv" title="CSV"/><link rel="alternate" type="application/pdf" href="http://www.legislation.gov.uk/eur/2013/519/2014-01-09/data.pdf" title="PDF"/>
+			<link rel="http://purl.org/dc/terms/tableOfContents" type="application/xml" href="http://www.legislation.gov.uk/eur/2013/519/contents" title="Table of Contents"/>
+			<author><name/></author>
+			<updated>2025-10-18T18:02:11+01:00</updated>
+			<published>2018-11-10T18:47:03+01:00</published>
+			<ukm:DocumentMainType Value="EuropeanUnionRegulation"/><ukm:Year Value="2013"/><ukm:Number Value="519"/><ukm:CreationDate Date="2013-02-21"/>
+			
+			
+			
+			<summary>Commission Regulation (EU) No 519/2013 of 21 February 2013 adapting certain regulations and decisions in the fields of free movement of goods, freedom of movement for persons, right of establishment and freedom to provide services, company law, competition policy, agriculture, food safety, veterinary and phytosanitary policy, fisheries, transport policy, energy, taxation, statistics, social policy and employment, environment, customs union, external relations, and foreign, security and defence policy, by reason of the accession of Croatia</summary>
+		</entry>
+<entry>
+			<id>http://www.legislation.gov.uk/id/eudn/1996/172</id>
+			<title>96/172/EC: Decision No 160 of 28 November 1995 concerning the scope of Article 71 (1) (b) (ii) of Council Regulation (EEC) No 1408/71 relating to the right to unemployment benefits of workers, other than frontier workers, who, during their last employment, were residing in the territory of a Member State other than the competent State</title>
+			<link rel="self" href="http://www.legislation.gov.uk/id/eudn/1996/172"/>
+			<link href="http://www.legislation.gov.uk/eudn/1996/172/adopted"/>
+			<link rel="alternate" type="application/pdf" href="http://www.legislation.gov.uk/eudn/1996/172/pdfs/eudn_19960172_adopted_en.pdf" title="PDF"/>
+			<link rel="http://purl.org/dc/terms/tableOfContents" type="application/xml" href="http://www.legislation.gov.uk/eudn/1996/172/contents/adopted" title="Table of Contents"/>
+			<author><name/></author>
+			<updated>2025-10-03T22:53:37+01:00</updated>
+			<published>2018-11-09T19:59:46+01:00</published>
+			<ukm:DocumentMainType Value="EuropeanUnionDecision"/><ukm:Year Value="1996"/><ukm:Number Value="172"/>
+			
+			
+			
+			<summary/>
+		</entry>
+<entry>
+			<id>http://www.legislation.gov.uk/id/ukpga/2025/36</id>
+			<title>Employment Rights Act 2025</title>
+			<link rel="self" href="http://www.legislation.gov.uk/id/ukpga/2025/36"/>
+			<link href="http://www.legislation.gov.uk/ukpga/2025/36/2026-10-01"/>
+			<link rel="alternate" type="application/xml" href="http://www.legislation.gov.uk/ukpga/2025/36/2026-10-01/data.xml" title="XML"/><link rel="alternate" type="application/rdf+xml" href="http://www.legislation.gov.uk/ukpga/2025/36/2026-10-01/data.rdf" title="RDF/XML"/><link rel="alternate" type="application/akn+xml" href="http://www.legislation.gov.uk/ukpga/2025/36/2026-10-01/data.akn" title="AKN"/><link rel="alternate" type="application/xhtml+xml" href="http://www.legislation.gov.uk/ukpga/2025/36/2026-10-01/data.xht" title="HTML snippet"/><link rel="alternate" type="application/akn+xhtml" href="http://www.legislation.gov.uk/ukpga/2025/36/2026-10-01/data.html" title="HTML5"/><link rel="alternate" type="text/html" href="http://www.legislation.gov.uk/ukpga/2025/36/2026-10-01/data.htm" title="Website (XHTML) Default View"/><link rel="alternate" type="text/csv" href="http://www.legislation.gov.uk/ukpga/2025/36/2026-10-01/data.csv" title="CSV"/><link rel="alternate" type="application/pdf" href="http://www.legislation.gov.uk/ukpga/2025/36/2026-10-01/data.pdf" title="PDF"/>
+			<link rel="http://purl.org/dc/terms/tableOfContents" type="application/xml" href="http://www.legislation.gov.uk/ukpga/2025/36/contents" title="Table of Contents"/>
+			<author><name/></author>
+			<updated>2026-10-21T08:56:29+01:00</updated>
+			<published>2026-10-21T00:00:00+01:00</published>
+			<ukm:DocumentMainType Value="UnitedKingdomPublicGeneralAct"/><ukm:Year Value="2025"/><ukm:Number Value="36"/><ukm:ISBN Value="9780105703044"/><ukm:CreationDate Date="2025-12-18"/>
+			
+			
+			
+			<summary>An Act to make provision to amend the law relating to employment rights; to make provision about procedure for handling redundancies; to make provision about the treatment of workers involved in the supply of services under certain public contracts; to provide for duties to be imposed on employers in relation to equality; to amend the definition of “employment business” in the Employment Agencies Act 1973; to provide for the establishment of the School Support Staff Negotiating Body and Social Care Negotiating Bodies; to amend the Seafarers’ Wages Act 2023; to make provision for the implementation of international agreements relating to maritime employment; to make provision about trade unions, industrial action, employers’ associations and the functions of the Certification Officer; to make provision about the enforcement of legislation relating to the labour market; and for connected purposes.</summary>
+		</entry>
+<entry>
+			<id>http://www.legislation.gov.uk/id/ukpga/1998/8</id>
+			<title>Employment Rights (Dispute Resolution) Act 1998</title>
+			<link rel="self" href="http://www.legislation.gov.uk/id/ukpga/1998/8"/>
+			<link href="http://www.legislation.gov.uk/ukpga/1998/8/2010-10-01"/>
+			<link rel="alternate" type="application/xml" href="http://www.legislation.gov.uk/ukpga/1998/8/2010-10-01/data.xml" title="XML"/><link rel="alternate" type="application/rdf+xml" href="http://www.legislation.gov.uk/ukpga/1998/8/2010-10-01/data.rdf" title="RDF/XML"/><link rel="alternate" type="application/akn+xml" href="http://www.legislation.gov.uk/ukpga/1998/8/2010-10-01/data.akn" title="AKN"/><link rel="alternate" type="application/xhtml+xml" href="http://www.legislation.gov.uk/ukpga/1998/8/2010-10-01/data.xht" title="HTML snippet"/><link rel="alternate" type="application/akn+xhtml" href="http://www.legislation.gov.uk/ukpga/1998/8/2010-10-01/data.html" title="HTML5"/><link rel="alternate" type="text/html" href="http://www.legislation.gov.uk/ukpga/1998/8/2010-10-01/data.htm" title="Website (XHTML) Default View"/><link rel="alternate" type="text/csv" href="http://www.legislation.gov.uk/ukpga/1998/8/2010-10-01/data.csv" title="CSV"/><link rel="alternate" type="application/pdf" href="http://www.legislation.gov.uk/ukpga/1998/8/2010-10-01/data.pdf" title="PDF"/>
+			<link rel="http://purl.org/dc/terms/tableOfContents" type="application/xml" href="http://www.legislation.gov.uk/ukpga/1998/8/contents" title="Table of Contents"/>
+			<author><name/></author>
+			<updated>2024-05-04T14:55:10+01:00</updated>
+			<published>1998-04-08T00:00:00+01:00</published>
+			<ukm:DocumentMainType Value="UnitedKingdomPublicGeneralAct"/><ukm:Year Value="1998"/><ukm:Number Value="8"/><ukm:ISBN Value="0105408980"/><ukm:CreationDate Date="1998-04-08"/>
+			
+			
+			<category term="Employment tribunals"/><category term="Hearings"/><category term="Dismissal"/><category term="Legislation"/>
+			<summary>An Act to rename industrial tribunals and amend the law relating to those tribunals; to amend the law relating to dismissal procedures agreements and other alternative methods of resolving disputes about employment rights; to provide for the adjustment of awards of compensation for unfair dismissal in cases where no use is made of internal procedures for appealing against dismissal; to make provision about cases involving both unfair dismissal and disability discrimination; and for connected purposes.</summary>
+		</entry>
+<entry>
+			<id>http://www.legislation.gov.uk/id/ukpga/1996/18</id>
+			<title>Employment Rights Act 1996</title>
+			<link rel="self" href="http://www.legislation.gov.uk/id/ukpga/1996/18"/>
+			<link href="http://www.legislation.gov.uk/ukpga/1996/18/2026-10-01"/>
+			<link rel="alternate" type="application/xml" href="http://www.legislation.gov.uk/ukpga/1996/18/2026-10-01/data.xml" title="XML"/><link rel="alternate" type="application/rdf+xml" href="http://www.legislation.gov.uk/ukpga/1996/18/2026-10-01/data.rdf" title="RDF/XML"/><link rel="alternate" type="application/akn+xml" href="http://www.legislation.gov.uk/ukpga/1996/18/2026-10-01/data.akn" title="AKN"/><link rel="alternate" type="application/xhtml+xml" href="http://www.legislation.gov.uk/ukpga/1996/18/2026-10-01/data.xht" title="HTML snippet"/><link rel="alternate" type="application/akn+xhtml" href="http://www.legislation.gov.uk/ukpga/1996/18/2026-10-01/data.html" title="HTML5"/><link rel="alternate" type="text/html" href="http://www.legislation.gov.uk/ukpga/1996/18/2026-10-01/data.htm" title="Website (XHTML) Default View"/><link rel="alternate" type="text/csv" href="http://www.legislation.gov.uk/ukpga/1996/18/2026-10-01/data.csv" title="CSV"/><link rel="alternate" type="application/pdf" href="http://www.legislation.gov.uk/ukpga/1996/18/2026-10-01/data.pdf" title="PDF"/>
+			<link rel="http://purl.org/dc/terms/tableOfContents" type="application/xml" href="http://www.legislation.gov.uk/ukpga/1996/18/contents" title="Table of Contents"/>
+			<author><name/></author>
+			<updated>2026-10-02T10:29:08+01:00</updated>
+			<published>1996-05-22T00:00:00+01:00</published>
+			<ukm:DocumentMainType Value="UnitedKingdomPublicGeneralAct"/><ukm:Year Value="1996"/><ukm:Number Value="18"/><ukm:ISBN Value="010541896X"/><ukm:CreationDate Date="1996-05-22"/>
+			
+			
+			<category term="Employment tribunals"/><category term="Health and safety requirements"/><category term="Employment rights"/>
+			<summary>An Act to consolidate enactments relating to employment rights.</summary>
+		</entry>
+</feed>

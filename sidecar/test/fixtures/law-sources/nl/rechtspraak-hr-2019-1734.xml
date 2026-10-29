@@ -1,0 +1,222 @@
+<?xml version="1.0" encoding="utf-8"?>
+<open-rechtspraak>
+  <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:ecli="https://e-justice.europa.eu/ecli" xmlns:tr="http://tuchtrecht.overheid.nl/" xmlns:eu="http://publications.europa.eu/celex/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:bwb="bwb-dl" xmlns:cvdr="http://decentrale.regelgeving.overheid.nl/cvdr/" xmlns:psi="http://psi.rechtspraak.nl/" xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#">
+    <rdf:Description>
+      <dcterms:identifier>ECLI:NL:HR:2019:1734</dcterms:identifier>
+      <dcterms:format>text/xml</dcterms:format>
+      <dcterms:accessRights>public</dcterms:accessRights>
+      <dcterms:modified>2025-08-19T11:23:47</dcterms:modified>
+      <dcterms:issued rdfs:label="Publicatiedatum">2019-11-08</dcterms:issued>
+      <dcterms:publisher resourceIdentifier="http://rechtspraak.nl/">Raad voor de Rechtspraak</dcterms:publisher>
+      <dcterms:language>nl</dcterms:language>
+      <dcterms:creator rdfs:label="Instantie" resourceIdentifier="http://standaarden.overheid.nl/owms/terms/Hoge_Raad_der_Nederlanden" scheme="overheid.RechterlijkeMacht">Hoge Raad</dcterms:creator>
+      <dcterms:date rdfs:label="Uitspraakdatum">2019-11-08</dcterms:date>
+      <psi:zaaknummer rdfs:label="Zaaknr">19/01873</psi:zaaknummer>
+      <dcterms:type rdf:language="nl" resourceIdentifier="http://psi.rechtspraak.nl/uitspraak">Uitspraak</dcterms:type>
+      <psi:procedure rdf:language="nl" rdfs:label="Procedure" resourceIdentifier="http://psi.rechtspraak.nl/procedure#cassatie">Cassatie</psi:procedure>
+      <psi:procedure rdf:language="nl" rdfs:label="Procedure" resourceIdentifier="http://psi.rechtspraak.nl/procedure#prejudicieleBeslissing">Prejudiciële beslissing</psi:procedure>
+      <dcterms:coverage>NL</dcterms:coverage>
+      <dcterms:subject rdfs:label="Rechtsgebied" resourceIdentifier="http://psi.rechtspraak.nl/rechtsgebied#civielRecht_arbeidsrecht">Civiel recht; Arbeidsrecht</dcterms:subject>
+      <dcterms:relation rdfs:label="Formele relatie" ecli:resourceIdentifier="ECLI:NL:PHR:2019:899" psi:type="http://psi.rechtspraak.nl/conclusie" psi:aanleg="http://psi.rechtspraak.nl/eerdereAanleg">Conclusie: ECLI:NL:PHR:2019:899</dcterms:relation>
+      <dcterms:hasVersion rdfs:label="Vindplaatsen" resourceIdentifier="http://psi.rechtspraak.nl/vindplaats">
+        <rdf:list>
+          <rdf:li>Rechtspraak.nl</rdf:li>
+          <rdf:li>AR-Updates.nl 2019-1182 met annotatie van A.R. Houweling</rdf:li>
+          <rdf:li>NJB 2019/2500</rdf:li>
+          <rdf:li>RvdW 2019/1132</rdf:li>
+          <rdf:li>Prg. 2019/289</rdf:li>
+          <rdf:li>JAR 2019/312 met annotatie van Otto, M.L.G.</rdf:li>
+          <rdf:li>RAR 2020/1</rdf:li>
+          <rdf:li>TRA 2020/5 met annotatie van D.J. Buijs</rdf:li>
+          <rdf:li>PR-Updates.nl PR-2019-0172 met annotatie van A.R. Houweling</rdf:li>
+          <rdf:li>TvPP 2020, afl. 1, p. 19</rdf:li>
+          <rdf:li>NJ 2020/135 met annotatie van W.H.A.C.M. Bouwens</rdf:li>
+          <rdf:li>PR-Updates.nl 2019-0172</rdf:li>
+          <rdf:li>VAAN-AR-Updates.nl 2019-1182</rdf:li>
+        </rdf:list>
+      </dcterms:hasVersion>
+    </rdf:Description>
+    <rdf:Description rdf:about="http://deeplink.rechtspraak.nl/uitspraak?id=ECLI:NL:HR:2019:1734">
+      <dcterms:identifier>http://deeplink.rechtspraak.nl/uitspraak?id=ECLI:NL:HR:2019:1734</dcterms:identifier>
+      <dcterms:format>text/html</dcterms:format>
+      <dcterms:accessRights>public</dcterms:accessRights>
+      <dcterms:modified>2019-11-08T14:58:26</dcterms:modified>
+      <dcterms:issued rdfs:label="Publicatiedatum">2019-11-08</dcterms:issued>
+      <dcterms:publisher resourceIdentifier="http://rechtspraak.nl/">Raad voor de Rechtspraak</dcterms:publisher>
+      <dcterms:language>nl</dcterms:language>
+      <dcterms:title rdf:language="nl">ECLI:NL:HR:2019:1734 Hoge Raad , 08-11-2019 / 19/01873</dcterms:title>
+      <dcterms:abstract resourceIdentifier="../../rs:inhoudsindicatie" />
+    </rdf:Description>
+  </rdf:RDF>
+  <inhoudsindicatie id="ECLI:NL:HR:2019:1734:INH" lang="nl" xml:space="preserve" xmlns="http://www.rechtspraak.nl/schema/rechtspraak-1.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+      <para>Prejudiciële vragen (art. 392 Rv). Arbeidsrecht. 'Slapend dienstverband'. Is werkgever verplicht om na twee jaar arbeidsongeschiktheid van werknemer in te stemmen met voorstel om de arbeidsovereenkomst te beëindigen onder toekenning van een vergoeding? Leent de maatstaf van HR 11 juli 2008, ECLI:NL:HR:2008:BD1847 (Stoof/Mammoet) zich voor 'omgekeerde toepassing'? Verplichting op grond van art. 7:611 BW (goed werkgeverschap)? Invoering van de Wet compensatie transitievergoeding.</para>
+    </inhoudsindicatie>
+  <uitspraak id="ECLI:NL:HR:2019:1734:DOC" lang="nl" xml:space="preserve" xmlns="http://www.rechtspraak.nl/schema/rechtspraak-1.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <parablock>
+    <para> HOGE RAAD DER NEDERLANDEN</para>
+  </parablock>
+  <parablock>
+    <para>CIVIELE KAMER</para>
+  </parablock>
+  <parablock>
+    <para>
+      <emphasis role="bold">Nummer</emphasis>	19/01873</para>
+    <para>
+      <emphasis role="bold">Datum   </emphasis>	8 november 2019</para>
+  </parablock>
+  <parablock>
+    <para>PREJUDICIËLE BESLISSING</para>
+  </parablock>
+  <parablock>
+    <para>In de zaak van</para>
+  </parablock>
+  <parablock>
+    <para>
+      [eiser] ,<?linebreak?>wonende te [woonplaats] , </para>
+    <para>EISER in eerste aanleg,</para>
+    <para>hierna: [eiser] of de werknemer,</para>
+    <para>advocaat in de prejudiciële procedure: mr. S.F. Sagel,</para>
+  </parablock>
+  <parablock>
+    <para>tegen</para>
+  </parablock>
+  <parablock>
+    <para>XELLA KALKZANDSTEENFABRIEK DE HAZELAAR B.V.,<?linebreak?>gevestigd te Koningsbosch, </para>
+    <para>VERWEERSTER in eerste aanleg,</para>
+    <para>hierna: Xella,</para>
+    <para>advocaat in de prejudiciële procedure: mr. H.J.W. Alt.</para>
+    <para>
+      <emphasis role="bold">1.	De prejudiciële procedure</emphasis>
+    </para>
+    <para>Bij tussenvonnis in de zaak 7567109\CV EXPL 19-1150 van 10 april 2019 heeft de kantonrechter te Roermond op de voet van art. 392 Rv prejudiciële vragen aan de Hoge Raad gesteld.</para>
+    <para>Beide partijen hebben schriftelijke opmerkingen als bedoeld in art. 393 lid 1 Rv ingediend, voor [eiser] mede door mr. I.L.N. Timp.</para>
+    <para>De conclusie van de Advocaat-Generaal R.H. de Bock strekt tot beantwoording van de prejudiciële vragen als in de conclusie onder 20.1 tot en met 20.6 vermeld.</para>
+    <para>De advocaat van Xella heeft schriftelijk op die conclusie gereageerd.</para>
+  </parablock>
+  <section>
+    <title>
+      <nr>2</nr>Beantwoording van de prejudiciële vragen</title>
+    <paragroup>
+      <nr>2.1</nr>
+      <parablock>
+        <para>Deze zaak gaat over het zogenoemde ‘slapende dienstverband’. Dat is een dienstverband dat een werkgever na twee jaar arbeidsongeschiktheid van een werknemer niet heeft opgezegd, hoewel hij daartoe wel bevoegd is, en waarbij hij de werknemer geen loon meer betaalt. Doordat de arbeidsovereenkomst niet is beëindigd, is de werkgever geen transitievergoeding verschuldigd.</para>
+        <para>	In deze procedure is de vraag aan de orde of een werkgever op grond van goed werkgeverschap (art. 7:611 BW) gehouden is in te stemmen met een voorstel van de werknemer om een ‘slapend dienstverband’ te beëindigen, onder toekenning van een vergoeding aan de werknemer.</para>
+      </parablock>
+      <para />
+    </paragroup>
+    <paragroup>
+      <nr>2.2</nr>
+      <para>Bij de beantwoording van de prejudiciële vragen gaat de Hoge Raad uit van de volgende feiten:</para>
+      <itemizedlist mark="-">
+        <listitem>
+          <para>i) Xella exploiteert een fabriek voor de productie van kalkzandsteen.</para>
+        </listitem>
+        <listitem>
+          <para>ii) De werknemer, geboren in 1963, is in 1986 in dienst getreden bij Xella als allround monteur/specialist.</para>
+        </listitem>
+        <listitem>
+          <para>iii) In 2009 liep de werknemer rugklachten op tijdens de uitvoering van zijn werk. Hij is vervolgens aan zijn rug geopereerd. In 2010 heeft hij zijn werkzaamheden hervat. Zijn rugpijn is in de loop der jaren teruggekomen en in januari 2016 is hij opnieuw arbeidsongeschikt geraakt.</para>
+        </listitem>
+        <listitem>
+          <para>iv) Vanaf 9 januari 2018 ontvangt de werknemer een WIA-uitkering (IVA). Hij is           80-100% duurzaam arbeidsongeschikt. Er zijn geen mogelijkheden tot werkhervatting, en verbetering van de belastbaarheid is niet of nauwelijks te verwachten.</para>
+        </listitem>
+        <listitem>
+          <para>v) De werknemer heeft Xella na 9 januari 2018 een aantal keer voorgesteld de arbeidsovereenkomst te beëindigen onder toekenning van een transitievergoeding. Xella heeft dit voorstel telkens afgewezen.</para>
+        </listitem>
+      </itemizedlist>
+      <para />
+    </paragroup>
+    <paragroup>
+      <nr>2.3</nr>
+      <para>In dit kort geding vordert de werknemer veroordeling van Xella tot betaling van                      € 25.000,-- als voorschot op schadevergoeding. De werknemer heeft aan zijn vordering ten grondslag gelegd dat Xella de norm van goed werkgeverschap in de zin van                art. 7:611 BW heeft geschonden en daardoor schadeplichtig is geworden. Xella had het voorstel van de werknemer niet mogen afwijzen. Dit voorstel hield in de arbeidsovereenkomst te beëindigen met wederzijds goedvinden, onder toekenning van een schadevergoeding aan de werknemer ter hoogte van de transitievergoeding, beperkt tot het bedrag waarvoor het UWV Xella zou compenseren op grond van de Wet compensatie transitievergoeding.</para>
+      <para />
+    </paragroup>
+    <paragroup>
+      <nr>2.4</nr>
+      <para>De kantonrechter heeft in een tussenvonnis geconstateerd dat er veel zaken zijn over ‘slapende dienstverbanden’ en overwogen dat er behoefte is aan een oordeel van de Hoge Raad. Om die reden heeft hij op de voet van art. 392 Rv de volgende prejudiciële vragen aan de Hoge Raad gesteld:</para>
+      <para />
+      <parablock>
+        <para>1. Geldt de in HR 11 juli 2008, ECLI:NL:HR:2008:BD1847 ( Stoof / Mammoet )  ontwikkelde maatstaf ter beoordeling of een werknemer op grond van artikel 7:611 BW gehouden is om een voorstel tot wijziging van de arbeidsovereenkomst te aanvaarden dat hem <emphasis role="italic">door de werkgever</emphasis> in verband met gewijzigde omstandigheden op het werk is gedaan, ook in het spiegelbeeldige geval, waarin <emphasis role="italic">de werknemer</emphasis> in verband met zulke gewijzigde omstandigheden een wijzigingsvoorstel doet aan de werkgever? Met andere woorden: is een werkgever, wanneer (i) sprake is van gewijzigde omstandigheden op het werk waarin de werknemer als goed werknemer aanleiding heeft kunnen vinden tot het doen van een voorstel tot wijziging van de arbeidsovereenkomst, (ii) geoordeeld moet worden dat het voorstel van de werknemer, alle omstandigheden in aanmerking genomen, redelijk is en (iii) niet gezegd kan worden dat aanvaarding van dat voorstel redelijkerwijze niet van de werkgever gevergd kan worden, op grond van art. 7:611 BW verplicht dat voorstel te aanvaarden?</para>
+      </parablock>
+      <para />
+      <parablock>
+        <para>2. Indien vraag 1 bevestigend beantwoord wordt, kan het in die vraag bedoelde redelijke voorstel van de werknemer ook een voorstel tot beëindiging van de arbeidsovereenkomst met wederzijds goedvinden behelzen? </para>
+      </parablock>
+      <para />
+      <parablock>
+        <para>3. Indien de vragen 1 en 2 bevestigend worden beantwoord,</para>
+      </parablock>
+      <para />
+      <parablock>
+        <para>(a) vormt dan het feit dat een werknemer wegens ziekte of gebreken niet meer in staat is de bedongen arbeid te verrichten en de periode bedoeld in art. 7:670 lid 1 en 11 BW is verstreken en aannemelijk is dat binnen 26 weken, geen herstel zal optreden en binnen die periode de bedongen arbeid niet in aangepaste vorm kan worden verricht – zodat de in artikel 7:669 lid 3, onder b, BW bedoelde ontslaggrond is vervuld – dan een <emphasis role="bold">gewijzigde omstandigheid</emphasis> waarin de werknemer, handelend als goed werknemer, aanleiding kan zien tot het doen van een voorstel tot beëindiging van de arbeidsovereenkomst met wederzijds goedvinden (al dan niet mede in aanmerking genomen de Wet van 11 juli 2018, houdende maatregelen met betrekking tot transitievergoeding bij ontslag wegens bedrijfseconomische omstandigheden of langdurige arbeidsongeschiktheid (Stb. 2018, 234))?</para>
+      </parablock>
+      <para />
+      <parablock>
+        <para>en, zo ja:</para>
+      </parablock>
+      <para />
+      <parablock>
+        <para>(b) heeft dan in de regel, dat wil zeggen: behoudens bijzondere omstandigheden, dan wel in beginsel, te gelden dat sprake is van een redelijk (beëindigings)- voorstel van de kant van de werknemer voor zover dat voorstel behelst dat de beëindiging met wederzijds goedvinden plaatsvindt onder betaling door de werkgever van een ontslagvergoeding ter hoogte van het bedrag dat de werkgever op grond van de Wet van 11 juli 2018, houdende maatregelen met betrekking tot transitievergoeding bij ontslag wegens bedrijfseconomische of langdurige arbeidsongeschiktheid (Stb. 2018, 234) kan verhalen op het UWV?</para>
+      </parablock>
+      <para />
+      <parablock>
+        <para>4. Indien de vragen 1 tot en met 3 (deels) ontkennend worden beantwoord, kan de werkgever dan toch onder omstandigheden gelet op het bepaalde in art. 7:611 BW gehouden zijn om akkoord te gaan met een voorstel tot beëindiging met wederzijds goedvinden van de arbeidsovereenkomst van een werknemer ten aanzien waarvan de in art. 7:669 lid 3, onder b, BW genoemde ontslaggrond vervuld is, wanneer dat voorstel van de werknemer behelst dat de werkgever aan hem een ontslagvergoeding betaalt ter hoogte van het bedrag dat de werkgever op grond van de Wet van 11 juli 2018, houdende maatregelen met betrekking tot transitievergoeding bij ontslag wegens bedrijfseconomische omstandigheden of langdurige arbeidsongeschiktheid (Stb. 2018, 234) kan verhalen op het UWV? Zo ja, aan welke voorwaarden dient dan getoetst te worden of een dergelijke gehoudenheid van de werkgever om zo een voorstel te aanvaarden, bestaat?</para>
+      </parablock>
+      <para />
+    </paragroup>
+    <paragroup>
+      <nr>2.5</nr>
+      <parablock>
+        <para>Voor de beantwoording van de prejudiciële vragen is het volgende van belang.</para>
+        <para>	Art. 7:673 BW bepaalt dat de werkgever aan de werknemer een transitievergoeding is verschuldigd indien de arbeidsovereenkomst ten minste 24 maanden heeft geduurd en de werkgever de arbeidsovereenkomst heeft opgezegd. De werkgever is deze vergoeding ook verschuldigd als hij de arbeidsovereenkomst opzegt omdat de werknemer door ziekte of gebreken niet meer in staat is de bedongen arbeid te verrichten (art. 7:669 lid 3, onder b, BW).</para>
+        <para>	Uit de wetsgeschiedenis blijkt dat werkgevers het in veel gevallen onrechtvaardig vinden dat zij een transitievergoeding moeten betalen na een opzegging wegens langdurige arbeidsongeschiktheid. Zij hebben immers voorafgaand aan die opzegging veelal gedurende twee jaar het loon doorbetaald en kosten gemaakt gericht op de re-integratie van de werknemer.<footnote-ref linkend="_192d54ae-5881-4760-b578-37e0ff9d1c00" /></para>
+        <para>	De Wet compensatie transitievergoeding beoogt aan deze bezwaren tegemoet te komen en de belangrijkste beweegreden voor werkgevers weg te nemen om dienstverbanden na twee jaar arbeidsongeschiktheid slapend te houden.<footnote-ref linkend="_779aabdf-0fb9-436d-bf1c-2b307e1169fe" /> Zij leidt onder meer tot invoering van art. 7:673e BW.<footnote-ref linkend="_d6cc2c2c-88c7-45fc-9f30-dd810c2ea85e" /> Daarin is voorzien in een compensatieregeling voor werkgevers die na beëindiging van een dienstverband wegens langdurige arbeidsongeschiktheid, waaronder begrepen een beëindiging met wederzijds goedvinden, een transitievergoeding hebben betaald. Een aanspraak op compensatie is mogelijk voor arbeidsovereenkomsten die op of na 1 juli 2015 zijn geëindigd. De compensatie komt ten laste van het Algemeen werkloosheidsfonds (Awf) en wordt verstrekt door het UWV. Tegenover de compensatie staat een verhoging van de Awf-premie, die ten laste komt van de werkgevers.</para>
+      </parablock>
+      <para />
+      <paragroup>
+        <nr>2.6.1</nr>
+        <para>De prejudiciële vragen 1 tot en met 3 stellen, kort gezegd en in samenhang gelezen, aan de orde of de maatstaf van het arrest Stoof / Mammoet van 11 juli 2008<footnote-ref linkend="_bd971616-ebed-4c68-85f7-be396f929478" /> zich leent voor ‘omgekeerde toepassing’ bij het beantwoorden van de vraag of een werkgever gehouden is een voorstel van de werknemer tot beëindiging van een ‘slapend dienstverband’ te aanvaarden, onder toekenning van een vergoeding aan de werknemer.</para>
+        <para />
+      </paragroup>
+      <paragroup>
+        <nr>2.6.2</nr>
+        <para>Art. 7:611 BW bepaalt dat de werkgever en de werknemer verplicht zijn zich als               een goed werkgever en een goed werknemer te gedragen. Op de grondslag van              art. 7:611 BW heeft de Hoge Raad in het arrest Stoof / Mammoet een maatstaf gegeven voor de beoordeling of een werknemer gehouden is in te stemmen met een voorstel van de werkgever tot wijziging van de arbeidsovereenkomst. Kort gezegd houdt die maatstaf in dat onderzocht moet worden (i) of de werkgever in gewijzigde omstandigheden op het werk als goed werkgever aanleiding heeft kunnen vinden tot het doen van een voorstel tot wijziging van de arbeidsvoorwaarden, (ii) of het door hem gedane voorstel redelijk is en (iii) of aanvaarding van het door de werkgever gedane redelijke voorstel in het licht van de omstandigheden van het geval in redelijkheid van de werknemer gevergd kan worden.</para>
+        <para />
+      </paragroup>
+      <paragroup>
+        <nr>2.6.3</nr>
+        <para>De maatstaf van het arrest Stoof / Mammoet leent zich niet voor de hiervoor in 2.6.1 bedoelde ‘omgekeerde toepassing’. Die maatstaf is immers gegeven voor wijziging van een arbeidsovereenkomst en niet voor gehele beëindiging daarvan. Daarbij komt dat de positie van een werkgever zodanig verschilt van die van een werknemer dat de maatstaf van het arrest Stoof / Mammoet zich ook om die reden niet leent voor ‘omgekeerde toepassing’. De werkgever staat immers in een gezagsverhouding tot de werknemer en dient bij de uitoefening van zijn bevoegdheden niet alleen het belang van de individuele werknemer te betrekken, maar ook andere belangen, waaronder de belangen van andere werknemers.<footnote-ref linkend="_c5bfd55b-7723-47e7-adaa-da4c55c3e6d0" /> Het antwoord op de vragen 1 tot en met 3 is dan ook dat een ‘omgekeerde toepassing’ van de maatstaf van het arrest Stoof / Mammoet niet geschikt is om de gehoudenheid te beoordelen van de werkgever om een voorstel van de werknemer tot beëindiging van een ‘slapend dienstverband’ te aanvaarden, onder toekenning van een vergoeding aan de werknemer.</para>
+        <para />
+      </paragroup>
+      <paragroup>
+        <nr>2.7.1</nr>
+        <para>Nu de prejudiciële vragen 1 tot en met 3 hiervoor in 2.6.3 ontkennend zijn beantwoord, komt de Hoge Raad toe aan de vierde prejudiciële vraag. Die vraag luidt, kort gezegd, of de norm van goed werkgeverschap van art. 7:611 BW de werkgever onder omstandigheden ertoe verplicht in te stemmen met een voorstel van de werknemer tot beëindiging van een ‘slapend dienstverband’, onder toekenning van een vergoeding aan de werknemer ter hoogte van het bedrag dat de werkgever op grond van de Wet compensatie transitievergoeding kan verhalen op het UWV.</para>
+        <para />
+      </paragroup>
+      <paragroup>
+        <nr>2.7.2</nr>
+        <parablock>
+          <para>De wetgever beoogt met de Wet compensatieregeling transitievergoeding een einde te maken aan het verschijnsel ‘slapende dienstverbanden’.<footnote-ref linkend="_53196921-8f41-43c6-8e53-3287180492ec" /> De compensatieregeling en de voor invoering daarvan in de wetsgeschiedenis gegeven redenen brengen mee dat als norm van goed werkgeverschap in de zin van art. 7:611 BW geldt dat een ‘slapend dienstverband’ in beginsel behoort te worden beëindigd als de werknemer dat wenst en de werkgever geen redelijk belang heeft bij voortduring daarvan. Die norm brengt tevens mee dat in dat geval in beginsel door de werkgever aan de werknemer een vergoeding behoort te worden toegekend.</para>
+          <para>	Anders dan in de prejudiciële vraag wordt verondersteld, dient voor de hoogte van die vergoeding niet te worden aangesloten bij de hoogte van het bedrag dat de werkgever ingevolge de compensatieregeling op het UWV kan verhalen. Die door de werkgever te verkrijgen compensatie kan onder omstandigheden lager zijn dan het bedrag aan transitievergoeding waarop de werknemer recht zou hebben bij beëindiging van de arbeidsovereenkomst op initiatief van de werkgever. Dit is bijvoorbeeld het geval als het totale bedrag aan brutoloon dat de werkgever tijdens de periode van arbeidsongeschiktheid heeft doorbetaald, lager is dan de wettelijke transitievergoeding (art. 7:673e lid 2 BW). Art. 7:673e BW beoogt slechts om met de geboden compensatie te voorkomen dat de kosten cumuleren die de werkgever heeft gemaakt door de loondoorbetaling tijdens arbeidsongeschiktheid en door de betaling van de transitievergoeding.<footnote-ref linkend="_d23d5539-fe20-4270-83ab-751080310402" /> Aan die strekking wordt recht gedaan indien de vergoeding die de werkgever aan de werknemer toekent ten minste gelijk is aan het bedrag aan transitievergoeding dat verschuldigd zou zijn bij beëindiging van de arbeidsovereenkomst op de dag na die waarop de werkgever wegens arbeidsongeschiktheid van de werknemer de arbeidsovereenkomst zou kunnen (doen) beëindigen. Dit geldt ongeacht of de aanspraak van de werkgever bestaat in compensatie van het bedrag van het tijdens de arbeidsongeschiktheid doorbetaalde brutoloon of van het bedrag aan transitievergoeding.</para>
+        </parablock>
+        <para />
+      </paragroup>
+      <paragroup>
+        <nr>2.7.3</nr>
+        <parablock>
+          <para>Het voorgaande brengt mee dat de vierde prejudiciële vraag als volgt moet worden beantwoord.</para>
+          <para>	Als is voldaan aan de vereisten van art. 7:669 lid 1 en lid 3, aanhef en onder b, BW voor beëindiging van de arbeidsovereenkomst wegens langdurige arbeidsongeschiktheid, geldt als uitgangspunt dat een werkgever op grond van goed werkgeverschap in de zin van art. 7:611 BW, gehouden is in te stemmen met een voorstel van de werknemer tot beëindiging van de arbeidsovereenkomst met wederzijds goedvinden, onder toekenning van een vergoeding aan de werknemer ter hoogte van de wettelijke transitievergoeding. Daarbij geldt dat die vergoeding niet meer behoeft te bedragen dan hetgeen aan transitievergoeding verschuldigd zou zijn bij beëindiging van de arbeidsovereenkomst op de dag na die waarop de werkgever wegens arbeidsongeschiktheid van de werknemer de arbeidsovereenkomst zou kunnen (doen) beëindigen.</para>
+          <para>	Op dit uitgangspunt moet een uitzondering worden aanvaard als – op grond van door de werkgever te stellen en zo nodig te bewijzen omstandigheden – de werkgever een gerechtvaardigd belang heeft bij instandhouding van de arbeidsovereenkomst. Zo’n belang kan bijvoorbeeld gelegen zijn in reële re-integratiemogelijkheden voor de werknemer. Zo’n belang kan niet gelegen zijn in de omstandigheid dat de werknemer op het moment dat hij zijn beëindigingsvoorstel doet, de pensioengerechtigde leeftijd bijna heeft bereikt.</para>
+        </parablock>
+        <para />
+      </paragroup>
+      <paragroup>
+        <nr>2.7.4</nr>
+        <para>De Wet compensatie transitievergoeding treedt in werking op 1 april 2020. Een aanspraak op compensatie is mogelijk voor arbeidsovereenkomsten die op of na 1 juli 2015 zijn geëindigd. Het antwoord op de vierde prejudiciële vraag hiervoor in 2.7.3 leidt ertoe dat de werkgever de vergoeding voor de werknemer moet voorfinancieren totdat de Wet compensatie transitievergoeding in werking is getreden. Als de werkgever aannemelijk maakt dat die voorfinanciering leidt tot ernstige financiële problemen, kan de rechter beslissen dat betaling aan de werknemer in termijnen plaatsvindt of wordt opgeschort tot na 1 april 2020. Vanaf 1 april 2020 geldt echter ingevolge art. 2 Regeling compensatie transitievergoeding dat voor een aanvraag op grond van de Wet compensatie transitievergoeding vereist is dat de volledige vergoeding aan de werknemer is voldaan, hetgeen de werkgever verplicht tot voorfinanciering.<footnote-ref linkend="_1439d72d-f375-4330-9235-7a37efc368cf" /></para>
+        <para />
+        <para />
+      </paragroup>
+    </paragroup>
+  </section>
+</uitspraak>
+</open-rechtspraak>
