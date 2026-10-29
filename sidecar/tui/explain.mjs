@@ -433,7 +433,7 @@ export function basedOnLines(act, width = 78, max = 5) {
     const rest = it.detail ? ` — ${it.detail}` : ''
     L.push([{ t: fit(head, width) }, { t: fit(rest, Math.max(width - head.length, 0)), dim: true }])
   })
-  L.push([{ t: `  ${items.length > max ? `… ${items.length - max} more. ` : ''}Ctrl+B or /basis: see each one in full`, dim: true }])
+  L.push([{ t: `  ${items.length > max ? `… ${items.length - max} more. ` : ''}Ctrl+B or /sources: see each one in full`, dim: true }])
   return L
 }
 

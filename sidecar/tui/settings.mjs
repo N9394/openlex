@@ -55,7 +55,7 @@ export function Settings() {
       { value: 'model', label: row('Which AI', describeModel(ctx.info)), hint: 'Where the AI runs: on this computer, or an online service with your key.' },
       { value: 'keys', label: row('Your keys', `${withKeys.filter((p) => p.hasKey).length} saved`), hint: 'Keys for online AI services, kept in this computer\'s keychain.' },
       { value: 'data', label: row('Where client data may go', describeRule(ctx.info.policy?.default)), hint: 'Which AI services may receive client documents. Privileged matters never leave this computer.' },
-      { value: 'lawsources', label: row('Where OpenLex looks up the law', 'law sources'), hint: 'Official law databases (free) and services you subscribe to (with your key). Same as /sources.' },
+      { value: 'lawsources', label: row('Where OpenLex looks up the law', 'law sources'), hint: 'Official law databases (free) and services you subscribe to (with your key). Same as /law.' },
       { value: 'perms', label: row('What OpenLex may do without asking', 'your rules'), hint: 'Saving files, opening web pages, running commands, using connectors.' },
       { value: 'folder', label: row('Working folder', ctx.folder?.short || 'none'), hint: 'The folder OpenLex reads (and asks before changing). Usually the folder you started OpenLex in.' },
       { value: 'workspace', label: row('Folder for results', shortPath(workspace)), hint: 'Where OpenLex keeps each matter\'s results and its history of earlier versions.' },

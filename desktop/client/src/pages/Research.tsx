@@ -31,6 +31,7 @@ import {
 import { useLocation } from 'react-router-dom'
 import { api, streamChat, apiBase } from '../lib/api'
 import { useWordLink } from '../lib/hub'
+import { useChatCommands } from '../components/ChatCommands'
 import type { VerificationResult, VerificationClaim } from '../lib/api'
 
 interface Source {
@@ -482,6 +483,15 @@ export default function Research() {
     inputRef.current?.focus()
   }
 
+  // "/" commands (the engine's one list, same as the terminal app and Word).
+  const commands = useChatCommands({
+    input,
+    setInput,
+    focusInput: () => inputRef.current?.focus(),
+    lastAnswer: () => messagesRef.current.filter((m) => m.role === 'assistant' && m.content).pop()?.content || null,
+    newConversation: startNewConversation,
+  })
+
   const createConversation = async (title: string): Promise<string> => {
     const data = await api.post('/research/conversations', {
       title,
@@ -510,6 +520,7 @@ export default function Research() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!input.trim() || loading) return
+    if (commands.intercept(input)) return
 
     const userMessage = input.trim()
     const fileToSend = attachedFile
@@ -1433,6 +1444,7 @@ export default function Research() {
               </button>
             </div>
           )}
+          {commands.menu}
           <div className="flex gap-3">
             {/* Hidden file input */}
             <input
@@ -1460,6 +1472,7 @@ export default function Research() {
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
+              onKeyDown={commands.onKeyDown}
               placeholder={t('research.askAnything')}
               className="input flex-1"
               disabled={loading}
@@ -1491,7 +1504,9 @@ export default function Research() {
             <span>•</span>
             <span>{t('research.multiJurisdictionDb')}</span>
           </div>
+          {commands.hint}
         </form>
+        {commands.overlay}
       </div>
 
       {/* Save modal */}

@@ -1,5 +1,5 @@
 /**
- * /sources — the law sources OpenLex looks things up in, one list in plain
+ * /law — the law sources OpenLex looks things up in, one list in plain
  * words ("RIS Austria: connected, free", "Ansvar: paste your key").
  * Enter on a source: switch it on or off, or paste its key (hidden, kept
  * in this computer's keychain). The engine decides the words

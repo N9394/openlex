@@ -180,7 +180,7 @@ async function search({ query, sources, jurisdiction, lang, limit = 5 } = {}) {
   for (const c of picked) {
     if (c.canSearch && !c.canSearch(q)) { if (named || jurisdiction) skipped.push({ source: c.id, reason: c.searchHint }); continue }
     const key = await keyOf(c.id)
-    if (c.needsKey && !key) { if (named) skipped.push({ source: c.id, reason: `${c.label} needs your key (paste it in the list of law sources: /sources)` }); continue }
+    if (c.needsKey && !key) { if (named) skipped.push({ source: c.id, reason: `${c.label} needs your key (add it under Law sources: /law)` }); continue }
     const blocked = await gate(c)
     if (blocked) { skipped.push({ source: c.id, reason: blocked }); continue }
     ready.push({ c, key })
@@ -206,7 +206,7 @@ async function get({ source, ref, article = null, lang = 'en' } = {}) {
   if (!isOn(c.id)) throw new SourceError(`${c.label} is switched off`, 'off')
   if (!String(ref || '').trim()) throw new SourceError(`Say which document of ${c.label} to open`, 'bad')
   const key = await keyOf(c.id)
-  if (c.needsKey && !key) throw new SourceError(`${c.label} needs your key (paste it in the list of law sources: /sources)`, 'key')
+  if (c.needsKey && !key) throw new SourceError(`${c.label} needs your key (add it under Law sources: /law)`, 'key')
   const blocked = await gate(c)
   if (blocked) throw new SourceError(`Not looked up: ${blocked}`, 'blocked')
   const doc = await run(c, () => c.get(String(ref).trim(), { article, lang }, { key }))

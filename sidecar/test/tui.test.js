@@ -919,7 +919,7 @@ test('chat in progress (AI on this computer): numbered steps, times, data line, 
   assert.match(f, /Based on:/)
   assert.match(f, /\[1\] ABGB § 933 — Das Recht auf die Gewährleistung/)
   assert.match(f, /\[3\] Your document: clause 4 \(Gewährleistung\)/)
-  assert.match(f, /Ctrl\+B or \/basis: see each one in full/)
+  assert.match(f, /Ctrl\+B or \/sources: see each one in full/)
   assert.match(f, /Done after 15 s · 6 steps/)
   assert.match(f, /✓ Stayed on this computer/)
 
@@ -1333,7 +1333,7 @@ test('forgiving input: "Did you mean /model?", help and quit as words, Esc keeps
 
 test('every command is in a menu (Ctrl+K) and the examples suit the folder', async () => {
   const mt = await import('../tui/matter.mjs')
-  for (const c of ['model', 'key', 'data', 'as', 'privileged', 'permissions', 'folder', 'sources', 'basis', 'copy', 'save', 'transcript', 'activity', 'clear', 'help']) assert.ok(mt.COMMANDS.some((x) => x.name === c), c)
+  for (const c of ['model', 'key', 'data', 'as', 'privileged', 'permissions', 'folder', 'sources', 'law', 'copy', 'save', 'transcript', 'activity', 'clear', 'help']) assert.ok(mt.COMMANDS.some((x) => x.name === c), c)
   assert.strictEqual(mt.didYouMean('modle', mt.COMMANDS.map((c) => c.name)), 'model')
   assert.strictEqual(mt.didYouMean('perm', mt.COMMANDS.map((c) => c.name)), 'permissions')
   assert.strictEqual(mt.didYouMean('xyzzy', mt.COMMANDS.map((c) => c.name)), null)

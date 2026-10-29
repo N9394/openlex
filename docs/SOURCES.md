@@ -2,7 +2,7 @@
 
 OpenLex connects you to the places where the law is published, and to services you already pay for, instead of keeping its own law database up to date. It tells you exactly where each passage came from.
 
-Type **`/sources`** in the terminal app (or `openlex sources` on the command line, or Settings → Where OpenLex looks up the law) to see the list in plain words:
+Type **`/law`** in the terminal app (or `openlex sources` on the command line, or Settings → Where OpenLex looks up the law) to see the list in plain words:
 
 ```
 RIS Austria: connected, free
@@ -30,7 +30,7 @@ Official sources are switched on from the start. They are only used when your cl
 
 ## Adding a key
 
-- **Ansvar.** Ansvar's Premium plan and the plans above it can create a *service credential* in the Ansvar workspace. Paste it as `client-id:client-secret` in `/sources` → Ansvar → Paste your key (or `openlex sources key ansvar`). Each lawyer uses their own credential: Ansvar counts a credential as a seat, and its terms forbid sharing or reselling access. Ansvar's free and Solo plans sign in through the browser instead; OpenLex does not support that sign-in yet.
+- **Ansvar.** Ansvar's Premium plan and the plans above it can create a *service credential* in the Ansvar workspace. Paste it as `client-id:client-secret` in `/law` → Ansvar → Paste your key (or `openlex sources key ansvar`). Each lawyer uses their own credential: Ansvar counts a credential as a seat, and its terms forbid sharing or reselling access. Ansvar's free and Solo plans sign in through the browser instead; OpenLex does not support that sign-in yet.
 - **e-Sbírka (optional).** With a key for the registered e-Sbírka API: `openlex sources key esbirka`. Without one, OpenLex uses the public e-Sbírka service.
 
 Keys are kept in this computer's keychain (macOS Keychain, Windows DPAPI, Linux Secret Service), never in a file, and only sent to the service they belong to.
@@ -38,7 +38,7 @@ Keys are kept in this computer's keychain (macOS Keychain, Windows DPAPI, Linux 
 ## What leaves this computer
 
 - Only the **search words** (or the number of the law) go to the source, never your document.
-- **Client-data rule.** Official sources count as online look-ups: they are used only when the matter's rule allows `web`. A paid service is a third party of its own and needs `source:ansvar` as well. Privileged matters never go online. In `/sources`, "Allow online look-ups" adds `web` to the rule; on the command line, `openlex policy allow web,<your AI service>`.
+- **Client-data rule.** Official sources count as online look-ups: they are used only when the matter's rule allows `web`. A paid service is a third party of its own and needs `source:ansvar` as well. Privileged matters never go online. In `/law`, "Allow online look-ups" adds `web` to the rule; on the command line, `openlex policy allow web,<your AI service>`.
 - **Your firm's rules** apply: a firm can switch a source off for everyone and lock the list (`openlex.json`, `"lock": ["sources"]`), deny it in the permissions (`search_law_sources:ansvar`), or block a host with a `before_web` hook.
 - OpenLex asks before it uses a paid service; official sources are read-only and need no asking.
 - Every look-up is logged (source, time, number of results), never the search words.

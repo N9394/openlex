@@ -486,6 +486,11 @@ async function handle(req, res) {
       const pr = require('./prompts')
       return sendJson(res, 200, { ...pr.explain(url.searchParams.get('message') || '', { afterTool: url.searchParams.get('afterTool') || null, docFull: url.searchParams.get('docFull') === '1' }), blocks: pr.blocks().map((b) => ({ id: b.id, when: b.when || null, origin: b.origin, tokens: require('./compress').estimateTokens(b.text) })) })
     }
+    // The chat commands, one list for the terminal app, Word and the desktop app (commands.js).
+    if (p === '/api/commands') {
+      const r = require('./commands').handle(req.method, p, url.searchParams)
+      return sendJson(res, r.status, r.json)
+    }
     if (req.method === 'GET' && p === '/api/agents') {
       require('./workspace').setBase(require('./agent-config').load().workspace)
       return sendJson(res, 200, { agents: require('./agents').list() })

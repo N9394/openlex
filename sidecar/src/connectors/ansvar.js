@@ -35,7 +35,7 @@ const hash = (s) => crypto.createHash('sha256').update(String(s)).digest('hex').
 /** { clientId, clientSecret } for a service credential, { bearer } for a token. */
 function parseKey(key) {
   const k = String(key || '').trim()
-  if (!k) throw new SourceError('Ansvar needs your key: paste it with /sources', 'key')
+  if (!k) throw new SourceError('Ansvar needs your key: add it under Law sources (/law)', 'key')
   if (k.startsWith('{')) {
     try {
       const j = JSON.parse(k)
