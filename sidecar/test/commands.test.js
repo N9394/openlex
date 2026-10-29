@@ -43,8 +43,8 @@ test('per window: only what that window can run, in its language', () => {
   const word = commands.list({ surface: 'word' }).map((c) => c.name)
   assert.deepStrictEqual(word, ['model', 'data', 'as', 'record', 'clear', 'help'])
 
-  assert.strictEqual(commands.find('model').description.en, 'where the AI runs')
-  assert.strictEqual(commands.list({ surface: 'app', lang: 'de' }).find((c) => c.name === 'model').help, 'wo die KI läuft')
+  assert.strictEqual(commands.find('model').description.en, 'where the AI runs: on this computer, with an EU provider or in the cloud')
+  assert.strictEqual(commands.list({ surface: 'app', lang: 'de' }).find((c) => c.name === 'model').help, 'wo die KI läuft: auf diesem Computer, bei einem EU-Anbieter oder in der Cloud')
   assert.strictEqual(commands.list({ lang: 'de-AT' }).find((c) => c.name === 'clear').help, 'ein neues Gespräch beginnen')
   assert.strictEqual(commands.list({ lang: 'fr' }).find((c) => c.name === 'clear').help, 'start a new conversation', 'other languages: English')
   assert.throws(() => commands.list({ surface: 'fax' }), /unknown window/)

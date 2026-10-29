@@ -18,7 +18,10 @@ const crypto = require('crypto')
 const config = require('./config')
 const { ping: llmPing, testProvider, activeProvider } = require('./llm')
 const providerSettings = require('./providers/settings')
-const { PROVIDERS } = require('./providers/catalog')
+const { PROVIDERS, GROUPS: PROVIDER_GROUPS } = require('./providers/catalog')
+const describeProvider = require('./providers/describe')
+const cloudNotice = require('./cloud_notice')
+const localModels = require('./local_models')
 const secrets = require('./secrets')
 const policy = require('./policy')
 const hub = require('./hub')
@@ -328,7 +331,7 @@ async function handle(req, res) {
       const qd = await qdrantPing()
       const embHealth = await embeddings.appHealth()
       return sendJson(res, 200, {
-        model: { loaded: llm.ok, name: llm.models?.[0] || config.LLM_MODEL, error: llm.error || null, provider: activeProvider().id, local: !!activeProvider().local },
+        model: { loaded: llm.ok, name: llm.models?.[0] || config.LLM_MODEL, error: llm.error || null, provider: activeProvider().id, local: !!activeProvider().local, region: activeProvider().region || null, display: describeProvider.label({ ...activeProvider(), model: activeProvider().model || activeProvider().defaultModel || null }, { localModel: localModels.currentName() }) },
         llamaState,
         modelFile: resolveModelPath(),
         qdrant: qd,
@@ -905,9 +908,86 @@ async function handle(req, res) {
           baseUrl: d.baseUrl || null, model: d.model || d.defaultModel || null, models: d.models || [],
           region: d.region || null, project: d.project || null,
           ctx: d.ctx || null, hasKey: d.needsKey ? await secrets.hasKey(id) : null,
+          // The picker (desktop app, Word pane): section, one plain line, who gets the data.
+          group: d.group || 'other', about: d.about || null, company: d.company || null, keyHelp: d.keyHelp || null,
+          usParent: !!d.usParent, noticeSeen: d.local ? null : cloudNotice.seen(id),
+          ...(id === 'openrouter' ? { plan: d.plan, euProviders: d.euProviders } : {}),
+          display: describeProvider.label({ ...d, model: d.model || d.defaultModel || null }, { localModel: localModels.currentName() }),
         })
       }
-      return sendJson(res, 200, { active: cur.active, providers: list })
+      const act = list.find((x) => x.id === cur.active)
+      return sendJson(res, 200, { active: cur.active, groups: PROVIDER_GROUPS, providers: list, display: act ? act.display : null })
+    }
+
+    // The cloud notice (cloud_notice.js): once per service, then from "About data".
+    if (p === '/api/providers/notice') {
+      try {
+        if (req.method === 'GET') {
+          const id = url.searchParams.get('provider') || providerSettings.load().active
+          if (!PROVIDERS[id]) return sendJson(res, 400, { error: `unknown provider: ${id}` })
+          const n = cloudNotice.notice(providerSettings.resolve(id))
+          return sendJson(res, 200, { provider: id, notice: n, seen: n ? cloudNotice.seen(id) : null })
+        }
+        if (req.method === 'POST') {
+          const body = await readBody(req)
+          if (!PROVIDERS[body.provider]) throw new Error(`unknown provider: ${body.provider}`)
+          return sendJson(res, 200, { ok: true, provider: body.provider, ack: cloudNotice.acknowledge(body.provider) })
+        }
+        return sendJson(res, 405, { error: 'use GET or POST' })
+      } catch (err) {
+        return sendJson(res, 400, { error: err.message })
+      }
+    }
+
+    // Spending meter + monthly limit for online AI (spend.js).
+    if (req.method === 'GET' && p === '/api/spend') {
+      return sendJson(res, 200, require('./spend').status())
+    }
+    if (req.method === 'POST' && p === '/api/spend/cap') {
+      const body = await readBody(req)
+      try {
+        const st = require('./spend').setCap(body.cap === null || body.cap === '' || body.cap === undefined ? null : Number(body.cap))
+        hub.publish('provider-changed', {}, clientOf(req))
+        return sendJson(res, 200, st)
+      } catch (err) {
+        return sendJson(res, 400, { error: err.message })
+      }
+    }
+
+    // "Download a local model": Ollama / llama.cpp on this computer (local_models.js).
+    if (req.method === 'GET' && p === '/api/local/detect') {
+      return sendJson(res, 200, await localModels.detect())
+    }
+    if (req.method === 'GET' && p === '/api/local/models') {
+      return sendJson(res, 200, await localModels.installed())
+    }
+    if (req.method === 'POST' && (p === '/api/local/use' || p === '/api/local/remove')) {
+      const body = await readBody(req)
+      try {
+        if (p === '/api/local/remove') return sendJson(res, 200, await localModels.remove(body.id))
+        const r = await localModels.use(body.id || body.name)
+        hub.publish('provider-changed', { provider: providerSettings.load().active }, clientOf(req))
+        return sendJson(res, 200, r)
+      } catch (err) {
+        return sendJson(res, 400, { error: err.message })
+      }
+    }
+    if (req.method === 'POST' && p === '/api/local/pull') {
+      const body = await readBody(req)
+      const ac = new AbortController()
+      res.on('close', () => { if (!res.writableFinished) ac.abort() })
+      res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' })
+      try {
+        const r = await localModels.pull(body.model, { signal: ac.signal, onProgress: (e) => sendSse(res, { type: 'progress', ...e }) })
+        // Use it: the AI program on this computer, with the model just downloaded.
+        providerSettings.update({ provider: 'local-server', overrides: { baseUrl: `${r.address}/v1`, model: r.model } })
+        if (body.use !== false) providerSettings.update({ active: 'local-server' })
+        hub.publish('provider-changed', { provider: 'local-server' }, clientOf(req))
+        sendSse(res, { type: 'done', model: r.model, active: body.use !== false ? 'local-server' : providerSettings.load().active })
+      } catch (err) {
+        if (!ac.signal.aborted) sendSse(res, { type: 'error', message: err.message })
+      }
+      return res.end()
     }
 
     if (req.method === 'POST' && p === '/api/providers') {

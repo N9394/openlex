@@ -47,10 +47,12 @@ function readSidecar() {
 }
 
 class HubClient {
-  constructor({ version, backend, llmProxy, onEvent, onStatus }) {
+  constructor({ version, backend, llmProxy, modelsDir, onEvent, onStatus }) {
     this.version = version
     this.backend = backend
     this.llmProxy = llmProxy || null
+    // Where the App keeps its GGUF files: the engine lists them in the model picker.
+    this.modelsDir = modelsDir || null
     this.onEvent = onEvent || (() => {})
     this.onStatus = onStatus || (() => {})
     this.connected = false
@@ -63,7 +65,7 @@ class HubClient {
   start() {
     ensureToken()
     fs.writeFileSync(APP_REG, JSON.stringify({
-      pid: process.pid, version: this.version, backend: this.backend, llmProxy: this.llmProxy, startedAt: new Date().toISOString(),
+      pid: process.pid, version: this.version, backend: this.backend, llmProxy: this.llmProxy, ...(this.modelsDir ? { modelsDir: this.modelsDir } : {}), startedAt: new Date().toISOString(),
     }, null, 2), { mode: 0o600 })
     this._tick()
     this.timer = setInterval(() => this._tick(), 5000)

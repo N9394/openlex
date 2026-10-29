@@ -73,6 +73,11 @@ const engine = http.createServer((req, res) => {
       case 'GET /api/providers': return json({ active: state.active, providers: providers() })
       case 'POST /api/providers': if (body.active) state.active = body.active; if (body.overrides?.model) state.models[body.active] = body.overrides.model; return json({ ok: true })
       case 'POST /api/providers/key': state.keys[body.provider] = body.key; return json({ ok: true, hasKey: !!body.key })
+      case 'GET /api/local/models': return json({ models: [{ id: 'ollama:qwen3:8b', runtime: 'ollama', name: 'qwen3:8b', title: 'Qwen3 8B' }, { id: 'gguf:lotus-2.gguf', runtime: 'gguf', name: 'lotus-2', title: 'Lotus 2' }] })
+      case 'POST /api/local/use':
+        if (!/qwen|lotus/i.test(body.name)) return json({ error: `there is no model called "${body.name}" on this computer` }, 400)
+        state.active = /qwen/i.test(body.name) ? 'local-server' : 'local'
+        return json({ ok: true, restarted: !/qwen/i.test(body.name), model: /qwen/i.test(body.name) ? { id: 'ollama:qwen3:8b', title: 'Qwen3 8B' } : { id: 'gguf:lotus-2.gguf', title: 'Lotus 2' } })
       case 'POST /api/providers/test': return json(state.policy.mode === 'local-only' ? { ok: false, error: 'Blocked by data policy: local-only', code: 'POLICY_BLOCKED' } : { ok: true, sample: 'ok' })
       case 'GET /api/policy': return json({ default: state.policy, matters: {} })
       case 'POST /api/policy': state.policy = body.rule; return json({ ok: true })
@@ -640,6 +645,15 @@ test('chat commands: "/" shows hints; /model, /key, /data, /as, /privileged, /pe
   assert.deepStrictEqual(posted('/api/providers').at(-1).body, { active: 'openrouter', provider: 'openrouter', overrides: { model: 'qwen/qwen3.5-9b' } })
   await press(r, '/model nowhere', 'enter')
   await waitFor(r, 'There is no AI service called "nowhere"')
+
+  // /model local NAME: a model on this computer.
+  await press(r, '/model local qwen3:8b', 'enter')
+  await waitFor(r, 'Now using Qwen3 8B on this computer. Nothing leaves this computer.')
+  assert.deepStrictEqual(posted('/api/local/use').at(-1).body, { name: 'qwen3:8b' })
+  await press(r, '/model local lotus', 'enter')
+  await waitFor(r, 'about 20 seconds longer')
+  await press(r, '/model local gpt-9', 'enter')
+  await waitFor(r, 'On this computer: qwen3:8b, lotus-2.')
 
   // /model alone: the picker, in the chat.
   await press(r, '/model', 'enter')

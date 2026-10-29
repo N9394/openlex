@@ -1,0 +1,20 @@
+{
+  "note": "ESTIMATES for the spending meter, not a bill. List prices per million tokens as published by the providers on the date given; your contract, discounts, taxes and currency rates differ. Change or add entries in <data dir>/prices.json (same shape; entries there are tried first).",
+  "usdToEur": 0.86,
+  "usdToEurAsOf": "2026-10-29",
+  "models": [
+    { "match": "claude-opus-5-5|claude-opus-5\\.5", "in": 4.0, "out": 20.0, "currency": "USD", "asOf": "2026-09-25", "source": "Anthropic list price" },
+    { "match": "claude-opus-(5|4)", "in": 5.0, "out": 25.0, "currency": "USD", "asOf": "2026-09-25", "source": "Anthropic list price" },
+    { "match": "claude-sonnet-5", "in": 2.0, "out": 10.0, "currency": "USD", "asOf": "2026-09-25", "source": "Anthropic list price" },
+    { "match": "claude-sonnet-4", "in": 3.0, "out": 15.0, "currency": "USD", "asOf": "2026-09-25", "source": "Anthropic list price (Bedrock/Vertex may differ)" },
+    { "match": "claude-haiku-4", "in": 1.0, "out": 5.0, "currency": "USD", "asOf": "2026-09-25", "source": "Anthropic list price" },
+    { "match": "claude-fable|claude-mythos", "in": 10.0, "out": 50.0, "currency": "USD", "asOf": "2026-09-25", "source": "Anthropic list price" },
+    { "match": "gpt-oss-120b", "provider": "ovhcloud", "in": 0.08, "out": 0.40, "currency": "EUR", "asOf": "2026-10-29", "source": "OVHcloud AI Endpoints catalogue" },
+    { "match": "gpt-oss", "in": 0.15, "out": 0.60, "currency": "EUR", "asOf": "2026-10-29", "source": "rough estimate for EU hosts; check your provider" },
+    { "match": "llama-3\\.3-70b|qwen|mistral-small|gemma", "in": 0.30, "out": 0.90, "currency": "EUR", "asOf": "2026-10-29", "source": "rough estimate for EU hosts; check your provider" },
+    { "match": "mistral|magistral", "in": 2.0, "out": 6.0, "currency": "USD", "asOf": "2026-10-29", "source": "rough estimate; check Mistral's price list" },
+    { "match": "gpt-5|gpt-6|^o\\d", "in": 1.25, "out": 10.0, "currency": "USD", "asOf": "2026-10-29", "source": "rough estimate; check OpenAI's price list" },
+    { "match": "gemini", "in": 1.25, "out": 10.0, "currency": "USD", "asOf": "2026-10-29", "source": "rough estimate; check Google's price list" }
+  ],
+  "default": { "in": 3.0, "out": 15.0, "currency": "USD", "asOf": "2026-10-29", "source": "no price known for this model: counted at a high estimate so the monthly cap errs on the safe side" }
+}

@@ -28,6 +28,7 @@
   const NAMES = {
     anthropic: 'Anthropic', openai: 'OpenAI', azure: 'Azure OpenAI', mistral: 'Mistral',
     openrouter: 'OpenRouter', bedrock: 'AWS Bedrock', vertex: 'Google Vertex',
+    scaleway: 'Scaleway', ovhcloud: 'OVHcloud', stackit: 'STACKIT', ionos: 'IONOS',
   }
   const FAMILIES = [[/claude|anthropic/i, 'Claude'], [/gpt|^o\d|openai/i, 'GPT'], [/mistral|mixtral|magistral|codestral/i, 'Mistral'], [/gemini/i, 'Gemini'], [/llama/i, 'Llama'], [/qwen/i, 'Qwen']]
   const isEu = (r) => /^(eu|europe)/i.test(String(r || ''))

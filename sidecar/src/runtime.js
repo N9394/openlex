@@ -152,6 +152,12 @@ function llamaEnv(binPath) {
 }
 
 function resolveModelPath() {
+  // The model chosen in the picker (local_models.js) — unless the
+  // OPENLEX_LLM_MODEL setting pins one.
+  if (!process.env.LEXVAULT_LLM_MODEL) {
+    const chosen = require('./local_models').chosenGguf()
+    if (chosen) return chosen
+  }
   const info = modelInfo(LLM_MODEL)
   const p = info ? path.join(MODELS_DIR, info.filename) : path.join(MODELS_DIR, `${LLM_MODEL}.gguf`)
   return fs.existsSync(p) ? p : null
@@ -348,7 +354,7 @@ async function ensureLlama() {
   // ("JSON.parse FAIL" at the last brace). Lotus 2 closes </think> on its
   // own anyway; the client guard in llm.js bounds runaway thinking.
   if (build >= 10353) {
-    args.push('--reasoning-budget', String(require('./models').forLocal(LLM_MODEL).thinkingBudget || AGENT.THINKING_BUDGET || 400))
+    args.push('--reasoning-budget', String(require('./models').forLocal(require('./local_models').currentName()).thinkingBudget || AGENT.THINKING_BUDGET || 400))
   }
   const flags = [amdGpu ? (cpuOnly ? 'amd-cpu-only' : 'amd') : 'non-amd']
   if (kvOk) flags.push('kvcache=' + cacheK + '/' + cacheV)
@@ -371,10 +377,28 @@ async function ensureLlama() {
   // Wait for readiness (model load on CPU can take 30s+).
   for (let i = 0; i < 120; i++) {
     const r = await probe()
-    if (r.ok) return { ok: true, owned: true, reason: 'spawned llama-server with ' + LLM_MODEL }
+    if (r.ok) return { ok: true, owned: true, reason: 'spawned llama-server with ' + path.basename(modelPath) }
     await new Promise((res) => setTimeout(res, 500))
   }
   return { ok: false, owned: true, reason: 'llama-server started but model not ready within 60s' }
+}
+
+/**
+ * The picker chose another GGUF file: restart our own llama-server with it
+ * (about 20 s). The desktop App's llama-server restarts on its own (its
+ * supervisor watches the choice); another program's server is left alone.
+ */
+async function switchModel() {
+  const p = await probe()
+  if (p.ok && p.appProxy) return { ok: true, owned: false, reason: 'the desktop app loads the new model with the next question' }
+  if (started && proc) {
+    const old = proc
+    stop()
+    await new Promise((r) => { const t = setTimeout(r, 5000); old.once('exit', () => { clearTimeout(t); r() }) })
+  } else if (p.ok) {
+    return { ok: false, owned: false, reason: 'another program on this computer serves the local AI; switch the model there' }
+  }
+  return ensureLlama()
 }
 
 function isOwned() { return started }
@@ -386,4 +410,4 @@ function stop() {
   }
 }
 
-module.exports = { ensureLlama, isOwned, stop, resolveModelPath, serverBuild }
+module.exports = { ensureLlama, isOwned, stop, resolveModelPath, serverBuild, switchModel }

@@ -32,7 +32,8 @@ function save(next) {
   return next
 }
 
-const OVERRIDE_FIELDS = ['baseUrl', 'model', 'ctx', 'local', 'apiVersion', 'nativeTools', 'region', 'project']
+const OVERRIDE_FIELDS = ['baseUrl', 'model', 'ctx', 'local', 'apiVersion', 'nativeTools', 'region', 'project', 'plan', 'euProviders']
+const LOOPBACK = new Set(['127.0.0.1', 'localhost', '[::1]'])
 
 /** Set the active provider and/or merge overrides for one provider. */
 function update({ active, provider, overrides } = {}) {
@@ -49,6 +50,17 @@ function update({ active, provider, overrides } = {}) {
       const u = new URL(clean.baseUrl) // throws on garbage
       if (!['http:', 'https:'].includes(u.protocol)) throw new Error('baseUrl must be http(s)')
       clean.baseUrl = clean.baseUrl.replace(/\/+$/, '')
+      // An AI program "on this computer" must really be on this computer.
+      if (provider === 'local-server' && !LOOPBACK.has(u.hostname)) throw new Error('an AI program on this computer must use a 127.0.0.1 or localhost address')
+    }
+    // OpenRouter: the firm's plan decides the gateway (Business: EU).
+    if (clean.plan !== undefined) {
+      if (provider !== 'openrouter') delete clean.plan
+      else if (!['standard', 'business'].includes(clean.plan)) throw new Error('plan must be standard or business')
+    }
+    if (clean.euProviders !== undefined) {
+      if (provider !== 'openrouter') delete clean.euProviders
+      else clean.euProviders = !!clean.euProviders
     }
     if (clean.ctx !== undefined) clean.ctx = Math.max(2048, parseInt(clean.ctx, 10) || 0)
     // Only custom endpoints may declare themselves local; a hosted API is
@@ -67,7 +79,19 @@ function resolve(id) {
   const { active, overrides } = load()
   const pid = id || active
   const base = getProvider(pid)
-  return { ...base, ...(overrides[pid] || {}), id: pid }
+  const out = { ...base, ...(overrides[pid] || {}), id: pid }
+  if (pid === 'openrouter') {
+    // Business plan: the EU gateway (decrypted and routed in the EU, fails
+    // closed). Standard plan: the US gateway, no region (an "EU only" rule
+    // blocks it, which is right: requests pass through the US).
+    out.plan = out.plan === 'business' ? 'business' : 'standard'
+    if (out.plan === 'business') {
+      if (!overrides[pid]?.baseUrl) out.baseUrl = base.euBaseUrl
+      out.region = 'eu'
+    } else out.region = null
+    out.euProviders = out.euProviders !== false
+  }
+  return out
 }
 
 module.exports = { load, update, resolve, SETTINGS_PATH }
