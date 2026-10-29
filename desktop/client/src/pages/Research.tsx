@@ -17,10 +17,12 @@ import { BookOpen, Check, ChevronDown, ChevronUp, Clock, Copy, FileText, Lock, M
 import { useLocation } from 'react-router-dom'
 import { useWordLink, hubBridge } from '../lib/hub'
 import { useChatCommands } from '../components/ChatCommands'
+import { ModelLabel } from '../components/ModelPicker'
+import i18n from '../i18n'
 import { engine } from '../lib/commands'
 import {
   Activity, Basis, LawSource, ModelUse, WINDOW_WORDS, applyEvent, basedOn, checkLine, basisText, clip, dataLine, duration,
-  endActivity, friendly, mark, permission, serviceName, startActivity, stopSentence, summaryLine,
+  endActivity, friendly, mark, permission, startActivity, stopSentence, summaryLine,
 } from '../lib/turn'
 
 interface Matter { id: string; title: string; number?: string; client?: string; privileged?: boolean; agent?: string | null }
@@ -64,9 +66,9 @@ function when(iso?: string | null) {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return ''
   const mins = Math.floor((Date.now() - d.getTime()) / 60000)
-  if (mins < 1) return 'just now'
-  if (mins < 60) return `${mins} min ago`
-  if (mins < 24 * 60) return `today ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+  if (mins < 1) return i18n.t('chat.justNow', 'just now')
+  if (mins < 60) return i18n.t('chat.minAgo', '{{n}} min ago', { n: mins })
+  if (mins < 24 * 60) return i18n.t('chat.todayAt', 'today {{time}}', { time: d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) })
   return d.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })
 }
 
@@ -79,7 +81,6 @@ export default function Research() {
   const [matter, setMatter] = useState<Matter | null>(null)
   const [agents, setAgents] = useState<Agent[]>([])
   const [quickAgent, setQuickAgent] = useState('associate')
-  const [aiLabel, setAiLabel] = useState('')
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [loadingList, setLoadingList] = useState(true)
   const [sessionId, setSessionId] = useState<string | null>(null)
@@ -105,7 +106,7 @@ export default function Research() {
   const loadGen = useRef(0)
 
   const agentName = (matter ? matter.agent : quickAgent) || 'associate'
-  const agent = agents.find((a) => a.name === agentName) || { name: 'associate', title: 'Associate' }
+  const agent = agents.find((a) => a.name === agentName) || { name: 'associate', title: t('chat.associate', 'Associate') }
 
   // ── setup: matter, roles, which AI ──
   const refreshSetup = useCallback(async () => {
@@ -119,10 +120,6 @@ export default function Research() {
     } catch { /* no matters bridge */ }
     if (!e) return
     e.call('GET', '/api/agents').then((r) => setAgents((r.agents || []).filter((a: any) => !a.error))).catch(() => {})
-    e.call('GET', '/api/status').then((st) => {
-      const m = st?.model || {}
-      setAiLabel(m.local !== false ? 'AI: this computer' : `AI: ${serviceName({ provider: m.provider, model: m.name, region: m.region, label: m.label })} (online)`)
-    }).catch(() => setAiLabel(''))
   }, [])
 
   useEffect(() => {
@@ -271,8 +268,8 @@ export default function Research() {
         patch((a) => { a.act = applyEvent(a.act!, ev, at) })
         if (ev.type === 'suggestion') patch((a) => { a.suggestions = [...(a.suggestions || []), ev.suggestion] })
         else if (ev.type === 'warning') patch((a) => { a.notes = [...(a.notes || []), String(ev.message || '')] })
-        else if (ev.type === 'withheld') patch((a) => { a.notes = [...(a.notes || []), `Your firm's rules held this answer back${ev.message ? `: ${ev.message}` : ''}. Do not rely on the text above.`] })
-        else if (ev.type === 'skill_suggestion' && ev.name) patch((a) => { a.tip = `Your firm's instructions “${ev.title || ev.name}” may fit — type /${ev.name} followed by your question to use them.` })
+        else if (ev.type === 'withheld') patch((a) => { a.notes = [...(a.notes || []), t('chat.withheld', 'Your firm\'s rules held this answer back{{why}}. Do not rely on the text above.', { why: ev.message ? `: ${ev.message}` : '' })] })
+        else if (ev.type === 'skill_suggestion' && ev.name) patch((a) => { a.tip = t('chat.skillTip', 'Your firm\'s instructions “{{title}}” may fit — type /{{name}} followed by your question to use them.', { title: ev.title || ev.name, name: ev.name }) })
         else if (ev.type === 'error' && !ev.recoverable) { failed = true; patch((a) => { a.error = friendly(ev.message) }) }
         else if (ev.type === 'permission') setPerm(ev)
         else if (ev.type === 'permission_result' && ev.by !== 'lawyer') {
@@ -296,7 +293,7 @@ export default function Research() {
     setPerm(null)
     setRunning(null)
     loadList(matterId)
-    try { (window as any).lexvault?.notify?.('OpenLex answered', 'Your question is answered — click to view.') } catch { /* optional */ }
+    try { (window as any).lexvault?.notify?.(t('chat.notifyTitle', 'OpenLex answered'), t('chat.notifyBody', 'Your question is answered — click to view.')) } catch { /* optional */ }
   }
 
   const stop = () => { if (running) engine()?.stop?.(running) }
@@ -419,7 +416,6 @@ export default function Research() {
             <button type="button" onClick={() => commands.run('as')} className="btn-secondary !px-3 !py-1.5 text-xs inline-flex items-center gap-1" title={t('chat.asHint', 'Who OpenLex works as (/as)')}>
               {t('chat.workingAs', 'Working as: {{who}}', { who: agent.title })} <ChevronDown size={12} />
             </button>
-            {aiLabel && <span className="text-antique" title={t('chat.aiHint', 'Where the AI runs (/model)')}>{aiLabel}</span>}
           </div>
         </div>
 
@@ -490,6 +486,8 @@ export default function Research() {
             </div>
           )}
           {commands.menu}
+          {/* Which AI answers (and this month's spending): one click opens /model. */}
+          <ModelLabel onOpen={() => commands.run('model')} />
           <div className="flex gap-3 items-end">
             <input ref={fileRef} type="file" multiple accept=".txt,.md,.csv,.eml,.json,.xml,.html,.rtf" className="hidden" onChange={(e) => attach(e.target.files)} />
             <button type="button" onClick={() => fileRef.current?.click()} disabled={!!running} className="text-antique hover:text-cream transition-colors px-2 pb-2" title={t('research.attachFile', 'Attach file')}>
@@ -624,7 +622,7 @@ function Answer({ m, now, live, openSteps, toggleSteps, onCopy, copied, onWord, 
             const check = checkLine(s)
             return (
               <div key={i} className="border-l-2 border-accent pl-3 text-sm space-y-1">
-                <div><span className={`font-semibold uppercase text-xs ${s.severity === 'high' ? 'text-red-400' : 'text-accent'}`}>{s.severity || 'note'}</span> <span className="text-parchment">{s.summary}</span></div>
+                <div><span className={`font-semibold uppercase text-xs ${s.severity === 'high' ? 'text-red-400' : 'text-accent'}`}>{String(t(`chat.severity.${s.severity || 'note'}`, { defaultValue: s.severity || 'note' }))}</span> <span className="text-parchment">{s.summary}</span></div>
                 {s.proposed_text && <div className="text-cream-dark text-xs">{t('chat.proposed', 'Proposed:')} {clip(s.proposed_text, 400)}</div>}
                 {s.basis && <div className="text-antique text-xs">{t('chat.legalBasis', 'Legal basis:')} {basisText(s.basis)}</div>}
                 <div className={`text-xs ${check.ok ? 'text-forest' : 'text-amber-400'}`}>{check.mark} {check.text}</div>

@@ -89,7 +89,7 @@ body {
 .accent { color: var(--brass); }
 .hdr-matter { display: flex; align-items: center; gap: 0.25rem; flex: 1; min-width: 0; }
 .matter-sel { flex: 1; min-width: 0; font-size: 0.75rem; padding: 0.25rem 0.4rem; }
-.ai-badge { font-size: 0.68rem; color: var(--text-dim); border: 1px solid var(--hairline-strong); border-radius: 999px; padding: 0.1rem 0.5rem; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.ai-badge { background: none; cursor: pointer; font-family: inherit; font-size: 0.68rem; color: var(--text-dim); border: 1px solid var(--hairline-strong); border-radius: 999px; padding: 0.1rem 0.5rem; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .status-msg { display: inline-flex; align-items: center; gap: 0.35rem; }
 .ai-badge.cloud { color: var(--warn); border-color: var(--warn); }
 .menu-btn { width: 32px; height: 32px; min-height: 32px; font-size: 1rem; }

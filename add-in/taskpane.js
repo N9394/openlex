@@ -2436,6 +2436,9 @@
   let providers = []
   let activeProvider = 'local'
 
+  // The label is also the way to change it: one click opens "Which AI" (/model).
+  document.addEventListener('click', (e) => { if (e.target && e.target.closest && e.target.closest('#aiBadge')) runCommand('model') })
+
   async function refreshAiBadge() {
     const badge = $('#aiBadge')
     try {
