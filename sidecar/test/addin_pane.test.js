@@ -340,3 +340,16 @@ test('AI record view: menu entries once the engine has it, query and export from
   for (const id of ['recFrom', 'recTo', 'recLeft', 'recPdf', 'recCsv', 'recVerify']) assert.ok(html.includes(`id="${id}"`), id)
   assert.ok(html.indexOf('lib/record.js') > html.indexOf('lib/words.js'))
 })
+
+test('overview: the engine sends cards as a list (id, title, items, link)', () => {
+  const cards = matter.overview({ matter: { id: 'm1' }, cards: [
+    { id: 'summary', title: 'Summary', items: [{ title: 'Office lease, Vienna', from: { kind: 'analysis', file: 'lease.docx' }, at: '2026-10-29' }], more: 0 },
+    { id: 'deadlines', title: 'Deadlines', items: [], more: 0, empty: 'No deadlines found yet.' },
+    { id: 'activity', title: 'Recent activity', items: [{ title: 'Question: liability cap' }], more: 2, link: { label: 'Open the AI record', action: 'record' } },
+  ] })
+  assert.deepStrictEqual(cards.map((c) => c.key), ['summary', 'activity'], 'empty cards are dropped')
+  assert.strictEqual(cards[0].items[0].text, 'Office lease, Vienna')
+  assert.strictEqual(cards[0].items[0].from.file, 'lease.docx')
+  assert.strictEqual(cards[1].link.action, 'record')
+  assert.strictEqual(cards[1].more, 2)
+})
