@@ -80,7 +80,7 @@ export default function DiligenceCard({ id }: { id: string }) {
           <div key={d.name}>
             <button type="button" onClick={() => setOpen(open === d.name ? null : d.name)} aria-expanded={open === d.name} className="w-full flex items-center gap-2 text-left text-xs text-parchment/90 hover:text-cream">
               <span className="flex-1 truncate">{d.name}{d.docType ? <span className="text-antique"> · {d.docType}</span> : null}</span>
-              <span className="text-antique">{t('diligence.flagCount', '{{n}} flags', { n: d.flags.length })}</span>
+              <span className="text-antique">{t('diligence.flagCount', '{{count}} flags', { count: d.flags.length })}</span>
               {open === d.name ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
             </button>
             {open === d.name && (

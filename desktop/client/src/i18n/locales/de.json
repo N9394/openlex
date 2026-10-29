@@ -1298,7 +1298,6 @@
     "gaps": "Lücken",
     "perDocument": "Je Dokument",
     "scanned": "überflogen: {{n}} von {{all}} Abschnitten gelesen",
-    "findingsCount": "{{n}} Feststellungen",
     "notRelevant": "Dieses Dokument enthält nichts zur Frage.",
     "checked": "{{verified}} Feststellungen wörtlich an ihrem Dokument geprüft",
     "dropped": "{{n}} entfernt, weil ihr Zitat nicht im Dokument steht",
@@ -1313,7 +1312,9 @@
       "deadline": "Frist",
       "fact": "Tatsache",
       "opportunity": "Chance"
-    }
+    },
+    "findingsCount_one": "{{count}} Feststellung",
+    "findingsCount_other": "{{count}} Feststellungen"
   },
   "diligence": {
     "col": {
@@ -1340,7 +1341,6 @@
     "showQuote": "Zitat anzeigen",
     "grid": "Prüfraster je Dokument",
     "openGrid": "auf der Seite Prüfraster öffnen",
-    "flagCount": "{{n}} Red Flags",
     "checked": "Jede Red Flag und jede Antwort im Raster zitiert ihr Dokument; {{n}} Red Flags wurden entfernt, weil ihr Zitat nicht gefunden wurde. „?“ = Zitat nicht gefunden, bitte prüfen.",
     "noCitations": "Es wurden keine Gesetzesstellen aus dem Gedächtnis zitiert. Von der KI erstellt — bitte prüfen Sie es, bevor Sie sich darauf verlassen.",
     "savedTitle": "Due Diligence {{date}}",
@@ -1365,7 +1365,9 @@
       "asset_purchase": "Asset Deal",
       "merger": "Verschmelzung",
       "joint_venture": "Joint Venture"
-    }
+    },
+    "flagCount_one": "{{count}} Red Flag",
+    "flagCount_other": "{{count}} Red Flags"
   },
   "draft": {
     "writing": "Der Entwurf wird geladen…",

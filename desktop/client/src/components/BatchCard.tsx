@@ -105,8 +105,8 @@ export default function BatchCard({ attachments = [], matterId, onStarted, kind 
                     <span className={f.status === 'failed' ? 'text-amber-400' : f.status === 'done' ? 'text-forest' : 'text-accent'}>{STATUS[f.status] || '·'}</span>
                     <span className="flex-1 truncate">{f.name}{f.pages ? <span className="text-antique"> · {f.pages} {t('batch.pagesShort', 'p.')}</span> : null}</span>
                     {f.risks && <span className="text-antique">{t('batch.risks', '{{high}} high · {{medium}} medium', { high: f.risks.high, medium: f.risks.medium })}</span>}
-                    {k === 'investigate' && f.status === 'done' && <span className="text-antique">{t('investigation.findingsCount', '{{n}} findings', { n: f.findings || 0 })}</span>}
-                    {k === 'diligence' && f.status === 'done' && <span className="text-antique">{t('diligence.flagCount', '{{n}} flags', { n: f.flags || 0 })}{f.docType ? ` · ${f.docType}` : ''}</span>}
+                    {k === 'investigate' && f.status === 'done' && <span className="text-antique">{t('investigation.findingsCount', '{{count}} findings', { count: f.findings || 0 })}</span>}
+                    {k === 'diligence' && f.status === 'done' && <span className="text-antique">{t('diligence.flagCount', '{{count}} flags', { count: f.flags || 0 })}{f.docType ? ` · ${f.docType}` : ''}</span>}
                     {f.note && <span className="text-amber-400 truncate max-w-[40%]">{f.note}</span>}
                     {f.analysisId && (open === f.file ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
                   </button>

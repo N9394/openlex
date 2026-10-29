@@ -60,7 +60,7 @@ export default function InvestigationCard({ id }: { id: string }) {
             <button type="button" onClick={() => setOpen(open === i ? null : i)} aria-expanded={open === i} className="w-full flex items-center gap-2 text-left text-xs text-parchment/90 hover:text-cream">
               <span className={d.relevant ? 'text-forest' : 'text-antique'}>{d.relevant ? '✓' : '–'}</span>
               <span className="flex-1 truncate">{d.name}{d.pages ? <span className="text-antique"> · {d.pages} p.</span> : null}{d.scan ? <span className="text-antique"> · {t('investigation.scanned', 'scanned: {{n}} of {{all}} sections read', { n: d.stats.selected ?? d.stats.sections, all: d.stats.sections })}</span> : null}</span>
-              <span className="text-antique">{t('investigation.findingsCount', '{{n}} findings', { n: d.findings.length })}</span>
+              <span className="text-antique">{t('investigation.findingsCount', '{{count}} findings', { count: d.findings.length })}</span>
               {open === i ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
             </button>
             {open === i && (

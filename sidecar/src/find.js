@@ -39,7 +39,10 @@ function find({ q = '', matterId = null, lang = 'en', limit = 8 } = {}) {
     .map((m) => ({ id: m.id, title: m.title, detail: [m.number, m.client, m.status && m.status !== 'open' ? m.status : ''].filter(Boolean).join(' · '), matterId: m.id, target: { page: '/research', matterId: m.id } })))
 
   try {
-    const convs = require('./session').list({ all: true, limit: 500 }).filter((c) => hit(ws, c.title))
+    // Every question of a conversation counts, not only its first.
+    const session = require('./session')
+    const asked = (id) => { try { return session.read(id).messages.filter((m) => m.role === 'user').map((m) => m.content).join('\n') } catch { return '' } }
+    const convs = session.list({ all: true, limit: 500 }).filter((c) => hit(ws, c.title) || hit(ws, asked(c.id)))
     // In the current matter first.
     convs.sort((a, b) => (b.matterId === matterId) - (a.matterId === matterId))
     add('conversation', convs.map((c) => ({ id: c.id, title: c.title, detail: [titleOf(c.matterId), c.updatedAt ? c.updatedAt.slice(0, 10) : ''].filter(Boolean).join(' · '), matterId: c.matterId || null, target: { page: '/research', matterId: c.matterId || null, sessionId: c.id } })))

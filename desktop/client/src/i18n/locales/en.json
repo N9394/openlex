@@ -1298,7 +1298,6 @@
     "gaps": "Gaps",
     "perDocument": "Per document",
     "scanned": "scanned: {{n}} of {{all}} sections read",
-    "findingsCount": "{{n}} findings",
     "notRelevant": "Nothing in this document answers the question.",
     "checked": "{{verified}} findings checked word for word against their document",
     "dropped": "{{n}} removed because their quote was not in the document",
@@ -1313,7 +1312,9 @@
       "deadline": "deadline",
       "fact": "fact",
       "opportunity": "opportunity"
-    }
+    },
+    "findingsCount_one": "{{count}} finding",
+    "findingsCount_other": "{{count}} findings"
   },
   "diligence": {
     "col": {
@@ -1340,7 +1341,6 @@
     "showQuote": "show the quote",
     "grid": "Review grid per document",
     "openGrid": "open on the Review grid page",
-    "flagCount": "{{n}} flags",
     "checked": "Every red flag and grid answer quotes its document; {{n}} flags removed because their quote was not found. “?” = quote not found, check it.",
     "noCitations": "No statutes were cited from memory. Written by AI — check before relying on it.",
     "savedTitle": "Due diligence {{date}}",
@@ -1365,7 +1365,9 @@
       "asset_purchase": "asset purchase",
       "merger": "merger",
       "joint_venture": "joint venture"
-    }
+    },
+    "flagCount_one": "{{count}} flag",
+    "flagCount_other": "{{count}} flags"
   },
   "draft": {
     "writing": "Loading the draft…",

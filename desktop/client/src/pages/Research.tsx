@@ -252,7 +252,8 @@ export default function Research() {
   const runTool = (name: string, arg: string, only?: Attachment[]) => {
     if (!engine()) return sys(t('chat.noEngine', 'The chat needs the OpenLex engine, which runs with the desktop app.'), 'warn')
     // The documents: just attached, else the ones this conversation is about.
-    const att = only || (files.length ? files : convDocs)
+    // (A draft uses only documents attached for it: they are its precedents or the document to work on.)
+    const att = only || (files.length ? files : name === 'draft' ? [] : convDocs)
     if (name !== 'draft' && !att.length) {
       toolAfterAttach.current = { name, arg }
       sys(name === 'diligence'
@@ -281,6 +282,8 @@ export default function Research() {
       { id: nextId(), role: 'user', content: message, files: att.map((f) => f.name), client: 'app' },
       { id: nextId(), role: 'assistant', content: '', tool: { name: name as ToolRun['name'], arg, attachments: att.map((f) => f.id), matterId, sessionId: sid, message, options } },
     ])
+    // The engine keeps the tool's turn in the conversation: show it in the list.
+    for (const ms of [1500, 15000]) setTimeout(() => loadList(matterId), ms)
   }
   useEffect(() => { toolRef.current = (name: string, arg: string) => runTool(name, arg) })
 
