@@ -1,5 +1,5 @@
 /**
- * LexVault App — Electron main process.
+ * OpenLex desktop app — Electron main process.
  *
  * Runs without an account. A distribution build may add a signed license
  * (pasted token, Settings → License); without one the App boots in
@@ -465,7 +465,7 @@ function registerIpc(license) {
   ipcMain.handle('lexvault:saveFile', async (_e, { suggestedName, bytes }) => {
     try {
       const { dialog } = require('electron')
-      const fname = String(suggestedName || 'lexvault-export')
+      const fname = String(suggestedName || 'openlex-export')
       const ext = fname.includes('.') ? fname.split('.').pop().toLowerCase() : 'bin'
       const filterMap = {
         docx: { name: 'Word Document', extensions: ['docx'] },

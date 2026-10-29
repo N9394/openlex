@@ -15,7 +15,7 @@ const DEFAULTS = {
   depth: DEFAULT_DEPTH,
   applyMode: 'tracked', // 'tracked' (default) | 'permanent'
   autopilot: false, // Batch 3: apply suggestions silently (tracked) instead of approval cards
-  workspace: undefined, // LexVault workspace base (undefined → ~/LexVault default)
+  workspace: undefined, // workspace base folder (undefined → ~/LexVault, kept for existing installs)
   calendar: { enabled: false, provider: 'auto' }, // calendar integration (Batch W3)
 }
 

@@ -96,7 +96,7 @@ async function fetchCurrentVersions(server) {
   return new Promise((resolve, reject) => {
     const url = new URL('/api/jurisdictions', server)
     const lib = url.protocol === 'https:' ? https : http
-    lib.get(url.toString(), { headers: { 'User-Agent': 'LexVault-PackFetcher/1' } }, res => {
+    lib.get(url.toString(), { headers: { 'User-Agent': 'OpenLex-PackFetcher/1' } }, res => {
       const chunks = []
       res.on('data', c => chunks.push(c))
       res.on('end', () => {

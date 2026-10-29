@@ -349,7 +349,7 @@ async function searchCourtListener(query, options = {}) {
         }
         const headers = {
             'Accept': 'application/json',
-            'User-Agent': 'LexVault/1.0 (Research Tool)',
+            'User-Agent': 'OpenLex/1.0 (Research Tool)',
         };
         if (apiToken) {
             headers['Authorization'] = `Token ${apiToken}`;
@@ -403,7 +403,7 @@ async function searchFindCaseLaw(query, options = {}) {
         const response = await fetch(`${FINDCASELAW_API}/atom.xml?${params}`, {
             headers: {
                 'Accept': 'application/xml',
-                'User-Agent': 'LexVault/1.0 (Research Tool)',
+                'User-Agent': 'OpenLex/1.0 (Research Tool)',
             },
         });
         if (!response.ok) {
@@ -705,7 +705,7 @@ async function searchAustLII(query, options = {}) {
         const response = await fetch(`https://www.austlii.edu.au/cgi-bin/sinosrch.cgi?${params}`, {
             headers: {
                 'Accept': 'text/html',
-                'User-Agent': 'LexVault/1.0 (Research Tool)',
+                'User-Agent': 'OpenLex/1.0 (Research Tool)',
             },
         });
         if (!response.ok) {

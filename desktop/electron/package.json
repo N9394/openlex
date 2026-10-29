@@ -2,10 +2,10 @@
   "name": "lexvault-app",
   "productName": "LexVault",
   "version": "0.1.59",
-  "description": "LexVault — private legal AI for solo lawyers. Multilingual statute research and document analysis running fully on your machine.",
+  "description": "OpenLex — open-source, local-first legal AI. Statute research and document analysis on your machine.",
   "main": "main/main.js",
-  "author": "LexVault",
-  "license": "Proprietary",
+  "author": "OpenLex contributors",
+  "license": "Apache-2.0",
   "private": true,
   "scripts": {
     "start": "electron .",

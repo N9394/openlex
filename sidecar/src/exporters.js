@@ -108,7 +108,7 @@ function toJSON(model) { return JSON.stringify(model, null, 2) + '\n' }
 
 function toMarkdown(model) {
   const L = []
-  L.push(`# ${model.matter} — LexVault analysis`)
+  L.push(`# ${model.matter} — OpenLex analysis`)
   L.push(`Generated: ${model.generatedAt}`)
   L.push(`\n## Clauses (${model.clauses.length})`)
   for (const c of model.clauses) L.push(`- §${c.section} ${c.heading} (${c.chars} chars)`)
@@ -120,7 +120,7 @@ function toMarkdown(model) {
 }
 
 function toICS(model) {
-  const L = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//LexVault//EN', 'CALSCALE:GREGORIAN']
+  const L = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//OpenLex//EN', 'CALSCALE:GREGORIAN']
   for (const d of model.deadlines) {
     if (!d.date) continue
     const safe = d.date.replace(/[-:]/g, '')
@@ -143,7 +143,7 @@ function toPDF(model) {
   const L = (s) => String(s ?? '')
   const blocks = []
   if (model.matter) {
-    blocks.push({ title: `Matter: ${model.matter}`, rows: [[String(model.generatedAt || ''), 'LexVault document export']] })
+    blocks.push({ title: `Matter: ${model.matter}`, rows: [[String(model.generatedAt || ''), 'OpenLex document export']] })
   }
   if (model.obligations && model.obligations.length) {
     blocks.push({ title: 'Obligations', rows: model.obligations.map((o) => [L(o.section), `${o.type || ''} — ${o.clause || ''}`]) })

@@ -93,7 +93,7 @@ function phoneHome(token) {
     const u = new URL(LICENSE_URL)
     const req = https.request(
       { hostname: u.hostname, port: u.port || 443, path: u.pathname, method: 'GET',
-        headers: { Authorization: `Bearer ${token}`, 'User-Agent': 'LexVault-Word-Sidecar/0.1.0' },
+        headers: { Authorization: `Bearer ${token}`, 'User-Agent': 'OpenLex-Engine' },
         timeout: 20000 },
       (res) => {
         const chunks = []

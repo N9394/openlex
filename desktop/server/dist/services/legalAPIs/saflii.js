@@ -49,7 +49,7 @@ const httpsAgent = new https.Agent({
 const DEFAULT_CONFIG = {
     baseUrl: 'https://www.saflii.org',
     timeout: 30000,
-    userAgent: 'LexVault-Crawler/1.0 (Legal Research; contact@lexvault.com)',
+    userAgent: 'OpenLex-Crawler/1.0 (Legal Research; +https://github.com/N9394/openlex)',
     rateLimit: {
         maxRequests: 60,
         windowMs: 60000,

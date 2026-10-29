@@ -5,7 +5,7 @@ exports.DEFAULT_API_CONFIGS = {
     courtlistener: {
         baseUrl: 'https://www.courtlistener.com/api/rest/v4',
         timeout: 30000,
-        userAgent: 'LexVault-Bot/1.0 (+https://lexvault.app)',
+        userAgent: 'OpenLex-Bot/1.0 (+https://github.com/N9394/openlex)',
         rateLimit: {
             maxRequests: 5000,
             windowMs: 60 * 60 * 1000,
@@ -16,7 +16,7 @@ exports.DEFAULT_API_CONFIGS = {
         baseUrl: 'https://eur-lex.europa.eu',
         sparqlEndpoint: 'https://publications.europa.eu/webapi/rdf/sparql',
         timeout: 30000,
-        userAgent: 'LexVault-Bot/1.0 (+https://lexvault.app)',
+        userAgent: 'OpenLex-Bot/1.0 (+https://github.com/N9394/openlex)',
         rateLimit: {
             maxRequests: 1000,
             windowMs: 60 * 60 * 1000,
@@ -26,7 +26,7 @@ exports.DEFAULT_API_CONFIGS = {
     canlii: {
         baseUrl: 'https://api.canlii.org/v1',
         timeout: 30000,
-        userAgent: 'LexVault-Bot/1.0 (+https://lexvault.app)',
+        userAgent: 'OpenLex-Bot/1.0 (+https://github.com/N9394/openlex)',
         rateLimit: {
             maxRequests: 1000,
             windowMs: 60 * 60 * 1000,

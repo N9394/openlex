@@ -6,7 +6,7 @@ exports.htmlToText = htmlToText;
 exports.DEFAULT_CRAWLER_CONFIG = {
     rateLimit: 1,
     respectRobotsTxt: true,
-    userAgent: 'LexVault-Crawler/1.0 (Legal Research; contact@lexvault.com)',
+    userAgent: 'OpenLex-Crawler/1.0 (Legal Research; +https://github.com/N9394/openlex)',
     maxPages: 100,
     timeoutMs: 30000,
 };

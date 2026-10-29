@@ -54,7 +54,7 @@ function downloadHfFile(name) {
   if (fs.existsSync(dest) && fs.statSync(dest).size > 0) return Promise.resolve()
   return new Promise((resolve, reject) => {
     const req = (u) => {
-      https.get(u, { headers: { 'User-Agent': 'lexvault-word-sidecar' } }, (res) => {
+      https.get(u, { headers: { 'User-Agent': 'OpenLex-Engine' } }, (res) => {
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
           res.resume()
           return req(new URL(res.headers.location, u).toString())

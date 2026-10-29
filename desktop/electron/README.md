@@ -1,4 +1,8 @@
-# LexVault App (the airgapped product)
+# OpenLex desktop app
+
+The installed app and its files still carry the old name `LexVault`
+(`LexVault.app`, `LexVault-Setup-*.exe`, app id `com.lexvault.app`): existing
+installs, their settings folder and the updater depend on it.
 
 The Electron app that runs entirely on the user's machine. The Launcher writes
 a signed license file and starts this binary; nothing here ever touches the

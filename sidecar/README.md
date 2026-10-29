@@ -1,4 +1,4 @@
-# LexVault Word Plugin — sidecar
+# OpenLex engine (sidecar)
 
 Local agent engine for the Word add-in. Airgapped by construction:
 - llama.cpp (Lotus 4B) on :11434

@@ -223,7 +223,7 @@ async function scrapeConsolidatedLaw(lawCode) {
     try {
         const response = await fetch(url, {
             headers: {
-                'User-Agent': 'Mozilla/5.0 (compatible; LexVault/1.0; Educational)',
+                'User-Agent': 'Mozilla/5.0 (compatible; OpenLex/1.0; Educational)',
                 'Accept': 'text/html,application/xhtml+xml',
                 'Accept-Language': 'de-AT,de;q=0.9,en;q=0.8',
             },

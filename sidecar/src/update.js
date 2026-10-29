@@ -88,7 +88,7 @@ async function extractZip(zipPath, destDir) {
  */
 async function applyUpdate(artifactPath, onEvent) {
   const installRoot = path.resolve(__dirname, '..', '..')
-  const stage = fs.mkdtempSync(path.join(os.tmpdir(), 'lexvault-update-'))
+  const stage = fs.mkdtempSync(path.join(os.tmpdir(), 'openlex-update-'))
   onEvent?.({ kind: 'extracting' })
   await extractZip(artifactPath, stage)
 
@@ -99,7 +99,7 @@ async function applyUpdate(artifactPath, onEvent) {
   if (!hasSidecar && !hasAddin) throw new Error('payload zip has no sidecar/ or add-in/ — refusing to apply')
 
   // Backup current code (rollback on failure).
-  const backup = fs.mkdtempSync(path.join(os.tmpdir(), 'lexvault-rollback-'))
+  const backup = fs.mkdtempSync(path.join(os.tmpdir(), 'openlex-rollback-'))
   const backupSidecar = path.join(backup, 'sidecar-src')
   const backupAddin = path.join(backup, 'add-in')
   if (hasSidecar) {

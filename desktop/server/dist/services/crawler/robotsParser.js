@@ -191,14 +191,14 @@ class RobotsTxtParser {
     }
 }
 exports.RobotsTxtParser = RobotsTxtParser;
-async function isUrlAllowed(url, userAgent = 'LexVault-Bot/1.0') {
+async function isUrlAllowed(url, userAgent = 'OpenLex-Bot/1.0') {
     const parser = new RobotsTxtParser();
     const urlObj = new URL(url);
     const robotsUrl = `${urlObj.protocol}//${urlObj.host}/robots.txt`;
     const rules = await parser.fetch(robotsUrl, userAgent);
     return parser.isAllowed(url, userAgent, rules);
 }
-async function getSitemapUrls(baseUrl, userAgent = 'LexVault-Bot/1.0') {
+async function getSitemapUrls(baseUrl, userAgent = 'OpenLex-Bot/1.0') {
     const parser = new RobotsTxtParser();
     const urlObj = new URL(baseUrl);
     const robotsUrl = `${urlObj.protocol}//${urlObj.host}/robots.txt`;

@@ -1,6 +1,6 @@
 "use strict"
 /**
- * LexVault Word sidecar — HTTP API for the Word add-in (:18001).
+ * OpenLex engine — HTTP API for the Word add-in, CLI and desktop app (:18001).
  *
  * - Serves the add-in static files (taskpane, manifest assets)
  * - /api/chat: agent loop with SSE streaming (step/suggestion/text/done/error)
@@ -1441,7 +1441,7 @@ const server = httpsServer || http.createServer(handle)
 server.listen(config.PORT, '127.0.0.1', () => {
   // Monitors (Phase 7.4): check due watches every 15 minutes while the engine runs.
   if (process.env.OPENLEX_MONITORS !== '0') require('./monitors').startScheduler()
-  console.log(`[sidecar] LexVault Word sidecar on https://localhost:${config.PORT}${httpsServer ? '' : ' (http fallback)'}`)
+  console.log(`[sidecar] OpenLex engine on https://localhost:${config.PORT}${httpsServer ? '' : ' (http fallback)'}`)
   console.log(`[sidecar] serving add-in from ${config.ADDIN_ROOT}`)
   console.log(`[sidecar] model: ${config.LLM_MODEL} (llama.cpp at ${config.LLM_BASE})`)
   console.log(`[sidecar] law index: ${config.QDRANT_COLLECTION} at ${config.QDRANT_BASE}`)
