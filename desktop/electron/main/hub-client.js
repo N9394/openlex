@@ -131,8 +131,11 @@ class HubClient {
     return this._request(method, pathname, body)
   }
 
-  /** Engine SSE endpoint (POST) → onEvent per event; resolves when the stream ends. */
-  stream(pathname, body, onEvent) {
+  /**
+   * Engine SSE endpoint (POST) → onEvent per event; resolves when the stream
+   * ends — or when `signal` aborts it (the engine then stops the run).
+   */
+  stream(pathname, body, onEvent, signal) {
     const sc = this.sidecar || readSidecar()
     if (!sc) return Promise.reject(new Error('OpenLex engine is not running'))
     const u = new URL(pathname, sc.url)
@@ -154,8 +157,13 @@ class HubClient {
           }
         })
         res.on('end', resolve)
+        res.on('close', resolve)
       })
-      req.on('error', reject)
+      if (signal) {
+        if (signal.aborted) { resolve(); return }
+        signal.addEventListener('abort', () => { req.destroy(); resolve() }, { once: true })
+      }
+      req.on('error', (err) => (signal?.aborted ? resolve() : reject(err)))
       req.end(payload)
     })
   }

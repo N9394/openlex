@@ -34,7 +34,7 @@ async function until(fn, ms = 8000) {
 
 test.before(async () => {
   sidecar = spawn(process.execPath, [path.join(ROOT, 'sidecar', 'src', 'server.js')], {
-    env: { ...process.env, LEXVAULT_SIDECAR_PORT: String(PORT), LEXVAULT_LLM_URL: 'http://127.0.0.1:1', LEXVAULT_SIDECAR_CERT: '/nonexistent', LEXVAULT_SIDECAR_KEY: '/nonexistent' },
+    env: { ...process.env, LEXVAULT_SIDECAR_PORT: String(PORT), LEXVAULT_LLM_URL: 'http://127.0.0.1:1', LEXVAULT_SIDECAR_CERT: '/nonexistent', LEXVAULT_SIDECAR_KEY: '/nonexistent', LEXVAULT_KEEPALIVE: '1' },
     stdio: 'ignore',
   })
   await until(() => fs.existsSync(path.join(DATA, 'run', 'sidecar.json')))
@@ -165,5 +165,59 @@ test('App LLM proxy routes through the shared engine + policy for cloud provider
       matters.setActive('app', null)
       assert.strictEqual((await call()).status, 200)
     } finally { proxy.close() }
+  } finally { fake.close() }
+})
+
+test('App chat on the engine: streamed answer through the hub, kept in the matter conversation; Stop ends the run', async () => {
+  // Fake OpenAI-compatible model: "slow" questions stream slowly (time to press Stop).
+  const fake = http.createServer((req, res) => {
+    let raw = ''; req.on('data', (c) => { raw += c }); req.on('end', () => {
+      const body = JSON.parse(raw)
+      const slow = /slow/i.test(JSON.stringify(body.messages))
+      const words = (slow ? 'This answer takes a long time to write. '.repeat(5) : 'A two-year non-compete is enforceable only if reasonable.').split(/(?<= )/)
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' })
+      let i = 0
+      const t = setInterval(() => {
+        if (res.destroyed) return clearInterval(t)
+        if (i >= words.length) { clearInterval(t); return res.end('data: [DONE]\n\n') }
+        res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: words[i++] } }] })}\n\n`)
+      }, slow ? 100 : 5)
+    })
+  })
+  await new Promise((r) => fake.listen(0, '127.0.0.1', r))
+  try {
+    const engineDir = path.join(ROOT, 'sidecar', 'src')
+    const settings = require(path.join(engineDir, 'providers', 'settings.js'))
+    const policy = require(path.join(engineDir, 'policy.js'))
+    settings.update({ provider: 'openai', overrides: { baseUrl: `http://127.0.0.1:${fake.address().port}/v1`, model: 'gpt-test', nativeTools: false } })
+    settings.update({ active: 'openai' })
+    policy.setRule(null, { mode: 'allow-list', providers: ['openai'] })
+    const m = require(path.join(engineDir, 'matters.js')).create({ title: 'Alpine share deal' })
+
+    const app = new HubClient({ version: '9.9.9', backend: 'http://127.0.0.1:18000', onEvent: () => {} })
+    const events = []
+    const r = await app.stream('/api/chat', { message: 'Is a two-year non-compete enforceable?', docId: `app:${m.id}`, sessionId: `app:${m.id}:1`, matterId: m.id, interactive: true }, (ev) => events.push(ev))
+    assert.strictEqual(r, undefined)
+    assert.match(events.filter((e) => e.type === 'text').map((e) => e.text).join(''), /enforceable only if reasonable/)
+    assert.ok(events.some((e) => e.type === 'model' && e.provider === 'openai'), 'the window learns where the data went')
+
+    // The conversation every window lists for the matter: kept as the App's.
+    const list = await app.request('GET', `/api/sessions?matterId=${m.id}`)
+    assert.strictEqual(list.sessions[0].id, `app_${m.id}_1`)
+    assert.deepStrictEqual(list.sessions[0].clients, ['app'])
+    const conv = await app.request('GET', `/api/session?id=${encodeURIComponent(list.sessions[0].id)}`)
+    assert.deepStrictEqual(conv.messages.map((x) => x.role), ['user', 'assistant'])
+    assert.strictEqual(conv.messages[1].data[0].provider, 'openai')
+
+    // Stop: the request is closed, the stream resolves, the engine keeps the turn as stopped.
+    const ac = new AbortController()
+    const seen = []
+    const t0 = Date.now()
+    await app.stream('/api/chat', { message: 'A slow question', docId: `app:${m.id}`, sessionId: `app:${m.id}:2`, matterId: m.id, interactive: true }, (ev) => { seen.push(ev); if (ev.type === 'model') ac.abort() }, ac.signal)
+    assert.ok(Date.now() - t0 < 4000, 'Stop returns at once')
+    assert.ok(!seen.some((e) => e.type === 'done' && !e.stopped), 'no finished answer after Stop')
+    const stopped = await until(async () => (await app.request('GET', `/api/session?id=app_${m.id}_2`)).messages[1], 20000)
+    assert.strictEqual(stopped.stopped, true)
+    assert.ok(stopped.content.length < 400, 'only what the window had shown is kept')
   } finally { fake.close() }
 })

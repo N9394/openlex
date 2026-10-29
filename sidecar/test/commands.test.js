@@ -37,6 +37,8 @@ test('per window: only what that window can run, in its language', () => {
   assert.deepStrictEqual(tui, ['model', 'key', 'data', 'as', 'privileged', 'permissions', 'folder', 'sources', 'law', 'copy', 'save', 'transcript', 'activity', 'record', 'clear', 'help'])
   const app = commands.list({ surface: 'app' })
   for (const n of ['help', 'model', 'data', 'matter', 'copy', 'save', 'word', 'activity', 'record', 'clear']) assert.ok(app.some((c) => c.name === n), `app has /${n}`)
+  // The app's chat runs on the engine, so these work there too (as in the terminal app).
+  for (const n of ['as', 'sources', 'privileged', 'permissions', 'law']) assert.ok(app.some((c) => c.name === n), `app has /${n}`)
   assert.ok(!app.some((c) => c.name === 'transcript'), 'no terminal-only commands in the app')
   const word = commands.list({ surface: 'word' }).map((c) => c.name)
   assert.deepStrictEqual(word, ['model', 'data', 'as', 'record', 'clear', 'help'])
@@ -82,4 +84,7 @@ test('every window reads the one list (no private copies)', async () => {
   const main = fs.readFileSync(path.join(ROOT, 'desktop', 'electron', 'main', 'main.js'), 'utf8')
   const allowed = new RegExp(main.match(/const ENGINE_PATHS = \/(.+)\/\r?\n/)[1])
   for (const p of ['/api/commands?surface=app&lang=en', '/api/record?limit=50', '/api/record/export', '/api/folder/save']) assert.ok(allowed.test(p), `the app may call ${p}`)
+  // The chat on the engine: asking, conversations, permission answers, law sections, /permissions, /law.
+  for (const p of ['/api/chat', '/api/sessions?matterId=m_1', '/api/session?id=app_m_1_x', '/api/session/clear', '/api/permissions', '/api/permissions/answer', '/api/permissions/rules', '/api/law/section?chunk_id=c1', '/api/agents', '/api/sources/law?matterId=m_1', '/api/sources/enable', '/api/sources/key']) assert.ok(allowed.test(p), `the app may call ${p}`)
+  for (const p of ['/api/hub/events', '/api/config/token', '/api/sources/add', '/api/download/model']) assert.ok(!allowed.test(p), `the app may not call ${p}`)
 })

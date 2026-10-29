@@ -110,6 +110,7 @@ test('local API: GET /api/sessions, GET /api/session, POST /api/session/clear', 
 test('server.js: chat keeps the turn in the window\'s conversation; the routes are served', () => {
   const server = fs.readFileSync(path.join(ROOT, 'sidecar', 'src', 'server.js'), 'utf8')
   assert.match(server, /new Session\(typeof body\.sessionId === 'string'/, 'POST /api/chat takes a sessionId')
-  assert.match(server, /session\.append\(body\.message, r\.text, \{ matterId: matterIdFor\(body, entry\), client: clientOf\(req\)/, 'the turn is kept with its matter and window')
+  assert.match(server, /const keep = \(text, stopped\) => session\.append\(body\.message, text, \{ matterId: matterIdFor\(body, entry\), client: clientOf\(req\)/, 'the turn is kept with its matter and window')
+  assert.match(server, /keep\(ac\.signal\.aborted \? shown : r\.text/, 'a stopped answer keeps only what the window showed')
   assert.match(server, /p === '\/api\/sessions'[\s\S]{0,300}require\('\.\/session'\)\.handle/, 'the routes are served')
 })

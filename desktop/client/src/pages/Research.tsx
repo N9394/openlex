@@ -1,1039 +1,392 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+// The App's chat: questions and answers through the OpenLex engine
+// (POST /api/chat) — the same engine, the same events and the same matter
+// conversation as the terminal app and the Word pane ("one OpenLex, three
+// windows"). While OpenLex works, the lawyer sees each step in plain words,
+// how long it has taken, where the data went and how to stop; afterwards
+// what the answer is based on and whether proposed changes were checked.
+// When OpenLex wants to save a file, open a web page, run a program or use
+// a connector, a small dialog asks first (Allow once / Always / Don't allow).
+//
+// Conversations live in the engine (GET /api/sessions?matterId=…): the
+// matter's newest one opens here, whichever window it was started in, and
+// continuing it here continues it everywhere.
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import ReactMarkdown from 'react-markdown'
-import {
-  Send,
-  Globe,
-  Plus,
-  MessageSquare,
-  Trash2,
-  Save,
-  Copy,
-  ChevronDown,
-  ChevronUp,
-  Check,
-  X,
-  Clock,
-  Sparkles,
-  BookOpen,
-  ExternalLink,
-  ChevronsDownUp,
-  ShieldCheck,
-  ShieldAlert,
-  ShieldX,
-  RefreshCw,
-  AlertTriangle,
-  Download,
-  Paperclip,
-  Square,
-  FileText,
-} from 'lucide-react'
+import { BookOpen, Check, ChevronDown, ChevronUp, Clock, Copy, FileText, Lock, MessageSquare, Paperclip, Plus, Send, Sparkles, Square, Trash2, X } from 'lucide-react'
 import { useLocation } from 'react-router-dom'
-import { api, streamChat, apiBase } from '../lib/api'
-import { useWordLink } from '../lib/hub'
+import { useWordLink, hubBridge } from '../lib/hub'
 import { useChatCommands } from '../components/ChatCommands'
-import type { VerificationResult, VerificationClaim } from '../lib/api'
+import { engine } from '../lib/commands'
+import {
+  Activity, Basis, LawSource, ModelUse, WINDOW_WORDS, applyEvent, basedOn, checkLine, basisText, clip, dataLine, duration,
+  endActivity, friendly, mark, permission, serviceName, startActivity, stopSentence, summaryLine,
+} from '../lib/turn'
 
-interface Source {
-  source_name?: string
-  title?: string
-  text?: string
-  content?: string
-  excerpt?: string
-  score?: number
-}
+interface Matter { id: string; title: string; number?: string; client?: string; privileged?: boolean; agent?: string | null }
+interface Conversation { id: string; title: string; matterId: string | null; clients: string[]; turns: number; updatedAt: string | null }
+interface Agent { name: string; title: string; description?: string }
 
 interface Message {
-  id?: string
-  role: 'user' | 'assistant'
-  content: string
-  sources?: Source[]
-  createdAt?: string
-  verificationPending?: boolean
-  streamingDone?: boolean
-  verifyStatus?: string
-  verifyStartTime?: number
-  verification?: VerificationResult
-  verificationExpanded?: boolean
-  remainingSources?: { remaining: number, nextOffset: number, total: number }
-}
-
-interface Conversation {
   id: string
-  title: string
-  jurisdiction?: string
-  createdAt: string
-  updatedAt?: string
-  messageCount?: number
+  role: 'user' | 'assistant' | 'sys'
+  content: string
+  kind?: 'ok' | 'warn' | 'bad' | 'info'
+  files?: string[]
+  at?: string
+  client?: string
+  as?: string
+  act?: Activity
+  stored?: boolean // from the engine's conversation (earlier, or another window)
+  suggestions?: any[]
+  notes?: string[]
+  error?: string
+  stopNote?: string
+  tip?: string
 }
 
-const jurisdictions = [
-  { code: 'US', label: 'US (Federal)', flag: '🇺🇸' },
-  { code: 'US-CA', label: 'California', flag: '🇺🇸' },
-  { code: 'EW', label: 'England & Wales', flag: '🇬🇧' },
-  { code: 'SC', label: 'Scotland', flag: '🏴󠁧󠁢󠁳󠁣󠁴󠁿' },
-  { code: 'NI', label: 'Northern Ireland', flag: '🇬🇧' },
-  { code: 'DE', label: 'Germany', flag: '🇩🇪' },
-  { code: 'AT', label: 'Austria (Federal)', flag: '🇦🇹' },
-  { code: 'SK', label: 'Slovakia', flag: '🇸🇰' },
-  { code: 'CZ', label: 'Czech Republic', flag: '🇨🇿' },
-  { code: 'RO', label: 'Romania', flag: '🇷🇴' },
-  { code: 'CY', label: 'Cyprus', flag: '🇨🇾' },
-  { code: 'ZA', label: 'South Africa', flag: '🇿🇦' },
-]
+const mattersBridge = () => (typeof window !== 'undefined' && (window as any).lexvault?.matters) || null
+let seq = 0
+const nextId = () => `m${Date.now().toString(36)}${++seq}`
+const TEXT_FILES = /\.(txt|md|markdown|csv|eml|json|xml|html?|rtf)$/i
+const MAX_ATTACH = 2 * 1024 * 1024
 
-function ElapsedTimer({ startTime }: { startTime: number }) {
-  const [elapsed, setElapsed] = useState(0)
-  useEffect(() => {
-    const id = setInterval(() => setElapsed(Math.floor((Date.now() - startTime) / 100) / 10), 100)
-    return () => clearInterval(id)
-  }, [startTime])
-  return <span className="tabular-nums font-mono text-amber-400/70 text-xs">{elapsed.toFixed(1)}s</span>
+/** A stored turn (GET /api/session) as a message on screen. */
+function storedMessage(m: any): Message {
+  if (m.role === 'user') return { id: nextId(), role: 'user', content: m.content, at: m.at, client: m.client, stored: true }
+  const at = m.at ? Date.parse(m.at) : Date.now()
+  const act: Activity = { ...startActivity(at), steps: [], endedAt: at, models: (m.data || []) as ModelUse[], online: m.online || [], sources: (m.sources || []) as LawSource[], stopped: !!m.stopped }
+  return { id: nextId(), role: 'assistant', content: m.content, at: m.at, client: m.client, as: m.agent || '', act, stored: true }
 }
 
-function VerificationBadge({ verification, expanded, onToggle }: {
-  verification: VerificationResult
-  expanded: boolean
-  onToggle: () => void
-}) {
-  const { verified, total, regenerated, removed, confidence, claims } = verification
-  const passed = verified + regenerated
-
-  const badgeColor = confidence === 'high' ? 'text-forest bg-forest/10 border-forest/30'
-    : confidence === 'medium' ? 'text-amber-400 bg-amber-400/10 border-amber-400/30'
-    : confidence === 'low' ? 'text-amber-500 bg-amber-500/10 border-amber-500/30'
-    : 'text-red-400 bg-red-400/10 border-red-400/30'
-
-  const iconColor = confidence === 'high' ? 'text-forest'
-    : confidence === 'medium' ? 'text-amber-400'
-    : 'text-red-400'
-
-  const BadgeIcon = confidence === 'high' ? ShieldCheck
-    : confidence === 'medium' ? ShieldAlert
-    : ShieldX
-
-  return (
-    <div className="mt-3 border-t border-tobacco/50 pt-3">
-      <button
-        onClick={onToggle}
-        className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-button border text-xs font-medium transition-all ${badgeColor} hover:opacity-80`}
-      >
-        <BadgeIcon size={14} className={iconColor} />
-        <span>{passed}/{total} verified</span>
-        {regenerated > 0 && (
-          <span className="flex items-center gap-1 text-amber-400">
-            <RefreshCw size={10} />
-            {regenerated}
-          </span>
-        )}
-        {removed > 0 && (
-          <span className="flex items-center gap-1 text-red-400">
-            <X size={10} />
-            {removed}
-          </span>
-        )}
-        {expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-      </button>
-
-      {expanded && (
-        <div className="mt-3 space-y-2 animate-fade-in">
-          {claims.map((claim, i) => (
-            <ClaimRow key={i} claim={claim} />
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function ClaimRow({ claim }: { claim: VerificationClaim }) {
-  const statusConfig = {
-    verified: { icon: ShieldCheck, color: 'text-forest', bg: 'bg-forest/5', label: 'Verified' },
-    regenerated: { icon: RefreshCw, color: 'text-amber-400', bg: 'bg-amber-400/5', label: 'Rewritten' },
-    removed: { icon: ShieldX, color: 'text-red-400', bg: 'bg-red-400/5', label: 'Removed' },
-    unverified: { icon: AlertTriangle, color: 'text-antique', bg: 'bg-tobacco/10', label: 'Unverified' },
-  }
-
-  const config = statusConfig[claim.status] || statusConfig.unverified
-  const Icon = config.icon
-
-  return (
-    <div className={`flex items-start gap-3 px-3 py-2 rounded-button ${config.bg} border border-tobacco/20`}>
-      <Icon size={14} className={`${config.color} mt-0.5 flex-shrink-0`} />
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-1">
-          <span className={`text-xs font-medium ${config.color}`}>{config.label}</span>
-          {claim.confidence > 0 && (
-            <span className="text-xs text-antique">{(claim.confidence * 100).toFixed(0)}%</span>
-          )}
-          {claim.sourceRef && (
-            <span className="text-xs text-accent truncate">{claim.sourceRef}</span>
-          )}
-        </div>
-        {claim.status === 'regenerated' && claim.originalClaim && (
-          <p className="text-xs text-antique line-through mb-1">{claim.originalClaim}</p>
-        )}
-        <p className="text-xs text-cream-dark line-clamp-2">{claim.claim}</p>
-      </div>
-    </div>
-  )
+function when(iso?: string | null) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const mins = Math.floor((Date.now() - d.getTime()) / 60000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins} min ago`
+  if (mins < 24 * 60) return `today ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+  return d.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })
 }
 
 export default function Research() {
   const { t } = useTranslation()
-  // Conversations
-  const [conversations, setConversations] = useState<Conversation[]>([])
-  const [currentConversation, setCurrentConversation] = useState<Conversation | null>(() => {
-    try {
-      const saved = sessionStorage.getItem('research_currentConv')
-      return saved ? JSON.parse(saved) : null
-    } catch { return null }
-  })
-  const [loadingConversations, setLoadingConversations] = useState(true)
+  const location = useLocation()
+  const wordLink = useWordLink()
+  const hasEngine = !!engine()?.stream
 
-  // Messages — wrapped so messagesRef is ALWAYS current (even before React renders)
-  const [messages, _setMessages] = useState<Message[]>(() => {
-    try {
-      const saved = sessionStorage.getItem('research_messages')
-      return saved ? JSON.parse(saved) : []
-    } catch { return [] }
-  })
-  const messagesRef = useRef<Message[]>(messages)
-  const setMessages = useCallback((updater: Message[] | ((prev: Message[]) => Message[])) => {
-    if (typeof updater === 'function') {
-      messagesRef.current = updater(messagesRef.current)
-    } else {
-      messagesRef.current = updater
-    }
-    _setMessages(messagesRef.current)
+  const [matter, setMatter] = useState<Matter | null>(null)
+  const [agents, setAgents] = useState<Agent[]>([])
+  const [quickAgent, setQuickAgent] = useState('associate')
+  const [aiLabel, setAiLabel] = useState('')
+  const [conversations, setConversations] = useState<Conversation[]>([])
+  const [loadingList, setLoadingList] = useState(true)
+  const [sessionId, setSessionId] = useState<string | null>(null)
+  const [messages, setMessagesRaw] = useState<Message[]>([])
+  const messagesRef = useRef<Message[]>([])
+  const setMessages = useCallback((up: Message[] | ((m: Message[]) => Message[])) => {
+    messagesRef.current = typeof up === 'function' ? up(messagesRef.current) : up
+    setMessagesRaw(messagesRef.current)
   }, [])
   const [input, setInput] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [attachedFile, setAttachedFile] = useState<File | null>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const streamAbortRef = useRef<AbortController | null>(null)
-  const streamConvIdRef = useRef<string | null>(null)
-  const loadGenRef = useRef(0)
-  const cancelledMsgsRef = useRef<Record<string, Message[]>>({})
+  const [files, setFiles] = useState<{ name: string; text: string }[]>([])
+  const [running, setRunning] = useState<string | null>(null) // stream id while an answer is written
+  const [now, setNow] = useState(Date.now())
+  const [perm, setPerm] = useState<any>(null) // a permission question waiting for the lawyer
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [copied, setCopied] = useState<string | null>(null)
+  const [sentToWord, setSentToWord] = useState<string | null>(null)
+  const [openSteps, setOpenSteps] = useState<Record<string, boolean>>({})
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const nearBottom = useRef(true)
+  const loadGen = useRef(0)
 
-  // Jurisdiction
-  const [selectedJurisdictions, setSelectedJurisdictions] = useState<string[]>(() => {
+  const agentName = (matter ? matter.agent : quickAgent) || 'associate'
+  const agent = agents.find((a) => a.name === agentName) || { name: 'associate', title: 'Associate' }
+
+  // ── setup: matter, roles, which AI ──
+  const refreshSetup = useCallback(async () => {
+    const e = engine()
+    const b = mattersBridge()
     try {
-      const saved = sessionStorage.getItem('research_jurisdictions')
-      return saved ? JSON.parse(saved) : ['US']
-    } catch { return ['US'] }
-  })
-  const [showJurisdictionPicker, setShowJurisdictionPicker] = useState(false)
+      if (b) {
+        const r = await b.list()
+        setMatter((r.matters || []).find((m: Matter) => m.id === r.active) || null)
+      }
+    } catch { /* no matters bridge */ }
+    if (!e) return
+    e.call('GET', '/api/agents').then((r) => setAgents((r.agents || []).filter((a: any) => !a.error))).catch(() => {})
+    e.call('GET', '/api/status').then((st) => {
+      const m = st?.model || {}
+      setAiLabel(m.local !== false ? 'AI: this computer' : `AI: ${serviceName({ provider: m.provider, model: m.name, region: m.region, label: m.label })} (online)`)
+    }).catch(() => setAiLabel(''))
+  }, [])
 
-  // UI
-  const jurisdictionRef = useRef<HTMLDivElement>(null)
-  const [showSaveModal, setShowSaveModal] = useState(false)
-  const [summaryTitle, setSummaryTitle] = useState('')
-  const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
-  // Word plugin link (desktop App only): send an answer into the open doc,
-  // and accept questions handed over from Word (Layout routes them here).
-  const wordLink = useWordLink()
-  const [sentToWordIndex, setSentToWordIndex] = useState<number | null>(null)
-  const location = useLocation()
+  useEffect(() => {
+    refreshSetup()
+    const on = () => refreshSetup()
+    window.addEventListener('openlex:matter-changed', on)
+    window.addEventListener('openlex:setup-changed', on)
+    hubBridge()?.onEvent((ev) => { if (['matter-changed', 'policy-changed', 'provider-changed'].includes(ev.type)) refreshSetup() })
+    return () => { window.removeEventListener('openlex:matter-changed', on); window.removeEventListener('openlex:setup-changed', on) }
+  }, [refreshSetup])
+
   useEffect(() => {
     const prefill = (location.state as { prefill?: string } | null)?.prefill
     if (prefill) setInput(prefill)
   }, [location.state])
-  const handleSendToWord = useCallback(async (index: number, content: string) => {
+
+  // ── conversations of this matter (any window) ──
+  const loadList = useCallback(async (matterId: string | null) => {
+    const e = engine()
+    if (!e) { setLoadingList(false); return [] as Conversation[] }
     try {
-      await wordLink.sendToWord(content, { source: 'Research' })
-      setSentToWordIndex(index)
-      setTimeout(() => setSentToWordIndex(null), 2000)
-    } catch (err) {
-      alert((err as Error).message)
-    }
-  }, [wordLink])
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-
-  // Source expansion state: { messageIndex: { expanded: Set<sourceIndex>, showAll: boolean } }
-  const [sourceState, setSourceState] = useState<Record<number, { expanded: Set<number>; showAll: boolean }>>({})
-
-  const toggleSourceExpanded = (msgIdx: number, srcIdx: number) => {
-    setSourceState(prev => {
-      const current = prev[msgIdx] || { expanded: new Set(), showAll: false }
-      const newExpanded = new Set(current.expanded)
-      if (newExpanded.has(srcIdx)) {
-        newExpanded.delete(srcIdx)
-      } else {
-        newExpanded.add(srcIdx)
-      }
-      return { ...prev, [msgIdx]: { ...current, expanded: newExpanded } }
-    })
-  }
-
-  const toggleShowAllSources = (msgIdx: number) => {
-    setSourceState(prev => {
-      const current = prev[msgIdx] || { expanded: new Set(), showAll: false }
-      return { ...prev, [msgIdx]: { ...current, showAll: !current.showAll } }
-    })
-  }
-
-  const collapseAllSources = (msgIdx: number) => {
-    setSourceState(prev => {
-      return { ...prev, [msgIdx]: { expanded: new Set(), showAll: false } }
-    })
-  }
-
-  const isSourceExpanded = (msgIdx: number, srcIdx: number) => {
-    return sourceState[msgIdx]?.expanded?.has(srcIdx) || false
-  }
-
-  const isShowingAllSources = (msgIdx: number) => {
-    return sourceState[msgIdx]?.showAll || false
-  }
-
-  const hasAnyExpanded = (msgIdx: number) => {
-    const state = sourceState[msgIdx]
-    return (state?.expanded?.size || 0) > 0 || state?.showAll
-  }
-
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-  const messagesContainerRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
-  const isNearBottomRef = useRef(true)
-
-  useEffect(() => {
-    loadConversations()
-    // Restore cancelled messages from previous mount (page navigation)
-    try {
-      const saved = sessionStorage.getItem('research_cancelled')
-      if (saved) {
-        sessionStorage.removeItem('research_cancelled')
-        Object.assign(cancelledMsgsRef.current, JSON.parse(saved))
-      }
-    } catch { /* ignore */ }
-
-    // Cleanup on unmount: abort stream, persist cancelled state
-    return () => {
-      if (streamAbortRef.current) {
-        streamAbortRef.current.abort()
-        // Mark current messages as cancelled directly in sessionStorage
-        const snap = messagesRef.current.map(m => ({
-          role: m.role, content: m.content, sources: m.sources, verification: m.verification
-        }))
-        const last = snap[snap.length - 1]
-        if (last?.role === 'assistant') {
-          last.content = last.content ? last.content + '\n\n*Query cancelled.*' : 'Query cancelled.'
-        } else if (snap.length > 0) {
-          snap.push({ role: 'assistant' as const, content: 'Query cancelled.', sources: undefined, verification: undefined })
-        }
-        try { sessionStorage.setItem('research_messages', JSON.stringify(snap)) } catch {}
-      }
-      // Persist any pending cancelled conversation snapshots for sidebar switches
-      if (Object.keys(cancelledMsgsRef.current).length > 0) {
-        try { sessionStorage.setItem('research_cancelled', JSON.stringify(cancelledMsgsRef.current)) } catch {}
-      }
-    }
+      const r = await e.call('GET', `/api/sessions${matterId ? `?matterId=${encodeURIComponent(matterId)}` : ''}`)
+      const list: Conversation[] = r?.sessions || []
+      setConversations(list)
+      return list
+    } catch { setConversations([]); return [] } finally { setLoadingList(false) }
   }, [])
 
-  // Track scroll position — distinguish user scroll from programmatic scroll
-  const programmaticScrollRef = useRef(false)
-  useEffect(() => {
-    const container = messagesContainerRef.current
-    if (!container) return
-    const handleScroll = () => {
-      // Ignore scroll events caused by our own scrollTop assignment
-      if (programmaticScrollRef.current) return
-      const { scrollTop, scrollHeight, clientHeight } = container
-      isNearBottomRef.current = scrollHeight - scrollTop - clientHeight < 100
-    }
-    container.addEventListener('scroll', handleScroll)
-    return () => container.removeEventListener('scroll', handleScroll)
-  }, [])
-
-  useEffect(() => {
-    if (!isNearBottomRef.current) return
-    const container = messagesContainerRef.current
-    if (!container) return
-    // Use instant scroll (no animation) so it doesn't fight with user scrolling
-    programmaticScrollRef.current = true
-    container.scrollTop = container.scrollHeight
-    // Reset flag after current event loop so the scroll handler ignores this
-    requestAnimationFrame(() => { programmaticScrollRef.current = false })
-  }, [messages])
-
-  // Persist messages to sessionStorage for page-level navigation resilience
-  // NOTE: Per-conversation caches are written ONLY in loadConversation/startNewConversation/onDone
-  // to avoid race conditions during conversation switches
-  useEffect(() => {
-    const serialized = messages.map(m => ({ role: m.role, content: m.content, sources: m.sources, verification: m.verification, remainingSources: m.remainingSources }))
+  const openConversation = useCallback(async (id: string | null) => {
+    const gen = ++loadGen.current
+    setSessionId(id)
+    setPerm(null)
+    if (!id) { setMessages([]); return }
     try {
-      sessionStorage.setItem('research_messages', JSON.stringify(serialized))
-    } catch { /* quota exceeded */ }
-  }, [messages])
-
-  useEffect(() => {
-    try {
-      if (currentConversation) {
-        sessionStorage.setItem('research_currentConv', JSON.stringify(currentConversation))
-      } else {
-        sessionStorage.removeItem('research_currentConv')
-      }
-    } catch { /* ignore */ }
-  }, [currentConversation])
-
-  useEffect(() => {
-    try {
-      sessionStorage.setItem('research_jurisdictions', JSON.stringify(selectedJurisdictions))
-    } catch { /* ignore */ }
-  }, [selectedJurisdictions])
-
-  // Close jurisdiction picker on click outside
-  useEffect(() => {
-    if (!showJurisdictionPicker) return
-    const handleClickOutside = (e: MouseEvent) => {
-      if (jurisdictionRef.current && !jurisdictionRef.current.contains(e.target as Node)) {
-        setShowJurisdictionPicker(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [showJurisdictionPicker])
-
-  const loadConversations = async () => {
-    try {
-      const data = await api.get('/research/conversations')
-      const convs = Array.isArray(data) ? data : data.conversations || []
-      setConversations(convs)
+      const r = await engine()!.call('GET', `/api/session?id=${encodeURIComponent(id)}`)
+      if (gen !== loadGen.current) return
+      setMessages((r?.messages || []).map(storedMessage))
+      nearBottom.current = true
     } catch (err) {
-      console.error('Failed to load conversations:', err)
-    } finally {
-      setLoadingConversations(false)
+      if (gen !== loadGen.current) return
+      setMessages([{ id: nextId(), role: 'sys', kind: 'bad', content: friendly(err) }])
     }
-  }
+  }, [setMessages])
 
-  const loadConversation = async (conv: Conversation) => {
-    const thisLoad = ++loadGenRef.current
+  // A matter opens with its newest conversation, whichever window it was held in.
+  const matterId = matter?.id || null
+  useEffect(() => {
+    if (running) return
+    let alive = true
+    setLoadingList(true)
+    loadList(matterId).then((list) => { if (alive) openConversation(list[0]?.id || null) })
+    return () => { alive = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matterId])
 
-    // If there's an active stream, snapshot current messages + "Query cancelled."
-    if (streamAbortRef.current && streamConvIdRef.current) {
-      const cancelledId = streamConvIdRef.current
-      const snap = messagesRef.current.map(m => ({ ...m }))
-      const last = snap[snap.length - 1]
-      if (last && last.role === 'assistant') {
-        last.content = last.content ? last.content + '\n\n*Query cancelled.*' : 'Query cancelled.'
-        last.verificationPending = false
-      } else {
-        snap.push({ role: 'assistant', content: 'Query cancelled.' })
-      }
-      cancelledMsgsRef.current[cancelledId] = snap
-      streamAbortRef.current.abort()
-      streamAbortRef.current = null
-    }
-    streamConvIdRef.current = null
+  // ── scrolling: stay at the bottom unless the lawyer scrolled up ──
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const onScroll = () => { nearBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120 }
+    el.addEventListener('scroll', onScroll)
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [])
+  useEffect(() => { const el = scrollRef.current; if (el && nearBottom.current) el.scrollTop = el.scrollHeight }, [messages, perm])
+  useEffect(() => {
+    if (!running) return
+    const t0 = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(t0)
+  }, [running])
 
-    setLoading(false)
+  const sys = useCallback((content: string, kind: Message['kind'] = 'ok') => setMessages((m) => [...m, { id: nextId(), role: 'sys', content, kind }]), [setMessages])
+
+  const startNew = useCallback(() => {
+    if (running) return
+    loadGen.current++
+    setSessionId(null)
     setMessages([])
-    setCurrentConversation(conv)
-    setSelectedJurisdictions(conv.jurisdiction ? conv.jurisdiction.split(',') : ['US'])
-
-    if (cancelledMsgsRef.current[conv.id]) {
-      const msgs = cancelledMsgsRef.current[conv.id]
-      delete cancelledMsgsRef.current[conv.id]
-      setMessages(msgs)
-      return
-    }
-
-    try {
-      const data = await api.get(`/research/conversations/${conv.id}`)
-      if (loadGenRef.current !== thisLoad) return
-      const msgs = Array.isArray(data.messages) ? data.messages : []
-      // Extract remainingSources from verification data (stored in DB)
-      for (const msg of msgs) {
-        if (msg.verification?.remainingSources) {
-          msg.remainingSources = msg.verification.remainingSources
-        }
-      }
-      setMessages(msgs)
-    } catch {
-      if (loadGenRef.current !== thisLoad) return
-      setMessages([])
-    }
-  }
-
-  const startNewConversation = () => {
-    loadGenRef.current++
-
-    // Snapshot cancelled messages if stream is active
-    if (streamAbortRef.current && streamConvIdRef.current) {
-      const cancelledId = streamConvIdRef.current
-      const snap = messagesRef.current.map(m => ({ ...m }))
-      const last = snap[snap.length - 1]
-      if (last && last.role === 'assistant') {
-        last.content = last.content ? last.content + '\n\n*Query cancelled.*' : 'Query cancelled.'
-        last.verificationPending = false
-      } else {
-        snap.push({ role: 'assistant', content: 'Query cancelled.' })
-      }
-      cancelledMsgsRef.current[cancelledId] = snap
-      streamAbortRef.current.abort()
-      streamAbortRef.current = null
-    }
-    streamConvIdRef.current = null
-
-    setCurrentConversation(null)
-    setLoading(false)
-    setMessages([])
+    setFiles([])
     setInput('')
     inputRef.current?.focus()
-  }
+  }, [running, setMessages])
+
+  const lastAnswer = () => [...messagesRef.current].reverse().find((m) => m.role === 'assistant' && m.content) || null
 
   // "/" commands (the engine's one list, same as the terminal app and Word).
   const commands = useChatCommands({
     input,
     setInput,
     focusInput: () => inputRef.current?.focus(),
-    lastAnswer: () => messagesRef.current.filter((m) => m.role === 'assistant' && m.content).pop()?.content || null,
-    newConversation: startNewConversation,
+    lastAnswer: () => lastAnswer()?.content || null,
+    lastBasis: () => basedOn([...messagesRef.current].reverse().find((m) => m.role === 'assistant' && m.act)?.act),
+    newConversation: startNew,
+    quickAgent,
+    setQuickAgent,
+    running: !!running,
   })
 
-  const createConversation = async (title: string): Promise<string> => {
-    const data = await api.post('/research/conversations', {
-      title,
-      jurisdiction: selectedJurisdictions.join(','),
-    })
-    const newConv = { id: data.id, title, jurisdiction: selectedJurisdictions.join(','), createdAt: new Date().toISOString() }
-    setConversations((prev) => [newConv, ...prev])
-    setCurrentConversation(newConv)
-    return data.id
-  }
-
-  const deleteConversation = async (id: string) => {
-    if (!confirm(t('research.deleteConversationConfirm'))) return
-
-    try {
-      await api.delete(`/research/conversations/${id}`)
-      setConversations((prev) => prev.filter((c) => c.id !== id))
-      if (currentConversation?.id === id) {
-        startNewConversation()
-      }
-    } catch (err) {
-      console.error('Failed to delete conversation:', err)
-    }
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!input.trim() || loading) return
-    if (commands.intercept(input)) return
-
-    const userMessage = input.trim()
-    const fileToSend = attachedFile
+  // ── asking ──
+  const send = async (raw: string) => {
+    const typed = raw.trim()
+    if (!typed && !files.length) return
+    if (commands.intercept(typed)) return
+    const e = engine()
+    if (!e?.stream) return sys(t('chat.noEngine', 'The chat needs the OpenLex engine, which runs with the desktop app.'), 'warn')
+    if (running) return sys(t('chat.stillWriting', 'The answer is still being written. Wait for it (or press Stop), then ask again. Commands like /model work meanwhile.'), 'warn')
+    const message = typed || t('chat.aboutFile', 'Please look at the attached file.')
+    const att = files
+    const sid = sessionId || `app:${matterId || 'quick'}:${Date.now().toString(36)}`
+    if (!sessionId) setSessionId(sid)
+    const streamId = `q-${Date.now().toString(36)}-${++seq}`
+    const aid = nextId()
+    const t0 = Date.now()
     setInput('')
-    setAttachedFile(null)
-    setLoading(true)
-    const submitGen = ++loadGenRef.current
-
-    // Add user message (show attached filename if present)
-    const displayMessage = fileToSend
-      ? `${userMessage}\n\n📎 ${fileToSend.name}`
-      : userMessage
-    setMessages((prev) => [...prev, { role: 'user', content: displayMessage }])
-
-    try {
-      // Get or create conversation
-      let convId = currentConversation?.id
-      if (!convId) {
-        const title = userMessage.slice(0, 50) + (userMessage.length > 50 ? '...' : '')
-        convId = await createConversation(title)
-      }
-
-      // Guard: user switched away during createConversation await
-      if (loadGenRef.current !== submitGen) {
-        // Save user message so it's visible if they come back
-        cancelledMsgsRef.current[convId!] = [
-          { role: 'user', content: displayMessage },
-          { role: 'assistant', content: 'Query cancelled.' },
-        ]
-        setLoading(false)
-        return
-      }
-
-      // Add placeholder for assistant with pending verification state
-      setMessages((prev) => [...prev, { role: 'assistant', content: '', sources: [], verificationPending: true }])
-
-      // Track which conversation this stream belongs to
-      streamConvIdRef.current = convId!
-      const thisStreamConv = convId!
-
-      // Track whether verified content has replaced streamed tokens
-      let contentReplaced = false
-
-      // Safety timeout: clear verificationPending after 300s if no event arrives
-      const verifyTimeout = setTimeout(() => {
-        if (streamConvIdRef.current !== thisStreamConv) return
-        setMessages((prev) => {
-          const updated = [...prev]
-          const last = updated[updated.length - 1]
-          if (last.role === 'assistant' && last.verificationPending) {
-            last.verificationPending = false
-          }
-          return updated
-        })
-      }, 300000)
-
-      // Stream response — all callbacks guarded by conv-id check
-      streamAbortRef.current = streamChat(
-        convId!,
-        userMessage,
-        selectedJurisdictions,
-        // onChunk
-        (text) => {
-          if (streamConvIdRef.current !== thisStreamConv) return
-          if (contentReplaced) return
-          setMessages((prev) => {
-            const updated = [...prev]
-            const last = updated[updated.length - 1]
-            if (last.role === 'assistant') {
-              last.content += text
-            }
-            return updated
-          })
-        },
-        // onSources
-        (sources) => {
-          if (streamConvIdRef.current !== thisStreamConv) return
-          setMessages((prev) => {
-            const updated = [...prev]
-            const last = updated[updated.length - 1]
-            if (last.role === 'assistant') {
-              last.sources = [...(last.sources || []), ...(sources as Source[])]
-            }
-            return updated
-          })
-        },
-        // onDone
-        () => {
-          clearTimeout(verifyTimeout)
-          if (streamConvIdRef.current !== thisStreamConv) return // ghost callback from aborted stream
-          streamConvIdRef.current = null
-          streamAbortRef.current = null
-          setMessages((prev) => {
-            const updated = [...prev]
-            const last = updated[updated.length - 1]
-            if (last.role === 'assistant') {
-              last.verificationPending = false
-            }
-            return updated
-          })
-          setLoading(false)
-          loadConversations()
-          // Desktop notification — only fires when window unfocused (main
-          // process gates this). Useful for queries that take 30+s and the
-          // user has alt-tabbed away.
-          try {
-            const lv = (window as any).lexvault
-            if (lv?.notify) lv.notify('Research answer ready', 'Your OpenLex question finished — click to view.')
-          } catch {}
-        },
-        // onContentReplace
-        (content) => {
-          if (streamConvIdRef.current !== thisStreamConv) return
-          contentReplaced = true
-          setMessages((prev) => {
-            const updated = [...prev]
-            const last = updated[updated.length - 1]
-            if (last.role === 'assistant') {
-              last.content = content
-            }
-            return updated
-          })
-        },
-        // onVerification
-        (result: VerificationResult & { remainingSources?: { remaining: number, nextOffset: number, total: number } }) => {
-          if (streamConvIdRef.current !== thisStreamConv) return
-          clearTimeout(verifyTimeout)
-          setMessages((prev) => {
-            const updated = [...prev]
-            const last = updated[updated.length - 1]
-            if (last.role === 'assistant') {
-              last.verification = result
-              last.verificationPending = false
-              last.verificationExpanded = true
-              // Extract remaining sources info if bundled with verification
-              if (result.remainingSources) {
-                last.remainingSources = result.remainingSources
-              }
-            }
-            return updated
-          })
-        },
-        // onStatus
-        (status) => {
-          if (streamConvIdRef.current !== thisStreamConv) return
-          setMessages((prev) => {
-            const updated = [...prev]
-            const last = updated[updated.length - 1]
-            if (last.role === 'assistant') {
-              if (!last.content) last.content = ''
-              if (status === 'Verifying claims...') {
-                last.streamingDone = true
-                last.verifyStartTime = Date.now()
-              }
-              // Update verify sub-status messages from ClaimVerifier
-              if (last.streamingDone && last.verificationPending) {
-                last.verifyStatus = status
-              }
-            }
-            return updated
-          })
-        },
-        fileToSend || undefined,
-        {
-          onRemainingSources: (data) => {
-            if (streamConvIdRef.current !== thisStreamConv) return
-            setMessages((prev) => {
-              const updated = [...prev]
-              const last = updated[updated.length - 1]
-              if (last.role === 'assistant') {
-                last.remainingSources = data
-              }
-              return updated
-            })
-          },
-        },
-      )
-    } catch (err) {
-      setLoading(false)
-      setMessages((prev) => {
-        const updated = [...prev]
-        const last = updated[updated.length - 1]
-        if (last.role === 'assistant') {
-          last.content = 'Sorry, an error occurred. Please try again.'
-        }
-        return updated
-      })
-    }
-  }
-
-  const handleCancel = () => {
-    streamConvIdRef.current = null
-    if (streamAbortRef.current) {
-      streamAbortRef.current.abort()
-      streamAbortRef.current = null
-    }
-    setLoading(false)
-    setMessages((prev) => {
-      const updated = [...prev]
-      const last = updated[updated.length - 1]
-      if (last?.role === 'assistant') {
-        last.verificationPending = false
-        if (!last.content) {
-          // Remove empty assistant message
-          return updated.slice(0, -1)
-        }
-      }
-      return updated
-    })
-  }
-
-  const handleLoadMoreSources = (nextOffset: number) => {
-    if (!currentConversation?.id || loading) return
-    setLoading(true)
-    const thisStreamConv = currentConversation.id
-    streamConvIdRef.current = thisStreamConv
-    let contentReplaced = false
-
-    // Add a new assistant message for the continuation
-    setMessages((prev) => [
-      ...prev,
-      { role: 'assistant' as const, content: '', verificationPending: true },
+    setFiles([])
+    nearBottom.current = true
+    setMessages((m) => [...m,
+      { id: nextId(), role: 'user', content: message, files: att.map((f) => f.name), client: 'app' },
+      { id: aid, role: 'assistant', content: '', act: startActivity(t0), suggestions: [], notes: [], as: agent.name !== 'associate' ? agent.title : '' },
     ])
-
-    streamAbortRef.current = streamChat(
-      currentConversation.id,
-      '',
-      selectedJurisdictions,
-      (text) => {
-        if (streamConvIdRef.current !== thisStreamConv) return
-        if (contentReplaced) return
-        setMessages((prev) => {
-          const updated = [...prev]
-          const last = updated[updated.length - 1]
-          if (last.role === 'assistant') last.content += text
-          return updated
-        })
-      },
-      (sources) => {
-        if (streamConvIdRef.current !== thisStreamConv) return
-        setMessages((prev) => {
-          const updated = [...prev]
-          const last = updated[updated.length - 1]
-          if (last.role === 'assistant') last.sources = [...(last.sources || []), ...(sources as Source[])]
-          return updated
-        })
-      },
-      () => {
-        if (streamConvIdRef.current !== thisStreamConv) return
-        streamConvIdRef.current = null
-        streamAbortRef.current = null
-        setMessages((prev) => {
-          const updated = [...prev]
-          const last = updated[updated.length - 1]
-          if (last.role === 'assistant') last.verificationPending = false
-          return updated
-        })
-        setLoading(false)
-      },
-      (content) => {
-        if (streamConvIdRef.current !== thisStreamConv) return
-        contentReplaced = true
-        setMessages((prev) => {
-          const updated = [...prev]
-          const last = updated[updated.length - 1]
-          if (last.role === 'assistant') last.content = content
-          return updated
-        })
-      },
-      (result: VerificationResult & { remainingSources?: { remaining: number, nextOffset: number, total: number } }) => {
-        if (streamConvIdRef.current !== thisStreamConv) return
-        setMessages((prev) => {
-          const updated = [...prev]
-          const last = updated[updated.length - 1]
-          if (last.role === 'assistant') {
-            last.verification = result
-            last.verificationPending = false
-            last.verificationExpanded = true
-            if (result.remainingSources) {
-              last.remainingSources = result.remainingSources
-            }
-          }
-          return updated
-        })
-      },
-      (status) => {
-        if (streamConvIdRef.current !== thisStreamConv) return
-        setMessages((prev) => {
-          const updated = [...prev]
-          const last = updated[updated.length - 1]
-          if (last.role === 'assistant') {
-            if (!last.content) last.content = ''
-            if (status === 'Verifying claims...') {
-              last.streamingDone = true
-              last.verifyStartTime = Date.now()
-            }
-            if (last.streamingDone && last.verificationPending) {
-              last.verifyStatus = status
-            }
-          }
-          return updated
-        })
-      },
-      undefined,
-      {
-        sourceOffset: nextOffset,
-        onRemainingSources: (data) => {
-          if (streamConvIdRef.current !== thisStreamConv) return
-          setMessages((prev) => {
-            const updated = [...prev]
-            const last = updated[updated.length - 1]
-            if (last.role === 'assistant') last.remainingSources = data
-            return updated
-          })
-        },
-      },
-    )
-    // Clear the button from the previous message
-    setMessages((prev) => {
-      const updated = [...prev]
-      // Find the message before the new assistant message that had remainingSources
-      for (let i = updated.length - 2; i >= 0; i--) {
-        if (updated[i].remainingSources) {
-          updated[i] = { ...updated[i], remainingSources: undefined }
-          break
+    setRunning(streamId)
+    setNow(t0)
+    const patch = (fn: (a: Message) => void) => setMessages((m) => m.map((x) => { if (x.id !== aid) return x; const c = { ...x }; fn(c); return c }))
+    // Streamed words are shown in small batches, not one redraw per word.
+    let buf = ''
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const flush = () => { if (timer) clearTimeout(timer); timer = null; if (!buf) return; const add = buf; buf = ''; patch((a) => { a.content += add }) }
+    let stopped = false
+    let gotText = false
+    let failed = false
+    const body = {
+      message, docId: `app:${matterId || 'quick'}`, sessionId: sid, interactive: true,
+      ...(matterId ? { matterId } : { agent: quickAgent }),
+      ...(att.length ? { text: att.map((f) => `=== ${f.name} ===\n${f.text}`).join('\n\n'), files: att.map((f) => f.name) } : {}),
+    }
+    try {
+      const r = await e.stream('/api/chat', body, (ev) => {
+        const at = Date.now()
+        if (ev.type === 'text') {
+          if (!gotText) patch((a) => { a.act = applyEvent(a.act!, ev, at) })
+          gotText = true
+          buf += ev.text || ''
+          if (!timer) timer = setTimeout(flush, 60)
+          return
         }
-      }
-      return updated
+        flush()
+        patch((a) => { a.act = applyEvent(a.act!, ev, at) })
+        if (ev.type === 'suggestion') patch((a) => { a.suggestions = [...(a.suggestions || []), ev.suggestion] })
+        else if (ev.type === 'warning') patch((a) => { a.notes = [...(a.notes || []), String(ev.message || '')] })
+        else if (ev.type === 'withheld') patch((a) => { a.notes = [...(a.notes || []), `Your firm's rules held this answer back${ev.message ? `: ${ev.message}` : ''}. Do not rely on the text above.`] })
+        else if (ev.type === 'skill_suggestion' && ev.name) patch((a) => { a.tip = `Your firm's instructions “${ev.title || ev.name}” may fit — type /${ev.name} followed by your question to use them.` })
+        else if (ev.type === 'error' && !ev.recoverable) { failed = true; patch((a) => { a.error = friendly(ev.message) }) }
+        else if (ev.type === 'permission') setPerm(ev)
+        else if (ev.type === 'permission_result' && ev.by !== 'lawyer') {
+          setPerm((p: any) => { if (p?.id === ev.id) sys(`${permission.settled(ev)}: ${p.summary}`, 'warn'); return p?.id === ev.id ? null : p })
+        }
+      }, streamId)
+      stopped = !!r?.stopped
+    } catch (err) {
+      failed = true
+      patch((a) => { a.error = friendly(err) })
+    }
+    flush()
+    patch((a) => {
+      a.act = endActivity(a.act!, Date.now(), stopped)
+      if (stopped) a.stopNote = stopSentence(a.act)
     })
+    if (failed && !gotText && typed) {
+      setInput((cur) => cur || typed)
+      sys(t('chat.backInField', 'Your question is back in the field: press Enter to try again.'), 'info')
+    }
+    setPerm(null)
+    setRunning(null)
+    loadList(matterId)
+    try { (window as any).lexvault?.notify?.('OpenLex answered', 'Your question is answered — click to view.') } catch { /* optional */ }
   }
 
-  const handleExportConversation = useCallback(async (format: 'docx' | 'pdf') => {
-    if (!currentConversation?.id) return
-    try {
-      const url = format === 'pdf'
-        ? `${apiBase()}/api/research/export/conversation/${currentConversation.id}/pdf`
-        : `${apiBase()}/api/research/export/conversation/${currentConversation.id}`
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-      })
-      if (!response.ok) throw new Error('Export failed')
-      const blob = await response.blob()
-      const fname = `${(currentConversation.title || 'research').replace(/[^a-zA-Z0-9-_ ]/g, '').replace(/\s+/g, '_')}.${format}`
-      // In Electron the browser a.download trick silently fails (contextIsolation
-      // + no file:// permissions). Hand the bytes off to the main process which
-      // shows a native save dialog and writes the file. Outside Electron (web),
-      // fall back to the browser anchor pattern.
-      const lv = (window as any).lexvault
-      if (lv?.saveFile) {
-        const bytes = await blob.arrayBuffer()
-        const r = await lv.saveFile({ suggestedName: fname, bytes })
-        if (!r?.ok && !r?.cancelled) console.warn('saveFile failed:', r?.error)
-      } else {
-        const blobUrl = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = blobUrl
-        a.download = fname
-        a.click()
-        URL.revokeObjectURL(blobUrl)
-      }
-    } catch (err) {
-      console.error(`${format.toUpperCase()} export failed:`, err)
-    }
-  }, [currentConversation])
+  const stop = () => { if (running) engine()?.stop?.(running) }
 
-  const handleCopy = useCallback(async (index: number, content: string) => {
-    // Three-layer fallback. Some Electron + Windows combinations (looking at
-    // you, file:// contexts and corporate AV policies) silently reject both
-    // navigator.clipboard and execCommand. The Electron-clipboard IPC bridge
-    // always works inside the App; outside the App it isn't there, and the
-    // browser paths handle that.
+  const answerPerm = async (req: any, decision: string) => {
+    setPerm((p: any) => (p?.id === req.id ? null : p))
+    try {
+      const r = await engine()!.call('POST', '/api/permissions/answer', { id: req.id, decision })
+      sys(permission.answered(req, decision, r?.saved), decision === 'deny' ? 'warn' : 'ok')
+    } catch (err) { sys(friendly(err), 'bad') }
+  }
+
+  const deleteConversation = async (c: Conversation) => {
+    if (!confirm(t('chat.deleteConfirm', 'Delete this conversation in every window (the terminal, Word and this app)? The documents of the matter stay.'))) return
+    try {
+      await engine()!.call('POST', '/api/session/clear', { sessionId: c.id })
+      const list = await loadList(matterId)
+      if (c.id === sessionId) openConversation(list[0]?.id || null)
+    } catch (err) { sys(friendly(err), 'bad') }
+  }
+
+  const attach = async (list: FileList | null) => {
+    for (const f of Array.from(list || [])) {
+      if (!TEXT_FILES.test(f.name)) { sys(t('chat.attachTextOnly', '{{name}}: only text files can be attached here for now. For Word and PDF files use the Word pane or the terminal app, or add them to the matter.', { name: f.name }), 'warn'); continue }
+      if (f.size > MAX_ATTACH) { sys(t('chat.attachTooLarge', '{{name}} is too large to attach (2 MB at most).', { name: f.name }), 'warn'); continue }
+      try { const text = await f.text(); setFiles((cur) => [...cur.filter((x) => x.name !== f.name), { name: f.name, text }]) } catch { sys(t('chat.attachUnreadable', '{{name}} could not be read.', { name: f.name }), 'bad') }
+    }
+    if (fileRef.current) fileRef.current.value = ''
+  }
+
+  const copy = async (m: Message) => {
     let ok = false
-    try {
-      await navigator.clipboard.writeText(content)
-      ok = true
-    } catch {}
-    if (!ok) {
-      try {
-        const lv = (window as any).lexvault
-        if (lv?.copyText) ok = !!(await lv.copyText(content))
-      } catch {}
-    }
-    if (!ok) {
-      try {
-        const textarea = document.createElement('textarea')
-        textarea.value = content
-        textarea.style.position = 'fixed'
-        textarea.style.opacity = '0'
-        document.body.appendChild(textarea)
-        textarea.select()
-        ok = document.execCommand('copy')
-        document.body.removeChild(textarea)
-      } catch {}
-    }
-    if (ok) {
-      setCopiedIndex(index)
-      setTimeout(() => setCopiedIndex(null), 2000)
-    }
-  }, [])
-
-  const toggleJurisdiction = (code: string) => {
-    setSelectedJurisdictions((prev) => {
-      if (prev.includes(code)) {
-        return prev.length > 1 ? prev.filter((j) => j !== code) : prev
-      }
-      return [...prev, code]
-    })
+    try { await navigator.clipboard.writeText(m.content); ok = true } catch { /* fall back */ }
+    if (!ok) { try { ok = !!(await (window as any).lexvault?.copyText?.(m.content)) } catch { /* none */ } }
+    if (ok) { setCopied(m.id); setTimeout(() => setCopied(null), 2000) }
+  }
+  const toWord = async (m: Message) => {
+    try { await wordLink.sendToWord(m.content, { source: 'Research' }); setSentToWord(m.id); setTimeout(() => setSentToWord(null), 2000) } catch (err) { sys(friendly(err), 'bad') }
   }
 
-  const handleSaveSummary = async () => {
-    if (!summaryTitle.trim()) return
-
-    try {
-      // Save to vault
-      const lastAssistant = messages.filter((m) => m.role === 'assistant').pop()
-      if (lastAssistant) {
-        await api.post('/vault', {
-          title: summaryTitle,
-          content: lastAssistant.content,
-          type: 'note',
-          tags: ['research', ...selectedJurisdictions.map((j) => j.toLowerCase())],
-        })
-      }
-      setShowSaveModal(false)
-      setSummaryTitle('')
-    } catch (err) {
-      console.error('Failed to save summary:', err)
-    }
-  }
-
-  const formatTime = (dateStr: string) => {
-    if (!dateStr) return ''
-    const date = new Date(dateStr)
-    if (isNaN(date.getTime())) return ''
-    const now = new Date()
-    const diffMs = now.getTime() - date.getTime()
-    const diffMins = Math.floor(diffMs / 60000)
-    const diffHours = Math.floor(diffMs / 3600000)
-    const diffDays = Math.floor(diffMs / 86400000)
-
-    if (diffMins < 1) return 'Just now'
-    if (diffMins < 60) return `${diffMins}m ago`
-    if (diffHours < 24) return `${diffHours}h ago`
-    if (diffDays < 7) return `${diffDays}d ago`
-    return date.toLocaleDateString()
-  }
+  const current = conversations.find((c) => c.id === sessionId)
+  const title = matter ? matter.title : t('chat.quick', 'Quick question')
+  const otherWindows = useMemo(() => (current?.clients || []).filter((c) => c !== 'app').map((c) => WINDOW_WORDS[c] || c), [current])
 
   return (
     <div className="h-[calc(100vh-0px)] flex overflow-hidden">
-      {/* Sidebar */}
-      <aside
-        className={`${
-          sidebarCollapsed ? 'w-0' : 'w-72'
-        } border-r border-tobacco flex flex-col transition-all duration-200 overflow-hidden bg-deep-brown`}
-      >
-        {/* New conversation button */}
+      {/* Conversations of this matter, from every window */}
+      <aside className={`${sidebarCollapsed ? 'w-0' : 'w-72'} border-r border-tobacco flex flex-col transition-all duration-200 overflow-hidden bg-deep-brown`}>
         <div className="h-[72px] px-4 border-b border-tobacco flex items-center">
-          <button
-            onClick={startNewConversation}
-            className="w-full btn-primary flex items-center justify-center gap-2 !py-2"
-          >
+          <button onClick={startNew} disabled={!!running} className="w-full btn-primary flex items-center justify-center gap-2 !py-2">
             <Plus size={18} />
-            New Research
+            {t('chat.new', 'New conversation')}
           </button>
         </div>
-
-        {/* Conversations list */}
+        <div className="px-4 pt-3 pb-1 text-[11px] uppercase tracking-wide text-antique/70">
+          {matter ? t('chat.inMatter', 'In this matter (every window)') : t('chat.withoutMatter', 'Without a matter')}
+        </div>
         <div className="flex-1 overflow-y-auto">
-          {loadingConversations ? (
-            <div className="p-4 text-center text-antique">Loading...</div>
+          {loadingList ? (
+            <div className="p-4 text-center text-antique text-sm">{t('common.loading', 'Loading…')}</div>
           ) : conversations.length === 0 ? (
-            <div className="p-4 text-center text-antique text-sm">
-              No conversations yet
-            </div>
+            <div className="p-4 text-center text-antique text-sm">{t('chat.noConversations', 'No conversations yet.')}</div>
           ) : (
-            <div className="py-2">
-              {conversations.map((conv) => (
+            <div className="py-1">
+              {conversations.map((c) => (
                 <div
-                  key={conv.id}
-                  className={`group px-4 py-3 cursor-pointer transition-colors ${
-                    currentConversation?.id === conv.id
-                      ? 'bg-accent/10 border-l-2 border-accent'
-                      : 'hover:bg-leather border-l-2 border-transparent'
-                  }`}
-                  onClick={() => loadConversation(conv)}
+                  key={c.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => !running && openConversation(c.id)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && !running) openConversation(c.id) }}
+                  className={`group px-4 py-3 cursor-pointer transition-colors ${c.id === sessionId ? 'bg-accent/10 border-l-2 border-accent' : 'hover:bg-leather border-l-2 border-transparent'}`}
                 >
-                  <div className="flex items-start justify-between">
+                  <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <MessageSquare size={14} className="text-antique flex-shrink-0" />
-                        <span className="text-cream text-sm font-medium truncate">
-                          {conv.title}
-                        </span>
+                        <span className="text-cream text-sm font-medium truncate">{c.title}</span>
                       </div>
-                      <div className="flex items-center gap-2 mt-1 text-xs text-antique">
+                      <div className="flex items-center gap-1.5 mt-1 text-xs text-antique">
                         <Clock size={10} />
-                        {formatTime(conv.createdAt || conv.updatedAt || '')}
-                        {conv.jurisdiction && (
-                          <>
-                            <span className="text-tobacco">•</span>
-                            <span>{conv.jurisdiction}</span>
-                          </>
-                        )}
+                        <span>{when(c.updatedAt)}</span>
+                        <span className="text-tobacco">·</span>
+                        <span className="truncate">{c.clients.length ? c.clients.map((x) => WINDOW_WORDS[x] || x).join(', ') : t('chat.earlier', 'earlier')}</span>
                       </div>
                     </div>
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        deleteConversation(conv.id)
-                      }}
-                      className="opacity-0 group-hover:opacity-100 p-1 text-antique hover:text-red-400 transition-all"
+                      onClick={(e) => { e.stopPropagation(); deleteConversation(c) }}
+                      className="opacity-0 group-hover:opacity-100 focus:opacity-100 p-1 text-antique hover:text-red-400 transition-all"
+                      aria-label={t('chat.delete', 'Delete conversation')}
                     >
                       <Trash2 size={14} />
                     </button>
@@ -1045,518 +398,317 @@ export default function Research() {
         </div>
       </aside>
 
-      {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0 min-h-0">
-        {/* Header */}
+        {/* Header: the matter, who OpenLex works as, where the AI runs */}
         <div className="h-[72px] border-b border-tobacco px-6 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0 flex-1">
-            <button
-              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-              className="text-antique hover:text-cream transition-colors flex-shrink-0"
-            >
+            <button onClick={() => setSidebarCollapsed(!sidebarCollapsed)} className="text-antique hover:text-cream transition-colors flex-shrink-0" aria-label={t('chat.conversations', 'Conversations')}>
               <MessageSquare size={20} />
             </button>
             <div className="min-w-0">
-              <h1 className="font-serif text-lg text-parchment truncate">
-                {currentConversation?.title || t('research.newConversation')}
+              <h1 className="font-serif text-lg text-parchment truncate flex items-center gap-2">
+                {title}
+                {matter?.privileged && <span className="inline-flex items-center gap-1 text-xs text-forest border border-forest/40 rounded px-1.5 py-0.5"><Lock size={11} /> {t('chat.privileged', 'privileged — stays on this computer')}</span>}
               </h1>
-              <p className="text-antique text-xs">
-                {t('research.title')}
+              <p className="text-antique text-xs truncate">
+                {current ? `${clip(current.title, 60)}${otherWindows.length ? ` · ${t('chat.alsoIn', 'also asked in {{where}}', { where: otherWindows.join(' and ') })}` : ''}` : t('chat.newConversation', 'New conversation')}
               </p>
             </div>
           </div>
-
-          <div className="flex items-center gap-2 flex-shrink-0">
-            {/* Jurisdiction picker */}
-            <div className="relative" ref={jurisdictionRef}>
-              <button
-                onClick={() => setShowJurisdictionPicker(!showJurisdictionPicker)}
-                className="btn-secondary flex items-center gap-2 !px-4 !py-2 text-sm"
-              >
-                <Globe size={16} />
-                {selectedJurisdictions.length === 1
-                  ? jurisdictions.find((j) => j.code === selectedJurisdictions[0])?.label
-                  : `${selectedJurisdictions.length} ${t('common.jurisdiction').toLowerCase()}`}
-                <ChevronDown size={14} />
-              </button>
-
-              {showJurisdictionPicker && (
-                <div className="absolute right-0 top-full mt-2 bg-deep-brown border border-tobacco rounded-card shadow-xl z-20 w-64 p-2">
-                  <div className="text-xs text-antique mb-2 px-2">Select jurisdictions:</div>
-                  {jurisdictions.map((j) => (
-                    <button
-                      key={j.code}
-                      onClick={() => toggleJurisdiction(j.code)}
-                      className={`w-full flex items-center justify-between px-3 py-2 rounded-button transition-colors ${
-                        selectedJurisdictions.includes(j.code)
-                          ? 'bg-accent/10 text-accent'
-                          : 'text-cream hover:bg-leather'
-                      }`}
-                    >
-                      <span className="flex items-center gap-2">
-                        <span>{j.flag}</span>
-                        <span>{j.label}</span>
-                      </span>
-                      {selectedJurisdictions.includes(j.code) && (
-                        <Check size={16} />
-                      )}
-                    </button>
-                  ))}
-                  <button
-                    onClick={() => setShowJurisdictionPicker(false)}
-                    className="w-full mt-2 py-2 text-sm text-antique hover:text-cream"
-                  >
-                    Done
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Export + Save buttons */}
-            {messages.some((m) => m.role === 'assistant' && m.content) && currentConversation?.id && (
-              <div className="relative group">
-                <button className="btn-secondary flex items-center gap-2 !px-4 !py-2 text-sm">
-                  <Download size={16} />
-                  Export
-                </button>
-                <div className="absolute right-0 top-full mt-2 bg-deep-brown border border-tobacco rounded-card shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-20 min-w-[160px]">
-                  <button
-                    onClick={() => handleExportConversation('docx')}
-                    className="block w-full px-4 py-2 text-sm text-cream hover:bg-leather text-left"
-                  >
-                    Export as .docx
-                  </button>
-                  <button
-                    onClick={() => handleExportConversation('pdf')}
-                    className="block w-full px-4 py-2 text-sm text-cream hover:bg-leather text-left"
-                  >
-                    Export as .pdf
-                  </button>
-                </div>
-              </div>
-            )}
-            {messages.some((m) => m.role === 'assistant' && m.content) && (
-              <button
-                onClick={() => setShowSaveModal(true)}
-                className="btn-secondary flex items-center gap-2 !px-4 !py-2 text-sm"
-              >
-                <Save size={16} />
-                Save
-              </button>
-            )}
+          <div className="flex items-center gap-3 flex-shrink-0 text-xs">
+            <button type="button" onClick={() => commands.run('as')} className="btn-secondary !px-3 !py-1.5 text-xs inline-flex items-center gap-1" title={t('chat.asHint', 'Who OpenLex works as (/as)')}>
+              {t('chat.workingAs', 'Working as: {{who}}', { who: agent.title })} <ChevronDown size={12} />
+            </button>
+            {aiLabel && <span className="text-antique" title={t('chat.aiHint', 'Where the AI runs (/model)')}>{aiLabel}</span>}
           </div>
         </div>
 
-        {/* Messages */}
-        <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-6 space-y-6 min-h-0">
-          {messages.length === 0 && (
-            <div className="text-center py-20">
+        {/* The conversation */}
+        <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-5 min-h-0" aria-live="polite">
+          {!hasEngine && (
+            <div className="max-w-xl mx-auto px-4 py-3 bg-amber-500/10 border border-amber-500/30 rounded-card text-sm text-amber-300">
+              {t('chat.noEngine', 'The chat needs the OpenLex engine, which runs with the desktop app.')}
+            </div>
+          )}
+          {messages.length === 0 && hasEngine && (
+            <div className="text-center py-16">
               <div className="w-16 h-16 bg-accent/10 rounded-full flex items-center justify-center mx-auto mb-6">
                 <Sparkles size={32} className="text-accent" />
               </div>
               <div className="font-serif text-2xl text-parchment mb-3">
-                Legal Research Assistant
+                {matter ? t('chat.emptyMatter', 'Ask anything about this matter') : t('chat.emptyQuick', 'Ask a legal question')}
               </div>
-              <p className="text-antique text-sm max-w-lg mx-auto mb-8">
-                Ask questions about laws, regulations, and legal concepts. I search
-                through statutes, codes, and legal sources to provide accurate,
-                sourced answers.
+              <p className="text-antique text-sm max-w-lg mx-auto mb-6">
+                {matter
+                  ? t('chat.emptyMatterHelp', 'Its documents, the law, a draft. This conversation is the same in the terminal app and in Word.')
+                  : t('chat.emptyQuickHelp', 'Nothing here is tied to a matter. Choose a matter in the sidebar (or /matter) to keep the conversation with it.')}
               </p>
-
-              {/* Dynamic jurisdiction disclaimer */}
-              <div className="max-w-xl mx-auto space-y-3">
-                <div className="px-4 py-3 bg-leather/40 border border-tobacco/50 rounded-card text-sm text-antique">
-                  <div className="flex items-center gap-2 mb-2 text-parchment text-xs font-medium uppercase tracking-wide">
-                    <AlertTriangle size={12} className="text-amber-400/70" />
-                    Before you search
-                  </div>
-                  <div className="mb-2">
-                    <span className="text-cream">
-                      {selectedJurisdictions.length === 0
-                        ? 'No jurisdictions selected.'
-                        : selectedJurisdictions.length === 1
-                          ? `Searching in ${jurisdictions.find(j => j.code === selectedJurisdictions[0])?.label || selectedJurisdictions[0]}.`
-                          : `Searching across ${selectedJurisdictions.length} jurisdictions: ${selectedJurisdictions.map(c => jurisdictions.find(j => j.code === c)?.label || c).join(', ')}.`}
-                    </span>
-                  </div>
-                  <ul className="space-y-1 text-antique/80 text-xs list-disc list-inside">
-                    {selectedJurisdictions.length > 1 && (
-                      <li className="text-amber-400/80">
-                        Multi-jurisdiction queries split search capacity. If your question is about one country, select only that jurisdiction for better results.
-                      </li>
-                    )}
-                    {selectedJurisdictions.length === 0 && (
-                      <li className="text-amber-400/80">
-                        Select at least one jurisdiction to get relevant results.
-                      </li>
-                    )}
-                    <li>Results are based on federal statutes and codes only — case law and state/regional law are not yet included.</li>
-                    <li>Responses are AI-generated and verified against sources, but should not substitute professional legal advice.</li>
-                    <li>Ask specific questions for better results — e.g. "What are the notice periods for terminating a commercial lease?" rather than "Tell me about lease law."</li>
-                  </ul>
-                </div>
-              </div>
+              <ul className="space-y-1 text-sm text-parchment">
+                {[matter ? t('chat.example1', 'Summarise the documents of this matter') : t('chat.example1q', 'Which deadlines apply to a commercial lease?'), t('chat.example2', 'Is a two-year non-compete enforceable under Austrian law?')].map((ex) => (
+                  <li key={ex}><button type="button" className="hover:text-accent" onClick={() => { setInput(ex); inputRef.current?.focus() }}>› {ex}</button></li>
+                ))}
+              </ul>
             </div>
           )}
 
-          {messages.map((msg, idx) => (
-            <div
-              key={idx}
-              className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-            >
-              <div
-                className={`max-w-3xl ${
-                  msg.role === 'user'
-                    ? 'bg-accent/20 rounded-card rounded-br-sm px-5 py-4'
-                    : 'w-full'
-                }`}
-              >
-                {msg.role === 'assistant' ? (
-                  <div className={`bg-leather border rounded-card overflow-hidden transition-colors duration-500 ${
-                    msg.verificationPending ? 'border-amber-500/40 verify-pulse'
-                      : msg.verification && msg.verification.total > 0 ? 'border-forest/30 verify-complete'
-                      : 'border-tobacco'
-                  }`}>
-                    {/* Response header */}
-                    <div className="flex items-center justify-between px-5 py-3 border-b border-tobacco/50 bg-deep-brown/50">
-                      <div className="flex items-center gap-2 text-antique text-sm">
-                        <BookOpen size={14} />
-                        Research Response
-                        {msg.verificationPending && msg.streamingDone && (
-                          <span className="flex items-center gap-1.5 text-amber-400 text-xs">
-                            <ShieldAlert size={12} className="animate-pulse" />
-                            <span className="animate-pulse">{t('research.verifying')}</span>
-                            {msg.verifyStartTime && <ElapsedTimer startTime={msg.verifyStartTime} />}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {currentConversation?.id && (
-                          <div className="relative group">
-                            <button
-                              className="text-antique hover:text-accent transition-colors"
-                              title={t('common.export')}
-                            >
-                              <Download size={14} />
-                            </button>
-                            <div className="absolute right-0 top-full mt-1 bg-deep-brown border border-tobacco rounded-card shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-20 min-w-[130px]">
-                              <button
-                                onClick={() => handleExportConversation('docx')}
-                                className="block w-full px-3 py-1.5 text-xs text-cream hover:bg-leather text-left"
-                              >
-                                {t('vault.exportDocx')}
-                              </button>
-                              <button
-                                onClick={() => handleExportConversation('pdf')}
-                                className="block w-full px-3 py-1.5 text-xs text-cream hover:bg-leather text-left"
-                              >
-                                {t('vault.exportPdf')}
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                        {wordLink.connected && msg.content && (
-                          <button
-                            onClick={() => handleSendToWord(idx, msg.content)}
-                            className="text-antique hover:text-accent transition-colors"
-                            title={t('research.sendToWord', 'Send to Word (insert at cursor)')}
-                          >
-                            {sentToWordIndex === idx ? (
-                              <Check size={14} className="text-forest" />
-                            ) : (
-                              <FileText size={14} />
-                            )}
-                          </button>
-                        )}
-                        <button
-                          onClick={() => handleCopy(idx, msg.content)}
-                          className="text-antique hover:text-accent transition-colors"
-                          title={t('research.copyResponse')}
-                        >
-                          {copiedIndex === idx ? (
-                            <Check size={14} className="text-forest" />
-                          ) : (
-                            <Copy size={14} />
-                          )}
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Content */}
-                    <div className="px-5 py-4">
-                      <div className="prose-custom max-w-none">
-                        {msg.content ? (
-                          <ReactMarkdown>{msg.content}</ReactMarkdown>
-                        ) : (
-                          <p className="text-antique animate-pulse">{t('research.searchingDb')}</p>
-                        )}
-                      </div>
-                      {/* Verification in-progress indicator — only after streaming completes */}
-                      {msg.verificationPending && msg.streamingDone && msg.content && (
-                        <div className="mt-3 flex items-center gap-3 px-4 py-2.5 rounded-button bg-amber-500/10 border border-amber-500/30">
-                          <ShieldAlert size={16} className="text-amber-400 animate-pulse flex-shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm text-amber-300 font-medium truncate">
-                              {msg.verifyStatus || 'Verifying claims against sources...'}
-                            </p>
-                            <p className="text-xs text-amber-400/70 mt-0.5">
-                              Cross-referencing response with legal sources
-                              {msg.verifyStartTime && (
-                                <> &middot; <ElapsedTimer startTime={msg.verifyStartTime} /></>
-                              )}
-                            </p>
-                          </div>
-                          <div className="w-4 h-4 border-2 border-amber-400/40 border-t-amber-400 rounded-full animate-spin flex-shrink-0" />
-                        </div>
-                      )}
-                      {/* Verification Badge — auto-shown when verification completes */}
-                      {msg.verification && (msg.verification.total > 0 || msg.verification.confidence !== 'none') && (
-                        <VerificationBadge
-                          verification={msg.verification}
-                          expanded={msg.verificationExpanded ?? true}
-                          onToggle={() => {
-                            setMessages((prev) => {
-                              const updated = [...prev]
-                              updated[idx] = { ...updated[idx], verificationExpanded: !updated[idx].verificationExpanded }
-                              return updated
-                            })
-                          }}
-                        />
-                      )}
-                      {/* Analyse More Sources button — only on the last assistant message */}
-                      {msg.remainingSources && msg.remainingSources.remaining > 0 && !loading && idx === messages.length - 1 && (
-                        <button
-                          onClick={() => handleLoadMoreSources(msg.remainingSources!.nextOffset)}
-                          className="mt-3 ml-5 flex items-center gap-2 px-4 py-2 bg-accent/10 border border-accent/30 text-accent text-sm rounded-lg hover:bg-accent/20 transition-colors"
-                        >
-                          <BookOpen size={14} />
-                          Analyse {Math.min(msg.remainingSources.remaining, 10)} more sources
-                          <span className="text-antique text-xs">({msg.remainingSources.remaining} remaining of {msg.remainingSources.total})</span>
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Sources */}
-                    {msg.sources && msg.sources.length > 0 && (
-                      <div className="px-5 py-4 border-t border-tobacco/50 bg-deep-brown/30">
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center gap-2 text-xs text-antique">
-                            <ExternalLink size={12} />
-                            Sources ({msg.sources.length})
-                          </div>
-                          {hasAnyExpanded(idx) && (
-                            <button
-                              onClick={() => collapseAllSources(idx)}
-                              className="flex items-center gap-1 text-xs text-antique hover:text-accent transition-colors"
-                            >
-                              <ChevronsDownUp size={14} />
-                              Collapse All
-                            </button>
-                          )}
-                        </div>
-                        <div className="space-y-2">
-                          {(isShowingAllSources(idx) ? msg.sources : msg.sources.slice(0, 5)).map((src, i) => {
-                            const sourceText = src.text || src.content || src.excerpt || ''
-                            const sourceName = src.title || src.source_name || ''
-                            const isExpanded = isSourceExpanded(idx, i)
-
-                            return (
-                              <div
-                                key={i}
-                                className="bg-deep-brown rounded-button border border-tobacco/30 overflow-hidden"
-                              >
-                                <button
-                                  onClick={() => toggleSourceExpanded(idx, i)}
-                                  className="w-full px-4 py-3 text-left cursor-pointer hover:bg-leather/30"
-                                >
-                                  <div className="flex items-start justify-between gap-2">
-                                    <div className="font-medium text-accent text-sm flex-1">
-                                      {sourceName}
-                                    </div>
-                                    <div className="flex items-center gap-2 flex-shrink-0">
-                                      {src.score && (
-                                        <span className="text-xs text-antique">
-                                          {(src.score * 100).toFixed(0)}%
-                                        </span>
-                                      )}
-                                      {isExpanded ? (
-                                        <ChevronUp size={14} className="text-antique" />
-                                      ) : (
-                                        <ChevronDown size={14} className="text-antique" />
-                                      )}
-                                    </div>
-                                  </div>
-                                  <div className={`mt-2 text-xs text-cream-dark whitespace-pre-wrap ${isExpanded ? '' : 'line-clamp-3'}`}>
-                                    {sourceText}
-                                  </div>
-                                </button>
-                              </div>
-                            )
-                          })}
-                          {msg.sources.length > 5 && (
-                            <button
-                              onClick={() => toggleShowAllSources(idx)}
-                              className="w-full py-3 text-sm text-accent hover:text-accent/80 transition-colors flex items-center justify-center gap-2 bg-obsidian/30 rounded-button border border-tobacco/20"
-                            >
-                              {isShowingAllSources(idx) ? (
-                                <>
-                                  <ChevronUp size={16} />
-                                  Show fewer sources
-                                </>
-                              ) : (
-                                <>
-                                  <ChevronDown size={16} />
-                                  Show {msg.sources.length - 5} more sources
-                                </>
-                              )}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    )}
+          {messages.map((m) => {
+            if (m.role === 'sys') {
+              return (
+                <div key={m.id} role="status" className={`max-w-3xl text-sm flex gap-2 ${m.kind === 'bad' ? 'text-red-400' : m.kind === 'warn' ? 'text-amber-400' : m.kind === 'info' ? 'text-antique' : 'text-forest'}`}>
+                  <span aria-hidden="true">{m.kind === 'bad' ? '✗' : m.kind === 'warn' ? '!' : m.kind === 'info' ? '·' : '✓'}</span>
+                  <span className="text-parchment/90">{m.content}</span>
+                </div>
+              )
+            }
+            if (m.role === 'user') {
+              return (
+                <div key={m.id} className="flex justify-end">
+                  <div className="max-w-3xl bg-accent/20 rounded-card rounded-br-sm px-5 py-3">
+                    <p className="text-parchment whitespace-pre-wrap">{m.content}</p>
+                    {!!m.files?.length && <p className="mt-1 text-xs text-antique">📎 {m.files.join(', ')}</p>}
+                    {m.stored && m.client && m.client !== 'app' && <p className="mt-1 text-[11px] text-antique">{t('chat.askedIn', 'asked in {{where}}', { where: WINDOW_WORDS[m.client] || m.client })}{m.at ? ` · ${when(m.at)}` : ''}</p>}
                   </div>
-                ) : (
-                  <p className="text-parchment">{msg.content}</p>
-                )}
-              </div>
-            </div>
-          ))}
-
-          {/* Loading indicator removed — "Searching..." already shown inside the assistant message card */}
-
-          <div ref={messagesEndRef} />
+                </div>
+              )
+            }
+            return <Answer key={m.id} m={m} now={now} live={!!running && m === messages[messages.length - 1]} openSteps={!!openSteps[m.id]} toggleSteps={() => setOpenSteps((s) => ({ ...s, [m.id]: !s[m.id] }))}
+              onCopy={() => copy(m)} copied={copied === m.id} onWord={wordLink.connected && m.content ? () => toWord(m) : null} sentToWord={sentToWord === m.id} onStop={stop} />
+          })}
         </div>
 
-        {/* Input */}
-        <form onSubmit={handleSubmit} className="border-t border-tobacco p-4 bg-deep-brown">
-          {/* File preview chip */}
-          {attachedFile && (
-            <div className="flex items-center gap-2 mb-2 px-3 py-1.5 bg-tobacco/30 border border-tobacco rounded-button w-fit">
-              <Paperclip size={14} className="text-antique" />
-              <span className="text-xs text-parchment truncate max-w-[200px]">{attachedFile.name}</span>
-              <span className="text-xs text-antique">({(attachedFile.size / 1024).toFixed(0)} KB)</span>
-              <button
-                type="button"
-                onClick={() => { setAttachedFile(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
-                className="text-antique hover:text-cream ml-1"
-              >
-                <X size={14} />
-              </button>
+        {/* The question field */}
+        <form onSubmit={(e) => { e.preventDefault(); send(input) }} className="border-t border-tobacco p-4 bg-deep-brown">
+          {!!files.length && (
+            <div className="flex flex-wrap gap-2 mb-2">
+              {files.map((f) => (
+                <span key={f.name} className="flex items-center gap-2 px-3 py-1 bg-tobacco/30 border border-tobacco rounded-button text-xs text-parchment">
+                  <Paperclip size={12} className="text-antique" /> {f.name}
+                  <button type="button" onClick={() => setFiles((cur) => cur.filter((x) => x.name !== f.name))} className="text-antique hover:text-cream" aria-label={t('research.removeFile', 'Remove file')}><X size={12} /></button>
+                </span>
+              ))}
+              <span className="text-[11px] text-antique self-center">{t('chat.attachSentence', 'Sent with your question, under your client-data rule.')}</span>
             </div>
           )}
           {commands.menu}
-          <div className="flex gap-3">
-            {/* Hidden file input */}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".pdf,.docx,.doc,.txt"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0]
-                if (file) setAttachedFile(file)
-              }}
-            />
-            {/* Paperclip button */}
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={loading}
-              className="text-antique hover:text-cream transition-colors px-2"
-              title={t('research.attachFile')}
-            >
+          <div className="flex gap-3 items-end">
+            <input ref={fileRef} type="file" multiple accept=".txt,.md,.csv,.eml,.json,.xml,.html,.rtf" className="hidden" onChange={(e) => attach(e.target.files)} />
+            <button type="button" onClick={() => fileRef.current?.click()} disabled={!!running} className="text-antique hover:text-cream transition-colors px-2 pb-2" title={t('research.attachFile', 'Attach file')}>
               <Paperclip size={18} />
             </button>
-            <input
+            <textarea
               ref={inputRef}
-              type="text"
+              rows={1}
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={commands.onKeyDown}
-              placeholder={t('research.askAnything')}
-              className="input flex-1"
-              disabled={loading}
+              onKeyDown={(e) => {
+                commands.onKeyDown(e)
+                if (e.defaultPrevented) return
+                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(input) }
+                if (e.key === 'Escape' && running) { e.preventDefault(); stop() }
+              }}
+              placeholder={running ? t('chat.placeholderRunning', 'Commands work while the answer is written: /model, /data …') : t('chat.placeholder', 'Type your question (or / for commands) and press Enter')}
+              className="input flex-1 resize-none min-h-[42px] max-h-40"
             />
-            {loading ? (
-              <button
-                type="button"
-                onClick={handleCancel}
-                className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-button transition-colors"
-                title={t('research.stopGeneration')}
-              >
-                <Square size={16} fill="currentColor" />
+            {running ? (
+              <button type="button" onClick={stop} className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-button transition-colors inline-flex items-center gap-2" title={t('chat.stopHint', 'Stop (Esc): the answer so far is kept')}>
+                <Square size={14} fill="currentColor" /> {t('research.stop', 'Stop')}
               </button>
             ) : (
-              <button
-                type="submit"
-                disabled={!input.trim()}
-                className="btn-primary px-5"
-              >
+              <button type="submit" disabled={!input.trim() && !files.length} className="btn-primary px-5" aria-label={t('chat.send', 'Send')}>
                 <Send size={18} />
               </button>
             )}
           </div>
-          <div className="flex items-center gap-4 mt-2 text-xs text-antique">
-            <span className="flex items-center gap-1">
-              <Globe size={10} />
-              {selectedJurisdictions.join(', ')}
-            </span>
-            <span>•</span>
-            <span>{t('research.multiJurisdictionDb')}</span>
-          </div>
           {commands.hint}
         </form>
         {commands.overlay}
+        {perm && <PermissionDialog req={perm} onAnswer={(d) => answerPerm(perm, d)} />}
       </div>
+    </div>
+  )
+}
 
-      {/* Save modal */}
-      {showSaveModal && (
-        <div className="fixed inset-0 bg-ink/80 flex items-center justify-center z-50 p-6">
-          <div className="card max-w-md w-full animate-fade-in">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-serif text-xl text-parchment">{t('research.saveToVault')}</h2>
-              <button
-                onClick={() => setShowSaveModal(false)}
-                className="text-antique hover:text-cream"
-              >
-                <X size={20} />
-              </button>
-            </div>
+// ── one answer ─────────────────────────────────────────────────────────────
 
-            <p className="text-antique text-sm mb-4">
-              {t('research.saveDescription')}
-            </p>
-
-            <div>
-              <label className="block text-cream text-sm mb-2">{t('common.title')}</label>
-              <input
-                type="text"
-                value={summaryTitle}
-                onChange={(e) => setSummaryTitle(e.target.value)}
-                className="input w-full"
-                placeholder={t('research.vaultTitlePlaceholder')}
-              />
-            </div>
-
-            <div className="flex gap-3 mt-6">
-              <button
-                onClick={() => setShowSaveModal(false)}
-                className="btn-secondary flex-1"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSaveSummary}
-                disabled={!summaryTitle.trim()}
-                className="btn-primary flex-1 inline-flex items-center justify-center"
-              >
-                <Save size={18} className="mr-2" />
-                Save
-              </button>
-            </div>
+function Answer({ m, now, live, openSteps, toggleSteps, onCopy, copied, onWord, sentToWord, onStop }: {
+  m: Message; now: number; live: boolean; openSteps: boolean; toggleSteps: () => void
+  onCopy: () => void; copied: boolean; onWord: (() => void) | null; sentToWord: boolean; onStop: () => void
+}) {
+  const { t } = useTranslation()
+  const act = m.act
+  const running = !!act && !act.endedAt
+  const data = act ? dataLine(act.models, act.online, running) : null
+  const basis = basedOn(act)
+  const steps = act?.steps || []
+  const shown = running ? steps.slice(-3) : steps
+  const earlier = running ? Math.max(steps.length - 3, 0) : 0
+  return (
+    <div className="flex justify-start">
+      <div className="max-w-3xl w-full bg-leather border border-tobacco rounded-card overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-2.5 border-b border-tobacco/50 bg-deep-brown/50">
+          <div className="flex items-center gap-2 text-antique text-sm">
+            <BookOpen size={14} />
+            OpenLex{m.as ? <span className="text-xs">· {t('chat.as', 'as {{who}}', { who: m.as })}</span> : null}
+            {m.stored && m.client && m.client !== 'app' && <span className="text-xs">· {t('chat.answeredIn', 'answered in {{where}}', { where: WINDOW_WORDS[m.client] || m.client })}</span>}
           </div>
+          {!running && m.content && (
+            <div className="flex items-center gap-2">
+              {onWord && (
+                <button onClick={onWord} className="text-antique hover:text-accent transition-colors" title={t('research.sendToWord', 'Send to Word (insert at cursor)')}>
+                  {sentToWord ? <Check size={14} className="text-forest" /> : <FileText size={14} />}
+                </button>
+              )}
+              <button onClick={onCopy} className="text-antique hover:text-accent transition-colors" title={t('research.copyResponse', 'Copy response')}>
+                {copied ? <Check size={14} className="text-forest" /> : <Copy size={14} />}
+              </button>
+            </div>
+          )}
         </div>
-      )}
+        <div className="px-5 py-4 space-y-3">
+          {m.content ? <div className="prose-custom max-w-none"><ReactMarkdown>{m.content}</ReactMarkdown></div> : null}
+
+          {/* What OpenLex is doing right now (≤3 recent steps, the current one marked) */}
+          {running && act && (
+            <div className="rounded-button border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm" aria-live="polite">
+              <div className="text-parchment font-medium">{t('chat.working', 'OpenLex is working on it')} <span className="text-antique font-normal">· {duration(now - act.startedAt)} {t('chat.soFar', 'so far')}</span></div>
+              {earlier > 0 && <div className="text-xs text-antique mt-1">… {earlier} {t('chat.earlierSteps', 'earlier steps')}</div>}
+              <ul className="mt-1 space-y-0.5">
+                {shown.map((s, i) => (
+                  <li key={i} className={`flex gap-2 ${s.status === 'now' ? 'text-cream font-medium' : s.status === 'failed' ? 'text-amber-400' : 'text-parchment/80'}`}>
+                    <span aria-hidden="true" className={s.status === 'done' ? 'text-forest' : s.status === 'failed' ? 'text-amber-400' : 'text-accent'}>{mark(s.status)}</span>
+                    <span className="flex-1">{s.text}</span>
+                    <span className="text-xs text-antique tabular-nums">{duration((s.end || now) - s.at)}</span>
+                  </li>
+                ))}
+              </ul>
+              {!act.waiting && !steps.some((s) => s.phase === 'writing') && <div className="text-xs text-antique mt-1">· {t('chat.next', 'Next: writing the answer')}</div>}
+            </div>
+          )}
+
+          {/* Where the data went: always visible, symbol + words */}
+          {data && (
+            <div className={`text-xs flex gap-2 ${data.left ? 'text-amber-400 font-medium' : 'text-forest'}`} title={data.title}>
+              <span aria-hidden="true">{data.symbol}</span>
+              <span>{data.text}</span>
+            </div>
+          )}
+          {running && live && (
+            <div className="text-xs text-antique">
+              <button type="button" onClick={onStop} className="underline hover:text-cream">{t('research.stop', 'Stop')}</button> {t('chat.stopKeeps', '(or Esc): the answer so far is kept')}
+            </div>
+          )}
+
+          {!running && act && !m.stored && (
+            <div className="text-xs text-antique">
+              <button type="button" onClick={toggleSteps} className="inline-flex items-center gap-1 hover:text-cream" aria-expanded={openSteps}>
+                {summaryLine(act)} {openSteps ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              </button>
+              {openSteps && (
+                <ol className="mt-1 ml-1 space-y-0.5">
+                  {steps.map((s, i) => (
+                    <li key={i} className="flex gap-2 text-parchment/80">
+                      <span className="tabular-nums w-5 text-right">{i + 1}</span>
+                      <span aria-hidden="true">{mark(s.status)}</span>
+                      <span className="flex-1">{s.text}</span>
+                      <span className="tabular-nums">{s.end ? duration(s.end - s.at) : ''}</span>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
+          )}
+
+          {!running && basis.length > 0 && <BasedOn items={basis} />}
+
+          {(m.suggestions || []).map((s, i) => {
+            const check = checkLine(s)
+            return (
+              <div key={i} className="border-l-2 border-accent pl-3 text-sm space-y-1">
+                <div><span className={`font-semibold uppercase text-xs ${s.severity === 'high' ? 'text-red-400' : 'text-accent'}`}>{s.severity || 'note'}</span> <span className="text-parchment">{s.summary}</span></div>
+                {s.proposed_text && <div className="text-cream-dark text-xs">{t('chat.proposed', 'Proposed:')} {clip(s.proposed_text, 400)}</div>}
+                {s.basis && <div className="text-antique text-xs">{t('chat.legalBasis', 'Legal basis:')} {basisText(s.basis)}</div>}
+                <div className={`text-xs ${check.ok ? 'text-forest' : 'text-amber-400'}`}>{check.mark} {check.text}</div>
+              </div>
+            )
+          })}
+
+          {(m.notes || []).map((n, i) => <div key={i} className="text-xs text-amber-400">! {n}</div>)}
+          {m.error && <div className="text-sm text-red-400">✗ {m.error}</div>}
+          {m.stopNote ? <div className="text-xs text-antique">{m.stopNote}</div> : m.stored && act?.stopped ? <div className="text-xs text-antique">{t('chat.wasStopped', '(stopped)')}</div> : null}
+          {m.tip && <div className="text-xs text-antique">{m.tip}</div>}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** "Based on": numbered; a law section opens in full on click (GET /api/law/section). */
+function BasedOn({ items }: { items: Basis[] }) {
+  const { t } = useTranslation()
+  const [open, setOpen] = useState<number | null>(null)
+  const [full, setFull] = useState<Record<number, string>>({})
+  const toggle = async (it: Basis) => {
+    if (open === it.n) return setOpen(null)
+    setOpen(it.n)
+    if (it.kind !== 'law' || !it.chunk_id || full[it.n]) return
+    setFull((f) => ({ ...f, [it.n]: t('common.loading', 'Loading…') }))
+    try {
+      const r = await engine()!.call('GET', `/api/law/section?chunk_id=${encodeURIComponent(it.chunk_id)}`)
+      setFull((f) => ({ ...f, [it.n]: r?.content || it.detail }))
+    } catch (err) { setFull((f) => ({ ...f, [it.n]: `${it.detail ? `${it.detail}\n\n` : ''}(${t('chat.notOpened', 'The full text could not be opened')}: ${friendly(err)})` })) }
+  }
+  return (
+    <div className="border-t border-tobacco/50 pt-3">
+      <div className="text-xs font-medium text-parchment mb-1">{t('chat.basedOn', 'Based on')}</div>
+      <ul className="space-y-0.5">
+        {items.map((it) => (
+          <li key={it.n}>
+            <button type="button" onClick={() => toggle(it)} aria-expanded={open === it.n} className="w-full text-left text-xs flex gap-2 hover:text-cream text-parchment/90">
+              <span className="text-accent tabular-nums">[{it.n}]</span>
+              <span className="flex-1">{it.label}{it.detail && open !== it.n ? <span className="text-antique"> — {clip(it.detail, 90)}</span> : null}</span>
+            </button>
+            {open === it.n && <div className="ml-7 mt-1 mb-2 text-xs text-cream-dark whitespace-pre-wrap">{full[it.n] || it.detail || t('chat.docPassage', 'OpenLex read this part of your document for the answer.')}</div>}
+          </li>
+        ))}
+      </ul>
+      <div className="text-[11px] text-antique/70 mt-1">{t('chat.checkSources', 'Law sections come from the law collection on this computer. Check them before relying on the answer.')}</div>
+    </div>
+  )
+}
+
+/** "May OpenLex …?" — the broker's question; Allow once is the default, Esc = Don't allow. */
+function PermissionDialog({ req, onAnswer }: { req: any; onAnswer: (decision: string) => void }) {
+  const { t } = useTranslation()
+  const boxRef = useRef<HTMLDivElement>(null)
+  const [sent, setSent] = useState(false)
+  const answer = useCallback((d: string) => { if (sent) return; setSent(true); onAnswer(d) }, [onAnswer, sent])
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); answer('deny') } }
+    document.addEventListener('keydown', onKey, true)
+    boxRef.current?.querySelector<HTMLElement>('button[data-default]')?.focus()
+    return () => document.removeEventListener('keydown', onKey, true)
+  }, [answer])
+  const buttons = permission.buttons(req)
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-[18vh]">
+      <div className="fixed inset-0 bg-ink/70" />
+      <div ref={boxRef} role="alertdialog" aria-modal="true" aria-labelledby="perm-q" aria-describedby="perm-risk" className="relative w-full max-w-lg rounded-card border border-accent/60 bg-deep-brown shadow-2xl animate-fade-in p-5 space-y-3">
+        <div className="text-xs uppercase tracking-wide text-accent">{req.title || t('chat.permTitle', 'OpenLex wants to use a tool')}</div>
+        <p id="perm-q" className="text-parchment text-base">{permission.question(req)}</p>
+        {permission.details(req).map((d) => (
+          <div key={d.label} className="text-xs text-antique"><span className="text-parchment/80">{d.label}:</span> <span className="font-mono break-all">{d.value}</span></div>
+        ))}
+        <p id="perm-risk" className="text-xs text-antique">{permission.riskLine(req)}</p>
+        <div className="flex flex-wrap gap-2 pt-1">
+          {buttons.map((b) => (
+            <button key={b.choice} type="button" disabled={sent} data-default={b.primary ? '' : undefined} onClick={() => answer(b.choice)}
+              className={b.primary ? 'btn-primary !py-1.5 text-sm' : b.choice === 'deny' ? 'btn-secondary !py-1.5 text-sm' : 'btn-secondary !py-1.5 text-sm opacity-90'}>
+              {b.label}
+            </button>
+          ))}
+        </div>
+        <p className="text-[11px] text-antique/70">{t('chat.permKeys', 'Enter: allow once · Esc: don\'t allow · nothing happens until you choose')}</p>
+      </div>
     </div>
   )
 }

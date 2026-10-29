@@ -3,7 +3,8 @@
  * OpenLex engine — HTTP API for the Word add-in, CLI and desktop app (:18001).
  *
  * - Serves the add-in static files (taskpane, manifest assets)
- * - /api/chat: agent loop with SSE streaming (step/suggestion/text/done/error)
+ * - /api/chat: agent loop with SSE streaming (step/suggestion/text/done/error);
+ *   /api/sessions, /api/session: the conversations every window shares
  * - /api/document/*: map, sections, full analyze
  * - /api/license/status, /api/jurisdictions, /api/packs, /api/status
  *
@@ -1286,8 +1287,10 @@ async function handle(req, res) {
       const rec = require('./activity').start({ matterId: matterIdFor(body, entry), kind: 'question', asked: body.message, client: clientOf(req), files: Array.isArray(body.files) ? body.files : [] })
       // What the answer was based on and where its data went, kept with the conversation.
       const turn = { sources: [], data: [], online: [] }
+      let shown = '' // the answer text the window actually received (kept as is when stopped)
       const out = (e) => {
         rec.see(e)
+        if (e.type === 'text' && !res.destroyed && !res.writableEnded) shown += e.text || ''
         sendSse(res, e)
         if (e.type === 'law') for (const s of e.sources || []) { if (!turn.sources.some((x) => (x.chunk_id && x.chunk_id === s.chunk_id) || (x.source_name === s.source_name && x.section === s.section))) turn.sources.push(s) }
         else if (e.type === 'model') {
@@ -1306,13 +1309,15 @@ async function handle(req, res) {
       // the run cleanly (partial results kept) instead of burning the loop.
       const ac = new AbortController()
       res.on('close', () => ac.abort())
+      // The turn in the conversation every window shows (stopped ones too).
+      const keep = (text, stopped) => session.append(body.message, text, { matterId: matterIdFor(body, entry), client: clientOf(req), agent: agent && agent.name !== 'associate' ? agent.name : null, ...turn, stopped })
       try {
         // Permissions: an interactive front end answers "may OpenLex …?"
         // questions on this stream; anything else fails closed (deny).
         const r = await rec.run(() => require('./folder').run(folderDir, () => require('./permissions').session(permissionSession(body, res, ac.signal), () => policy.observeModels((m) => out({ type: 'model', ...m }), () => policy.withMatter(matterIdFor(body, entry), () => agentsMod.run(agent, () => runAction(context, body.message, out, { signal: ac.signal, skill, agent })))))))
         // Conversation memory: persist the exchange (best-effort; the
         // model's streamed prose already went out token-by-token).
-        session.append(body.message, r.text, { matterId: matterIdFor(body, entry), client: clientOf(req), agent: agent && agent.name !== 'associate' ? agent.name : null, ...turn, stopped: ac.signal.aborted || !!r.stopped })
+        keep(ac.signal.aborted ? shown : r.text, ac.signal.aborted || !!r.stopped)
         // Firm hooks at the answer (hooks.js): warn → note; deny → withheld.
         // A streamed answer is already on screen: the pane marks it withheld.
         const hooks = require('./hooks')
@@ -1336,6 +1341,7 @@ async function handle(req, res) {
         out({ type: 'done' })
         rec.finish({ aborted: ac.signal.aborted })
       } catch (err) {
+        if (ac.signal.aborted) keep(shown, true)
         out({ type: 'error', message: err.message })
         rec.finish({ error: err.message })
       }

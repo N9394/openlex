@@ -121,15 +121,17 @@ contextBridge.exposeInMainWorld('lexvault', {
   // OpenLex engine API (same endpoints the Word pane uses).
   //   engine.call('GET', '/api/library')
   //   engine.stream('/api/workflows/run', body, (ev) => …)  → resolves when done
+  //   engine.stream('/api/chat', body, onEvent, 'q-1') · engine.stop('q-1')  → Stop
   engine: {
     call: (method, path, body) => ipcRenderer.invoke('lexvault:engine', { method, path, body }),
-    stream: (path, body, onEvent) => {
-      const streamId = Math.random().toString(36).slice(2)
+    stream: (path, body, onEvent, id) => {
+      const streamId = id ? String(id) : Math.random().toString(36).slice(2)
       const listener = (_e, msg) => { if (msg.streamId === streamId) onEvent(msg.ev) }
       ipcRenderer.on('lexvault:engine-stream', listener)
       return ipcRenderer.invoke('lexvault:engineStream', { path, body, streamId })
         .finally(() => ipcRenderer.removeListener('lexvault:engine-stream', listener))
     },
+    stop: (streamId) => ipcRenderer.invoke('lexvault:engineStop', { streamId: String(streamId) }),
   },
 
   // Matters shared with the Word plugin (OpenLex engine matters.js).

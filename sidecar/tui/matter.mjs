@@ -57,6 +57,16 @@ const backToChat = new Set()
 const drafts = new Map()
 // Questions asked, per matter, for ↑ / ↓ in the question field.
 const histories = new Map()
+// The engine conversation each matter continues (shared with the Word pane and the desktop app).
+const sessionIds = new Map()
+const WINDOW_WORDS = { app: 'the desktop app', word: 'Word', tui: 'the terminal', cli: 'the command line' }
+
+/** A stored conversation (GET /api/session) as chat messages. */
+export function historyMessages(messages = []) {
+  return messages.map((m) => (m.role === 'user'
+    ? { role: 'you', text: m.content, files: [] }
+    : { id: ++seq, role: 'ai', text: m.content, sources: m.sources || [], suggestions: [], ...(m.stopped ? { stopped: true } : {}) }))
+}
 
 export const ACTIONS = [
   { value: 'review', label: 'Review the documents against a checklist', hint: 'Every document, checked point by point; each finding quotes the document.' },
@@ -132,6 +142,8 @@ export function Matter({ matterId = null }) {
   const [files, setFiles] = useState([]) // files dropped into the question field: [{ path, name, size }]
   const [now, setNow] = useState(clock.now()) // ticks every second while an answer is written
   const [source, setSource] = useState(null) // the law section opened from "Based on"
+  const [sessionId, setSessionIdRaw] = useState(() => sessionIds.get(key) || `tui:${key}`)
+  const setSessionId = (v) => { sessionIds.set(key, v); setSessionIdRaw(v) }
   const abort = useRef(null)
   const pageRef = useRef({ height: 10, total: 0 })
   const { cols, rows } = useSize()
@@ -154,6 +166,24 @@ export function Matter({ matterId = null }) {
     } catch (err) { setNotes([{ kind: 'bad', text: err.message }]) }
   }
   useEffect(() => { load() }, [matterId, ctx.hubTick])
+  // One conversation per matter in every window: an empty chat picks up the
+  // matter's newest conversation from the engine (asked here, in Word or in the desktop app).
+  useEffect(() => {
+    if (!matterId || conversations.get(key)?.length || sessionIds.has(key)) return
+    let alive = true
+    ;(async () => {
+      try {
+        const newest = (await ctx.api.sessions(matterId)).sessions?.[0]
+        if (!newest || !alive) return
+        const r = await ctx.api.session(newest.id)
+        if (!alive || !r.messages?.length) return
+        setSessionId(newest.id)
+        const where = (newest.clients || []).filter((c) => c !== 'tui').map((c) => WINDOW_WORDS[c] || c)
+        setMsgs((m) => (m.length ? m : [{ role: 'sys', kind: 'info', text: `Continuing this matter's conversation${where.length ? ` (also asked in ${where.join(' and ')})` : ''}. /clear starts a new one.` }, ...historyMessages(r.messages)]))
+      } catch (err) { log('loading the matter conversation failed:', err) }
+    })()
+    return () => { alive = false }
+  }, [matterId])
   useEffect(() => { conversations.set(key, msgs) }, [msgs])
   useEffect(() => () => abort.current?.abort(), [])
   // Typed text survives going back (and is said to).
@@ -264,7 +294,7 @@ export function Matter({ matterId = null }) {
     let failed = false
     const flush = () => { clearTimeout(timer); timer = null; if (!buf) return; const t = buf; buf = ''; patch((a) => { a.text += t }) }
     try {
-      await ctx.api.chat({ message, docId, ...(docText ? { text: docText, files: att.map((f) => f.name) } : {}), matterId: matterId || undefined, agent: as.name, interactive: true, ...ctx.folderBody() }, (ev) => {
+      await ctx.api.chat({ message, docId, ...(docText ? { text: docText, files: att.map((f) => f.name) } : {}), matterId: matterId || undefined, sessionId, agent: as.name, interactive: true, ...ctx.folderBody() }, (ev) => {
         const at = clock.now()
         if (ev.type === 'text') {
           // The first words switch the activity to "Writing the answer"; the rest only add text.
@@ -437,7 +467,8 @@ export function Matter({ matterId = null }) {
     if (name === 'record') { backToChat.add(key); return ctx.go('record', { matterId: /^all\b/i.test(arg) ? null : matterId }) }
     if (name === 'clear') {
       try {
-        await ctx.api.clearConversation(`tui:${key}`)
+        await ctx.api.clearConversation(sessionId)
+        setSessionId(`tui:${key}`)
         setMsgs([])
         sys(`New conversation${matterId ? ' for this matter' : ''}: OpenLex no longer remembers the earlier questions. The documents are still there.`)
       } catch (err) { sys(err.message, 'bad') }

@@ -554,6 +554,8 @@ test('permission prompt: plain words over the chat; Enter = allow once, a = this
   let f = await waitFor(r, 'OpenLex wants to save a file')
   capture('permission prompt', f)
   assert.strictEqual(posted('/api/chat').at(-1).body.interactive, true, 'the TUI says it can answer')
+  assert.strictEqual(posted('/api/chat').at(-1).body.sessionId, 'tui:m_1', 'the matter conversation the other windows see')
+  assert.ok(seen.some((x) => x.method === 'GET' && x.path === '/api/sessions'), 'an empty chat asks for the matter\'s conversation')
   assert.match(flat(f), /OpenLex wants to save obligations\.csv in Alpine\/\. Allow\?/)
   assert.match(f, /path: Alpine\/obligations\.csv/)
   assert.match(flat(f), /This writes a file\. Nothing happens until you choose\./)
@@ -1608,4 +1610,18 @@ test('AI record in plain ASCII, and the CLI: openlex record [--left] [--verify] 
   assert.strictEqual(JSON.parse(x.out).entries.length, 2)
   x = await run('record', '--from', '29.10.2026')
   assert.match(x.err, /usage: --from takes a date like 2026-10-29/)
+})
+
+test('a matter conversation from another window, as chat messages', async () => {
+  const mt = await import('../tui/matter.mjs')
+  const msgs = mt.historyMessages([
+    { role: 'user', content: 'Asked in the app', client: 'app' },
+    { role: 'assistant', content: 'Answered.', sources: [{ chunk_id: 'c1', source_name: 'ABGB', section: '§ 879' }], stopped: true },
+  ])
+  assert.deepStrictEqual(msgs[0], { role: 'you', text: 'Asked in the app', files: [] })
+  assert.strictEqual(msgs[1].role, 'ai')
+  assert.strictEqual(msgs[1].sources[0].section, '§ 879')
+  assert.strictEqual(msgs[1].stopped, true)
+  const lines = mt.transcript(msgs, 60).map((l) => l.segs.map((g) => g.t).join(''))
+  assert.ok(lines.some((l) => /Based on:/.test(l)) && lines.some((l) => /ABGB § 879/.test(l)), lines.join('\n'))
 })
