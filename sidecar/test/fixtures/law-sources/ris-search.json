@@ -1,0 +1,151 @@
+{
+ "OgdSearchResult": {
+  "OgdDocumentResults": {
+   "Hits": {
+    "@pageNumber": "1",
+    "@pageSize": "10",
+    "#text": "13"
+   },
+   "OgdDocumentReference": [
+    {
+     "Data": {
+      "Metadaten": {
+       "Technisch": {
+        "ID": "NOR40018128",
+        "Applikation": "BrKons",
+        "Organ": "BKA (Bundeskanzleramt)",
+        "ImportTimestamp": {
+         "@xsi:nil": "true",
+         "@xmlns:xsi": "http://www.w3.org/2001/XMLSchema-instance"
+        }
+       },
+       "Allgemein": {
+        "Geaendert": "2015-04-08",
+        "DokumentUrl": "https://ogd.ris.bka.gv.at/eli/jgs/1811/946/P922/NOR40018128"
+       },
+       "Bundesrecht": {
+        "Kurztitel": "Allgemeines bürgerliches Gesetzbuch",
+        "Eli": "https://www.ris.bka.gv.at/eli/jgs/1811/946/P922/NOR40018128",
+        "BrKons": {
+         "Kundmachungsorgan": "JGS Nr. 946/1811 zuletzt geändert durch BGBl. I Nr. 48/2001 ",
+         "Typ": "BG",
+         "Dokumenttyp": "Paragraph",
+         "ArtikelParagraphAnlage": "§ 922",
+         "Paragraphnummer": "922",
+         "StammnormPublikationsorgan": "JGS Nr.",
+         "StammnormBgblnummer": "946/1811",
+         "NovellenPublikationsorgan": "BGBl. I Nr.",
+         "NovellenBgblnummer": "48/2001",
+         "NovellenBeziehung": "zuletzt geändert durch",
+         "Inkrafttretensdatum": "2002-01-01",
+         "Abkuerzung": "ABGB",
+         "Indizes": {
+          "item": "20/01 Allgemeines bürgerliches Gesetzbuch (ABGB)"
+         },
+         "Aenderung": "",
+         "Schlagworte": "bedungener Gebrauch",
+         "Gesetzesnummer": "10001622",
+         "GesamteRechtsvorschriftUrl": "https://ogd.ris.bka.gv.at/GeltendeFassung.wxe?Abfrage=Bundesnormen&Gesetzesnummer=10001622"
+        }
+       }
+      },
+      "Dokumentliste": {
+       "ContentReference": {
+        "ContentType": "MainDocument",
+        "Name": "Hauptdokument",
+        "Urls": {
+         "ContentUrl": [
+          {
+           "DataType": "Xml",
+           "Url": "https://ogd.ris.bka.gv.at/Dokumente/Bundesnormen/NOR40018128/NOR40018128.xml"
+          },
+          {
+           "DataType": "Html",
+           "Url": "https://ogd.ris.bka.gv.at/Dokumente/Bundesnormen/NOR40018128/NOR40018128.html"
+          },
+          {
+           "DataType": "Rtf",
+           "Url": "https://ogd.ris.bka.gv.at/Dokumente/Bundesnormen/NOR40018128/NOR40018128.rtf"
+          },
+          {
+           "DataType": "Pdf",
+           "Url": "https://ogd.ris.bka.gv.at/Dokumente/Bundesnormen/NOR40018128/NOR40018128.pdf"
+          }
+         ]
+        }
+       }
+      }
+     }
+    },
+    {
+     "Data": {
+      "Metadaten": {
+       "Technisch": {
+        "ID": "NOR12018648",
+        "Applikation": "BrKons",
+        "Organ": "BKA (Bundeskanzleramt)",
+        "ImportTimestamp": {
+         "@xsi:nil": "true",
+         "@xmlns:xsi": "http://www.w3.org/2001/XMLSchema-instance"
+        }
+       },
+       "Allgemein": {
+        "Geaendert": "2015-04-08",
+        "DokumentUrl": "https://ogd.ris.bka.gv.at/eli/jgs/1811/946/P923/NOR12018648"
+       },
+       "Bundesrecht": {
+        "Kurztitel": "Allgemeines bürgerliches Gesetzbuch",
+        "Eli": "https://www.ris.bka.gv.at/eli/jgs/1811/946/P923/NOR12018648",
+        "BrKons": {
+         "Kundmachungsorgan": "JGS Nr. 946/1811",
+         "Typ": "BG",
+         "Dokumenttyp": "Paragraph",
+         "ArtikelParagraphAnlage": "§ 923",
+         "Paragraphnummer": "923",
+         "StammnormPublikationsorgan": "JGS Nr.",
+         "StammnormBgblnummer": "946/1811",
+         "Inkrafttretensdatum": "1812-01-01",
+         "Abkuerzung": "ABGB",
+         "Indizes": {
+          "item": "20/01 Allgemeines bürgerliches Gesetzbuch (ABGB)"
+         },
+         "Aenderung": "",
+         "Schlagworte": "bedungener Gebrauch",
+         "Gesetzesnummer": "10001622",
+         "AlteDokumentnummer": "N2181111130Z",
+         "GesamteRechtsvorschriftUrl": "https://ogd.ris.bka.gv.at/GeltendeFassung.wxe?Abfrage=Bundesnormen&Gesetzesnummer=10001622"
+        }
+       }
+      },
+      "Dokumentliste": {
+       "ContentReference": {
+        "ContentType": "MainDocument",
+        "Name": "Hauptdokument",
+        "Urls": {
+         "ContentUrl": [
+          {
+           "DataType": "Xml",
+           "Url": "https://ogd.ris.bka.gv.at/Dokumente/Bundesnormen/NOR12018648/NOR12018648.xml"
+          },
+          {
+           "DataType": "Html",
+           "Url": "https://ogd.ris.bka.gv.at/Dokumente/Bundesnormen/NOR12018648/NOR12018648.html"
+          },
+          {
+           "DataType": "Rtf",
+           "Url": "https://ogd.ris.bka.gv.at/Dokumente/Bundesnormen/NOR12018648/NOR12018648.rtf"
+          },
+          {
+           "DataType": "Pdf",
+           "Url": "https://ogd.ris.bka.gv.at/Dokumente/Bundesnormen/NOR12018648/NOR12018648.pdf"
+          }
+         ]
+        }
+       }
+      }
+     }
+    }
+   ]
+  }
+ }
+}

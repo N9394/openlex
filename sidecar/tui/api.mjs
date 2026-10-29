@@ -88,6 +88,9 @@ export function createApi(c = client) {
     lawSection: (chunkId) => call('GET', `/api/law/section${q({ chunk_id: chunkId })}`),
     folderInfo: (p) => call('GET', `/api/folder${q({ path: p })}`),
     saveInFolder: (body) => call('POST', '/api/folder/save', body),
+    lawSources: (matterId) => call('GET', `/api/sources/law${q({ matterId })}`),
+    enableSource: (name, on) => call('POST', '/api/sources/enable', { name, on }),
+    saveSourceKey: (name, key) => call('POST', '/api/sources/key', { name, key }),
   }
 }
 

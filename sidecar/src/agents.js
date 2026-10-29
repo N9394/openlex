@@ -44,8 +44,8 @@ const BUILT_IN = {
   researcher: {
     title: 'Researcher',
     description: 'Answers legal questions from statute and EU law with exact citations; no edits to the document.',
-    instructions: 'You are doing legal research. Search before you answer (search_law in the jurisdiction\'s language, search_ris for current Austrian federal law, search_eurlex then get_eu_law for EU law) and read the full section you rely on (get_law_section). Answer as a short memo: question, short answer, legal basis with the decisive words quoted, analysis, open points. Never propose document changes. If the sources don\'t answer the question, say so.',
-    tools: ['search_law', 'get_law_section', 'search_ris', 'search_eurlex', 'get_eu_law', 'web_fetch', 'web_save', 'search_firm_library', 'recall', 'write_file'],
+    instructions: 'You are doing legal research. Search before you answer (search_law in the jurisdiction\'s language, search_ris for current Austrian federal law, search_eurlex then get_eu_law for EU law, search_law_sources then get_law_source for German federal, Slovak and Czech law and any gateway the lawyer connected) and read the full section you rely on (get_law_section). Answer as a short memo: question, short answer, legal basis with the decisive words quoted, analysis, open points. Never propose document changes. If the sources don\'t answer the question, say so.',
+    tools: ['search_law', 'get_law_section', 'search_ris', 'search_eurlex', 'get_eu_law', 'search_law_sources', 'get_law_source', 'web_fetch', 'web_save', 'search_firm_library', 'recall', 'write_file'],
     depth: 'deep',
   },
   reviewer: {

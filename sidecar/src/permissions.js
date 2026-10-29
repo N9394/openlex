@@ -88,6 +88,10 @@ const BUILTIN = {
   search_ris: 'allow',
   search_eurlex: 'allow',
   get_eu_law: 'allow',
+  // Law sources (connectors/): official ones like RIS; asked first when a
+  // paid gateway (the lawyer's own subscription, e.g. Ansvar) would be used.
+  search_law_sources: 'law_sources',
+  get_law_source: 'law_sources',
 
   // The firm's own knowledge, indexed on this computer.
   search_firm_library: 'allow',
@@ -158,7 +162,7 @@ function kindOf(tool) {
   if (WEB_TOOLS.has(tool)) return 'web'
   if (tool === 'run_bash') return 'command'
   if (tool === 'sync_calendar') return 'calendar'
-  if (tool === 'search_sources') return 'sources'
+  if (tool === 'search_sources' || tool === 'search_law_sources' || tool === 'get_law_source') return 'sources'
   return 'other'
 }
 
@@ -196,6 +200,7 @@ function subjectOf(tool, args = {}) {
   if (tool === 'export_document') return { type: 'path', value: cleanPath(args.matter), abs: null }
   if (FILE_TOOLS.has(tool)) return pathSubject(args.path)
   if (tool === 'search_sources') return { type: 'list', value: searchedSources(args).map((s) => s.name) }
+  if (tool === 'search_law_sources' || tool === 'get_law_source') return { type: 'list', value: lawSources(tool, args).map((c) => c.id) }
   return { type: 'none', value: '' }
 }
 
@@ -304,6 +309,16 @@ function searchedSources(args = {}) {
   return all.filter((s) => !s.error && (!want || want.has(s.name)) && (!args.kind || s.kind === args.kind))
 }
 
+/** Law sources (connectors/) a search_law_sources / get_law_source call would contact. */
+function lawSources(tool, args = {}) {
+  try {
+    const ls = require('./connectors')
+    if (tool === 'get_law_source') { const c = ls.CONNECTORS.find((x) => x.id === String(args.source || '').toLowerCase()); return c ? [c] : [] }
+    const list = Array.isArray(args.sources) ? args.sources : typeof args.sources === 'string' && args.sources ? args.sources.split(/[\s,]+/) : undefined
+    return ls.planned({ sources: list, jurisdiction: args.jurisdiction })
+  } catch { return [] }
+}
+
 /**
  * The decision for one call, without asking anyone.
  * @returns {{ decision: 'allow'|'deny'|'ask', source: 'firm'|'user'|'matter'|'default', rule?: string, canAlways: boolean }}
@@ -328,6 +343,7 @@ function evaluate(tool, args = {}, { matterId = null } = {}) {
   if ((rule = hit(r.user.ask))) return { decision: 'ask', source: 'user', rule, canAlways, area: where.area, root: where.root }
   let d = String(tool).startsWith('mcp__') ? 'ask' : BUILTIN[tool] || 'ask'
   if (d === 'ask' && where.area) return { decision: 'ask', source: 'default', canAlways, area: where.area, root: where.root }
+  if (d === 'law_sources') d = lawSources(tool, args).some((c) => c.gateway) ? 'ask' : 'allow'
   if (d === 'sources') {
     const list = searchedSources(args)
     d = list.length && list.every((s) => s.local === true) ? 'allow' : list.length ? 'ask' : 'allow' // nothing configured → the tool only says so
@@ -395,6 +411,8 @@ function summarize(tool, args = {}) {
     case 'web_fetch': return `Read the web page ${hostOf(a.url) || short(a.url, 60)}`
     case 'web_save': return `Save the web page from ${hostOf(a.url) || short(a.url, 60)} into the matter folder`
     case 'download_to_matter': return `Download ${path.posix.basename(String(a.url || '').split(/[?#]/)[0]) || 'a file'} from ${hostOf(a.url) || 'the web'} into the matter folder`
+    case 'search_law_sources': return `Look up "${short(a.query, 60)}" in ${lawSources(tool, a).map((c) => c.label).join(', ') || 'the law sources'}`
+    case 'get_law_source': return `Open a document from ${lawSources(tool, a).map((c) => c.label).join(', ') || 'a law source'}`
     case 'search_sources': return `Search ${searchedSources(a).filter((s) => !s.local).map((s) => s.title || s.name).join(', ') || 'a connected source'} for "${short(a.query, 60)}"`
     default:
       if (String(tool).startsWith('mcp__')) { const [, server, ...t] = String(tool).split('__'); return `Use "${t.join('__')}" from the ${server} connector` }
@@ -419,7 +437,7 @@ function suggestPattern(tool, args = {}) {
   if (s.type === 'mcp') return `mcp:${s.value}`
   if (s.type === 'host' && s.value) return `${tool}:${s.value}`
   if (s.type === 'command' && s.value) return `run_bash:${s.value.split(/\s+/)[0]} *`
-  if (s.type === 'list' && s.value.length) return `search_sources:${s.value.join(',')}`
+  if (s.type === 'list' && s.value.length) return `${tool}:${s.value.join(',')}`
   return tool
 }
 
@@ -604,7 +622,7 @@ function describe() {
   const r = rules()
   return {
     firm: r.firm, user: r.user, locked: r.locked,
-    defaults: Object.entries(BUILTIN).map(([tool, d]) => ({ tool, decision: d === 'sources' ? 'allow (local sources) / ask' : d, kind: kindOf(tool) })),
+    defaults: Object.entries(BUILTIN).map(([tool, d]) => ({ tool, decision: d === 'sources' ? 'allow (local sources) / ask' : d === 'law_sources' ? 'allow (official sources) / ask (paid gateways)' : d, kind: kindOf(tool) })),
     pending: waiting(),
   }
 }

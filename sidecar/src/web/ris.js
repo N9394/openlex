@@ -5,7 +5,7 @@
  * scraping, stable fields, and it says which version is in force.
  */
 
-const API = process.env.OPENLEX_RIS_API || 'https://data.bka.gv.at/ris/api/v2.6'
+const API = () => process.env.OPENLEX_RIS_API || 'https://data.bka.gv.at/ris/api/v2.6'
 const PAGE_SIZES = { 10: 'Ten', 20: 'Twenty', 50: 'Fifty', 100: 'OneHundred' }
 
 const asArray = (x) => (Array.isArray(x) ? x : x ? [x] : [])
@@ -23,7 +23,7 @@ async function getJson(url) {
 async function searchBundesrecht(query, { limit = 10, inForceOnly = true } = {}) {
   const params = new URLSearchParams({ Applikation: 'BrKons', Suchworte: query, DokumenteProSeite: PAGE_SIZES[limit <= 10 ? 10 : 20] })
   if (inForceOnly) params.set('Fassung.FassungVom', new Date().toISOString().slice(0, 10))
-  const d = await getJson(`${API}/Bundesrecht?${params}`)
+  const d = await getJson(`${API()}/Bundesrecht?${params}`)
   const docs = d?.OgdSearchResult?.OgdDocumentResults || {}
   const total = parseInt(docs.Hits?.['#text'] || '0', 10)
   const results = asArray(docs.OgdDocumentReference).slice(0, limit).map((ref) => {

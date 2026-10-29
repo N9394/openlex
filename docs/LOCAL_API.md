@@ -195,15 +195,20 @@ A skill is a `SKILL.md` file (frontmatter `name`, `title`, `description`, `trigg
 | POST | `/api/workflows/playbooks/draft` | `{ files?, matterId?, title, focus? }` | Review checklist from the firm's precedents; a check's firm `standard` is kept only with a verbatim quote from them. |
 | POST | `/api/workflows/playbooks` | `{ name, playbook }` | Save a playbook to the workspace `playbooks/` folder. |
 
-### Data sources
-The firm's databases and subscriptions as searchable sources (see [SOURCES.md](SOURCES.md)).
-| Method | Path | Body | What |
+### Law sources and data sources
+The law sources OpenLex connects to (RIS Austria, EUR-Lex, German federal law, Slov-Lex, e-Sbírka, Ansvar) and the firm's own databases and subscriptions (see [SOURCES.md](SOURCES.md)).
+
+| Method | Path | Body / query | What it does |
 |---|---|---|---|
-| GET | `/api/sources` | | Configured sources (type, kind, local/remote, problems) and presets. |
-| POST | `/api/sources/search` | `{ query, kind?, jurisdiction?, sources?, matterId? }` | Search allowed sources in parallel → `{ results, searched, skipped }`. |
-| POST | `/api/sources/test` | `{ name, query? }` | One quick query. |
+| GET | `/api/sources/law` | `?matterId=` | The law sources, one entry each: `{ id, label, country, description, licence, licenceUrl, homepage, needsKey, optionalKey, keyHelp, gateway, testPhase, enabled, hasKey, managedByFirm, state, status }`. `state`: `ready` · `needs_key` · `offline` (the data policy keeps the matter offline) · `off`. `status` is the line to show as is ("RIS Austria: connected, free", "Ansvar: paste your key"). |
+| GET | `/api/sources` | `?matterId=` | `law` (as above) plus the firm's configured sources (type, kind, local/remote, problems) and presets. |
+| POST | `/api/sources/law/search` | `{ query, jurisdiction?, sources?, lang?, matterId? }` | Search law sources under the data policy → `{ results, searched, skipped }`. Each result: `{ source, sourceLabel, ref, title, citation, url, snippet, date, inForce, jurisdiction, licence, retrieved }`; `skipped` reasons are plain sentences. |
+| POST | `/api/sources/law/get` | `{ source, ref, article?, lang?, matterId? }` | One document or section: `{ source, sourceLabel, ref, title, citation, url, text, licence, retrieved }`. |
+| POST | `/api/sources/enable` | `{ name, on }` | Switch a law source on or off (your layer; refused when the firm locks `sources`). |
+| POST | `/api/sources/search` | `{ query, kind?, jurisdiction?, sources?, matterId? }` | Search the firm's allowed sources in parallel → `{ results, searched, skipped }`. |
+| POST | `/api/sources/test` | `{ name, query? }` | One quick query (a law source or a firm source). |
 | POST | `/api/sources/add`, `/api/sources/remove` | `{ name, source? }`, `{ name }` | Add a preset or definition to your layer; remove it. |
-| POST | `/api/sources/key` | `{ name, key }` | Store the source's key in the OS keychain (`null` removes it). |
+| POST | `/api/sources/key` | `{ name, key }` | Store the source's key in the OS keychain (`null` removes it). Works for law sources too (`ansvar`, `esbirka`). |
 
 ### Review grid
 Rows are documents, columns are questions, and every cell is an answer with a verbatim quote from its document.
