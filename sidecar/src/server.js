@@ -1244,8 +1244,10 @@ async function handle(req, res) {
         sendSse(res, { type: 'error', message: `local engine unavailable: ${ready.reason || 'unknown'} — Settings → Download model, then retry` })
         return res.end()
       }
+      // The conversation: the window's own (sessionId: the terminal app and
+      // the desktop app, one per matter conversation), else this document's.
       const { Session } = require('./session')
-      const session = new Session(entry.doc.docId)
+      const session = new Session(typeof body.sessionId === 'string' && body.sessionId.trim() ? body.sessionId.trim() : entry.doc.docId)
       const context = {
         doc: entry.doc, memory: entry.memory, search, embeddings, session,
         summary: () => entry.doc.summary(),
@@ -1273,7 +1275,18 @@ async function handle(req, res) {
       } catch (err) { sendSse(res, { type: 'error', message: err.message }); return res.end() }
       // Activity record (GET /api/activity) + `model` events (where the data went).
       const rec = require('./activity').start({ matterId: matterIdFor(body, entry), kind: 'question', asked: body.message, client: clientOf(req), files: Array.isArray(body.files) ? body.files : [] })
-      const out = (e) => { rec.see(e); sendSse(res, e) }
+      // What the answer was based on and where its data went, kept with the conversation.
+      const turn = { sources: [], data: [], online: [] }
+      const out = (e) => {
+        rec.see(e)
+        sendSse(res, e)
+        if (e.type === 'law') for (const s of e.sources || []) { if (!turn.sources.some((x) => (x.chunk_id && x.chunk_id === s.chunk_id) || (x.source_name === s.source_name && x.section === s.section))) turn.sources.push(s) }
+        else if (e.type === 'model') {
+          const hit = turn.data.find((m) => m.provider === e.provider && m.region === (e.region || null) && m.redacted === !!e.redacted && m.local === !!e.local)
+          if (hit) hit.calls++
+          else turn.data.push({ provider: e.provider, label: e.label, model: e.model || null, local: !!e.local, region: e.region || null, redacted: !!e.redacted, calls: 1 })
+        } else if (e.type === 'step' && e.online && e.onlineTo && !turn.online.includes(e.onlineTo)) turn.online.push(e.onlineTo)
+      }
       if (agent && agent.name !== 'associate') sendSse(res, { type: 'agent', name: agent.name, title: agent.title })
       if (skill) sendSse(res, { type: 'skill', name: skill.name, title: skill.title })
       else if (body.suggestSkill !== false) {
@@ -1290,7 +1303,7 @@ async function handle(req, res) {
         const r = await rec.run(() => require('./folder').run(folderDir, () => require('./permissions').session(permissionSession(body, res, ac.signal), () => policy.observeModels((m) => out({ type: 'model', ...m }), () => policy.withMatter(matterIdFor(body, entry), () => agentsMod.run(agent, () => runAction(context, body.message, out, { signal: ac.signal, skill, agent })))))))
         // Conversation memory: persist the exchange (best-effort; the
         // model's streamed prose already went out token-by-token).
-        session.append(body.message, r.text)
+        session.append(body.message, r.text, { matterId: matterIdFor(body, entry), client: clientOf(req), agent: agent && agent.name !== 'associate' ? agent.name : null, ...turn, stopped: ac.signal.aborted || !!r.stopped })
         // Firm hooks at the answer (hooks.js): warn → note; deny → withheld.
         // A streamed answer is already on screen: the pane marks it withheld.
         const hooks = require('./hooks')
@@ -1419,13 +1432,12 @@ async function handle(req, res) {
       }
     }
 
-    // Clear the conversation memory for this document.
-    if (req.method === 'POST' && p === '/api/session/clear') {
-      const body = await readBody(req).catch(() => ({}))
-      const { Session } = require('./session')
-      const session = new Session(body.docId || 'default')
-      session.clear()
-      return sendJson(res, 200, { ok: true })
+    // Conversations (session.js): listed per matter and read by every window;
+    // /api/session/clear forgets one (this document's, or a window's sessionId).
+    if (p === '/api/sessions' || p === '/api/session' || p === '/api/session/clear') {
+      const body = req.method === 'POST' ? await readBody(req).catch(() => ({})) : {}
+      const r = require('./session').handle(req.method, p, url.searchParams, body, { forDoc: matters.forDoc })
+      return sendJson(res, r.status, r.json)
     }
 
     return sendJson(res, 404, { error: 'not found', path: p })
