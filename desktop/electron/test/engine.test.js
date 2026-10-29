@@ -18,7 +18,8 @@ process.env.LEXVAULT_SIDECAR_KEY = '/nonexistent'
 
 const { ensureEngine, stopEngine } = require('../main/engine')
 const { HubClient } = require('../main/hub-client')
-test.after(() => { stopEngine(); fs.rmSync(DATA, { recursive: true, force: true }) })
+// Windows keeps the stopped engine's log open for a moment: retry the cleanup.
+test.after(() => { stopEngine(); fs.rmSync(DATA, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 }) })
 
 const opts = {
   engineDir: path.join(ROOT, 'sidecar', 'src'),
