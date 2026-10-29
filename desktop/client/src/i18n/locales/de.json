@@ -195,7 +195,8 @@
     "stopGeneration": "Generierung anhalten",
     "multiJurisdictionDb": "Multi-Jurisdiktions-Datenbank",
     "saveDescription": "Speichern Sie die letzte Recherche-Antwort im Tresor zur späteren Nutzung.",
-    "sendToWord": "An Word senden (an der Cursorposition einfügen)"
+    "sendToWord": "An Word senden (an der Cursorposition einfügen)",
+    "attachFolder": "Ordner anhängen (alle Dokumente darin)"
   },
   "navigator": {
     "title": "Smart Legal Navigator",
@@ -863,7 +864,14 @@
     "switchOn": "Einschalten",
     "lawNote": "Es werden nur Ihre Suchbegriffe gesendet, nie Ihre Dokumente.",
     "lawOffline": "Online-Abfragen sind in Ihrer Regel für Mandantendaten ausgeschaltet (/data).",
-    "lawFirm": "Diese Liste wird von Ihrer Kanzlei verwaltet."
+    "lawFirm": "Diese Liste wird von Ihrer Kanzlei verwaltet.",
+    "notHere": "Dieser Befehl funktioniert hier nicht.",
+    "nowAsMatter": "Arbeitet jetzt als {{who}} für diese Akte.",
+    "nowAs": "Arbeitet jetzt als {{who}}.",
+    "keySavedFor": "Der Schlüssel für {{name}} wurde gespeichert.",
+    "nowOff": "{{name}} ist jetzt ausgeschaltet.",
+    "nowOn": "{{name}} ist jetzt eingeschaltet.",
+    "matterId": "Akte {{id}}"
   },
   "modelPicker": {
     "labelHint": "Welche KI antwortet und wo sie läuft. Zum Ändern klicken (/model).",
@@ -1045,7 +1053,13 @@
       "medium": "mittel",
       "low": "niedrig",
       "note": "Hinweis"
-    }
+    },
+    "dropHere": "Dokument hier ablegen: OpenLex liest es auf diesem Computer",
+    "reading": "{{name}} wird auf diesem Computer gelesen …",
+    "analyse": "Vollständige Analyse (/analyse)",
+    "attachAsk": "Stellen Sie eine Frage dazu oder starten Sie die vollständige Analyse.",
+    "convDocs": "Fragen beziehen sich auf",
+    "analysisReady": "Die Dokumentanalyse ist fertig – zum Ansehen klicken."
   },
   "turn": {
     "once": "einmal",
@@ -1187,5 +1201,8 @@
     "lawFound_other": "{{count}} gefundene Normen",
     "changes_one": "{{count}} Änderungsvorschlag",
     "changes_other": "{{count}} Änderungsvorschläge"
+  },
+  "analysis": {
+    "choose": "Wählen Sie das zu analysierende Dokument (Word, PDF, Excel, E-Mail oder Text) – oder ziehen Sie es hierher."
   }
 }

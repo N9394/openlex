@@ -27,6 +27,7 @@ type Lang = 'en' | 'de'
 export interface PickerProvider {
   id: string
   label: string
+  labels?: Two
   kind: string
   local: boolean
   needsKey: boolean
@@ -355,7 +356,7 @@ export function ModelPicker({ onDone, pick }: { onDone: (text: string) => void; 
     return r.providers as PickerProvider[]
   }, [])
 
-  const nameOf = (p: PickerProvider) => (p.kind === 'local' ? t('modelPicker.builtin', 'OpenLex\'s own AI') : p.label)
+  const nameOf = (p: PickerProvider) => (p.kind === 'local' ? t('modelPicker.builtin', 'OpenLex\'s own AI') : two(p.labels, lang) || p.label)
 
   const doneRef = useRef(onDone)
   doneRef.current = onDone
@@ -364,7 +365,7 @@ export function ModelPicker({ onDone, pick }: { onDone: (text: string) => void; 
     try {
       await call('POST', '/api/providers', { active: p.id })
       changed()
-      doneRef.current(t('commands.nowUsing', 'Now using {{name}}. This applies from your next question.', { name: p.local ? t('commands.thisComputer', 'the AI on this computer') : p.label }))
+      doneRef.current(t('commands.nowUsing', 'Now using {{name}}. This applies from your next question.', { name: p.local ? t('commands.thisComputer', 'the AI on this computer') : two(p.labels, lang) || p.label }))
     } catch (err) { setError(friendly(err)) }
   }
 
@@ -464,6 +465,7 @@ function ProviderSetup({ p, onChanged, onUse }: { p: PickerProvider; onChanged: 
   const [msg, setMsg] = useState<{ text: string; bad?: boolean } | null>(null)
   const [manual, setManual] = useState<{ command: string; en: string; de: string } | null>(null)
   const [retention, setRetention] = useState(p.retention || null)
+  const name = two(p.labels, lang) || p.label
   const showUrl = p.id === 'azure' || p.id === 'custom' || p.id === 'local-server'
   const showModel = p.id !== 'azure'
   const showKey = p.needsKey || p.id === 'custom' || p.id === 'vertex'
@@ -538,11 +540,11 @@ function ProviderSetup({ p, onChanged, onUse }: { p: PickerProvider; onChanged: 
       {p.id === 'bedrock' && <p className="text-xs text-antique">{t('modelPicker.bedrockRegion', 'Region: eu-central-1 (Frankfurt), fixed — called from there, Claude runs only in EU data centres.')}</p>}
       {showKey && (
         <div>
-          <label className="block text-xs text-cream" htmlFor={`key-${p.id}`}>{p.id === 'vertex' ? t('modelPicker.vertexKey', 'Service-account key (JSON), optional') : p.id === 'custom' ? t('modelPicker.keyOptional', 'Key (optional)') : t('commands.yourKey', 'Your {{name}} key', { name: p.label })}</label>
+          <label className="block text-xs text-cream" htmlFor={`key-${p.id}`}>{p.id === 'vertex' ? t('modelPicker.vertexKey', 'Service-account key (JSON), optional') : p.id === 'custom' ? t('modelPicker.keyOptional', 'Key (optional)') : t('commands.yourKey', 'Your {{name}} key', { name })}</label>
           {p.id === 'vertex'
             ? <textarea id={`key-${p.id}`} rows={2} value={key} onChange={(e) => setKey(e.target.value)} className="input w-full text-xs font-mono" autoComplete="off" placeholder={p.hasKey ? t('modelPicker.keyKeep', 'saved — paste a new one to replace it') : ''} />
             : <input id={`key-${p.id}`} type="password" value={key} onChange={(e) => setKey(e.target.value)} className="input w-full" autoComplete="off" placeholder={p.hasKey ? t('modelPicker.keyKeep', 'saved — paste a new one to replace it') : ''} />}
-          <p className="text-[11px] text-antique mt-0.5">{p.keyHelp ? `${two(p.keyHelp, lang)} ` : ''}{t('commands.keyKept', 'It is kept in this computer\'s keychain and only sent to {{name}}.', { name: p.label })}</p>
+          <p className="text-[11px] text-antique mt-0.5">{p.keyHelp ? `${two(p.keyHelp, lang)} ` : ''}{t('commands.keyKept', 'It is kept in this computer\'s keychain and only sent to {{name}}.', { name })}</p>
         </div>
       )}
       {showUrl && (
@@ -610,7 +612,7 @@ function ProviderSetup({ p, onChanged, onUse }: { p: PickerProvider; onChanged: 
         </div>
       )}
       <div className="flex flex-wrap items-center gap-2 pt-1">
-        <button type="submit" disabled={!!busy || !!p.blocked} className="btn-primary !py-1.5 text-sm">{t('modelPicker.use', 'Use {{name}}', { name: p.label })}</button>
+        <button type="submit" disabled={!!busy || !!p.blocked} className="btn-primary !py-1.5 text-sm">{t('modelPicker.use', 'Use {{name}}', { name })}</button>
         <button type="button" disabled={!!busy} className="btn-secondary !py-1.5 text-sm" onClick={test}>{t('modelPicker.test', 'Test the connection')}</button>
         {p.needsKey && p.hasKey && <button type="button" disabled={!!busy} className="text-xs text-antique underline hover:text-cream" onClick={removeKey}>{t('modelPicker.removeKey', 'Remove the key')}</button>}
         {busy && <span className="text-xs text-antique">{busy}</span>}

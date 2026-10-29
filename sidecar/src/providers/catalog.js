@@ -33,7 +33,7 @@
 // (CLOUD Act exposure even in an EU region).
 const PROVIDERS = {
   local: {
-    label: 'Local (llama.cpp / Ollama)',
+    label: 'Local (llama.cpp / Ollama)', labelDe: 'Lokal (llama.cpp / Ollama)',
     kind: 'local',
     local: true,
     needsKey: false,
@@ -46,7 +46,7 @@ const PROVIDERS = {
     // An AI program the lawyer runs on this computer: Ollama (default
     // address) or llama.cpp's llama-server (http://127.0.0.1:8080/v1).
     // Loopback only — settings.js refuses any other host for it.
-    label: 'Ollama or llama.cpp on this computer',
+    label: 'Ollama or llama.cpp on this computer', labelDe: 'Ollama oder llama.cpp auf diesem Computer',
     kind: 'openai',
     local: true,
     needsKey: false,
@@ -62,7 +62,7 @@ const PROVIDERS = {
   // regions would be added). Data retention "none" is set through the API
   // (bedrock_retention.js). https://docs.aws.amazon.com/bedrock/latest/userguide/data-retention.html
   bedrock: {
-    label: 'Claude on AWS Bedrock (EU)',
+    label: 'Claude on AWS Bedrock (EU)', labelDe: 'Claude über AWS Bedrock (EU)',
     kind: 'bedrock',
     local: false,
     needsKey: true,
@@ -96,7 +96,7 @@ const PROVIDERS = {
   },
   // https://www.scaleway.com/en/docs/generative-apis/quickstart/ (base_url)
   scaleway: {
-    label: 'Scaleway (France)',
+    label: 'Scaleway (France)', labelDe: 'Scaleway (Frankreich)',
     kind: 'openai',
     local: false,
     needsKey: true,
@@ -111,7 +111,7 @@ const PROVIDERS = {
   },
   // https://www.ovhcloud.com/en/public-cloud/ai-endpoints/catalog/ (OpenAI-compatible endpoint)
   ovhcloud: {
-    label: 'OVHcloud AI Endpoints (France)',
+    label: 'OVHcloud AI Endpoints (France)', labelDe: 'OVHcloud AI Endpoints (Frankreich)',
     kind: 'openai',
     local: false,
     needsKey: true,
@@ -126,7 +126,7 @@ const PROVIDERS = {
   },
   // https://docs.stackit.cloud/products/data-and-ai/ai-model-serving/basics/available-shared-models/
   stackit: {
-    label: 'STACKIT (Germany)',
+    label: 'STACKIT (Germany)', labelDe: 'STACKIT (Deutschland)',
     kind: 'openai',
     local: false,
     needsKey: true,
@@ -141,7 +141,7 @@ const PROVIDERS = {
   },
   // https://docs.ionos.com/cloud/ai/ai-model-hub/how-tos/text-generation
   ionos: {
-    label: 'IONOS AI Model Hub (Germany)',
+    label: 'IONOS AI Model Hub (Germany)', labelDe: 'IONOS AI Model Hub (Deutschland)',
     kind: 'openai',
     local: false,
     needsKey: true,
@@ -155,7 +155,7 @@ const PROVIDERS = {
     about: { en: 'German company (United Internet), servers in Germany. Ask IONOS how long it keeps requests.', de: 'Deutsches Unternehmen (United Internet), Server in Deutschland. Fragen Sie IONOS, wie lange Anfragen gespeichert werden.' },
   },
   azure: {
-    label: 'Azure OpenAI (your tenant)',
+    label: 'Azure OpenAI (your tenant)', labelDe: 'Azure OpenAI (Konto Ihrer Kanzlei)',
     kind: 'azure',
     local: false,
     needsKey: true,
@@ -171,7 +171,7 @@ const PROVIDERS = {
     about: { en: 'GPT in your firm\'s own Microsoft account; choose a deployment in the EU Data Zone. US company.', de: 'GPT im eigenen Microsoft-Konto Ihrer Kanzlei; Bereitstellung in der EU-Datenzone wählen. US-Unternehmen.' },
   },
   vertex: {
-    label: 'Google Vertex AI (your project)',
+    label: 'Google Vertex AI (your project)', labelDe: 'Google Vertex AI (Projekt Ihrer Kanzlei)',
     kind: 'vertex',
     local: false,
     // Service-account JSON in the keychain, or the local gcloud login.
@@ -236,7 +236,7 @@ const PROVIDERS = {
     about: { en: 'GPT directly from OpenAI. US company; EU processing only with zero retention approved by OpenAI\'s sales team.', de: 'GPT direkt von OpenAI. US-Unternehmen; Verarbeitung in der EU nur mit Zero-Data-Retention, die der OpenAI-Vertrieb genehmigt.' },
   },
   custom: {
-    label: 'Custom OpenAI-compatible endpoint',
+    label: 'Custom OpenAI-compatible endpoint', labelDe: 'Eigener OpenAI-kompatibler Server',
     kind: 'openai',
     // A firm gateway may be on-prem (vLLM, LM Studio, LiteLLM) or cloud —
     // the user declares which in Settings; default to NOT local so the

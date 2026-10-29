@@ -25,7 +25,7 @@ const pick = (v, lang) => (v && typeof v === 'object' ? v[lang] || v.en : v) || 
 
 function words(p, lang) {
   const de = lang === 'de'
-  const name = p.label || p.id
+  const name = (lang === 'de' && p.labelDe) || p.label || p.id
   const company = pick(p.company, lang) || name
   const or = p.id === 'openrouter'
   const standard = or && p.plan !== 'business'

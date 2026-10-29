@@ -195,7 +195,8 @@
     "stopGeneration": "Stop generation",
     "multiJurisdictionDb": "Multi-jurisdiction database",
     "saveDescription": "Save the latest research response to your vault for future reference.",
-    "sendToWord": "Send to Word (insert at cursor)"
+    "sendToWord": "Send to Word (insert at cursor)",
+    "attachFolder": "Attach a folder (every document in it)"
   },
   "navigator": {
     "title": "Smart Legal Navigator",
@@ -863,7 +864,14 @@
     "switchOn": "Switch on",
     "lawNote": "Only your search words are sent, never your documents.",
     "lawOffline": "Online look-ups are off in your client-data rule (/data).",
-    "lawFirm": "Your firm manages this list."
+    "lawFirm": "Your firm manages this list.",
+    "notHere": "This command does not work here.",
+    "nowAsMatter": "Now working as {{who}} for this matter.",
+    "nowAs": "Now working as {{who}}.",
+    "keySavedFor": "Saved the {{name}} key.",
+    "nowOff": "{{name}} is now off.",
+    "nowOn": "{{name}} is now on.",
+    "matterId": "matter {{id}}"
   },
   "modelPicker": {
     "labelHint": "Which AI answers, and where it runs. Click to change (/model).",
@@ -1045,7 +1053,13 @@
       "medium": "medium",
       "low": "low",
       "note": "note"
-    }
+    },
+    "dropHere": "Drop the document: OpenLex reads it on this computer",
+    "reading": "Reading {{name}} on this computer…",
+    "analyse": "Full analysis (/analyse)",
+    "attachAsk": "Ask about it, or run the full analysis.",
+    "convDocs": "Questions are about",
+    "analysisReady": "The document analysis is ready — click to view."
   },
   "turn": {
     "once": "once",
@@ -1187,5 +1201,8 @@
     "lawFound_other": "{{count}} law sections it found",
     "changes_one": "{{count}} proposed change",
     "changes_other": "{{count}} proposed changes"
+  },
+  "analysis": {
+    "choose": "Choose the document to analyse (Word, PDF, Excel, e-mail or text) — or drop it here."
   }
 }

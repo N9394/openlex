@@ -909,7 +909,7 @@ async function handle(req, res) {
       for (const id of Object.keys(PROVIDERS)) {
         const d = providerSettings.resolve(id)
         list.push({
-          id, label: d.label, kind: d.kind, local: !!d.local, needsKey: d.needsKey,
+          id, label: d.label, labels: { en: d.label, de: d.labelDe || d.label }, kind: d.kind, local: !!d.local, needsKey: d.needsKey,
           baseUrl: d.baseUrl || null, model: d.model || d.defaultModel || null, models: d.models || [],
           region: d.region || null, project: d.project || null,
           ctx: d.ctx || null, hasKey: d.needsKey ? await secrets.hasKey(id) : null,

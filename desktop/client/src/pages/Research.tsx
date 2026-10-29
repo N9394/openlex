@@ -433,7 +433,7 @@ export default function Research() {
     setPerm(null)
     setRunning(null)
     loadList(matterId)
-    try { (window as any).lexvault?.notify?.('OpenLex', 'The document analysis is ready — click to view.') } catch { /* optional */ }
+    try { (window as any).lexvault?.notify?.('OpenLex', t('chat.analysisReady', 'The document analysis is ready — click to view.')) } catch { /* optional */ }
   }
 
   const copy = async (m: Message) => {

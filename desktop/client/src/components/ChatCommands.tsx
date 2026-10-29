@@ -13,6 +13,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import i18n from '../i18n'
 import { Check, Download, Folder, Lock, X } from 'lucide-react'
 import { ModelPicker, PickerProvider } from './ModelPicker'
 import { useWordLink } from '../lib/hub'
@@ -484,10 +485,10 @@ async function chooseAgent(a: Agent, setQuickAgent?: (name: string) => void): Pr
     if (b?.update) await b.update(m.id, patch)
     else await engine()!.call('POST', '/api/matters/update', { id: m.id, patch })
     window.dispatchEvent(new CustomEvent('openlex:matter-changed'))
-    return `Now working as ${a.title} for this matter.`
+    return String(i18n.t('commands.nowAsMatter', { defaultValue: 'Now working as {{who}} for this matter.', who: a.title }))
   }
   setQuickAgent?.(a.name)
-  return `Now working as ${a.title}.`
+  return String(i18n.t('commands.nowAs', { defaultValue: 'Now working as {{who}}.', who: a.title }))
 }
 
 async function setPrivileged(m: Matter, on: boolean) {
@@ -556,7 +557,7 @@ function PermissionRules({ say }: { say: (text: string, kind?: 'ok' | 'warn' | '
   const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
   const mine: { pattern: string; where: string; mark: string; matterId?: string }[] = [
     ...(u.allow || []).map((p: string) => ({ pattern: p, where: t('commands.everywhere', 'allowed everywhere'), mark: '✓' })),
-    ...Object.entries(u.matters || {}).filter(([id]) => !matterId || id === matterId).flatMap(([id, m]: [string, any]) => (m.allow || []).map((p: string) => ({ pattern: p, where: id === matterId ? t('commands.thisMatterRule', 'this matter') : `matter ${id}`, mark: '✓', matterId: id }))),
+    ...Object.entries(u.matters || {}).filter(([id]) => !matterId || id === matterId).flatMap(([id, m]: [string, any]) => (m.allow || []).map((p: string) => ({ pattern: p, where: id === matterId ? t('commands.thisMatterRule', 'this matter') : t('commands.matterId', 'matter {{id}}', { id }), mark: '✓', matterId: id }))),
     ...(u.deny || []).map((p: string) => ({ pattern: p, where: t('commands.never', 'never allowed'), mark: '✗' })),
   ]
   const firm: { pattern: string; where: string; mark: string }[] = [
@@ -654,7 +655,7 @@ function LawSources({ say }: { say: (text: string, kind?: 'ok' | 'warn' | 'bad')
   if (!list) return <p className="text-antique">{t('common.loading', 'Loading…')}</p>
   if (keyFor) {
     return (
-      <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); if (secret.trim()) act(() => engine()!.call('POST', '/api/sources/key', { name: keyFor.id, key: secret.trim() }), `Saved the ${keyFor.label} key.`) }}>
+      <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); if (secret.trim()) act(() => engine()!.call('POST', '/api/sources/key', { name: keyFor.id, key: secret.trim() }), t('commands.keySavedFor', 'Saved the {{name}} key.', { name: keyFor.label })) }}>
         <label className="block text-cream">{t('commands.yourKey', 'Your {{name}} key', { name: keyFor.label })}</label>
         <input type="password" autoFocus value={secret} onChange={(e) => setSecret(e.target.value)} className="input w-full" autoComplete="off" />
         <p className="text-xs text-antique">{keyFor.keyHelp ? `${keyFor.keyHelp} ` : ''}{t('commands.keyKept', 'It is kept in this computer\'s keychain and only sent to {{name}}.', { name: keyFor.label })}</p>
@@ -676,7 +677,7 @@ function LawSources({ say }: { say: (text: string, kind?: 'ok' | 'warn' | 'bad')
               <span className="flex-1 text-cream">{s.status}</span>
               {(s.needsKey || s.optionalKey) && <button type="button" disabled={busy} className="text-xs text-antique underline hover:text-cream" onClick={() => setKeyFor(s)}>{s.hasKey ? t('commands.replaceKey', 'Replace the key') : t('commands.pasteKey', 'Paste your key')}</button>}
               {!s.managedByFirm && (
-                <button type="button" disabled={busy} className="text-xs text-antique underline hover:text-cream" onClick={() => act(() => engine()!.call('POST', '/api/sources/enable', { name: s.id, on: !s.enabled }), `${s.label} is now ${s.enabled ? 'off' : 'on'}.`)}>
+                <button type="button" disabled={busy} className="text-xs text-antique underline hover:text-cream" onClick={() => act(() => engine()!.call('POST', '/api/sources/enable', { name: s.id, on: !s.enabled }), s.enabled ? t('commands.nowOff', '{{name}} is now off.', { name: s.label }) : t('commands.nowOn', '{{name}} is now on.', { name: s.label }))}>
                   {s.enabled ? t('commands.switchOff', 'Switch off') : t('commands.switchOn', 'Switch on')}
                 </button>
               )}
