@@ -419,8 +419,17 @@ async function handle(req, res) {
       const body = await readBody(req)
       const wf = require('./workflows')
       const docs = require('./workflows_docs')
-      const run = { review: wf.runReview, chronology: wf.runChronology, translate: docs.runTranslate, compare: docs.runCompare }[body.type]
-      if (!run) return sendJson(res, 400, { error: 'type must be review, chronology, translate or compare' })
+      const analyse = require('./analysis').runAnalyse
+      const run = { review: wf.runReview, chronology: wf.runChronology, translate: docs.runTranslate, compare: docs.runCompare, analyse, analyze: analyse }[body.type]
+      if (!run) return sendJson(res, 400, { error: 'type must be review, chronology, translate, compare or analyse' })
+      // analyse with docId: the Word document the pane has mapped (its text, its title in the matter).
+      let wordDoc = null
+      if (run === analyse && body.docId && !body.file && !(Array.isArray(body.files) && body.files.length)) {
+        const entry = activeDocs.get(body.docId)
+        if (!entry?.doc) return sendJson(res, 400, { error: 'that Word document is not open in OpenLex (map it first), or pass files' })
+        const bound = matters.forDoc(body.docId)?.docs?.find((d) => d.docId === body.docId)
+        wordDoc = { text: entry.doc.text, name: String(body.title || bound?.title || 'Word document') }
+      }
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' })
       const ready = await engineReady()
       if (!ready?.ok) { sendSse(res, { type: 'error', message: `model unavailable: ${ready.reason}` }); return res.end() }
@@ -435,9 +444,10 @@ async function handle(req, res) {
         const r = await policy.observeModels((m) => out({ type: 'model', ...m }), () => policy.withMatter(matterId, () => run({
           matterId, folder: body.folder, playbook: body.playbook, signal: ac.signal,
           file: body.file, target: body.target, glossary: body.glossary, fileA: body.fileA, fileB: body.fileB, rate: body.rate !== false,
+          files: Array.isArray(body.files) ? body.files : undefined, ...(wordDoc || {}),
           onProgress: (ev) => out({ type: 'progress', ...ev }),
         })))
-        out({ type: 'done', files: r.files, stats: r.stats, count: (r.findings || r.events || r.changes || r.flags || []).length })
+        out({ type: 'done', files: r.files, stats: r.stats, count: r.count ?? (r.findings || r.events || r.changes || r.flags || []).length, ...(r.summary ? { summary: r.summary } : {}), ...(r.analyses ? { analyses: r.analyses } : {}) })
         rec.finish({ aborted: ac.signal.aborted, files: r.files || [] })
         require('./hooks').run('after_workflow', { workflow: body.type, files: r.files, stats: r.stats, matterId }).catch(() => {})
       } catch (err) {
@@ -805,6 +815,13 @@ async function handle(req, res) {
         active: matters.active('word')?.id || null,
         forDoc: url.searchParams.get('docId') ? matters.forDoc(url.searchParams.get('docId'))?.id || null : undefined,
       })
+    }
+    // Matter overview, recall and the matter memo (overview.js) — what is stored, readable.
+    if (p === '/api/matters/overview' || p === '/api/matters/recall' || p === '/api/matters/overview/export') {
+      require('./workspace').setBase(require('./agent-config').load().workspace)
+      const body = req.method === 'POST' ? await readBody(req) : {}
+      const r = await require('./overview').handle(req.method, p, url.searchParams, body)
+      return sendJson(res, r.status, r.json)
     }
     if (req.method === 'POST' && p.startsWith('/api/matters')) {
       const body = await readBody(req)

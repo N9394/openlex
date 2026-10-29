@@ -29,12 +29,12 @@ Every model call has a role:
 | Role | Used for |
 |---|---|
 | `plan` | The agent's first step (which tools, what to read); plan proposals |
-| `analyze` | Reading tool results between steps |
+| `analyze` | Reading tool results between steps; document analysis (`analyse` workflow) |
 | `write` | The final answer and suggestions |
-| `judge` | Checking suggestions against sources |
+| `judge` | Checking suggestions against sources; the second check of suggested fixes in an analysis |
 | `extract` | Review, chronology, grid cells, playbook building, change ratings |
 | `translate` | Document translation |
-| `summarize` | Monitor alert summaries |
+| `summarize` | Monitor alert summaries; the optional recall summary |
 | `draft` | Drafting new skills |
 
 A target is `"<provider>"` or `"<provider>:<model>"` (providers: `local`, `anthropic`, `openai`, `azure`, `mistral`, `openrouter`, `bedrock`, `vertex`, `custom`). Keys and endpoints are set as usual in Settings → Model provider.
@@ -130,7 +130,7 @@ The agent's file tools never write `openlex.json`, `skills/`, `playbooks/` or `.
 | `before_answer` | before the answer is final | `text` | `warn`: a note under the answer; `deny`: the answer is withheld |
 | `on_suggestion` | for each suggested change | `text` (proposed), `summary, severity` | `flag`: a note on the card (never auto-applied); `deny`: dropped |
 | `before_web` | before any web request, monitors included | `host, url, call` | `deny`: refused |
-| `after_workflow` | after review, chronology, translate, compare, grid, plan | `workflow, files, stats` | observe, e.g. file outputs into the DMS |
+| `after_workflow` | after review, chronology, translate, compare, analyse, grid, plan | `workflow, files, stats` | observe, e.g. file outputs into the DMS |
 
 Every event also carries `matterId`. Three hook types:
 
