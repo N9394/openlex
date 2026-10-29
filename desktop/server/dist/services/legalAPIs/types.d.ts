@@ -245,7 +245,7 @@ export declare const DEFAULT_API_CONFIGS: {
     readonly courtlistener: {
         readonly baseUrl: "https://www.courtlistener.com/api/rest/v4";
         readonly timeout: 30000;
-        readonly userAgent: "LexVault-Bot/1.0 (+https://lexvault.app)";
+        readonly userAgent: "OpenLex-Bot/1.0 (+https://github.com/N9394/openlex)";
         readonly rateLimit: {
             readonly maxRequests: 5000;
             readonly windowMs: number;
@@ -256,7 +256,7 @@ export declare const DEFAULT_API_CONFIGS: {
         readonly baseUrl: "https://eur-lex.europa.eu";
         readonly sparqlEndpoint: "https://publications.europa.eu/webapi/rdf/sparql";
         readonly timeout: 30000;
-        readonly userAgent: "LexVault-Bot/1.0 (+https://lexvault.app)";
+        readonly userAgent: "OpenLex-Bot/1.0 (+https://github.com/N9394/openlex)";
         readonly rateLimit: {
             readonly maxRequests: 1000;
             readonly windowMs: number;
@@ -266,7 +266,7 @@ export declare const DEFAULT_API_CONFIGS: {
     readonly canlii: {
         readonly baseUrl: "https://api.canlii.org/v1";
         readonly timeout: 30000;
-        readonly userAgent: "LexVault-Bot/1.0 (+https://lexvault.app)";
+        readonly userAgent: "OpenLex-Bot/1.0 (+https://github.com/N9394/openlex)";
         readonly rateLimit: {
             readonly maxRequests: 1000;
             readonly windowMs: number;

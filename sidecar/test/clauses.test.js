@@ -59,7 +59,8 @@ test('word search, removal, persistence', () => {
   cl.removeFile('/firm/beta.docx')
   cl._reset() // reload from disk
   assert.strictEqual(cl.search({ type: 'liability' })[0].uses, 1)
-  assert.strictEqual(fs.statSync(cl.STORE).mode & 0o777, 0o600)
+  // Windows has no POSIX modes (the file sits in the user's profile, protected by its ACL).
+  if (process.platform !== 'win32') assert.strictEqual(fs.statSync(cl.STORE).mode & 0o777, 0o600)
 })
 
 test('agent tool find_clause returns the firm wording with its sources', async () => {

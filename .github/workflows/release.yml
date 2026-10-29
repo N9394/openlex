@@ -1,0 +1,345 @@
+# Release: build, sign and attest the OpenLex CLI tarball in CI.
+#
+# Trigger: push a tag vX.Y.Z whose version matches sidecar/package.json.
+# (Run it by hand with "Run workflow" for a dry run: build + checks only,
+# nothing is signed or published.)
+#
+# What ends up on the (draft) GitHub release, all built here, not on a laptop:
+#   openlex-X.Y.Z.tar.gz                 the CLI + engine (reproducible build)
+#   openlex-X.Y.Z.tar.gz.sha256          its checksum (used by the installers)
+#   openlex-X.Y.Z.cdx.json               SBOM (CycloneDX, the shipped npm dependencies)
+#   install.sh, install.ps1              the installers, so that
+#                                        https://github.com/N9394/openlex/releases/latest/download/install.sh
+#                                        (and install.ps1) always serve the latest ones
+#   SHA256SUMS                           checksums of all of the above
+#   <file>.bundle                        Sigstore (cosign, keyless) signature bundle for each file
+# plus GitHub build provenance attestations for every file and an SBOM
+# attestation for the tarball (visible under the repository's "Attestations").
+# How anyone checks a download: docs/VERIFY.md.
+#
+# The release is created as a DRAFT: read it, then press "Publish release".
+# releases/latest/download/... URLs only work once a release is published.
+#
+# Signed desktop installers (macOS notarized, Windows Authenticode via Azure
+# Trusted Signing) are prepared below but OFF: those jobs only run when the
+# APPLE_* / AZURE_* repository secrets exist. They are delivered to clients
+# individually and are NOT attached to the public release.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: build CLI tarball
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # No dependency cache in release builds: everything comes from the lockfile.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 20
+      - name: Version
+        id: version
+        run: |
+          version=$(node -p "require('./sidecar/package.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ] && [ "${GITHUB_REF_NAME}" != "v$version" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} does not match sidecar/package.json version $version"
+            exit 1
+          fi
+      - name: Build the tarball (reproducible; mtimes = commit time)
+        run: |
+          SOURCE_DATE_EPOCH=$(git log -1 --format=%ct); export SOURCE_DATE_EPOCH
+          echo "SOURCE_DATE_EPOCH=$SOURCE_DATE_EPOCH"
+          bash scripts/package-cli.sh
+      - name: Check the tarball
+        run: bash scripts/check-cli-tarball.sh
+      - name: Rebuild and compare (reproducible build)
+        run: |
+          SOURCE_DATE_EPOCH=$(git log -1 --format=%ct); export SOURCE_DATE_EPOCH
+          first=$(cut -d' ' -f1 dist/*.tar.gz.sha256)
+          bash scripts/package-cli.sh
+          second=$(cut -d' ' -f1 dist/*.tar.gz.sha256)
+          [ "$first" = "$second" ] || { echo "::error::the tarball is not reproducible ($first vs $second)"; exit 1; }
+          echo "reproducible: $first"
+      - name: SBOM (CycloneDX, npm sbom)
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          (cd "dist/openlex-$VERSION/sidecar" && npm sbom --sbom-format cyclonedx --omit dev --omit optional --package-lock-only) > "dist/openlex-$VERSION.cdx.json"
+          node -e "const s=require('./dist/openlex-$VERSION.cdx.json'); if(!s.components||!s.components.length) process.exit(1); console.log('SBOM: '+s.components.length+' components')"
+      - name: Collect release files
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          mkdir -p out
+          cp "dist/openlex-$VERSION.tar.gz" "dist/openlex-$VERSION.tar.gz.sha256" "dist/openlex-$VERSION.cdx.json" out/
+          cp scripts/install.sh scripts/install.ps1 out/
+          (cd out && sha256sum "openlex-$VERSION.tar.gz" "openlex-$VERSION.cdx.json" install.sh install.ps1 > SHA256SUMS && cat SHA256SUMS)
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-files
+          path: out/
+          if-no-files-found: error
+          retention-days: 7
+
+  sign:
+    name: sign and attest
+    needs: build
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write       # keyless signing (Sigstore) and attestations
+      attestations: write   # store the attestations on GitHub
+    env:
+      VERSION: ${{ needs.build.outputs.version }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-files
+          path: out
+      - name: Checksums match the build
+        working-directory: out
+        run: sha256sum -c SHA256SUMS && sha256sum -c "openlex-$VERSION.tar.gz.sha256"
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - name: Sign every file (cosign keyless, Sigstore bundle)
+        working-directory: out
+        run: |
+          for f in "openlex-$VERSION.tar.gz" "openlex-$VERSION.tar.gz.sha256" "openlex-$VERSION.cdx.json" install.sh install.ps1 SHA256SUMS; do
+            cosign sign-blob --yes --bundle "$f.bundle" "$f"
+          done
+      - name: Check the signatures the way users will
+        working-directory: out
+        env:
+          IDENTITY: ${{ github.server_url }}/${{ github.workflow_ref }}
+        run: |
+          echo "signer identity: $IDENTITY"
+          for f in "openlex-$VERSION.tar.gz" "openlex-$VERSION.tar.gz.sha256" "openlex-$VERSION.cdx.json" install.sh install.ps1 SHA256SUMS; do
+            cosign verify-blob --bundle "$f.bundle" \
+              --certificate-identity "$IDENTITY" \
+              --certificate-oidc-issuer https://token.actions.githubusercontent.com "$f"
+          done
+      - name: Build provenance attestations
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            out/openlex-${{ env.VERSION }}.tar.gz
+            out/openlex-${{ env.VERSION }}.cdx.json
+            out/install.sh
+            out/install.ps1
+            out/SHA256SUMS
+      - name: SBOM attestation for the tarball
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: out/openlex-${{ env.VERSION }}.tar.gz
+          sbom-path: out/openlex-${{ env.VERSION }}.cdx.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-files-signed
+          path: out/
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: draft GitHub release
+    needs: [build, sign]
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write   # create the release and upload its files
+    env:
+      VERSION: ${{ needs.build.outputs.version }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: CHANGELOG.md
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-files-signed
+          path: out
+      - name: Release notes from CHANGELOG.md
+        run: |
+          awk -v v="$VERSION" '
+            $0 ~ "^## \\[" v "\\]" { on=1; next }
+            on && /^## \[/ { exit }
+            on { print }
+          ' CHANGELOG.md > notes.md || true
+          [ -s notes.md ] || echo "OpenLex $VERSION" > notes.md
+          cat >> notes.md <<EOF
+
+          ---
+          **Verify this download:** every file is signed (Sigstore, \`*.bundle\`) and has a build provenance attestation from this repository's release workflow. See [docs/VERIFY.md](https://github.com/$GH_REPO/blob/$TAG/docs/VERIFY.md).
+          EOF
+      - name: Create or update the draft release
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" out/* --clobber
+          else
+            gh release create "$TAG" out/* --draft --verify-tag --title "OpenLex $VERSION" --notes-file notes.md
+          fi
+          gh release view "$TAG" --json url,isDraft,assets -q '"\(.url) draft=\(.isDraft)\n" + ([.assets[].name] | join("\n"))'
+
+  # ── Signed desktop installers (OFF until the certificates exist) ─────────
+  #
+  # Repository secrets (Settings → Secrets and variables → Actions):
+  #   macOS (Developer ID + notarization):
+  #     APPLE_CERTIFICATE_P12_BASE64   Developer ID Application certificate (.p12, base64)
+  #     APPLE_CERTIFICATE_PASSWORD     its password
+  #     APPLE_SIGNING_IDENTITY         e.g. "Developer ID Application: Name (TEAMID)"
+  #     APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID   for notarytool
+  #   Windows (Azure Trusted Signing / Artifact Signing):
+  #     AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET
+  #     AZURE_SIGNING_ENDPOINT         e.g. https://weu.codesigning.azure.net/
+  #     AZURE_SIGNING_ACCOUNT          the signing account name
+  #     AZURE_CERT_PROFILE             the certificate profile name
+  #     AZURE_PUBLISHER_NAME           the publisher name in the certificate
+  # Without them these jobs are skipped. The installers are uploaded as
+  # workflow artifacts (attested), not to the public release: they go to
+  # clients individually. NOTE: untested until certificates exist; the
+  # desktop build also needs the embeddings sidecar sources in
+  # desktop/electron/resources/bin/embeddings (not in this repository yet).
+  installer-gate:
+    name: installer signing configured?
+    needs: build
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      apple: ${{ steps.check.outputs.apple }}
+      azure: ${{ steps.check.outputs.azure }}
+    steps:
+      - id: check
+        env:
+          A1: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
+          A2: ${{ secrets.APPLE_ID }}
+          A3: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          A4: ${{ secrets.APPLE_TEAM_ID }}
+          Z1: ${{ secrets.AZURE_CLIENT_ID }}
+          Z2: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
+          Z3: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
+          Z4: ${{ secrets.AZURE_CERT_PROFILE }}
+        run: |
+          apple=false; azure=false
+          [ -n "$A1" ] && [ -n "$A2" ] && [ -n "$A3" ] && [ -n "$A4" ] && apple=true
+          [ -n "$Z1" ] && [ -n "$Z2" ] && [ -n "$Z3" ] && [ -n "$Z4" ] && azure=true
+          echo "apple=$apple" >> "$GITHUB_OUTPUT"; echo "azure=$azure" >> "$GITHUB_OUTPUT"
+          echo "macOS signing + notarization: $apple · Windows Authenticode: $azure"
+
+  installer-macos:
+    name: macOS installer (signed + notarized)
+    needs: installer-gate
+    if: needs.installer-gate.outputs.apple == 'true'
+    runs-on: macos-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - name: Build, sign and notarize (electron-builder)
+        working-directory: desktop/electron
+        env:
+          CSC_LINK: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          npm ci --no-audit --no-fund
+          npm run package:mac:arm64 -- "-c.mac.identity=$SIGNING_IDENTITY" -c.mac.hardenedRuntime=true -c.mac.notarize=true
+      - name: Check signature and notarization
+        working-directory: desktop/electron/dist
+        run: |
+          app=$(find . -maxdepth 3 -name '*.app' | head -1)
+          codesign --verify --deep --strict --verbose=2 "$app"
+          spctl --assess --type execute --verbose "$app"
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: desktop/electron/dist/*.zip
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: installer-macos
+          path: desktop/electron/dist/*.zip
+          retention-days: 14
+
+  installer-windows:
+    name: Windows installer (Authenticode, Azure Trusted Signing)
+    needs: installer-gate
+    if: needs.installer-gate.outputs.azure == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - name: Build (unsigned)
+        working-directory: desktop/electron
+        shell: bash
+        run: |
+          npm ci --no-audit --no-fund
+          npm run package:win
+      - name: Sign the installer (Azure Trusted Signing)
+        uses: azure/artifact-signing-action@c7ab2a863ab5f9a846ddb8265964877ef296ee82 # v2.0.0
+        with:
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          endpoint: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ secrets.AZURE_CERT_PROFILE }}
+          files-folder: ${{ github.workspace }}\desktop\electron\dist
+          files-folder-filter: exe
+          file-digest: SHA256
+          timestamp-digest: SHA256
+      - name: Check the signature
+        shell: pwsh
+        run: |
+          Get-ChildItem desktop/electron/dist -Filter *.exe | ForEach-Object {
+            $s = Get-AuthenticodeSignature $_.FullName
+            Write-Host "$($_.Name): $($s.Status) $($s.SignerCertificate.Subject)"
+            if ($s.Status -ne 'Valid') { throw "$($_.Name) is not validly signed" }
+          }
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: desktop/electron/dist/*.exe
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: installer-windows
+          path: desktop/electron/dist/*.exe
+          retention-days: 14

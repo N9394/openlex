@@ -80,6 +80,7 @@ export const COMMANDS = [
   { name: 'save', args: '[name]', help: 'save the last answer as a file (asks first)' },
   { name: 'transcript', args: '', help: 'print this conversation in the terminal when you quit' },
   { name: 'activity', args: '', help: 'what OpenLex did recently, and where data went' },
+  { name: 'record', args: '[all]', help: 'the AI record: what the AI did, to show a client' },
   { name: 'clear', args: '', help: 'start a new conversation' },
   { name: 'help', args: '', help: 'these commands' },
 ]
@@ -443,6 +444,7 @@ export function Matter({ matterId = null }) {
     if (name === 'basis') return openSources()
     if (name === 'sources') return setMode('lawsources')
     if (name === 'activity') { backToChat.add(key); return ctx.go('activity', { matterId }) }
+    if (name === 'record') { backToChat.add(key); return ctx.go('record', { matterId: /^all\b/i.test(arg) ? null : matterId }) }
     if (name === 'clear') {
       try {
         await ctx.api.clearConversation(`tui:${key}`)
@@ -589,6 +591,7 @@ export function Matter({ matterId = null }) {
       { value: 'docs', label: `Documents in this matter (${docs.length})` },
       ...(ctx.folder && ctx.folder.documents && !docs.some((d) => String(d.path).startsWith(ctx.folder.path)) ? [{ value: 'folderDocs', label: `Use the ${ctx.folder.documents} document${ctx.folder.documents === 1 ? '' : 's'} in this folder for this matter`, hint: ctx.folder.short }] : []),
       { value: 'activity', label: 'Recent activity', hint: 'what OpenLex did, and where data went' },
+      { value: 'record', label: 'AI record', hint: 'what the AI did, checkable, to show a client' },
       { value: 'back', label: 'Back to matters' },
     ]
     body = html`<${Box} flexDirection="column">
@@ -600,6 +603,7 @@ export function Matter({ matterId = null }) {
         if (it.value === 'priv') return matter?.privileged ? setMode('unprivilege') : setPrivileged(true)
         if (it.value === 'actions') return setMode('actions')
         if (it.value === 'activity') return ctx.go('activity', { matterId })
+        if (it.value === 'record') return ctx.go('record', { matterId })
         if (it.value === 'chat') setEscHint(false)
         setMode(it.value)
       }} />

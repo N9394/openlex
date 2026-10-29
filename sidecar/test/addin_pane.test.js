@@ -25,6 +25,7 @@ const theme = lib('theme')
 const suggest = lib('suggest')
 const matter = lib('matter')
 const words = lib('words')
+const record = lib('record')
 const explain = require('../src/explain')
 
 /** A fake engine answer to one question, as the SSE stream delivers it. */
@@ -291,4 +292,64 @@ test('words: durations, clause names, service names', () => {
   assert.strictEqual(words.clauseName({ index: 2 }), 'part 3 of the document')
   assert.strictEqual(words.serviceName({ provider: 'openai', model: 'gpt-4.1' }), 'GPT (OpenAI)')
   assert.strictEqual(words.plural(1, 'party', 'parties'), '1 party')
+})
+
+test('AI record view: menu entries once the engine has it, query and export from the filters, the summary line, rows that do not rely on colour', () => {
+  const ids = (q, o) => menu.search(q, o).map((e) => e.id)
+  assert.ok(!ids('').includes('record'), 'hidden until the engine offers it')
+  const on = { available: { record: true } }
+  assert.deepStrictEqual(ids('ai record', on).slice(0, 2), ['record', 'recordAll'])
+  assert.strictEqual(ids('audit', on)[0], 'record', 'found by "audit" too')
+  assert.strictEqual(ids('dpo', on)[0], 'record')
+  assert.ok(!ids('', { ...on, features: { record: false } }).includes('record'))
+  assert.strictEqual(menu.ENTRIES.find((e) => e.id === 'record').label, 'AI record for this matter')
+  assert.strictEqual(menu.ENTRIES.find((e) => e.id === 'recordAll').label, 'AI record — all matters')
+
+  assert.strictEqual(record.query({ matterId: 'm_1', from: '2026-10-01', to: '2026-10-29', left: true }), '?matterId=m_1&from=2026-10-01&to=2026-10-29&left=1&limit=100')
+  assert.strictEqual(record.query({ from: 'garbage' }, 200), '?limit=200')
+  assert.strictEqual(record.rangeProblem({ from: '2026-10-29', to: '2026-10-01' }), 'The first date is after the second one.')
+  assert.strictEqual(record.rangeProblem({ from: '2026-10-01' }), '')
+  assert.deepStrictEqual(record.exportBody({ matterId: 'm_1', left: true, from: '' }, 'csv'), { format: 'csv', matterId: 'm_1', left: true })
+  assert.deepStrictEqual(record.exportBody({}, 'exe'), { format: 'pdf' })
+
+  const r = {
+    summary: { text: '12 requests · 3 sent to Claude (Anthropic, EU), names hidden · 2 online lookups · 1 permission denied' },
+    verify: { ok: true, text: 'Record intact: all 3 logs checked, no line changed, removed or moved.', fingerprint: '3f2a 9c1d' },
+    entries: [
+      { id: 'r1', at: '2026-10-29T13:02:00.000Z', title: 'Question: “Is the cap valid?”', window: 'Word', matter: 'Alpine share deal', left: true, outcome: 'done', lines: ['AI: Claude (Anthropic, EU) — sent outside this computer, names hidden · 3 calls'] },
+      { id: 'r2', at: '2026-10-29T12:02:00.000Z', title: 'Checklist review: “spa”', window: 'Terminal app', left: false, outcome: 'done', lines: [] },
+      { id: 'r3', at: '2026-10-29T11:02:00.000Z', title: 'Question: “Translate”', left: false, outcome: 'failed', lines: [] },
+    ],
+  }
+  assert.strictEqual(record.summaryLine(r), '12 requests · 3 sent to Claude (Anthropic, EU), names hidden · 2 online lookups · 1 permission denied · record intact ✓')
+  assert.match(record.summaryLine({ ...r, verify: { ok: false } }), /record changed ✗$/)
+  assert.strictEqual(record.summaryLine(null), 'Nothing recorded yet')
+  const rows = r.entries.map(record.row)
+  assert.deepStrictEqual(rows.map((x) => x.symbol), ['!', '✓', '✗'])
+  assert.deepStrictEqual(rows.map((x) => x.mark), ['Something left this computer.', 'Stayed on this computer.', 'Did not finish.'])
+  assert.match(rows[0].sub, /^29 Oct 2026 \d{2}:02 · Word · Alpine share deal$/)
+  assert.deepStrictEqual(rows[0].lines, r.entries[0].lines)
+  assert.deepStrictEqual(record.verifyLine({ ok: false, text: 'Record changed: line 7.', fingerprint: 'ab12' }), { ok: false, text: '✗ Record changed: line 7. Fingerprint: ab12' })
+  assert.strictEqual(record.title({ matterId: 'm_1' }, 'Alpine'), 'AI record: Alpine')
+  assert.strictEqual(record.title({}), 'AI record — all matters')
+
+  // The pane's HTML: one view with a way back, nothing permanent but the link on the "Your data" line.
+  const html = require('fs').readFileSync(path.join(LIB, '..', 'taskpane.html'), 'utf8')
+  assert.match(html, /<section id="view-record" class="view" hidden[^>]*>\s*<div class="view-head"><button class="btn btn-ghost back"/)
+  assert.match(html, /id="dlRecord" hidden>see the AI record</)
+  for (const id of ['recFrom', 'recTo', 'recLeft', 'recPdf', 'recCsv', 'recVerify']) assert.ok(html.includes(`id="${id}"`), id)
+  assert.ok(html.indexOf('lib/record.js') > html.indexOf('lib/words.js'))
+})
+
+test('overview: the engine sends cards as a list (id, title, items, link)', () => {
+  const cards = matter.overview({ matter: { id: 'm1' }, cards: [
+    { id: 'summary', title: 'Summary', items: [{ title: 'Office lease, Vienna', from: { kind: 'analysis', file: 'lease.docx' }, at: '2026-10-29' }], more: 0 },
+    { id: 'deadlines', title: 'Deadlines', items: [], more: 0, empty: 'No deadlines found yet.' },
+    { id: 'activity', title: 'Recent activity', items: [{ title: 'Question: liability cap' }], more: 2, link: { label: 'Open the AI record', action: 'record' } },
+  ] })
+  assert.deepStrictEqual(cards.map((c) => c.key), ['summary', 'activity'], 'empty cards are dropped')
+  assert.strictEqual(cards[0].items[0].text, 'Office lease, Vienna')
+  assert.strictEqual(cards[0].items[0].from.file, 'lease.docx')
+  assert.strictEqual(cards[1].link.action, 'record')
+  assert.strictEqual(cards[1].more, 2)
 })

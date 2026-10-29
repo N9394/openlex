@@ -13,7 +13,7 @@ exports.TIERS = {
     free: {
         name: 'free',
         displayName: 'Free',
-        description: 'Try LexVault with basic document analysis',
+        description: 'Try OpenLex with basic document analysis',
         price: 0,
         requiresAuth: false,
         limits: {

@@ -11,10 +11,10 @@ const options = {
     definition: {
         openapi: '3.0.0',
         info: {
-            title: 'LexVault API',
+            title: 'OpenLex desktop server API (legacy)',
             version: '1.0.0',
             description: `
-LexVault is an AI-powered legal document analysis platform. This API provides
+OpenLex is an open-source, local-first legal AI. This legacy desktop server is being replaced by the engine (sidecar/). This API provides
 endpoints for document upload, analysis, user management, and subscription handling.
 
 ## Authentication
@@ -37,7 +37,7 @@ All errors follow this format:
 \`\`\`
       `,
             contact: {
-                name: 'LexVault Support',
+                name: 'OpenLex',
                 email: 'support@lexvault.com',
             },
             license: {
@@ -523,7 +523,7 @@ function setupSwagger(app) {
         .swagger-ui .topbar { display: none }
         .swagger-ui .info { margin: 20px 0 }
       `,
-        customSiteTitle: 'LexVault API Documentation',
+        customSiteTitle: 'OpenLex desktop server API (legacy)',
     }));
     app.get('/api/documentation.json', (_req, res) => {
         res.setHeader('Content-Type', 'application/json');

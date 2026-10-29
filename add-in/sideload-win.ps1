@@ -1,7 +1,8 @@
-# Sideload the LexVault add-in into Word for Windows.
+# Sideload the OpenLex add-in into Word for Windows.
+# (The file keeps its old name LexVault.xml so a re-run replaces an existing sideload.)
 # 1. Start the sidecar (serves the add-in at https://localhost:18001)
 # 2. Run this PowerShell script (as the current user)
-# 3. In Word: Insert -> Add-ins -> Shared Folder -> 'LexVault'
+# 3. In Word: Insert -> Add-ins -> Shared Folder -> 'OpenLex'
 #
 # Web add-ins sideload via the WEF catalog folder ONLY. Do NOT create
 # HKCU\Software\Microsoft\Office\Word\Addins\LexVault — that registry key
@@ -33,4 +34,4 @@ New-Item -ItemType Directory -Force -Path $wefPath | Out-Null
 Copy-Item $manifest (Join-Path $wefPath "LexVault.xml") -Force
 
 Write-Host "Manifest copied to $wefPath"
-Write-Host "In Word: Insert -> Add-ins -> Shared Folder -> 'LexVault'"
+Write-Host "In Word: Insert -> Add-ins -> Shared Folder -> 'OpenLex'"

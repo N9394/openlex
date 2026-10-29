@@ -38,9 +38,10 @@ The pane keeps only what you need in view. Everything else is one search away.
   - `✓ Stayed on this computer`
   - `! Sent to Claude (Anthropic, EU) — names hidden · 2 times`
   - `! Looked up online: RIS` (only search words or web addresses leave the computer)
-  Hover over it for more detail.
+  Hover over it for more detail. **see the AI record** at its end opens the [AI record](ai-record.md).
 - **The question box** and **one main action, Review this contract.** Everything else is in the menu.
 - **☰ What can I do here?** (or **Ctrl+K** / **⌘K**) opens one searchable menu: compare with another version, answer the comments, list the obligations, check cross-references, the document outline, proposed changes, work across the matter (review every document, chronology, translate, compare), your firm's clauses, a new matter, and the settings. Type a few words ("translate", "timeline", "which AI") and press Enter. Your firm can switch entries off (see [HARNESS.md](../HARNESS.md#features)).
+- **The AI record.** ☰ → *AI record for this matter* (or *AI record — all matters*) opens one view: a summary line (*12 requests · 3 sent to Claude (Anthropic, EU), names hidden · 2 online lookups · 1 permission denied · record intact ✓*), a date range and *Only what left this computer*, the entries (click one for its details), and **Export PDF**, **Export CSV** and **Check the record**. It never contains document text, prompts or answers. See [The AI record](ai-record.md).
 - **One hint at a time.** Under the question box OpenLex sometimes offers one thing that fits what you are doing — for example, when you select text: *With the selected text: Explain · Rewrite for the client · Check*, or *Your firm has instructions for this: “NDA review”*. Close it with ✕ and it stays away.
 
 ### While OpenLex works

@@ -391,7 +391,7 @@ export default function Audit() {
         const blobUrl = URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = blobUrl
-        a.download = `lexvault-audit-${new Date().toISOString().split('T')[0]}.${format}`
+        a.download = `openlex-audit-${new Date().toISOString().split('T')[0]}.${format}`
         a.click()
         URL.revokeObjectURL(blobUrl)
       } catch (err) {
@@ -427,7 +427,7 @@ export default function Audit() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `lexvault-audit-${new Date().toISOString().split('T')[0]}.${ext}`
+    a.download = `openlex-audit-${new Date().toISOString().split('T')[0]}.${ext}`
     a.click()
     URL.revokeObjectURL(url)
   }

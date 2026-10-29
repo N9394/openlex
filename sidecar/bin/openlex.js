@@ -22,6 +22,7 @@
  *   openlex matters [new "Title" [--client X] [--privileged] | privileged ID [--off]]   privileged = never leaves this computer
  *   openlex matters show ID | export ID [--format docx|pdf|md]   the matter at a glance, or as a "matter memo" file
  *   openlex recall "liability cap" --matter ID [--summary]   search everything stored for the matter
+ *   openlex record [--matter ID] [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--left] [--export pdf|csv|md] [--verify] [--keep-months N|all]   the AI record: what the AI did, never any content
  *   openlex clauses [--type liability] [--query words] [--matter ID]
  *   openlex grid list | new TITLE --columns cols.json [--matter ID] | run ID [--force] | show ID | export ID
  *   openlex decide "text" --question "Is …?" | --questions q.json [--file doc] [--matter ID]
@@ -63,7 +64,7 @@ function parseArgs(argv) {
     else if (a === '--json') out.json = true
     else if (a === '--force') out.force = true
     else if (a === '--clear') out.clear = true
-    else if (['--local', '--remove', '--redact', '--privileged', '--off', '--yes', '--ascii', '--summary', '--law'].includes(a)) out[a.slice(2)] = true
+    else if (['--local', '--remove', '--redact', '--privileged', '--off', '--yes', '--ascii', '--summary', '--left', '--verify', '--law'].includes(a)) out[a.slice(2)] = true
     else if (a === '--no-folder') out.folder = false
     else if (a === '--allow') out.allow = [...(out.allow || []), ...String(argv[++i] || '').split(',').map((x) => x.trim()).filter(Boolean)]
     else if (a === '--save' && (i + 1 >= argv.length || argv[i + 1].startsWith('--'))) out.save = true
@@ -340,6 +341,31 @@ async function main() {
       const q = new URLSearchParams({ id: a.matter, q: a._.join(' '), format: 'text', ...(a.summary ? { summary: '1' } : {}), ...(a.limit ? { limit: a.limit } : {}) })
       const r = await request('GET', `/api/matters/recall?${q}`)
       return console.log(a.json ? JSON.stringify(r, null, 2) : r.text)
+    }
+    case 'record': {
+      const cli = await esm('cli.mjs')
+      if (a['keep-months']) {
+        const r = await request('POST', '/api/record/settings', { keepMonths: a['keep-months'] })
+        if (a.json) return console.log(JSON.stringify(r, null, 2))
+        console.log(r.keepMonths ? `The AI record now keeps the last ${r.keepMonths} months. Older entries are removed with a note saying how many and from when.` : 'The AI record now keeps everything (the default).')
+        for (const x of r.applied || []) console.log(x.error ? `  ${x.name}: ${x.error}` : `  ${x.name}: ${x.removed.count} old entries removed`)
+        return
+      }
+      if (a.verify) {
+        const v = await request('GET', '/api/record/verify')
+        if (!v.ok) process.exitCode = 1
+        return console.log(a.json ? JSON.stringify(v, null, 2) : cli.verifyText(v))
+      }
+      for (const k of ['from', 'to']) if (a[k] && !/^\d{4}-\d{2}-\d{2}$/.test(a[k])) throw new Error(`usage: --${k} takes a date like 2026-10-29`)
+      if (a.export) {
+        const r = await request('POST', '/api/record/export', { matterId: a.matter, from: a.from, to: a.to, left: !!a.left, format: a.export })
+        if (a.json) return console.log(JSON.stringify(r, null, 2))
+        console.log(cli.asciiText(`Saved the AI record (${r.entries} entr${r.entries === 1 ? 'y' : 'ies'}, ${r.verified ? 'record intact ✓' : 'record changed ✗'}):`))
+        return console.log(r.file)
+      }
+      const q = new URLSearchParams(Object.entries({ matterId: a.matter, from: a.from, to: a.to, left: a.left ? '1' : '', limit: a.limit || '50' }).filter(([, v]) => v))
+      const r = await request('GET', `/api/record?${q}`)
+      return console.log(a.json ? JSON.stringify(r, null, 2) : cli.recordText(r))
     }
     case 'matters': {
       const [sub, arg] = a._

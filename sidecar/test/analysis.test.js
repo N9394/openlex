@@ -191,7 +191,7 @@ test('analysis: verified findings only, locations from the text, risks rated and
   // Outputs in the matter folder.
   assert.strictEqual(r.files.length, 3)
   const md = fs.readFileSync(a.files.md, 'utf8')
-  assert.match(a.files.md, /2026-031_Office_lease\/analysis-lease\.md$/)
+  assert.match(a.files.md, /2026-031_Office_lease[\\/]analysis-lease\.md$/)
   assert.match(md, /### High risk — Unlimited liability of the tenant/)
   assert.match(md, /\*\*Where:\*\* § 9 Liability/)
   assert.match(md, /\*\*Law:\*\* ABGB § 1295/)

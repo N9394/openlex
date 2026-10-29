@@ -31,6 +31,8 @@
     { id: 'translate', group: 'This matter', label: 'Translate a document', hint: 'Keeps numbers and your glossary', keywords: 'translation language', feature: 'translate' },
     { id: 'compareDocs', group: 'This matter', label: 'Compare two documents of the matter', hint: 'A Word file listing each change and how much it matters', keywords: 'diff versions', feature: 'compare' },
     { id: 'clauses', group: 'This matter', label: 'Find wording in your firm\'s clauses', hint: 'Your precedents, most used first', keywords: 'clause library precedent template insert', feature: 'clauses' },
+    { id: 'record', group: 'This matter', label: 'AI record for this matter', hint: 'What the AI did, where it ran, what left this computer — to show a client', keywords: 'audit log record history data protection dpo gdpr export verify', feature: 'record', needs: 'record' },
+    { id: 'recordAll', group: 'This matter', label: 'AI record — all matters', hint: 'The same for every matter, to export or check', keywords: 'audit log record history data protection dpo gdpr export verify', feature: 'record', needs: 'record' },
     { id: 'newMatter', group: 'This matter', label: 'Start a new matter', hint: 'Its own rules, folder and notes', keywords: 'matter create file client', feature: 'matters' },
 
     { id: 'settingsAI', group: 'Settings', label: 'Settings: which AI', hint: 'On this computer or an AI service', keywords: 'model provider key cloud local', feature: 'settings' },

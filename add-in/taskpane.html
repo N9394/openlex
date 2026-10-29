@@ -105,6 +105,25 @@
     <div id="sugList" class="sug-list"></div>
   </section>
 
+  <section id="view-record" class="view" hidden aria-labelledby="h-record">
+    <div class="view-head"><button class="btn btn-ghost back" type="button">← Back to the conversation</button><h2 id="h-record">AI record</h2></div>
+    <p id="recSummary" class="rec-summary" role="status" aria-live="polite">Loading…</p>
+    <p class="muted rec-note">What the AI did, where it ran and what left this computer. Never the content of documents, questions or answers.</p>
+    <div class="rec-filters">
+      <label class="field-label" for="recFrom">From</label><input type="date" id="recFrom">
+      <label class="field-label" for="recTo">To</label><input type="date" id="recTo">
+      <label class="rec-left"><input type="checkbox" id="recLeft"> Only what left this computer</label>
+    </div>
+    <div id="recMsg" class="muted" role="status" aria-live="polite"></div>
+    <div id="recList" class="rec-list"></div>
+    <button class="btn btn-ghost" id="recMore" type="button" hidden>Show more</button>
+    <div class="btn-row">
+      <button class="btn" id="recPdf" type="button">Export PDF</button>
+      <button class="btn btn-ghost" id="recCsv" type="button">Export CSV</button>
+      <button class="btn btn-ghost" id="recVerify" type="button">Check the record</button>
+    </div>
+  </section>
+
   <section id="view-settings" class="view" hidden aria-labelledby="h-settings">
     <div class="view-head"><button class="btn btn-ghost back" type="button">← Back to the conversation</button><h2 id="h-settings">Settings</h2></div>
 
@@ -270,7 +289,7 @@
 
 <footer class="dock">
   <div id="dataLine" class="dataline" role="status" aria-live="polite" aria-atomic="true" title="Where your data went">
-    <span class="dl-label">Your data:</span> <span class="dl-sym" aria-hidden="true">✓</span> <span class="dl-text">Nothing has left this computer</span>
+    <span class="dl-label">Your data:</span> <span class="dl-sym" aria-hidden="true">✓</span> <span class="dl-text">Nothing has left this computer</span> <button type="button" class="dl-link" id="dlRecord" hidden>see the AI record</button>
   </div>
   <!-- The contextual suggestion slot: at most one hint at a time (lib/suggest.js). -->
   <div id="hint" class="hint" hidden>
@@ -329,6 +348,7 @@
 <script src="lib/theme.js"></script>
 <script src="lib/suggest.js"></script>
 <script src="lib/matter.js"></script>
+<script src="lib/record.js"></script>
 <script src="taskpane.js"></script>
 </body>
 </html>

@@ -52,14 +52,16 @@ test('shell syntax and dangerous options are refused', () => {
 
 test('paths must stay in the workspace, also through symlinks; ~ and absolute paths are refused', () => {
   for (const cmd of ['cat /etc/passwd', 'cat ~/.ssh/id_ed25519', 'cat ../outside/secret.txt', `cat ${path.join(OUTSIDE, 'secret.txt')}`, 'cat escape/secret.txt', 'cp notes.txt escape/x.txt', 'find escape', 'grep -r TOP escape', 'ls --color=/tmp']) {
-    assert.throws(() => ws.checkCommand(cmd), /outside the OpenLex workspace|outside the workspace/, cmd)
+    // On Windows an absolute path has backslashes, which the shell-syntax check refuses first.
+    assert.throws(() => ws.checkCommand(cmd), process.platform === 'win32' ? /outside the OpenLex workspace|outside the workspace|shell syntax/ : /outside the OpenLex workspace|outside the workspace/, cmd)
   }
   assert.throws(() => ws.writeFile('escape/planted.txt', 'x'), /outside/)
   assert.throws(() => ws.readFile('escape/secret.txt'), /outside/)
   assert.ok(!fs.existsSync(path.join(OUTSIDE, 'planted.txt')))
 })
 
-test('allowed commands run, see no secrets, and cp never overwrites', async () => {
+// run_bash runs POSIX tools (grep, cat, cp) and has no OS sandbox on Windows, so it stays off there.
+test('allowed commands run, see no secrets, and cp never overwrites', { skip: process.platform === 'win32' && 'run_bash is not available on Windows' }, async () => {
   shellOn(true)
   const sb = ws.sandboxFor(ws.realBase())
   if (!sb) shellOn(true, { shellWithoutSandbox: true }) // CI without a sandbox: still test the checks

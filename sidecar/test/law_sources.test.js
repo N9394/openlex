@@ -395,6 +395,19 @@ test('transparency: the step says which source is contacted online, in plain wor
   for (const e of [ev, g, f]) assert.ok(!/search_law|get_law|connector|mcp/i.test(e.plain), e.plain)
 })
 
+test('AI record: a law-source lookup shows under the source\'s name, once; a blocked one as blocked', async () => {
+  setPolicy(['web'])
+  await ls.search({ query: 'Kaufvertrag', jurisdiction: 'DE' })
+  setPolicy(null)
+  await ls.search({ query: 'Kaufvertrag', jurisdiction: 'DE' })
+  const entries = require('../src/record').build(null)
+  const looked = entries.flatMap((e) => e.lookups || []).filter((l) => /NeuRIS/.test(l.name))
+  assert.ok(looked.length >= 1 && looked.every((l) => l.name === 'NeuRIS (Germany\'s federal law portal)'))
+  assert.ok(entries.flatMap((e) => e.blocked || []).some((b) => /NeuRIS/.test(b.what)))
+  assert.ok(!entries.some((e) => /firm's database “(ris|neuris|eurlex|slovlex|esbirka|ansvar)”/.test(JSON.stringify(e))), 'never shown as a firm database')
+  assert.ok(!entries.some((e) => /Kaufvertrag/.test(JSON.stringify(e))), 'no search words in the record')
+})
+
 test('terminal /sources: the engine\'s words, one list; Enter offers only what applies', async () => {
   setPolicy(['web'])
   const ui = await import('../tui/sources.mjs')
@@ -427,30 +440,33 @@ test('terminal /sources screen: the list, paste a key (hidden), switch a source 
   }
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
   const r = ink.render(React.createElement(LawSources, { api }))
-  const waitFor = async (re) => { for (let i = 0; i < 150; i++) { const f = r.lastFrame() || ''; if (re.test(f.replace(/\s+/g, ' '))) return f; await sleep(20) } throw new Error(`timed out: ${re}\n${r.lastFrame()}`) }
-  const press = async (...keys) => { for (const k of keys) { r.stdin.write(k); await sleep(40) } }
-  const DOWN = '\u001B[B'
+  const waitFor = async (re) => { for (let i = 0; i < 500; i++) { const f = r.lastFrame() || ''; if (re.test(f.replace(/\s+/g, ' '))) return f; await sleep(20) } throw new Error(`timed out: ${re}\n${r.lastFrame()}`) }
+  const press = async (...keys) => { for (const k of keys) { r.stdin.write(k); await sleep(80) } }
+  // Under load a key can arrive before the screen listens: press again until the next screen shows.
+  const choose = async (key, re) => {
+    for (let n = 0; n < 5; n++) {
+      r.stdin.write(key)
+      for (let i = 0; i < 75; i++) { if (re.test((r.lastFrame() || '').replace(/\s+/g, ' '))) return r.lastFrame(); await sleep(20) }
+    }
+    throw new Error(`timed out: ${re}\n${r.lastFrame()}`)
+  }
   try {
     let f = await waitFor(/Ansvar: paste your key/)
     assert.match(f, /Where OpenLex looks up the law/)
     assert.match(f.replace(/\s+/g, ' '), /RIS Austria: free, but your client-data rule keeps OpenLex offline/)
     assert.match(f.replace(/\s+/g, ' '), /Only your search words are sent, never your documents/)
-    await press(DOWN, DOWN, DOWN, DOWN, DOWN, '\r')
-    await waitFor(/Paste your key/)
-    await press('\r')
-    await waitFor(/Your Ansvar key/)
+    await choose('6', /Paste your key/) // digits pick a row: Ansvar is the sixth
+    await choose('1', /Your Ansvar key/)
+    await sleep(100)
     await press('firm-agent:s3cret', '\r')
     f = await waitFor(/Saved the Ansvar key/)
     assert.ok(!f.includes('s3cret'), 'the key is never shown')
     assert.deepStrictEqual(calls[0], ['key', 'ansvar', 'firm-agent:s3cret'])
-    await press('\r') // RIS Austria
-    await waitFor(/Switch it off/)
-    await press('\r')
-    await waitFor(/RIS Austria is now off/)
+    await choose('1', /Switch it off/) // RIS Austria
+    await choose('1', /RIS Austria is now off/)
     assert.deepStrictEqual(calls[1], ['enable', 'ris', false])
     // The last item allows online look-ups (keeps the rule's other services).
-    await press(...Array(6).fill(DOWN), '\r')
-    await waitFor(/Online look-ups are allowed/)
+    await choose('7', /Online look-ups are allowed/)
     assert.deepStrictEqual(calls[2], ['policy', { mode: 'allow-list', providers: ['web'] }])
   } finally { r.unmount() }
 })

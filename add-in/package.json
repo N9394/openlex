@@ -1,6 +1,6 @@
 {
   "name": "lexvault-word-addin",
   "version": "0.1.0",
-  "description": "LexVault Word add-in — airgapped legal drafting agent. Task pane + sidecar.",
+  "description": "OpenLex Word add-in — local legal drafting agent. Task pane + engine.",
   "private": true
 }

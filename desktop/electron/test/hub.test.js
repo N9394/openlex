@@ -57,7 +57,7 @@ test('sidecar registers itself; hub refuses requests without the token', async (
   assert.strictEqual((await get('/api/hub/info')).status, 401)
   assert.strictEqual((await get('/api/hub/info', { Authorization: 'Bearer ' + 'f'.repeat(64) })).status, 401)
   const mode = fs.statSync(path.join(DATA, 'run', 'hub.token')).mode & 0o777
-  assert.strictEqual(mode, 0o600)
+  if (process.platform !== 'win32') assert.strictEqual(mode, 0o600) // no POSIX modes on Windows (profile ACL)
 })
 
 test('app connects, sends text to Word, receives open-in-app', async () => {

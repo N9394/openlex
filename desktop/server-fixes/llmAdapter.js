@@ -2237,7 +2237,7 @@ async function chatWithMock(messages) {
     if (messageLower.includes('create') || messageLower.includes('document')) {
         return "You can create documents using three methods: Smart Navigator for AI-guided creation, Quick Templates for fast generation, or Business Bundles for complete packages. Which approach interests you?";
     }
-    return "I'm here to help you navigate LexVault. You can ask me about your uploaded documents, search your vault, or get guidance on creating new legal documents. What would you like to know?";
+    return "I'm here to help you navigate OpenLex. You can ask me about your uploaded documents, search your vault, or get guidance on creating new legal documents. What would you like to know?";
 }
 async function generateFlashcardsWithAI(text, filename) {
     const provider = process.env.LLM_PROVIDER || 'mock';

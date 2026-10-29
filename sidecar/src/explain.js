@@ -312,5 +312,5 @@ function checkLine(s = {}) {
 module.exports = {
   annotate, withPlain, explainStep, explainTool, failedSentence, errorSentence, friendly,
   serviceName, addModel, dataLine, duration, basisText, checkLine, clauseName, lawOf,
-  TOOL_WORDS, LAWS, NAMES,
+  TOOL_WORDS, LAWS, NAMES, LAW_SOURCES,
 }

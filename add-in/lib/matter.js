@@ -81,12 +81,17 @@
 
   /** GET /api/matters/overview → [{ key, title, items: [{ text, from, at }] }] with empty cards dropped. */
   function overview(json) {
+    const toItems = (v) => (Array.isArray(v) ? v : [v]).map((x) => ({ text: words.clip(itemText(x), 300), from: (x && x.from) || null, at: (x && x.at) || '' })).filter((x) => x.text)
+    // The engine sends `cards` as a list ({ id, title, items }); keep the keyed form working too.
+    if (json && Array.isArray(json.cards)) {
+      return json.cards.map((c) => ({ key: c.id || c.key, title: c.title || c.id, items: toItems(c.items || []), more: c.more || 0, link: c.link || null })).filter((c) => c.items.length)
+    }
     const o = (json && (json.overview || json.cards || json)) || {}
     const out = []
     for (const [key, title] of CARDS) {
       const v = o[key]
       if (v == null) continue
-      const items = (Array.isArray(v) ? v : [v]).map((x) => ({ text: words.clip(itemText(x), 300), from: (x && x.from) || null, at: (x && x.at) || '' })).filter((x) => x.text)
+      const items = toItems(v)
       if (items.length) out.push({ key, title, items })
     }
     return out

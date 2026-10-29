@@ -1,6 +1,6 @@
 "use strict"
 /**
- * LexVault Word sidecar — HTTP API for the Word add-in (:18001).
+ * OpenLex engine — HTTP API for the Word add-in, CLI and desktop app (:18001).
  *
  * - Serves the add-in static files (taskpane, manifest assets)
  * - /api/chat: agent loop with SSE streaming (step/suggestion/text/done/error)
@@ -458,12 +458,12 @@ async function handle(req, res) {
       const rec = require('./activity').start({ matterId, kind: body.type, asked: [body.playbook, body.target].filter(Boolean).join(' · '), client: clientOf(req), files: [body.file, body.fileA, body.fileB].filter(Boolean) })
       const out = (e) => { rec.see(e); sendSse(res, e) }
       try {
-        const r = await require('./folder').run(folderDir, () => policy.observeModels((m) => out({ type: 'model', ...m }), () => policy.withMatter(matterId, () => run({
+        const r = await rec.run(() => require('./folder').run(folderDir, () => policy.observeModels((m) => out({ type: 'model', ...m }), () => policy.withMatter(matterId, () => run({
           matterId, folder: folderDir || undefined, playbook: body.playbook, signal: ac.signal,
           file: body.file, target: body.target, glossary: body.glossary, fileA: body.fileA, fileB: body.fileB, rate: body.rate !== false,
           files: Array.isArray(body.files) ? body.files : undefined, ...(wordDoc || {}),
           onProgress: (ev) => out({ type: 'progress', ...ev }),
-        }))))
+        })))))
         out({ type: 'done', files: r.files, stats: r.stats, count: r.count ?? (r.findings || r.events || r.changes || r.flags || []).length, ...(r.summary ? { summary: r.summary } : {}), ...(r.analyses ? { analyses: r.analyses } : {}) })
         rec.finish({ aborted: ac.signal.aborted, files: r.files || [] })
         require('./hooks').run('after_workflow', { workflow: body.type, files: r.files, stats: r.stats, matterId }).catch(() => {})
@@ -669,7 +669,7 @@ async function handle(req, res) {
           const rec = require('./activity').start({ matterId: plan.matterId, kind: 'plan', asked: plan.goal || '', client: clientOf(req) })
           const out = (e) => { rec.see(e); sendSse(res, e) }
           try {
-            const r = await require('./folder').run(folderDir, () => require('./permissions').session(permissionSession(body, res, ac.signal), () => policy.observeModels((m) => out({ type: 'model', ...m }), () => policy.withMatter(plan.matterId, () => planMod.run(body.id, { signal: ac.signal, onProgress: (ev) => out({ type: 'progress', ...ev }) })))))
+            const r = await rec.run(() => require('./folder').run(folderDir, () => require('./permissions').session(permissionSession(body, res, ac.signal), () => policy.observeModels((m) => out({ type: 'model', ...m }), () => policy.withMatter(plan.matterId, () => planMod.run(body.id, { signal: ac.signal, onProgress: (ev) => out({ type: 'progress', ...ev }) }))))))
             out({ type: 'done', status: r.status, report: r.report || null, waiting: r.steps.find((x) => x.status === 'waiting') || null })
             rec.finish({ aborted: ac.signal.aborted, files: [r.report, ...r.steps.flatMap((x) => x.result?.files || [])] })
             if (r.status === 'done' || r.status === 'failed') require('./hooks').run('after_workflow', { workflow: 'plan', files: [r.report, ...r.steps.flatMap((x) => x.result?.files || [])].filter(Boolean), stats: { status: r.status, steps: r.steps.length }, matterId: plan.matterId }).catch(() => {})
@@ -792,10 +792,10 @@ async function handle(req, res) {
           const rec = require('./activity').start({ matterId: g.matterId, kind: 'grid', asked: g.title || '', client: clientOf(req) })
           const out = (e) => { rec.see(e); sendSse(res, e) }
           try {
-            const r = await require('./folder').run(folderDir, () => policy.observeModels((m) => out({ type: 'model', ...m }), () => policy.withMatter(g.matterId, () => grid.run(body.id, {
+            const r = await rec.run(() => require('./folder').run(folderDir, () => policy.observeModels((m) => out({ type: 'model', ...m }), () => policy.withMatter(g.matterId, () => grid.run(body.id, {
               documents: body.documents, columns: body.columns, force: !!body.force, signal: ac.signal,
               onProgress: (ev) => out({ type: 'progress', ...ev }),
-            }))))
+            })))))
             out({ type: 'done', stats: r.stats })
             rec.finish({ aborted: ac.signal.aborted })
             require('./hooks').run('after_workflow', { workflow: 'grid', files: [], stats: r.stats, matterId: g.matterId }).catch(() => {})
@@ -860,6 +860,13 @@ async function handle(req, res) {
       const body = req.method === 'POST' ? await readBody(req) : {}
       const r = await require('./overview').handle(req.method, p, url.searchParams, body)
       return sendJson(res, r.status, r.json)
+    }
+    // The AI record (record.js): what the AI did, merged from the audit and activity logs; check, export, retention.
+    if (p === '/api/record' || p.startsWith('/api/record/')) {
+      require('./workspace').setBase(require('./agent-config').load().workspace)
+      const body = req.method === 'POST' ? await readBody(req) : {}
+      const r = await require('./record').handle(req.method, p, url.searchParams, body)
+      if (r) return sendJson(res, r.status, r.json)
     }
     if (req.method === 'POST' && p.startsWith('/api/matters')) {
       const body = await readBody(req)
@@ -1274,7 +1281,7 @@ async function handle(req, res) {
       if (agent && agent.name !== 'associate') sendSse(res, { type: 'agent', name: agent.name, title: agent.title })
       if (skill) sendSse(res, { type: 'skill', name: skill.name, title: skill.title })
       else if (body.suggestSkill !== false) {
-        const hint = await policy.withMatter(matterIdFor(body, entry), () => skillsMod.suggest(body.message).catch(() => null))
+        const hint = await rec.run(() => policy.withMatter(matterIdFor(body, entry), () => skillsMod.suggest(body.message).catch(() => null)))
         if (hint) sendSse(res, { type: 'skill_suggestion', ...hint })
       }
       // Stop support (Batch 1.3): when the pane aborts the SSE fetch, stop
@@ -1284,7 +1291,7 @@ async function handle(req, res) {
       try {
         // Permissions: an interactive front end answers "may OpenLex …?"
         // questions on this stream; anything else fails closed (deny).
-        const r = await require('./folder').run(folderDir, () => require('./permissions').session(permissionSession(body, res, ac.signal), () => policy.observeModels((m) => out({ type: 'model', ...m }), () => policy.withMatter(matterIdFor(body, entry), () => agentsMod.run(agent, () => runAction(context, body.message, out, { signal: ac.signal, skill, agent }))))))
+        const r = await rec.run(() => require('./folder').run(folderDir, () => require('./permissions').session(permissionSession(body, res, ac.signal), () => policy.observeModels((m) => out({ type: 'model', ...m }), () => policy.withMatter(matterIdFor(body, entry), () => agentsMod.run(agent, () => runAction(context, body.message, out, { signal: ac.signal, skill, agent })))))))
         // Conversation memory: persist the exchange (best-effort; the
         // model's streamed prose already went out token-by-token).
         session.append(body.message, r.text)
@@ -1292,7 +1299,7 @@ async function handle(req, res) {
         // A streamed answer is already on screen: the pane marks it withheld.
         const hooks = require('./hooks')
         const mid = matterIdFor(body, entry)
-        const gate = hooks.has('before_answer') && r.text ? await hooks.run('before_answer', { text: r.text, matterId: mid }) : { decision: 'allow', warnings: [] }
+        const gate = hooks.has('before_answer') && r.text ? await rec.run(() => hooks.run('before_answer', { text: r.text, matterId: mid })) : { decision: 'allow', warnings: [] }
         if (gate.decision === 'deny') out({ type: 'withheld', message: gate.reason })
         else {
           // streamed=true → the write phase already streamed the prose token
@@ -1302,7 +1309,7 @@ async function handle(req, res) {
         }
         for (const sug of r.suggestions) {
           if (hooks.has('on_suggestion')) {
-            const g = await hooks.run('on_suggestion', { text: sug.proposed_text || '', summary: sug.summary || '', severity: sug.severity, matterId: mid })
+            const g = await rec.run(() => hooks.run('on_suggestion', { text: sug.proposed_text || '', summary: sug.summary || '', severity: sug.severity, matterId: mid }))
             if (g.decision === 'deny') { out({ type: 'warning', message: `A suggestion was removed by a firm rule: ${g.reason}` }); continue }
             if (g.flags.length || g.warnings.length) sug.flags = [...g.flags, ...g.warnings]
           }
@@ -1448,9 +1455,18 @@ if (fs.existsSync(config.HTTPS_CERT) && fs.existsSync(config.HTTPS_KEY)) {
 // Bind to loopback only — the add-in and sidecar are on the same machine.
 const server = httpsServer || http.createServer(handle)
 server.listen(config.PORT, '127.0.0.1', () => {
+  // The AI record: seal lines written before tamper-evidence existed (once),
+  // then apply the retention setting (default: keep everything) — daily.
+  try {
+    const record = require('./record')
+    record.sealAll()
+    const keep = () => { for (const r of record.applyRetention()) console.log('[record] retention:', r.name, r.error || `${r.removed.count} old entries removed`) }
+    keep()
+    setInterval(keep, 24 * 3600 * 1000).unref()
+  } catch (err) { console.warn('[record] startup failed:', err.message) }
   // Monitors (Phase 7.4): check due watches every 15 minutes while the engine runs.
   if (process.env.OPENLEX_MONITORS !== '0') require('./monitors').startScheduler()
-  console.log(`[sidecar] LexVault Word sidecar on https://localhost:${config.PORT}${httpsServer ? '' : ' (http fallback)'}`)
+  console.log(`[sidecar] OpenLex engine on https://localhost:${config.PORT}${httpsServer ? '' : ' (http fallback)'}`)
   console.log(`[sidecar] serving add-in from ${config.ADDIN_ROOT}`)
   console.log(`[sidecar] model: ${config.LLM_MODEL} (llama.cpp at ${config.LLM_BASE})`)
   console.log(`[sidecar] law index: ${config.QDRANT_COLLECTION} at ${config.QDRANT_BASE}`)

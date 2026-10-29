@@ -39,7 +39,7 @@ function licenseBase() {
 function httpGet(urlStr, { token, range, onChunk, timeoutMs = 3600000 }) {
   return new Promise((resolve, reject) => {
     const u = new URL(urlStr)
-    const headers = { 'User-Agent': 'LexVault-Word-Sidecar/0.1.0' }
+    const headers = { 'User-Agent': 'OpenLex-Engine' }
     if (token) headers.Authorization = `Bearer ${token}`
     if (range) headers.Range = `bytes=${range}-`
     const reqLib = u.protocol === 'http:' ? http : https

@@ -20,7 +20,7 @@ const MA_NO_CITATION_RULE = '\n\nCRITICAL: Do NOT cite specific statute sections
     'A response containing fabricated "§ 12 ABC Act" or "Case Foo v. Bar (2019)" is WORSE than no citation — it misleads the lawyer. ' +
     'Discuss the contractual / factual issue; flag the legal angle for verification, do not attempt to verify it yourself.';
 
-const MA_DISCLAIMER = '⚠ LexVault M&A analysis — generated from deal documents only, NOT verified against any legal database. ' +
+const MA_DISCLAIMER = '⚠ OpenLex M&A analysis — generated from deal documents only, NOT verified against any legal database. ' +
     'Use Research mode to verify any legal claims before relying on them.';
 
 function withMaRules(systemContent) {
