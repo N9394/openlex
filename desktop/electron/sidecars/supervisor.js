@@ -56,25 +56,31 @@ class Supervisor {
   // modelPath: the GGUF main.js settled on; null = no local model (community
   // mode without a download — own API key / custom endpoint only). Omitted =
   // the tier's model from hardware.json.
-  constructor({ paths, license, modelPath }) {
+  // legacyBackend: start the old desktop server (desktop/server) too. Off
+  // by default — its features moved onto the engine (main/legacy.js).
+  constructor({ paths, license, modelPath, legacyBackend = false }) {
     this.paths = paths
     this.license = license
     this.modelPath = modelPath
     this.children = []
-    this.backendUrl = `http://127.0.0.1:${PORTS.backend}`
+    this.legacyBackend = !!legacyBackend
+    this.backendUrl = this.legacyBackend ? `http://127.0.0.1:${PORTS.backend}` : null
   }
+
+  /** Wait for a service to answer (tests replace this). */
+  _wait(url, ms, opts) { return waitForHttp(url, ms, opts) }
 
   async start(emit = () => {}) {
     fs.mkdirSync(this.paths.qdrantData, { recursive: true })
 
     emit({ stage: 'qdrant', state: 'starting' })
     await this._startQdrant()
-    await waitForHttp(`http://127.0.0.1:${PORTS.qdrant}/healthz`, 30_000)
+    await this._wait(`http://127.0.0.1:${PORTS.qdrant}/healthz`, 30_000)
     emit({ stage: 'qdrant', state: 'ready' })
 
     emit({ stage: 'embeddings', state: 'starting' })
     await this._startEmbeddings()
-    await waitForHttp(`http://127.0.0.1:${PORTS.embeddings}/`, 60_000)
+    await this._wait(`http://127.0.0.1:${PORTS.embeddings}/`, 60_000)
     emit({ stage: 'embeddings', state: 'ready' })
 
     emit({ stage: 'llm', state: 'starting' })
@@ -82,16 +88,17 @@ class Supervisor {
     // LLM proxy is up immediately; the actual llama-server is lazy-spawned
     // on the first inference request. We probe the proxy's own /healthz, not
     // /api/tags (which would force-spawn the model just for the health check).
-    await waitForHttp(`http://127.0.0.1:${PORTS.llm}/healthz`, 10_000)
+    await this._wait(`http://127.0.0.1:${PORTS.llm}/healthz`, 10_000)
     emit({ stage: 'llm', state: 'ready' })
 
+    if (!this.legacyBackend) return
     emit({ stage: 'backend', state: 'starting' })
     await this._startBackend()
     // Accept ANY HTTP response from /health, including 503. The backend
     // returns 503 while the LLM is still warming up (lazy spawn), but the
     // server itself is up and serving — that's all we care about for boot.
     // Non-LLM features (vault, settings, doc upload) work without LLM.
-    await waitForHttp(`http://127.0.0.1:${PORTS.backend}/health`, 30_000, { acceptAny: true })
+    await this._wait(`http://127.0.0.1:${PORTS.backend}/health`, 30_000, { acceptAny: true })
     emit({ stage: 'backend', state: 'ready' })
 
     // Pre-warm the LLM in the background. On slow Vulkan setups (e.g. RDNA1

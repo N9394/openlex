@@ -169,7 +169,24 @@ export default function Settings() {
     fetchProfile()
   }, [])
 
+  // The desktop App keeps its settings on this computer and in the engine;
+  // the old desktop server (accounts, /docs) is off.
+  const DEPTH_TO_ENGINE: Record<string, string> = { quick: 'fast', standard: 'balanced', thorough: 'deep' }
+  const DEPTH_FROM_ENGINE: Record<string, 'quick' | 'standard' | 'thorough'> = { fast: 'quick', balanced: 'standard', deep: 'thorough', ultra: 'thorough' }
+  const fetchLocal = async () => {
+    const pref = (localStorage.getItem('lexvault-ui-lang-pref') || 'auto') as ResponseLanguage
+    setResponseLanguage(RESPONSE_LANGUAGE_OPTIONS.some((o) => o.value === pref) ? pref : 'auto')
+    setUsername(localStorage.getItem('openlex-display-name') || user?.name || '')
+    let saved: any = {}
+    try { saved = JSON.parse(localStorage.getItem('openlex-ai-style') || '{}') } catch { saved = {} }
+    let depth = saved.depth || 'standard'
+    try { const c = await (window as any).lexvault?.engine?.call('GET', '/api/config/agent'); if (c?.depth) depth = DEPTH_FROM_ENGINE[c.depth] || depth } catch { /* engine not running */ }
+    setAiSettings((a) => ({ ...a, ...saved, depth }))
+    setLoading(false)
+  }
+
   const fetchProfile = async () => {
+    if (isElectron) return fetchLocal()
     try {
       const data = await api.get('/account/me')
       const profileData = data.user || data
@@ -202,6 +219,12 @@ export default function Settings() {
     setUsernameMessage(null)
 
     try {
+      if (isElectron) {
+        localStorage.setItem('openlex-display-name', username.trim())
+        setUsernameMessage({ type: 'success', text: t('settings.nameSavedHere', 'Saved on this computer.') })
+        setTimeout(() => setUsernameMessage(null), 3000)
+        return
+      }
       await api.put('/account/username', { username: username.trim() || null })
       setUsernameMessage({ type: 'success', text: 'Username updated successfully!' })
       setTimeout(() => setUsernameMessage(null), 3000)
@@ -276,6 +299,12 @@ export default function Settings() {
     setSavingAI(true)
     try {
       localStorage.setItem('ragOnly', String(aiSettings.ragOnly))
+      if (isElectron) {
+        // Depth goes to the engine (how far the AI reads and looks things up); the rest stays on this computer.
+        localStorage.setItem('openlex-ai-style', JSON.stringify(aiSettings))
+        await (window as any).lexvault?.engine?.call('POST', '/api/config/agent', { depth: DEPTH_TO_ENGINE[aiSettings.depth] || 'balanced' })
+        return
+      }
       await api.put('/account/preferences', { ai: aiSettings })
     } catch (err) {
       console.error('Failed to save AI settings:', err)
@@ -291,7 +320,7 @@ export default function Settings() {
     setSavingLanguage(true)
     setLanguageSaved(false)
     try {
-      await api.patch('/account/me', { language: next })
+      if (!isElectron) await api.patch('/account/me', { language: next })
       setProfile(p => p ? { ...p, language: next } : p)
       setLanguageSaved(true)
       setTimeout(() => setLanguageSaved(false), 2000)
@@ -907,7 +936,8 @@ export default function Settings() {
             <div className="card space-y-6">
               <h2 className="font-serif text-xl text-parchment">{t('settings.ai.title')}</h2>
 
-              <div>
+              {/* Tone and "always search the law" were settings of the old desktop server; the App's chat does not use them. */}
+              {!isElectron && <div>
                 <label className="block text-cream text-sm mb-2">{t('settings.ai.communicationStyle')}</label>
                 <select
                   value={aiSettings.tone}
@@ -918,7 +948,7 @@ export default function Settings() {
                   <option value="balanced">{t('settings.ai.tone.balanced')}</option>
                   <option value="professional">{t('settings.ai.tone.professional')}</option>
                 </select>
-              </div>
+              </div>}
 
               <div>
                 <label className="block text-cream text-sm mb-2">
@@ -953,7 +983,7 @@ export default function Settings() {
                 <p className="text-antique text-xs mt-2">{t('settings.ai.depthHint')}</p>
               </div>
 
-              <div className="pt-4 border-t border-tobacco">
+              {!isElectron && <div className="pt-4 border-t border-tobacco">
                 <label className="flex items-center justify-between cursor-pointer p-4 bg-leather rounded-button hover:bg-tobacco transition-colors">
                   <div>
                     <div className="text-cream font-medium">{t('settings.ai.ragOnly')}</div>
@@ -966,7 +996,7 @@ export default function Settings() {
                     className="w-5 h-5 rounded border-tobacco bg-deep-brown text-accent focus:ring-accent/30"
                   />
                 </label>
-              </div>
+              </div>}
 
               <button
                 onClick={handleSaveAISettings}

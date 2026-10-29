@@ -480,6 +480,9 @@ export function Matter({ matterId = null }) {
       return sys(ok ? 'Copied the last answer. Paste it anywhere with Cmd+V or Ctrl+V.' : 'Copying is not possible in this terminal. Use /save to keep the answer as a file.', ok ? 'ok' : 'warn')
     }
     if (name === 'save') return saveAnswer(arg)
+    if (name === 'saved') return showSaved()
+    if (name === 'investigate' || name === 'diligence') return runTool(name, arg)
+    if (name === 'draft') return writeDraft(arg)
     if (name === 'transcript') {
       onExit.lines = transcript(msgs, 100, clock.now()).map((l) => l.segs.map((g) => g.t).join(''))
       return sys('This conversation will be printed in your terminal window when you quit OpenLex (there you can scroll, select and copy it).')
@@ -498,6 +501,75 @@ export function Matter({ matterId = null }) {
     }
   }
 
+  // ── the tools from the old desktop app ──
+  /** The documents a tool reads: the files in the question field, else the working folder. */
+  const toolDocs = () => (files.length ? { files: files.map((f) => f.path) } : ctx.folder ? { folder: ctx.folder.path } : null)
+
+  /** /investigate and /diligence: one document at a time in the engine, then the result as a few lines and a Word report. */
+  const runTool = async (kind, arg) => {
+    const docs = toolDocs()
+    if (!docs) return sys(`Drop the documents into the question field (or choose a folder with /folder), then type /${kind}${kind === 'investigate' ? ' and your question' : ''} again.`, 'info')
+    if (kind === 'investigate' && !arg) return sys('Type your question after /investigate (or one of: liability, exit, obligations, advantages).', 'info')
+    const options = kind === 'investigate' ? { question: arg } : { ...(/seller|verkäufer/i.test(arg) ? { perspective: 'seller' } : { perspective: 'buyer' }), dealType: /asset/i.test(arg) ? 'asset_purchase' : /merger/i.test(arg) ? 'merger' : 'share_purchase' }
+    setFiles([])
+    let job
+    try {
+      job = (await ctx.api.batchStart({ ...docs, kind, options, matterId: matterId || undefined, sessionId, message: `/${kind} ${arg}`.trim(), confirmed: true })).batch
+    } catch (err) { return sys(err.message, 'bad') }
+    sys(`${kind === 'investigate' ? 'Investigating' : 'Due diligence of'} ${job.counts.total} document${job.counts.total === 1 ? '' : 's'}: ${job.estimate.sentence}`, 'info')
+    let last = -1
+    for (;;) {
+      await new Promise((r) => setTimeout(r, 1500))
+      try { job = (await ctx.api.batch(job.id)).batch } catch (err) { return sys(err.message, 'bad') }
+      const done = job.counts.done + job.counts.failed + job.counts.skipped
+      if (done !== last && job.state === 'running') { last = done; sys(`${done} of ${job.counts.total} read…`, 'info') }
+      if (job.state !== 'running' && job.state !== 'finishing') break
+    }
+    if (job.state !== 'done' || !job.result) return sys(`Stopped: ${job.note || 'not finished'}. The documents read so far are kept.`, 'warn')
+    const what = kind === 'investigate' ? 'investigation' : 'diligence'
+    try {
+      const r = (await ctx.api.getResult(what, job.result.id))[what]
+      if (kind === 'investigate') {
+        sys(r.comparison.answer || 'Nothing in the documents answers the question.')
+        for (const c of r.comparison.conflicts.slice(0, 5)) sys(`Differs — ${c.topic}: ${c.detail}`, 'info')
+        sys(`${r.stats.verified} quoted findings in ${r.stats.documents} documents; ${r.stats.removed} statements removed by the check.`, 'info')
+      } else {
+        sys(`${r.stats.flags} red flags in ${r.stats.documents} documents: ${r.byTier.deal_breaker} deal breakers, ${r.byTier.price_affecting} price-affecting.`)
+        if (r.overview.summary) sys(r.overview.summary, 'info')
+        if (r.missing.length) sys(`Not in the data room: ${r.missing.join(', ')}.`, 'info')
+      }
+      const w = await ctx.api.exportResult(what, job.result.id, kind === 'investigate' ? 'docx' : 'xlsx')
+      sys(`Report saved: ${w.file}`)
+    } catch (err) { sys(err.message, 'bad') }
+  }
+
+  /** /draft: a first draft from the instructions (and dropped documents), saved as Word in the matter folder. */
+  const writeDraft = async (arg) => {
+    if (!arg && !files.length) return sys('Type what to draft after /draft (for example: /draft a mutual NDA, Austrian law) — or drop a document to work on.', 'info')
+    const att = files.map((f) => f.path)
+    setFiles([])
+    setBusy('Writing the draft…')
+    try {
+      const d = (await ctx.api.draftCreate({ instruction: arg, files: att, matterId: matterId || undefined, sessionId, message: `/draft ${arg}`.trim() })).draft
+      const text = d.versions[d.versions.length - 1].text
+      setMsgs((m) => [...m, { role: 'you', text: `/draft ${arg}`.trim() }, { id: ++seq, role: 'ai', text, sources: [], suggestions: [] }])
+      const w = await ctx.api.exportResult('draft', d.id, 'docx')
+      sys(`Draft saved as Word: ${w.file}. In the desktop app you can fill in, change and check it.`)
+    } catch (err) { sys(err.message, 'bad') }
+    setBusy('')
+  }
+
+  /** /saved: what is kept with this matter. */
+  const showSaved = async () => {
+    try {
+      const { items } = await ctx.api.saved(matterId || undefined)
+      if (!items.length) return sys('Nothing saved with this matter yet. /save keeps the last answer here.', 'info')
+      sys(`Saved with this ${matterId ? 'matter' : 'quick question'} (${items.length}):`, 'info')
+      for (const it of items.slice(0, 20)) sys(`${it.createdAt.slice(0, 10)} · ${it.kind} · ${it.title}${it.tags.length ? ` (${it.tags.map((t) => `#${t}`).join(' ')})` : ''}`, 'info')
+      if (items.length > 20) sys(`… and ${items.length - 20} more in the desktop app (Saved).`, 'info')
+    } catch (err) { sys(err.message, 'bad') }
+  }
+
   // ── getting the answer out ──
   /** /save: the last answer as a Markdown file in the working folder (or the matter folder), asked first like any save. */
   const saveAnswer = async (arg, decision) => {
@@ -512,7 +584,9 @@ export function Matter({ matterId = null }) {
     try {
       const r = await ctx.api.saveInFolder({ ...ctx.folderBody(), path: rel, content, matterId: matterId || undefined, ...(decision ? { decision } : {}) })
       if (r.ask) return setSaveAsk({ req: r.ask, arg })
-      sys(`Saved the answer as ${r.short}.`)
+      // Also kept with the matter (Saved in the desktop app, /saved here).
+      await ctx.api.saveItem({ matterId: matterId || null, kind: 'answer', title: arg || (q ? q.text.slice(0, 120) : ''), content, source: { kind: 'session', id: sessionId, sessionId } }).catch(() => {})
+      sys(`Saved the answer as ${r.short} and with the matter (/saved).`)
     } catch (err) { sys(err.message, 'bad') }
   }
 

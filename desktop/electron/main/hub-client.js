@@ -107,7 +107,7 @@ class HubClient {
       },
       // Reading a long scanned PDF (OCR on this computer) or sizing a whole
       // folder takes longer than an ordinary call.
-      timeout: /^\/api\/(document\/read|batch\/(estimate|start)|analysis\/export)\b/.test(pathname) ? 600000 : 10000,
+      timeout: /^\/api\/(document\/read|batch\/(estimate|start)|analysis\/export|draft\b|saved\/export|investigation\/export|diligence\/export)/.test(pathname) ? 600000 : 10000,
     }
     // Trust the sidecar's own localhost cert (self-signed) — and only it.
     if (u.protocol === 'https:' && sc.ca) { try { opts.ca = fs.readFileSync(sc.ca) } catch { /* fall through to system CAs */ } }

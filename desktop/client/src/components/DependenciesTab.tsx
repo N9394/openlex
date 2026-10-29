@@ -11,7 +11,7 @@ type DepStatus = {
   embeddings: { reachable: boolean }
   qdrant: { reachable: boolean; collectionExists: boolean; totalChunks: number }
   llm: { reachable: boolean; llmRunning: boolean; lastUsedAt?: number; idleMs?: number }
-  backend: { reachable: boolean; status?: number; body?: any }
+  backend: { reachable: boolean; status?: number; body?: any; off?: boolean }
   packs: { entitled: string[]; downloaded: string[]; installed_meta?: Record<string, { version?: string; ingested_at?: string; chunk_count?: number }> }
 }
 
@@ -383,16 +383,18 @@ export default function DependenciesTab() {
                   : 'No collection — download statute packs to populate'
             }
           />
-          <Row
-            icon={Server}
-            name="Backend (Express)"
-            status={dep.backend.reachable && dep.backend.status === 200 ? 'ok' : dep.backend.reachable ? 'warn' : 'down'}
-            detail={
-              !dep.backend.reachable
-                ? 'Not reachable on 127.0.0.1:18000'
-                : `HTTP ${dep.backend.status} — ${dep.backend.body?.status || 'unknown'}`
-            }
-          />
+          {!dep.backend.off && (
+            <Row
+              icon={Server}
+              name="Old desktop server"
+              status={dep.backend.reachable && dep.backend.status === 200 ? 'ok' : dep.backend.reachable ? 'warn' : 'down'}
+              detail={
+                !dep.backend.reachable
+                  ? 'Not reachable on 127.0.0.1:18000'
+                  : `HTTP ${dep.backend.status} — ${dep.backend.body?.status || 'unknown'}`
+              }
+            />
+          )}
         </div>
         <LLMTestPanel />
         <RetrievalTestPanel entitled={dep.packs.entitled} />

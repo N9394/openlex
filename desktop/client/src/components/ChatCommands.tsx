@@ -58,6 +58,8 @@ export function useChatCommands(opts: {
   newConversation: () => void
   /** /analyse [document]: the full document analysis of the attached (or named) document. */
   analyse?: (arg: string) => void
+  /** /investigate, /diligence, /draft: the chat's tools from the old desktop app (they become cards). */
+  tool?: (name: string, arg: string) => void
   /** Who OpenLex works as for questions without a matter (a matter keeps its own). */
   quickAgent?: string
   setQuickAgent?: (name: string) => void
@@ -113,6 +115,19 @@ export function useChatCommands(opts: {
     } catch (err) { say((err as Error).message, 'bad') }
   }, [lastAnswer, say, t])
 
+  /** /save: the last answer is kept with the matter (Saved; the old Vault). */
+  const keep = useCallback(async (arg: string) => {
+    const e = engine()
+    const text = lastAnswer()
+    if (!e) return
+    if (!text) return say(t('commands.noAnswer', 'There is no answer yet.'), 'warn')
+    try {
+      const m = await activeMatter()
+      await e.call('POST', '/api/saved', { matterId: m?.id || null, kind: 'answer', title: arg, content: text })
+      say(t('commands.keptAnswer', 'Saved with {{where}}. Find it under Saved (or type /saved).', { where: m ? m.title : t('commands.noMatterSaved', 'your quick questions') }))
+    } catch (err) { say((err as Error).message, 'bad') }
+  }, [lastAnswer, say, t])
+
   const run = useCallback(async (name: string, arg = '') => {
     setDismissed(null)
     setInput('')
@@ -163,7 +178,10 @@ export function useChatCommands(opts: {
         if (!text) return say(t('commands.noAnswer', 'There is no answer yet.'), 'warn')
         try { await navigator.clipboard.writeText(text); return say(t('commands.copied', 'Copied the last answer.')) } catch { return say(t('commands.copyFailed', 'Copying did not work. Select the answer and copy it by hand, or use /save.'), 'bad') }
       }
-      case 'save': return save(arg)
+      case 'save': return keep(arg)
+      case 'saved': return navigate('/vault')
+      case 'investigate': case 'diligence': case 'draft':
+        return opts.tool ? opts.tool(name, arg) : say(t('commands.notHere', 'This command does not work here.'), 'warn')
       case 'word': {
         const text = lastAnswer()
         if (!text) return say(t('commands.noAnswer', 'There is no answer yet.'), 'warn')
@@ -204,7 +222,7 @@ export function useChatCommands(opts: {
       case 'analyse': return opts.analyse ? opts.analyse(arg) : say(t('commands.notHere', 'This command does not work here.'), 'warn')
       default: return say(t('commands.unknown', 'There is no command /{{name}}. Type /help to see the commands.', { name }), 'warn')
     }
-  }, [lastAnswer, lastBasis, navigate, newConversation, running, save, say, setInput, setQuickAgent, t, word])
+  }, [keep, lastAnswer, lastBasis, navigate, newConversation, running, say, setInput, setQuickAgent, t, word])
 
   /** In handleSubmit: true when the text was a command (then it is not sent as a question). */
   const intercept = useCallback((text: string) => {
@@ -428,7 +446,7 @@ function MatterChoice({ onDone }: { onDone: (text: string) => void }) {
 }
 
 /** /record and /activity: what the AI did (engine AI record), never any content. */
-function RecordList({ all, recent, say }: { all: boolean; recent: boolean; say: (text: string, kind?: 'ok' | 'warn' | 'bad') => void }) {
+export function RecordList({ all, recent, say }: { all: boolean; recent: boolean; say: (text: string, kind?: 'ok' | 'warn' | 'bad') => void }) {
   const { t } = useTranslation()
   const [data, setData] = useState<{ line?: string; entries: RecordEntry[]; matterId: string | null } | null>(null)
   const [open, setOpen] = useState<number | null>(null)

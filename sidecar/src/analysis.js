@@ -312,6 +312,23 @@ function setLawSources(s = {}) {
   lawSources.web = s.web || searchWeb
 }
 
+/**
+ * One law look-up for the other chat tools (investigation, due diligence,
+ * drafts): the local law packs always, official online sources only when
+ * the matter's data rules allow web access. → { sources, web }
+ */
+async function lawLookup({ query, jurisdiction = '', language = 'en', matterId = null }) {
+  const found = []
+  const errors = []
+  try { found.push(...await lawSources.local({ query, jurisdiction, language })) } catch (err) { errors.push(err.message) }
+  const web = webAllowed(matterId)
+  if (web) { try { found.push(...await lawSources.web({ query, jurisdiction, language })) } catch (err) { errors.push(err.message) } }
+  const keys = new Set()
+  const sources = found.filter((x) => x && x.title).filter((x) => { const k = `${x.title}|${x.section || ''}`; if (keys.has(k)) return false; keys.add(k); return true })
+    .slice(0, 3).map((x) => ({ kind: x.kind || 'law', title: str(x.title, 200), section: str(x.section, 80), snippet: str(x.snippet, 240), url: str(x.url, 400), ref: str(x.ref, 80) }))
+  return { sources, web, errors }
+}
+
 function webAllowed(matterId) {
   try { return require('./policy').check({ id: 'web', local: false }, matterId).allowed } catch { return false }
 }
@@ -875,4 +892,4 @@ function brief(a) {
   return lines.join('\n')
 }
 
-module.exports = { stepWords, runAnalyse, detectLanguage, locate, firstObject, level, toMarkdown, toDocx, toCsv, toPdf, rows, exportAnalysis, get, brief, splitParts, partChars, setLawSources, overallRisk, readability, LABELS, searchLocal, searchWeb }
+module.exports = { lawLookup, askObject, locate: locate, labelsFor, webAllowed, stepWords, runAnalyse, detectLanguage, firstObject, level, toMarkdown, toDocx, toCsv, toPdf, rows, exportAnalysis, get, brief, splitParts, partChars, setLawSources, overallRisk, readability, LABELS, searchLocal, searchWeb }
