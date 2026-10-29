@@ -24,6 +24,7 @@ cp -R sidecar/tui "$STAGE/sidecar/"
 cp sidecar/package.json sidecar/package-lock.json sidecar/README.md "$STAGE/sidecar/"
 cp add-in/commands.html add-in/manifest.xml add-in/taskpane.css add-in/taskpane.html add-in/taskpane.js "$STAGE/add-in/"
 cp -R add-in/assets "$STAGE/add-in/assets"
+cp -R add-in/lib "$STAGE/add-in/lib"
 cp -R docs LICENSE README.md "$STAGE/"
 
 # Production dependencies only, no native optional modules, no install scripts.

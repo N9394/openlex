@@ -2,239 +2,333 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>OpenLex</title>
 <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
 <link rel="stylesheet" href="taskpane.css">
 </head>
 <body>
+<a class="skip-link" href="#input">Skip to the question box</a>
+
+<!-- Permanent chrome, kept minimal: header (matter + where the AI runs + menu),
+     the conversation, the data line, the question box with the one main action.
+     Everything else lives in the "What can I do here?" menu. -->
 <header class="brandbar">
   <h1>Open<span class="accent">Lex</span></h1>
-  <div class="status"><button class="badge app-pill" id="appPill" type="button" style="display:none" title="Desktop app connected — continue this question there">↗ App</button><span class="badge" id="dataBadge" title="Where client data goes">…</span><span class="dot" id="statusDot"></span><span id="statusText">starting…</span></div>
+  <div class="hdr-matter">
+    <label for="matterSel" class="sr-only">Matter</label>
+    <select id="matterSel" class="select matter-sel" title="The matter this document belongs to: its client-data rule, folder and notes apply"><option value="">No matter</option></select>
+    <button class="btn-icon btn-tiny" id="matterPrivBtn" type="button" hidden></button>
+  </div>
+  <button class="btn-icon menu-btn" id="menuBtn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="menu" aria-keyshortcuts="Control+K Meta+K" title="What can I do here? (Ctrl+K or ⌘K)">
+    <span aria-hidden="true">☰</span><span class="sr-only">What can I do here?</span>
+  </button>
 </header>
+<div class="status-line" id="statusLine"><span class="ai-badge" id="aiBadge" title="Where the AI runs">AI: …</span><span class="status-msg" role="status" aria-live="polite"><span class="dot" id="statusDot" aria-hidden="true"></span><span id="statusText">Starting…</span></span><span class="badge" id="matterPolicy" hidden></span><button class="badge app-pill" id="appPill" type="button" hidden title="The desktop app is open — continue this question there">↗ Continue in the desktop app</button></div>
 
-<div class="topbar">
-<nav class="tabs">
-  <button class="tab active" data-tab="chat">Chat</button>
-  <button class="tab" data-tab="map">Document</button>
-  <button class="tab" data-tab="suggestions">Suggestions</button>
-  <button class="tab" data-tab="settings">Settings</button>
-</nav>
+<div class="matter-new card" id="matterNew" hidden>
+  <h2 class="card-title">New matter</h2>
+  <label class="field-label" for="matterTitle">Name</label>
+  <input type="text" id="matterTitle" placeholder="e.g. Acme v. Beta">
+  <label class="field-label" for="matterClient">Client (optional)</label>
+  <input type="text" id="matterClient">
+  <label class="field-label" for="matterNumber">Matter number (optional)</label>
+  <input type="text" id="matterNumber">
+  <label class="field-label" for="matterTerms">Names to hide from AI services, separated by commas (optional)</label>
+  <input type="text" id="matterTerms">
+  <label class="row"><input type="checkbox" id="matterPriv"> Privileged — keep everything on this computer</label>
+  <div class="btn-row"><button class="btn" id="matterCreate" type="button">Create and file this document under it</button><button class="btn btn-ghost" id="matterCancel" type="button">Cancel</button></div>
 </div>
 
-<div class="matterbar">
-  <label for="matterSel" class="matter-label">Matter</label>
-  <select id="matterSel" class="select matter-sel"><option value="">— none —</option></select>
-  <span class="badge" id="matterPolicy" title="Data policy for this matter"></span>
-  <button class="btn-icon" id="matterPrivBtn" type="button" style="display:none" title="Privileged: keep this matter on this machine"></button>
-  <button class="btn-icon" id="matterNewBtn" type="button" title="New matter">＋</button>
-</div>
-<div class="matter-new card" id="matterNew" style="display:none">
-  <input type="text" id="matterTitle" placeholder="Matter title (e.g. Acme v. Beta)">
-  <input type="text" id="matterClient" placeholder="Client (optional)">
-  <input type="text" id="matterNumber" placeholder="Matter number (optional)">
-  <input type="text" id="matterTerms" placeholder="Names to hide from cloud models, comma-separated (optional)">
-  <label class="row"><input type="checkbox" id="matterPriv"> Privileged — keep on this machine (local only)</label>
-  <div class="btn-row"><button class="btn" id="matterCreate" type="button">Create &amp; use for this document</button><button class="btn btn-ghost" id="matterCancel" type="button">Cancel</button></div>
-</div>
-
-<main>
-  <!-- Chat -->
-  <section id="tab-chat" class="tabpane active">
-    <div id="chat" class="chat"></div>
-    <div class="composer">
-      <button id="undoBtn" class="btn-icon" disabled type="button" title="Undo last change">↩</button>
-      <textarea id="input" rows="1" placeholder="Brief…"></textarea>
-      <button id="send" class="btn">Send</button>
+<main id="main">
+  <!-- The conversation (home) -->
+  <section id="view-chat" class="view active" aria-label="Conversation">
+    <div id="chat" class="chat" role="log" aria-live="polite" aria-relevant="additions" aria-label="Conversation with OpenLex">
+      <div class="welcome" id="welcome">
+        <p><b>Ask about this document</b>, or press <b>Review this contract</b>.</p>
+        <p class="muted">Everything else is in <b>☰ What can I do here?</b> (Ctrl+K or ⌘K).</p>
+      </div>
     </div>
   </section>
 
-  <!-- Document map -->
-  <section id="tab-map" class="tabpane">
+  <!-- Secondary views: opened from the menu, one at a time, with a way back. -->
+  <section id="view-outline" class="view" hidden aria-labelledby="h-outline">
+    <div class="view-head"><button class="btn btn-ghost back" type="button">← Back to the conversation</button><h2 id="h-outline">Document outline</h2></div>
     <div id="docmeta" class="muted"></div>
-    <button class="btn btn-block" id="scanDoc">Build document map</button>
-    <div class="doc-tools">
-      <button class="btn btn-ghost" id="compareDoc" type="button">Compare with…</button>
-      <button class="btn btn-ghost" id="commentDigest" type="button">Comment digest</button>
-      <button class="btn btn-ghost" id="obligCheck" type="button">Obligation checklist</button>
-      <button class="btn btn-ghost" id="xrefCheck" type="button">Check cross-refs</button>
-      <input type="file" id="compareFile" accept=".docx" style="display:none">
-    </div>
-    <div class="card wf-box">
-      <div class="wf-head">Whole matter</div>
-      <div class="muted" style="font-size:0.72rem">Runs over every document in the matter's library folders. Every finding is checked against a verbatim quote.</div>
-      <select id="wfPlaybook" class="select" style="margin-top:0.4rem"></select>
+    <button class="btn btn-ghost" id="scanDoc" type="button">Read the document again</button>
+    <div id="doctree" class="tree"></div>
+    <input type="file" id="compareFile" accept=".docx" hidden>
+  </section>
+
+  <section id="view-matter" class="view" hidden aria-labelledby="h-matter">
+    <div class="view-head"><button class="btn btn-ghost back" type="button">← Back to the conversation</button><h2 id="h-matter">Work across the matter</h2></div>
+    <div class="card wf-box" id="wfBox">
+      <div class="muted">Runs over every document in the matter's folders. Every finding quotes the document.</div>
+      <label class="field-label" for="wfPlaybook">Checklist</label>
+      <select id="wfPlaybook" class="select"></select>
       <div class="btn-row">
-        <button class="btn" id="wfReview" type="button">Review documents</button>
-        <button class="btn btn-ghost" id="wfChrono" type="button">Build chronology</button>
+        <button class="btn" id="wfReview" type="button">Review every document</button>
+        <button class="btn btn-ghost" id="wfChrono" type="button">Build a chronology</button>
       </div>
-      <details class="wf-more" style="margin-top:0.5rem">
-        <summary class="muted" style="font-size:0.75rem;cursor:pointer">Translate or compare documents</summary>
+      <details class="wf-more" id="wfMore">
+        <summary>Translate or compare documents</summary>
         <label class="field-label" for="wfDocA">Document</label>
         <select id="wfDocA" class="select"></select>
-        <div class="row" style="gap:0.4rem;margin-top:0.3rem">
-          <select id="wfLang" class="select" style="flex:1" title="Target language"></select>
-          <input type="text" id="wfGlossary" placeholder="glossary (optional)" style="flex:1" title="Name of a glossaries/<name>.json file in the workspace">
+        <div class="row">
+          <label class="sr-only" for="wfLang">Translate into</label>
+          <select id="wfLang" class="select" title="Translate into"></select>
+          <label class="sr-only" for="wfGlossary">Glossary name (optional)</label>
+          <input type="text" id="wfGlossary" placeholder="glossary (optional)" title="Name of a glossary file in your files folder">
         </div>
         <div class="btn-row"><button class="btn btn-ghost" id="wfTranslate" type="button">Translate</button></div>
         <label class="field-label" for="wfDocB">Compare with (newer version)</label>
         <select id="wfDocB" class="select"></select>
         <div class="btn-row"><button class="btn btn-ghost" id="wfCompare" type="button">Compare versions</button></div>
       </details>
-      <div class="muted" id="wfMsg" style="font-size:0.72rem;margin-top:0.4rem"></div>
+      <div class="muted" id="wfMsg" role="status" aria-live="polite"></div>
     </div>
-    <div class="card wf-box">
-      <div class="wf-head">Firm clauses</div>
-      <div class="muted" style="font-size:0.72rem">Your firm's own wording, from the precedents in the firm library — most used first.</div>
-      <div class="row" style="gap:0.4rem;margin-top:0.4rem">
-        <select id="clType" class="select" style="flex:1"></select>
-        <input type="text" id="clQuery" placeholder="words…" style="flex:1">
+    <div class="card wf-box" id="clBox">
+      <div class="wf-head">Your firm's clauses</div>
+      <div class="muted">Your firm's own wording, from the firm library — most used first.</div>
+      <div class="row">
+        <label class="sr-only" for="clType">Clause type</label>
+        <select id="clType" class="select"></select>
+        <label class="sr-only" for="clQuery">Words to look for</label>
+        <input type="text" id="clQuery" placeholder="words…">
       </div>
       <div id="clList" class="cl-list"></div>
     </div>
-    <div id="doctree" class="tree"></div>
   </section>
 
-  <!-- Suggestions -->
-  <section id="tab-suggestions" class="tabpane">
+  <section id="view-changes" class="view" hidden aria-labelledby="h-changes">
+    <div class="view-head"><button class="btn btn-ghost back" type="button">← Back to the conversation</button><h2 id="h-changes">Proposed changes</h2></div>
     <div id="sugList" class="sug-list"></div>
   </section>
 
-  <!-- Settings -->
-  <section id="tab-settings" class="tabpane">
-    <h2>Subscription</h2>
-    <div id="setupBox" class="card">Loading…</div>
-    <h2>Model</h2>
+  <section id="view-settings" class="view" hidden aria-labelledby="h-settings">
+    <div class="view-head"><button class="btn btn-ghost back" type="button">← Back to the conversation</button><h2 id="h-settings">Settings</h2></div>
+
+    <h3 id="set-ai">Which AI</h3>
     <div class="card" id="providerBox">
-      <label class="field-label" for="providerSel">Provider</label>
+      <label class="field-label" for="providerSel">AI service</label>
       <select id="providerSel" class="select"></select>
       <div id="providerFields">
-        <label class="field-label" for="providerModel">Model</label>
-        <input type="text" id="providerModel" list="providerModels" placeholder="model name">
-        <datalist id="providerModels"></datalist>
-        <div id="providerUrlRow">
-          <label class="field-label" for="providerUrl">Endpoint URL</label>
-          <input type="text" id="providerUrl" placeholder="https://…">
-        </div>
-        <div id="providerCloudRow" class="row" style="gap:0.4rem">
-          <div style="flex:1"><label class="field-label" for="providerRegion">Region</label><input type="text" id="providerRegion" placeholder="eu-central-1"></div>
-          <div style="flex:1" id="providerProjectWrap"><label class="field-label" for="providerProject">GCP project</label><input type="text" id="providerProject" placeholder="my-firm-project"></div>
-        </div>
-        <label class="row" id="providerLocalRow"><input type="checkbox" id="providerLocal"> This endpoint runs inside our network (counts as local)</label>
         <div id="providerKeyRow">
-          <label class="field-label" for="providerKey">API key <span class="muted" id="providerKeyState"></span></label>
-          <input type="password" id="providerKey" placeholder="Paste key — stored in the OS keychain" autocomplete="off">
+          <label class="field-label" for="providerKey">Key <span class="muted" id="providerKeyState"></span></label>
+          <input type="password" id="providerKey" placeholder="Paste the key — kept in your computer's keychain" autocomplete="off">
         </div>
+        <details class="tech">
+          <summary>Technical details</summary>
+          <label class="field-label" for="providerModel">Model name</label>
+          <input type="text" id="providerModel" list="providerModels" placeholder="leave empty for the recommended one">
+          <datalist id="providerModels"></datalist>
+          <div id="providerUrlRow">
+            <label class="field-label" for="providerUrl">Address of the service</label>
+            <input type="text" id="providerUrl" placeholder="https://…">
+          </div>
+          <div id="providerCloudRow" class="row">
+            <div class="grow"><label class="field-label" for="providerRegion">Region</label><input type="text" id="providerRegion" placeholder="eu-central-1"></div>
+            <div class="grow" id="providerProjectWrap"><label class="field-label" for="providerProject">Google Cloud project</label><input type="text" id="providerProject"></div>
+          </div>
+          <label class="row" id="providerLocalRow"><input type="checkbox" id="providerLocal"> This server runs inside our firm's network (counts as this computer)</label>
+        </details>
       </div>
       <div class="btn-row">
-        <button class="btn" id="providerSave" type="button">Save &amp; use</button>
+        <button class="btn" id="providerSave" type="button">Save and use</button>
         <button class="btn btn-ghost" id="providerTest" type="button">Test</button>
         <button class="btn btn-ghost" id="providerKeyDel" type="button">Remove key</button>
       </div>
-      <div class="muted" id="providerMsg" style="font-size:0.72rem;margin-top:0.4rem"></div>
+      <div class="muted" id="providerMsg" role="status" aria-live="polite"></div>
     </div>
-    <h2>Data policy</h2>
+
+    <h3 id="set-data">Where client data may go</h3>
     <div class="card" id="policyBox">
-      <label class="row"><input type="radio" name="policyMode" value="local-only"> Local only — client data never leaves this machine</label>
-      <label class="row"><input type="radio" name="policyMode" value="allow-list"> Allow these cloud providers:</label>
+      <fieldset>
+        <legend class="sr-only">Client-data rule</legend>
+        <label class="row"><input type="radio" name="policyMode" value="local-only"> Only on this computer — client data never leaves it</label>
+        <label class="row"><input type="radio" name="policyMode" value="allow-list"> Also these AI services and sources:</label>
+      </fieldset>
       <div id="policyProviders" class="policy-providers"></div>
-      <label class="row" title="Cloud calls are only allowed where the provider is pinned to an EU region (Bedrock eu-*, Vertex europe-*, Mistral, Azure in an EU region). OpenAI and Anthropic's own APIs have no pinned region and are blocked."><input type="checkbox" id="policyEu"> Only EU regions</label>
-      <label class="row" title="Client name, the matter's listed names, e-mail addresses, IBANs and phone numbers are replaced by placeholders before a cloud call and restored in the answer."><input type="checkbox" id="policyRedact"> Hide names &amp; identifiers from cloud models (pseudonymise)</label>
-      <div class="muted" id="policyMsg" style="font-size:0.7rem;margin-top:0.4rem"></div>
+      <label class="row" title="AI services are only used when they are pinned to an EU region."><input type="checkbox" id="policyEu"> Only services in the EU</label>
+      <label class="row" title="The client's name, the matter's listed names, e-mail addresses, IBANs and phone numbers are replaced before sending and put back in the answer."><input type="checkbox" id="policyRedact"> Hide names and identifiers from AI services</label>
+      <div class="muted" id="policyMsg" role="status" aria-live="polite"></div>
     </div>
-    <h2>Firm library</h2>
+
+    <h3 id="set-library">Firm library</h3>
     <div class="card" id="libraryBox">
-      <div class="muted" style="font-size:0.72rem;margin-bottom:0.4rem">Your precedents, templates and past work — indexed on this machine and searchable by the agent. Word (.docx), PDF, text and Markdown.</div>
+      <div class="muted">Your precedents, templates and past work — searched on this computer. Word, PDF, text and Markdown files.</div>
       <div id="libFolders" class="lib-folders"></div>
-      <input type="text" id="libPath" placeholder="Folder path, e.g. ~/Documents/Precedents">
+      <label class="field-label" for="libPath">Folder</label>
+      <input type="text" id="libPath" placeholder="e.g. ~/Documents/Precedents">
       <label class="row"><input type="checkbox" id="libMatter"> Only for the current matter</label>
       <div class="btn-row">
         <button class="btn" id="libAdd" type="button">Add folder</button>
-        <button class="btn btn-ghost" id="libSync" type="button">Re-index now</button>
+        <button class="btn btn-ghost" id="libSync" type="button">Look for new files now</button>
       </div>
-      <div class="muted" id="libMsg" style="font-size:0.72rem;margin-top:0.4rem"></div>
+      <div class="muted" id="libMsg" role="status" aria-live="polite"></div>
     </div>
-    <h2>Web &amp; sign-ins</h2>
+
+    <h3>Proposed changes</h3>
+    <div class="card">
+      <label class="row" for="aggression">How much to propose</label>
+      <div class="row"><input type="range" id="aggression" min="0" max="2" step="1" value="1" aria-describedby="aggLabel"><span id="aggLabel">Balanced</span></div>
+      <label class="row"><input type="checkbox" id="postComments" checked> Add a Word comment with the reason and the legal basis</label>
+      <label class="row"><input type="checkbox" id="applyTracked" checked> Put changes into the document as tracked changes</label>
+      <label class="row"><input type="checkbox" id="autopilot"> Put changes in without asking me each time (still as tracked changes)</label>
+    </div>
+
+    <h3>Appearance</h3>
+    <div class="card">
+      <label class="field-label" for="themeSel">Colours</label>
+      <select id="themeSel" class="select">
+        <option value="auto">Match Word</option>
+        <option value="light">Light</option>
+        <option value="dark">Dark</option>
+      </select>
+      <label class="field-label" for="langSel">Language of answers</label>
+      <select id="langSel" class="select">
+        <option value="auto">Same as the document</option>
+        <option value="de">Deutsch</option>
+        <option value="en">English</option>
+        <option value="ro">Română</option>
+        <option value="sk">Slovenčina</option>
+        <option value="cs">Čeština</option>
+      </select>
+    </div>
+
+    <h3>How thoroughly to read</h3>
+    <div class="card">
+      <label class="field-label" for="depthSel">Thoroughness</label>
+      <select id="depthSel" class="select">
+        <option value="fast">Quick</option>
+        <option value="balanced">Balanced</option>
+        <option value="deep">Thorough</option>
+        <option value="ultra">Most thorough (slow)</option>
+      </select>
+      <details class="tech"><summary>Technical details</summary><div class="muted" id="depthNote"></div></details>
+    </div>
+
+    <h3>Your files folder</h3>
+    <div class="card">
+      <div class="muted">Files OpenLex creates (reviews, checklists, calendars) are saved here, one folder per matter.</div>
+      <label class="field-label" for="wsPath">Folder</label>
+      <input type="text" id="wsPath" placeholder="~/OpenLex">
+      <div class="btn-row">
+        <button class="btn" id="wsSave" type="button">Use this folder</button>
+        <button class="btn btn-ghost" id="wsReveal" type="button">Show in Finder / Explorer</button>
+      </div>
+      <details class="tech"><summary>Files in it</summary><div id="wsList" class="muted">…</div></details>
+    </div>
+
+    <h3>Calendar</h3>
+    <div class="card">
+      <label class="row"><input type="checkbox" id="calEnabled"> Put contract deadlines into my calendar when I ask</label>
+      <label class="field-label" for="calProviderSel">Calendar</label>
+      <select id="calProviderSel" class="select">
+        <option value="auto">Find it automatically</option>
+        <option value="apple">Apple Calendar</option>
+        <option value="outlook">Microsoft Outlook</option>
+      </select>
+    </div>
+
+    <h3>Online sources and sign-ins</h3>
     <div class="card" id="webBox">
-      <div class="muted" style="font-size:0.72rem;margin-bottom:0.4rem">The agent can read official sources (RIS) and web pages when the data policy allows "Web access". For subscription databases, sign in once yourself — OpenLex keeps the session, never the password.</div>
-      <input type="text" id="webLoginUrl" placeholder="Login page URL of a legal database">
+      <div class="muted">OpenLex can read official sources (RIS) and web pages when your client-data rule allows it. For subscription databases, sign in once yourself — OpenLex keeps the session, never the password.</div>
+      <label class="field-label" for="webLoginUrl">Sign-in page of a legal database</label>
+      <input type="text" id="webLoginUrl" placeholder="https://…">
       <div class="btn-row"><button class="btn btn-ghost" id="webLogin" type="button">Open sign-in window</button></div>
-      <div class="muted" id="webMsg" style="font-size:0.72rem;margin-top:0.4rem">Check each database's terms before letting the agent use it — many forbid automated access.</div>
+      <div class="muted" id="webMsg" role="status" aria-live="polite">Check each database's terms first — many do not allow automated access.</div>
     </div>
-    <h2>Connectors</h2>
+
+    <h3>Connected systems</h3>
     <div class="card" id="mcpBox">
-      <div class="muted" style="font-size:0.72rem;margin-bottom:0.4rem">MCP servers (document management, mail, drives, court portals…). Their tools become available to the agent.</div>
+      <div class="muted">Document management, mail, drives, court portals… (MCP servers). OpenLex can then search and use them.</div>
       <div id="mcpList" class="lib-folders"></div>
-      <input type="text" id="mcpName" placeholder="Name, e.g. imanage">
-      <input type="text" id="mcpCmd" placeholder="Command, e.g. npx -y @acme/imanage-mcp">
-      <label class="row"><input type="checkbox" id="mcpRemote" checked> Sends data off this machine (needs data-policy approval)</label>
-      <div class="btn-row"><button class="btn" id="mcpAdd" type="button">Add connector</button><button class="btn btn-ghost" id="mcpReconnect" type="button">Reconnect</button></div>
-      <div class="muted" id="mcpMsg" style="font-size:0.72rem;margin-top:0.4rem"></div>
+      <label class="field-label" for="mcpName">Name</label>
+      <input type="text" id="mcpName" placeholder="e.g. imanage">
+      <label class="field-label" for="mcpCmd">Command that starts it</label>
+      <input type="text" id="mcpCmd" placeholder="e.g. npx -y @acme/imanage-mcp">
+      <label class="row"><input type="checkbox" id="mcpRemote" checked> It sends data off this computer (needs your client-data rule to allow it)</label>
+      <div class="btn-row"><button class="btn" id="mcpAdd" type="button">Connect</button><button class="btn btn-ghost" id="mcpReconnect" type="button">Reconnect all</button></div>
+      <div class="muted" id="mcpMsg" role="status" aria-live="polite"></div>
     </div>
-    <h2>Jurisdictions</h2>
+
+    <h3>Law collections</h3>
     <div id="jurList" class="jur-list"></div>
-    <h2>Packages</h2>
-    <div id="packList" class="muted">…</div>
-    <h2>Language</h2>
-    <div class="dd" id="langDd">
-      <button class="dd-btn" type="button"><span id="langLabel">Auto (match document)</span><span class="dd-chev">▼</span></button>
-      <div class="dd-menu" role="listbox">
-        <div class="dd-item" data-lang="auto"><span>Auto (match document)</span><span class="dd-check">✓</span></div>
-        <div class="dd-item" data-lang="de"><span>Deutsch</span><span class="dd-check">✓</span></div>
-        <div class="dd-item" data-lang="en"><span>English</span><span class="dd-check">✓</span></div>
-        <div class="dd-item" data-lang="ro"><span>Română</span><span class="dd-check">✓</span></div>
-        <div class="dd-item" data-lang="sk"><span>Slovenčina</span><span class="dd-check">✓</span></div>
-        <div class="dd-item" data-lang="cs"><span>Čeština</span><span class="dd-check">✓</span></div>
-      </div>
-    </div>
-    <h2>Appearance</h2>
-    <div class="dd" id="themeDd">
-      <button class="dd-btn" type="button"><span id="themeLabel">Dark</span><span class="dd-chev">▼</span></button>
-      <div class="dd-menu" role="listbox">
-        <div class="dd-item" data-theme-opt="dark"><span>Dark</span><span class="dd-check">✓</span></div>
-        <div class="dd-item" data-theme-opt="light"><span>Light</span><span class="dd-check">✓</span></div>
-        <div class="dd-item" data-theme-opt="auto"><span>Match system</span><span class="dd-check">✓</span></div>
-      </div>
-    </div>
-    <h2>Analysis depth</h2>
-    <div class="dd" id="depthDd">
-      <button class="dd-btn" type="button"><span id="depthLabel">Balanced · 16K</span><span class="dd-chev">▼</span></button>
-      <div class="dd-menu" role="listbox">
-        <div class="dd-item" data-depth-opt="fast"><span>Fast · 8K ctx</span><span class="dd-sub">~3.0 GB RAM · 3 hops</span><span class="dd-check">✓</span></div>
-        <div class="dd-item" data-depth-opt="balanced"><span>Balanced · 16K ctx</span><span class="dd-sub">~3.2 GB RAM · 5 hops</span><span class="dd-check">✓</span></div>
-        <div class="dd-item" data-depth-opt="deep"><span>Deep · 32K ctx</span><span class="dd-sub">~4.2 GB RAM · 6 hops</span><span class="dd-check">✓</span></div>
-        <div class="dd-item" data-depth-opt="ultra"><span>Ultra · 64K ctx</span><span class="dd-sub">~5.8 GB RAM · 6 hops</span><span class="dd-check">✓</span></div>
-      </div>
-    </div>
-    <div class="muted" id="depthNote">2.7 GB model weights + quantized KV cache (iq4_nl-K/q4_0-V).</div>
-    <h2>Suggestions</h2>
-    <label class="row"><input type="range" id="aggression" min="0" max="2" step="1" value="1"><span id="aggLabel">Balanced</span></label>
-    <label class="row"><input type="checkbox" id="postComments" checked> Post as Word comments</label>
-    <label class="row"><input type="checkbox" id="applyTracked" checked> Apply as tracked change (Review pane)</label>
-    <label class="row"><input type="checkbox" id="autopilot"> Autopilot: apply suggestions silently (no approval cards)</label>
-    <h2>Calendar</h2>
-    <label class="row"><input type="checkbox" id="calEnabled"> Sync contract deadlines to my calendar</label>
-    <div class="dd" id="calProviderDd">
-      <button class="dd-btn" type="button"><span id="calProviderLabel">Auto (detect)</span><span class="dd-chev">▼</span></button>
-      <div class="dd-menu" role="listbox">
-        <div class="dd-item" data-provider="auto"><span>Auto (detect)</span></div>
-        <div class="dd-item" data-provider="apple"><span>Apple Calendar</span></div>
-        <div class="dd-item" data-provider="outlook"><span>Microsoft Outlook</span></div>
-      </div>
-    </div>
-    <div class="muted" style="font-size:0.7rem;margin-top:0.3rem">Ask the agent: "put the deadlines in my calendar". It also exports Acme/deadlines.ics to the workspace.</div>
-    <h2>Workspace</h2>
-    <div class="muted" style="margin-bottom:0.4rem">Files the agent creates (checklists, exports, calendar) land here, in per-matter folders.</div>
-    <input type="text" id="wsPath" placeholder="~/LexVault">
-    <button class="btn btn-block" id="wsSave" type="button">Set workspace folder</button>
-    <button class="btn btn-ghost btn-block" id="wsReveal" type="button">Reveal in Finder/Explorer</button>
-    <div id="wsList" class="muted" style="font-size:0.7rem;margin-top:0.4rem">…</div>
-    <h2>Conversation</h2>
-    <label class="row"><button class="btn btn-ghost" id="clearConv" type="button">Clear conversation memory</button></label>
-    <h2>Update</h2>
+    <details class="tech"><summary>Downloaded files</summary><div id="packList" class="muted">…</div></details>
+
+    <h3>Licence</h3>
+    <div id="setupBox" class="card">Loading…</div>
+
+    <h3>Conversation</h3>
+    <button class="btn btn-ghost" id="clearConv" type="button">Forget this conversation</button>
+
+    <h3>Updates</h3>
     <div id="updateBox" class="card">Checking…</div>
   </section>
 </main>
 
+<footer class="dock">
+  <div id="dataLine" class="dataline" role="status" aria-live="polite" aria-atomic="true" title="Where your data went">
+    <span class="dl-label">Your data:</span> <span class="dl-sym" aria-hidden="true">✓</span> <span class="dl-text">Nothing has left this computer</span>
+  </div>
+  <!-- The contextual suggestion slot: at most one hint at a time (lib/suggest.js). -->
+  <div id="hint" class="hint" hidden>
+    <span class="hint-text"></span>
+    <span class="hint-acts"></span>
+    <button class="hint-x" type="button" aria-label="Dismiss this suggestion">✕</button>
+  </div>
+  <div class="composer">
+    <label for="input" class="sr-only">Your question</label>
+    <textarea id="input" rows="1" placeholder="Ask about this document…" aria-describedby="inputHelp"></textarea>
+    <span id="inputHelp" class="sr-only">Enter sends, Shift+Enter for a new line. Type / for your firm's instructions.</span>
+    <button id="send" class="btn" type="button">Send</button>
+  </div>
+  <div class="mainrow">
+    <button class="btn btn-primary" id="reviewBtn" type="button">Review this contract</button>
+    <button class="btn btn-ghost btn-small" id="reviewOptsBtn" type="button" aria-expanded="false" aria-controls="reviewOpts">Options</button>
+    <span class="grow"></span>
+    <button id="undoBtn" class="btn-icon" disabled type="button" title="Undo the last change OpenLex put into the document" aria-label="Undo the last change OpenLex put into the document">↩</button>
+  </div>
+  <div id="reviewOpts" class="review-opts card" hidden>
+    <label class="field-label" for="rvSide">Acting for</label>
+    <select id="rvSide" class="select"></select>
+    <label class="field-label" for="rvPlaybook">Check against</label>
+    <select id="rvPlaybook" class="select"><option value="">No checklist — general review</option></select>
+    <fieldset class="rv-focus">
+      <legend class="field-label">Pay particular attention to (optional)</legend>
+      <div id="rvFocus" class="rv-focus-list"></div>
+    </fieldset>
+    <div class="btn-row"><button class="btn" id="rvStart" type="button">Start the review</button><button class="btn btn-ghost" id="rvClose" type="button">Close</button></div>
+  </div>
+</footer>
+
+<!-- "What can I do here?" — the one menu for every secondary action. -->
+<div id="menu" class="menu" role="dialog" aria-modal="true" aria-labelledby="menuTitle" hidden>
+  <div class="menu-box">
+    <div class="menu-head">
+      <h2 id="menuTitle">What can I do here?</h2>
+      <button class="btn-icon btn-tiny" id="menuClose" type="button" aria-label="Close the menu">✕</button>
+    </div>
+    <label for="menuSearch" class="sr-only">Search what OpenLex can do</label>
+    <input type="text" id="menuSearch" role="combobox" aria-expanded="true" aria-controls="menuList" aria-autocomplete="list" placeholder="Type to search, e.g. translate" autocomplete="off">
+    <div id="menuList" class="menu-list" role="listbox" aria-label="Actions"></div>
+    <div class="menu-foot muted">↑ ↓ choose · Enter open · Esc close</div>
+  </div>
+</div>
+
+<!-- Pane logic (no Office.js; unit-tested in node) then the Office glue. -->
+<script src="lib/words.js"></script>
+<script src="lib/dataline.js"></script>
+<script src="lib/activity.js"></script>
+<script src="lib/sources.js"></script>
+<script src="lib/review.js"></script>
+<script src="lib/errors.js"></script>
+<script src="lib/menu.js"></script>
+<script src="lib/permission.js"></script>
+<script src="lib/theme.js"></script>
+<script src="lib/suggest.js"></script>
+<script src="lib/matter.js"></script>
 <script src="taskpane.js"></script>
 </body>
 </html>

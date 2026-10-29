@@ -12,6 +12,7 @@ cp -f "$SRC/sidecar/src/"*.js "$DST/sidecar/src/"
 cp -f "$SRC/add-in/taskpane.html" "$SRC/add-in/taskpane.js" "$SRC/add-in/taskpane.css" "$SRC/add-in/commands.html" "$DST/add-in/"
 cp -f "$SRC/add-in/manifest.xml" "$DST/add-in/"
 cp -f "$SRC/add-in/assets/"*.png "$DST/add-in/assets/"
+mkdir -p "$DST/add-in/lib" && cp -f "$SRC/add-in/lib/"*.js "$DST/add-in/lib/"
 
 # License public key — sidecar loadPublicKey() scans ~/.lexvault; without
 # it the sidecar runs dev mode (license payloads never signature-verified).

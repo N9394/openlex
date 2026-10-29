@@ -8,7 +8,12 @@ happens in the sidecar at `http://127.0.0.1:18001`.
 
 ```
 manifest.xml          TaskPane manifest (catalog sideload, SourceLocation = sidecar)
-taskpane.html/.css/.js  Pane UI (LexVault dark theme)
+taskpane.html/.css/.js  Pane UI: the Office.js + DOM glue (follows Word's light/dark theme)
+lib/*.js              Pane logic without Office.js (activity, data line, sources,
+                      review, errors, menu, permission card, theme, hint slot,
+                      matter) — plain scripts in the pane, require()d by the
+                      node tests in ../sidecar/test/addin_pane.test.js
+TESTING.md            Manual test script in Word
 commands.html         Ribbon command handlers (Office.actions.associate)
 assets/               Icons (16/32/80)
 sideload-mac.sh       macOS: copies manifest into Word's WEF folder

@@ -74,6 +74,8 @@ Section "LexVault Word Plugin (required)" SEC_MAIN
   File "${STAGE_DIR}\add-in\taskpane.css"
   File "${STAGE_DIR}\add-in\commands.html"
   File /r "${STAGE_DIR}\add-in\assets\*.*"
+  SetOutPath "$INSTDIR\add-in\lib"
+  File "${STAGE_DIR}\add-in\lib\*.js"
 
   ; Certs
   SetOutPath "$INSTDIR\certs"

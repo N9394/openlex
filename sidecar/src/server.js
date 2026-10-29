@@ -216,6 +216,8 @@ function sendSse(res, event) {
   // one kills the whole sidecar mid-analysis. Guard both sides: swallow
   // response errors at the router and skip writes once the socket is gone.
   if (!res || res.destroyed || res.writableEnded) return
+  // Steps the engine itself emits get their plain sentence here (explain.js).
+  require('./explain').withPlain(event)
   res.write(`data: ${JSON.stringify(event)}\n\n`)
 }
 
@@ -305,7 +307,7 @@ async function handle(req, res) {
 
   try {
     // Static add-in assets
-    if (p === '/' || p.startsWith('/taskpane') || p.startsWith('/commands') || p.startsWith('/assets/') || p.startsWith('/outlook')) {
+    if (p === '/' || p.startsWith('/taskpane') || p.startsWith('/commands') || p.startsWith('/assets/') || p.startsWith('/lib/') || p.startsWith('/outlook')) {
       const file = p === '/' ? '/taskpane.html' : p
       const fp = path.normalize(path.join(config.ADDIN_ROOT, file))
       if (!fp.startsWith(config.ADDIN_ROOT)) return sendJson(res, 403, { error: 'forbidden' })
@@ -533,6 +535,14 @@ async function handle(req, res) {
       } catch (err) {
         return sendJson(res, 400, { error: err.message })
       }
+    }
+
+    // Feature switches only (openlex.json → features): front ends hide what a firm turned off.
+    if (req.method === 'GET' && p === '/api/features') {
+      try {
+        require('./workspace').setBase(require('./agent-config').load().workspace)
+        return sendJson(res, 200, { features: require('./harness').load().features || {} })
+      } catch (err) { return sendJson(res, 200, { features: {}, error: err.message }) }
     }
 
     // ── Harness map (routes, hooks, agents, features — layered config) ───
@@ -1129,11 +1139,17 @@ async function handle(req, res) {
 
     // Full analyze: map → per-section agent analysis → suggestions → SSE
     if (req.method === 'POST' && p === '/api/document/analyze') {
+      // Contract review, clause by clause. Optional: side (whom we act
+      // for), playbook (a firm checklist), focus (topics), interactive
+      // (permission cards). Streams `step` (kind: clause, position,
+      // total), `model`, `suggestion` (with its clause), `done`
+      // ({ comments, stopped, total }).
       const body = await readBody(req, 20)
       const entry = getDoc(body)
       entry.doc = new Document(body.text, body.docId, body.styles)
       const { DocMemory } = require('./memory')
       entry.memory = new DocMemory(entry.doc.docId)
+      const review = require('./review')
 
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' })
       // Same recovery as /api/chat: respawn llama when it died since startup.
@@ -1142,23 +1158,54 @@ async function handle(req, res) {
         sendSse(res, { type: 'error', message: `local engine unavailable: ${ready.reason || 'unknown'} — Settings → Download model, then retry` })
         return res.end()
       }
+      const opts = review.options(body)
+      let checks = []
+      if (opts.playbook) {
+        try {
+          require('./workspace').setBase(require('./agent-config').load().workspace)
+          checks = require('./workflows').loadPlaybook(opts.playbook).checks
+        } catch (err) { sendSse(res, { type: 'warning', message: `The firm checklist could not be loaded (${err.message}); reviewing without it.` }) }
+      }
       const map = entry.doc.map()
       const context = {
         doc: entry.doc, memory: entry.memory, search, embeddings,
         summary: () => entry.doc.summary(),
       }
+      // Stop: the pane aborts the fetch → stop between clauses, keep what is done.
+      const ac = new AbortController()
+      res.on('close', () => ac.abort())
+      const sections = map.sections.slice(0, 30)
+      if (map.sections.length > sections.length) sendSse(res, { type: 'warning', message: `This document has ${map.sections.length} parts; the review covers the first ${sections.length}.` })
+      const mid = matterIdFor(body, entry)
       let comments = 0
-      for (const s of map.sections.slice(0, 30)) {
-        sendSse(res, { type: 'step', text: `analyzing § ${s.heading || s.index + 1}…` })
-        try {
-          const r = await policy.withMatter(matterIdFor(body, entry), () => runAction(context, `Analyze section ${s.index} of the document ("${s.heading || 'untitled'}"). Use get_range_text and get_clause_analysis; search the law only if a clause is risky; propose suggestions.`, (e) => sendSse(res, e)))
-          for (const sug of r.suggestions) { comments++; sendSse(res, { type: 'suggestion', suggestion: sug }) }
-        } catch (err) {
-          sendSse(res, { type: 'error', message: `section ${s.index}: ${err.message}` })
+      await require('./permissions').session(permissionSession(body, res, ac.signal), () => policy.observeModels((m) => sendSse(res, { type: 'model', ...m }), async () => {
+        for (const [position, s] of sections.entries()) {
+          if (ac.signal.aborted) break
+          sendSse(res, { type: 'step', text: `analyzing § ${s.heading || s.index + 1}…`, kind: 'clause', position, total: sections.length, detail: { clause: { index: s.index, heading: s.heading || '' } } })
+          try {
+            const r = await policy.withMatter(mid, () => runAction(context, review.clausePrompt({ section: s, position, total: sections.length, opts, checks }), (e) => { if (e.type !== 'done' && e.type !== 'text') sendSse(res, e) }, { signal: ac.signal }))
+            for (const sug of r.suggestions) { comments++; sendSse(res, { type: 'suggestion', suggestion: { ...sug, clause: { index: s.index, heading: s.heading || '', position } } }) }
+          } catch (err) {
+            sendSse(res, { type: 'error', message: `section ${s.index}: ${err.message}`, clause: { index: s.index, heading: s.heading || '' }, recoverable: true })
+          }
         }
-      }
-      sendSse(res, { type: 'done', comments })
+      }))
+      sendSse(res, { type: 'done', comments, stopped: ac.signal.aborted, total: sections.length })
       return res.end()
+    }
+
+    // Export a finished review (Word pane summary card) into the matter's folder.
+    if (req.method === 'POST' && p === '/api/review/export') {
+      const body = await readBody(req, 5)
+      try {
+        require('./workspace').setBase(require('./agent-config').load().workspace)
+        const entry = body.docId ? getDoc(body) : null
+        const matterId = body.matterId || (entry ? matterIdFor(body, entry) : null)
+        const file = require('./review').exportReview({ title: body.title, side: body.side, findings: body.findings, format: body.format, matterLabel: require('./workflows').matterLabel(matterId) })
+        return sendJson(res, 200, { file })
+      } catch (err) {
+        return sendJson(res, 400, { error: err.message })
+      }
     }
 
     // What OpenLex did per request (activity.js): asked, looked at, where data went, result.
