@@ -6,8 +6,14 @@
  * side. https://ansvar.eu
  *
  * Access is MCP-only (Streamable HTTP, JSON-RPC) at gateway.ansvar.eu/mcp
- * with OAuth 2.1. Two credentials work here, both pasted by the lawyer and
- * kept in the OS keychain ("source-ansvar"):
+ * with OAuth 2.1 (Ansvar's own sign-in server, auth.ansvar.eu). Three ways
+ * in, all with the lawyer's own account, kept in the OS keychain
+ * ("source-ansvar"):
+ *   - browser sign-in (any Ansvar plan, including the free and Solo plans):
+ *     OpenLex registers itself as a public client (RFC 7591), the lawyer
+ *     types a code shown by OpenLex on Ansvar's page (device code, RFC 8628;
+ *     or a browser redirect to this computer with PKCE when device codes are
+ *     refused); the tokens are renewed with the refresh token (oauth.js);
  *   - a service credential "client-id:client-secret" (Ansvar's Premium
  *     plan and above): exchanged for a short-lived token
  *     (OAuth client_credentials) and renewed when it runs out;
@@ -21,12 +27,15 @@
 
 const crypto = require('crypto')
 const { request, SourceError } = require('./http')
+const oauth = require('./oauth')
 
 const GATEWAY = () => process.env.OPENLEX_ANSVAR_URL || 'https://gateway.ansvar.eu/mcp'
 const TOKEN_URL = () => process.env.OPENLEX_ANSVAR_TOKEN_URL || 'https://auth.ansvar.eu/realms/ansvar/protocol/openid-connect/token'
 const LABEL = 'Ansvar'
 const PROTOCOL = '2025-06-18'
 const MAX_QUERY = 500 // Ansvar refuses longer questions
+const SCOPE = 'mcp:tools offline_access'
+const CLIENT_KEY = 'source-ansvar-client' // OpenLex's registration with Ansvar (no secret for a public client)
 
 const tokens = new Map() // credential hash → { token, until }
 const toolCache = new Map() // credential hash → { tools, at }
@@ -39,7 +48,8 @@ function parseKey(key) {
   if (k.startsWith('{')) {
     try {
       const j = JSON.parse(k)
-      if (j.client_id && j.client_secret) return { clientId: String(j.client_id), clientSecret: String(j.client_secret) }
+      if (j.type === 'oauth' && j.access_token) return { oauth: j }
+      if (j.client_id && j.client_secret && !j.access_token) return { clientId: String(j.client_id), clientSecret: String(j.client_secret) }
       if (j.access_token) return { bearer: String(j.access_token) }
     } catch { /* not JSON */ }
   }
@@ -48,9 +58,24 @@ function parseKey(key) {
   return { bearer: k.replace(/^Bearer\s+/i, '') }
 }
 
-async function accessToken(key) {
+/** A signed-in credential: its access token, renewed (and saved) when it runs out. */
+async function signedInToken(key, cred, { saveKey, force = false } = {}) {
+  const id = hash(key)
+  const hit = tokens.get(id)
+  if (!force && hit && hit.until > Date.now() + 30000) return hit.token
+  if (!force && Number(cred.expires_at) > Date.now() + 30000) return cred.access_token
+  if (!cred.refresh_token || !cred.token_endpoint) throw new SourceError('Your Ansvar sign-in has run out: sign in again under Law sources (/law)', 'key', 'no refresh token')
+  const t = await oauth.refresh(cred, { label: LABEL })
+  const next = oauth.credential(t, null, null, cred)
+  tokens.set(id, { token: next.access_token, until: next.expires_at })
+  if (saveKey) { try { await saveKey(JSON.stringify(next)) } catch { /* keychain busy: the token still works for now */ } }
+  return next.access_token
+}
+
+async function accessToken(key, ctx = {}) {
   const k = parseKey(key)
   if (k.bearer) return k.bearer
+  if (k.oauth) return signedInToken(key, k.oauth, ctx)
   const id = hash(key)
   const hit = tokens.get(id)
   if (hit && hit.until > Date.now() + 30000) return hit.token
@@ -111,11 +136,59 @@ class Session {
   }
 }
 
-async function session(key) {
-  try { return await new Session(await accessToken(key)).open() } catch (err) {
-    if (err.code === 'key') tokens.delete(hash(key))
+async function session(key, ctx = {}) {
+  try { return await new Session(await accessToken(key, ctx)).open() } catch (err) {
+    if (err.code !== 'key') throw err
+    tokens.delete(hash(key))
+    // A signed-in token the gateway refused before its time: renew once.
+    const k = parseKey(key)
+    if (k.oauth?.refresh_token && !ctx.retried) return new Session(await accessToken(key, { ...ctx, force: true, retried: true })).open()
+    if (k.oauth) throw new SourceError('Your Ansvar sign-in has run out: sign in again under Law sources (/law)', 'key', err.message)
     throw err
   }
+}
+
+/** OpenLex's client registration with Ansvar: the one set by the firm, the one saved, or a new one. */
+async function clientFor(meta, store) {
+  if (process.env.OPENLEX_ANSVAR_CLIENT_ID) return { client_id: process.env.OPENLEX_ANSVAR_CLIENT_ID, issuer: meta.issuer }
+  try {
+    const saved = JSON.parse((await store?.get(CLIENT_KEY)) || 'null')
+    if (saved?.client_id && saved.issuer === meta.issuer) return saved
+  } catch { /* none saved */ }
+  const c = await oauth.register(meta, { label: LABEL, scope: SCOPE })
+  try { await store?.set(CLIENT_KEY, JSON.stringify(c)) } catch { /* registered again next time */ }
+  return c
+}
+
+/**
+ * Start the browser sign-in. Resolves once the code (or the page) is ready;
+ * `done` resolves with the credential to keep in the keychain.
+ * @returns {Promise<{ flow: 'device'|'browser', url, userCode?, expiresIn, done: Promise<string>, cancel() }>}
+ */
+async function signIn({ store, pollMs } = {}) {
+  const meta = await oauth.discover(GATEWAY(), { label: LABEL })
+  let client = await clientFor(meta, store)
+  const ac = new AbortController()
+  const keep = (t) => JSON.stringify(oauth.credential(t, meta, client))
+  if (meta.device_authorization_endpoint) {
+    let dev = null
+    try { dev = await oauth.startDevice(meta, client, { scope: SCOPE, label: LABEL }) } catch (err) {
+      if (err.code === 'client' && !process.env.OPENLEX_ANSVAR_CLIENT_ID) { // registration forgotten on Ansvar's side
+        try { await store?.set(CLIENT_KEY, null) } catch { /* ignore */ }
+        client = await clientFor(meta, { get: async () => null, set: store?.set })
+        dev = await oauth.startDevice(meta, client, { scope: SCOPE, label: LABEL })
+      } else if (err.code !== 'unsupported' && err.code !== 'key') throw err
+    }
+    if (dev) {
+      const done = oauth.pollDevice(meta, client, dev, { label: LABEL, signal: ac.signal, intervalMs: pollMs }).then(keep)
+      done.catch(() => {})
+      return { flow: 'device', url: dev.verification_uri_complete || dev.verification_uri, pageUrl: dev.verification_uri, userCode: dev.user_code, expiresIn: dev.expires_in, done, cancel: () => ac.abort() }
+    }
+  }
+  const lb = await oauth.startLoopback(meta, client, { scope: SCOPE, label: LABEL, signal: ac.signal })
+  const done = lb.done.then(keep)
+  done.catch(() => {})
+  return { flow: 'browser', url: lb.url, pageUrl: lb.url, userCode: null, expiresIn: 600, done, cancel: () => ac.abort() }
 }
 
 async function toolsOf(s, key) {
@@ -179,11 +252,16 @@ const connector = {
   licenceUrl: 'https://ansvar.eu/terms',
   homepage: 'https://ansvar.eu',
   needsKey: true,
-  keyHelp: 'Paste the service credential from your Ansvar workspace as client-id:client-secret (Ansvar Premium plan or higher). Each lawyer uses their own.',
+  keyHelp: 'Paste the service credential from your Ansvar workspace as client-id:client-secret (Ansvar Premium plan or higher). Each lawyer uses their own. On the free and Solo plans, sign in with your browser instead.',
+  needsKeyWords: 'sign in or paste your key',
+  guide: 'ansvar',
+  signIn,
+  /** How the saved credential reads in the list. */
+  keyWords: (key) => { try { return parseKey(key).oauth ? 'signed in' : null } catch { return null } },
   hosts: ['gateway.ansvar.eu', 'auth.ansvar.eu'],
 
-  async search(query, { limit = 8, jurisdiction = null } = {}, { key = null } = {}) {
-    const s = await session(key)
+  async search(query, { limit = 8, jurisdiction = null } = {}, { key = null, saveKey } = {}) {
+    const s = await session(key, { saveKey })
     const tools = await toolsOf(s, key)
     const tool = tools.find((t) => t.name === 'search') || tools.find((t) => /^search(_law|_legislation)?$/.test(t.name)) || tools.find((t) => /search/.test(t.name))
     if (!tool) throw new SourceError('Your Ansvar plan offers no search', 'unsupported')
@@ -198,8 +276,8 @@ const connector = {
     return mapResults(resultText(r), limit)
   },
 
-  async get(ref, { article = null } = {}, { key = null } = {}) {
-    const s = await session(key)
+  async get(ref, { article = null } = {}, { key = null, saveKey } = {}) {
+    const s = await session(key, { saveKey })
     const tools = await toolsOf(s, key)
     const tool = tools.find((t) => t.name === 'get_provision') || tools.find((t) => /^get_/.test(t.name))
     if (!tool) throw new SourceError('Your Ansvar plan offers no full texts', 'unsupported')
@@ -226,4 +304,4 @@ const connector = {
   },
 }
 
-module.exports = { ...connector, parseKey, mapResults, pickResponse, _reset: () => { tokens.clear(); toolCache.clear() } }
+module.exports = { ...connector, parseKey, mapResults, pickResponse, _reset: () => { tokens.clear(); toolCache.clear(); oauth._reset() } }

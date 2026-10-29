@@ -155,7 +155,7 @@ SELECT DISTINCT ?celex ?date ?title WHERE {
   async ris(src, since) {
     const API = process.env.OPENLEX_RIS_API || 'https://data.bka.gv.at/ris/api/v2.6'
     const url = `${API}/Bundesrecht?${new URLSearchParams({ Applikation: 'BgblAuth', Suchworte: src.query, ImRisSeit: 'EinemMonat', DokumenteProSeite: 'Fifty' })}`
-    const d = JSON.parse(await getText(url, 'application/json'))
+    const d = JSON.parse(await require('./web/ris').risFetch(url)) // RIS terms: one at a time, two seconds apart, in the allowed hours
     const refs = [].concat(d?.OgdSearchResult?.OgdDocumentResults?.OgdDocumentReference || [])
     return refs.map((ref) => {
       const m = ref.Data?.Metadaten || {}
@@ -269,6 +269,7 @@ async function checkDue(now = Date.now()) {
   for (const m of load().monitors) {
     if (m.paused) continue
     if (m.lastRun && now - Date.parse(m.lastRun) < m.everyHours * 3600000) continue
+    if (m.source.type === 'ris' && !require('./web/ris').liveAllowed()) continue // RIS terms: checked in the next allowed hours
     out.push({ id: m.id, ...(await check(m.id)) })
   }
   return out
