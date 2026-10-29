@@ -4,10 +4,13 @@ All notable changes to OpenLex are listed here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-10-29
+
 ### Security
 - The legacy desktop server (`desktop/server`) listened on all network interfaces; it now listens on `127.0.0.1` only. A test checks that every server in the engine, the desktop shell and the legacy server binds to loopback.
 
 ### Added
+- **AI record:** a tamper-evident log of what the AI did (which model, which sources, what was sent online, which actions were approved), hash-chained so later edits are detectable, readable and exportable from the Word pane, the terminal app and the CLI.
 - Releases are built, signed and attested on GitHub: a reproducible CLI tarball, an SBOM (CycloneDX), Sigstore signatures (`*.bundle`) and GitHub build provenance for every file. The install scripts are release files too (`releases/latest/download/install.sh` and `install.ps1`). How to check a download: [docs/VERIFY.md](docs/VERIFY.md).
 - The install scripts also check the signature (with `cosign`) or the GitHub attestation (with `gh`) when those tools are installed, and say which checks were made.
 - CI on Linux, macOS and Windows with Node 20 and 22, and a packaging smoke test.
