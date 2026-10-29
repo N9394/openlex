@@ -18,8 +18,6 @@
 
 const fs = require('fs')
 const path = require('path')
-const { docxText } = require('./docx_text')
-const { pdfText } = require('./pdf_text')
 
 const EXTS = new Set(['.docx', '.pdf', '.txt', '.md'])
 const PART_CHARS = 12000 // per model call; documents are split on paragraph boundaries
@@ -64,11 +62,9 @@ function listDocs(folders) {
   return out.sort()
 }
 
+/** The text of a document (read.js: Word, PDF with OCR, Excel, e-mail, text; the one size rule applies). */
 async function readDoc(file) {
-  const ext = path.extname(file).toLowerCase()
-  if (ext === '.docx') return docxText(file)
-  if (ext === '.pdf') return pdfText(file)
-  return fs.readFileSync(file, 'utf8')
+  return (await require('./read').readDocument({ file })).text
 }
 
 function parts(text) {

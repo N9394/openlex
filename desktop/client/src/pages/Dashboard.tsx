@@ -3,6 +3,14 @@ import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../contexts/AuthContext'
 import { api } from '../lib/api'
+import { engine } from '../lib/commands'
+
+/** Recent conversations from the OpenLex engine (GET /api/sessions): every window's, newest first. */
+async function engineSessions(limit: number): Promise<{ id: string; title: string; updatedAt: string | null }[]> {
+  const e = engine()
+  if (!e) return []
+  try { const r = await e.call('GET', `/api/sessions?all=1&limit=${limit}`); return Array.isArray(r?.sessions) ? r.sessions : [] } catch { return [] }
+}
 import {
   FileSearch,
   ScanSearch,
@@ -88,7 +96,7 @@ export default function Dashboard() {
     try {
       // Fetch recent documents
       const docs = await api.get('/docs?limit=3').catch(() => ({ documents: [] }))
-      const conversations = await api.get('/research/conversations?limit=3').catch(() => [])
+      const conversations = await engineSessions(3)
 
       const activities: RecentActivity[] = []
 
@@ -106,14 +114,13 @@ export default function Dashboard() {
         })
       }
 
-      // Add conversations
-      const convList = Array.isArray(conversations) ? conversations : conversations.conversations || []
-      convList.slice(0, 2).forEach((conv: { id: string; title: string; createdAt: string }) => {
+      // Add conversations (the engine's, from every window)
+      conversations.filter((c) => c.updatedAt).slice(0, 2).forEach((conv) => {
         activities.push({
           id: `conv-${conv.id}`,
           type: 'research',
           title: conv.title,
-          timestamp: conv.createdAt,
+          timestamp: conv.updatedAt as string,
           link: '/research',
         })
       })
@@ -132,11 +139,10 @@ export default function Dashboard() {
     try {
       const docs = await api.get('/docs').catch(() => ({ documents: [] }))
       const vault = await api.get('/vault').catch(() => [])
-      const convs = await api.get('/research/conversations').catch(() => [])
+      const convList = await engineSessions(200)
 
       const docList = docs.documents || docs || []
       const vaultList = Array.isArray(vault) ? vault : vault.items || []
-      const convList = Array.isArray(convs) ? convs : convs.conversations || []
 
       setStats({
         documents: Array.isArray(docList) ? docList.length : 0,

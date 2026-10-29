@@ -36,6 +36,7 @@
  * analysis-<document>.json (structured; the matter overview reads it).
  */
 
+const fs = require('fs')
 const path = require('path')
 const wf = require('./workflows')
 const { docxBuffer } = require('./docx_write')
@@ -92,6 +93,13 @@ const LABELS = {
     lawCount: 'law searches for high and medium risks', parts: 'Document read in', partsUnit: 'parts',
     period: 'period', whatCol: 'What', term: 'Term', value: 'As written',
     lv: { high: 'high', medium: 'medium', low: 'low' },
+    type: 'Kind of document', keyPoints: 'Key points', governingLaw: 'Governing law', glossary: 'Legal terms in plain words',
+    overall: 'Overall risk', readability: 'Readability', score: 'score', explanation: 'Explanation',
+    imp: { critical: 'critical', recommended: 'recommended', optional: 'optional' },
+    read: { full: 'read in full', parts: 'read in parts' }, pagesWord: 'pages', ocrNote: 'pages were scanned images, read by text recognition on this computer (check quotes from them)',
+    readEasy: 'easy to read', readAverage: 'average', readHard: 'hard to read', sentences: 'words per sentence on average',
+    csv: { type: 'Type', level: 'Level', title: 'Title', detail: 'Detail', fix: 'Suggested fix', check: 'Fix check', party: 'Party', date: 'Date', where: 'Where', quote: 'Quote', law: 'Law' },
+    kinds: { risk: 'Risk', deadline: 'Deadline', obligation: 'Obligation', term: 'Key term', clause: 'Clause', missing: 'Possibly missing', glossary: 'Legal term' },
   },
   de: {
     title: 'Analyse', glance: 'Auf einen Blick', what: 'Worum es geht', parties: 'Parteien', purpose: 'Zweck',
@@ -108,6 +116,13 @@ const LABELS = {
     lawCount: 'Rechtsrecherchen zu hohen und mittleren Risiken', parts: 'Dokument gelesen in', partsUnit: 'Teilen',
     period: 'Frist', whatCol: 'Was', term: 'Begriff', value: 'Wortlaut',
     lv: { high: 'hoch', medium: 'mittel', low: 'gering' },
+    type: 'Art des Dokuments', keyPoints: 'Kernpunkte', governingLaw: 'Anwendbares Recht', glossary: 'Rechtsbegriffe einfach erklärt',
+    overall: 'Gesamtrisiko', readability: 'Lesbarkeit', score: 'Wert', explanation: 'Erläuterung',
+    imp: { critical: 'kritisch', recommended: 'empfohlen', optional: 'optional' },
+    read: { full: 'vollständig gelesen', parts: 'in Teilen gelesen' }, pagesWord: 'Seiten', ocrNote: 'Seiten waren Bilder (Scans) und wurden auf diesem Computer per Texterkennung gelesen (Zitate daraus bitte prüfen)',
+    readEasy: 'leicht lesbar', readAverage: 'durchschnittlich', readHard: 'schwer lesbar', sentences: 'Wörter pro Satz im Schnitt',
+    csv: { type: 'Art', level: 'Stufe', title: 'Titel', detail: 'Inhalt', fix: 'Vorschlag', check: 'Prüfung', party: 'Partei', date: 'Datum', where: 'Fundstelle', quote: 'Zitat', law: 'Rechtsgrundlage' },
+    kinds: { risk: 'Risiko', deadline: 'Frist', obligation: 'Pflicht', term: 'Bedingung', clause: 'Klausel', missing: 'Möglicherweise fehlend', glossary: 'Rechtsbegriff' },
   },
 }
 const labelsFor = (lang) => LABELS[lang] || LABELS.en
@@ -210,12 +225,7 @@ async function askObject(messages, maxTokens, role) {
  * model) gets smaller parts so the reply still fits.
  */
 function partChars(matterId) {
-  try {
-    const p = require('./routing').primary({ role: 'analyze', matterId })
-    const ctx = p.ctx || require('./models').profileFor({ kind: p.kind === 'local' ? 'local' : 'hosted', model: p.model }).ctx
-    if (ctx) return Math.max(2500, Math.min(12000, (ctx - 3500) * 3))
-    return p.kind === 'local' ? 6000 : 12000
-  } catch { return 12000 }
+  return require('./strategy').forModel({ tokens: Infinity, role: 'analyze', matterId }).partChars
 }
 
 function splitParts(text, size) {
@@ -231,10 +241,21 @@ function splitParts(text, size) {
   return out
 }
 
-function analysePrompt(name, part, idx, total, langName) {
+const SYSTEM = (langName) => `You analyse legal documents for a lawyer. Answer only from the document text. Never guess or invent facts, dates, amounts or law. Copy every quote exactly, word for word. Write all your text in ${langName}, the language of the document.`
+
+/**
+ * The analysis call for one part (or the whole document).
+ * cached: a cloud model reads the whole document; it goes into the system
+ * prompt as a stable, cacheable prefix (providers/common.js CACHE_MARK).
+ * outline: the document's headings, given with every part when a document
+ * is read in parts (the structured approach for long documents).
+ */
+function analysePrompt(name, part, idx, total, langName, { cached = false, outline = '' } = {}) {
+  const { CACHE_MARK } = require('./providers/common')
+  const where = cached ? `DOCUMENT: ${name} (the full text is in the system prompt above)` : `DOCUMENT: ${name}${total > 1 ? ` (part ${idx + 1} of ${total})` : ''}${outline ? `\nOUTLINE OF THE WHOLE DOCUMENT (for orientation; analyse only this part):\n${outline}` : ''}\n"""\n${part}\n"""`
   return [
-    { role: 'system', content: `You analyse legal documents for a lawyer. Answer only from the document text. Never guess or invent facts, dates, amounts or law. Copy every quote exactly, word for word. Write all your text in ${langName}, the language of the document.` },
-    { role: 'user', content: `DOCUMENT: ${name}${total > 1 ? ` (part ${idx + 1} of ${total})` : ''}\n"""\n${part}\n"""\n\nAnalyse this document for a lawyer. Write every text field in ${langName}. Every item needs "quote": the exact words copied from the document (max ${QUOTE_MAX} characters), and "location": the clause or section number, or [Page N] if visible.${idx > 0 ? ' "summary" may be left out for this part.' : ''}\nReply with JSON only, one object:\n{"summary": {"what": "<what kind of document, one sentence>", "parties": [{"name": "<as written>", "role": "<e.g. landlord>"}], "purpose": "<one or two sentences>"},\n "key_terms": [{"term": "<e.g. rent>", "value": "<as written>", "quote": "", "location": ""}],\n "dates": [{"date": "<YYYY-MM-DD, or empty when the text gives a period, not a date>", "when": "<the date or period as written>", "what": "<what is due or happens>", "importance": "high|medium|low", "quote": "", "location": ""}],\n "obligations": [{"party": "<who>", "duty": "<what they must do>", "quote": "", "location": ""}],\n "risks": [{"title": "<short>", "level": "high|medium|low", "why": "<one line: why it matters and for whom>", "fix": "<one line: the change you suggest>", "law_query": "<search words with statutory terms in ${langName}, or empty>", "quote": "", "location": ""}],\n "clauses": [{"title": "<clause>", "kind": "notable|missing", "note": "<one line>", "quote": "<exact words; empty for a missing clause>", "location": ""}]}` },
+    { role: 'system', content: cached ? `${SYSTEM(langName)}\n\nDOCUMENT TEXT (${name}):\n"""\n${part}\n"""${CACHE_MARK}` : SYSTEM(langName) },
+    { role: 'user', content: `${where}\n\nAnalyse this document for a lawyer. Write every text field in ${langName}. Every item needs "quote": the exact words copied from the document (max ${QUOTE_MAX} characters), and "location": the clause or section number, or [Page N] if visible.${idx > 0 ? ' "summary" may be left out for this part.' : ''}\nReply with JSON only, one object:\n{"summary": {"type": "<kind of document, e.g. office lease>", "what": "<what kind of document, one sentence>", "parties": [{"name": "<as written>", "role": "<e.g. landlord>"}], "purpose": "<one or two sentences>", "key_points": ["<3 to 5 points that matter most to the client>"], "governing_law": "<the law the document says applies, as written, or empty>"},\n "key_terms": [{"term": "<e.g. rent>", "value": "<as written>", "quote": "", "location": ""}],\n "dates": [{"date": "<YYYY-MM-DD, or empty when the text gives a period, not a date>", "when": "<the date or period as written>", "what": "<what is due or happens>", "importance": "high|medium|low", "quote": "", "location": ""}],\n "obligations": [{"party": "<who>", "duty": "<what they must do>", "quote": "", "location": ""}],\n "risks": [{"title": "<short>", "level": "high|medium|low", "why": "<one line: why it matters and for whom>", "fix": "<one line: the change you suggest>", "law_query": "<search words with statutory terms in ${langName}, or empty>", "quote": "", "location": ""}],\n "clauses": [{"title": "<clause>", "kind": "notable|missing", "category": "<e.g. payment, termination, liability, confidentiality, disputes, IP, warranties, general>", "importance": "<for a missing clause: critical|recommended|optional>", "note": "<one line>", "quote": "<exact words; empty for a missing clause>", "location": ""}],\n "glossary": [{"term": "<a legal term used in the document, as written>", "explanation": "<plain words, one sentence>"}]}` },
   ]
 }
 
@@ -308,6 +329,8 @@ const safeBase = (f) => path.basename(f).replace(/\.[^.]+$/, '').replace(/[^\p{L
  */
 async function runAnalyse(o = {}) {
   const inputs = []
+  // Documents attached in a chat (attachments.js): read once, referred to by id.
+  for (const a of Array.isArray(o.attachments) ? require('./attachments').load(o.attachments) : []) inputs.push({ name: a.name, text: a.text, meta: a.meta })
   if (typeof o.text === 'string' && o.text.trim()) inputs.push({ name: String(o.name || 'Document').slice(0, 120), text: o.text })
   const list = Array.isArray(o.files) ? o.files : o.file ? [o.file] : []
   for (const f of list) inputs.push({ file: require('./workflows_docs').resolveDoc(o.matterId, String(f)) })
@@ -316,7 +339,7 @@ async function runAnalyse(o = {}) {
   const files = []
   for (const [i, input] of inputs.entries()) {
     if (o.signal?.aborted) break
-    const a = await analyseOne({ matterId: o.matterId, onProgress: o.onProgress, signal: o.signal, sources: o.sources, file: input.file, text: input.text, name: input.name, index: i, total: inputs.length })
+    const a = await analyseOne({ matterId: o.matterId, onProgress: o.onProgress, signal: o.signal, sources: o.sources, file: input.file, text: input.text, name: input.name, meta: input.meta, focus: o.focus, index: i, total: inputs.length })
     analyses.push(a)
     files.push(...Object.values(a.files))
   }
@@ -331,31 +354,46 @@ async function runAnalyse(o = {}) {
   return { analyses, files, stats, count: analyses.reduce((n, a) => n + a.risks.length, 0), summary: analyses.map(brief).join('\n\n') }
 }
 
-async function analyseOne({ matterId, file, text, name, onProgress, signal, sources = {}, index = 0, total = 1 }) {
+async function analyseOne({ matterId, file, text, name, meta = null, focus = '', onProgress, signal, sources = {}, index = 0, total = 1 }) {
   name = name || path.basename(file)
   onProgress?.({ step: 'read', index: index + 1, total, name })
-  if (file) text = await wf.readDoc(file)
+  const read = require('./read')
+  if (file) { const r = await read.readDocument({ file }); text = r.text; meta = r }
   text = String(text || '')
+  const pages = meta?.pages || read.pagesOf(text)
+  const ocrPages = meta?.ocrPages || (text.match(/\[Page \d+ · OCR\]/g) || []).length
   if (!text.trim()) throw new Error(`${name}: no text found (scanned PDF where OCR found nothing?)`)
   const lang = detectLanguage(text)
   const langName = require('./workflows_docs').LANGS[lang] || 'English'
   let jurisdiction = new (require('./doc').Document)(text.slice(0, 4000), 'analysis').jurisdiction()
   if (jurisdiction === 'US' && lang !== 'en') jurisdiction = ''
 
-  const ps = splitParts(text, partChars(matterId))
-  const stats = { parts: ps.length, verified: 0, dropped: 0, lawSearches: 0, web: false, errors: [] }
-  const raw = { summary: null, key_terms: [], dates: [], obligations: [], risks: [], clauses: [] }
+  // Large documents (strategy.js): a cloud model reads the whole document
+  // when it fits its window (cached prefix); otherwise — and for the local
+  // model beyond its memory — the document is read in parts, each with the
+  // document's outline.
+  const st = require('./strategy').forModel({ tokens: read.tokensFor(text), role: 'analyze', matterId })
+  const ps = st.mode === 'full' && st.kind === 'cloud' ? [text] : splitParts(text, st.partChars)
+  const outline = ps.length > 1 ? new (require('./doc').Document)(text, 'outline').map().sections.filter((x) => x.heading).slice(0, 80).map((x) => x.heading).join('\n').slice(0, 4000) : ''
+  const stats = { parts: ps.length, verified: 0, dropped: 0, lawSearches: 0, web: false, errors: [], strategy: { kind: st.kind, mode: ps.length > 1 ? 'parts' : 'full', ctx: st.ctx, tokens: st.tokens, cache: st.cache && ps.length === 1 } }
+  onProgress?.({ step: 'plan', name, mode: stats.strategy.mode, parts: ps.length, kind: st.kind, label: st.label, cache: stats.strategy.cache, pages })
+  const raw = { summary: null, key_terms: [], dates: [], obligations: [], risks: [], clauses: [], glossary: [] }
+  const focusLine = focus ? `\nThe lawyer asks to focus on: ${String(focus).slice(0, 300)}` : ''
   for (const [pi, part] of ps.entries()) {
     if (signal?.aborted) break
     onProgress?.({ step: 'analyse', index: pi + 1, total: ps.length, name })
     let obj
-    try { obj = await askObject(analysePrompt(name, part, pi, ps.length, langName), 3500, 'analyze') } catch (err) {
+    try {
+      const msgs = analysePrompt(name, part, pi, ps.length, langName, { cached: stats.strategy.cache, outline })
+      if (focusLine) msgs[1] = { ...msgs[1], content: msgs[1].content + focusLine }
+      obj = await askObject(msgs, 3500, 'analyze')
+    } catch (err) {
       if (err.code === 'POLICY_BLOCKED' || /data policy/i.test(err.message)) throw err
       stats.errors.push(`part ${pi + 1}: ${err.message}`)
       continue
     }
     if (!raw.summary && obj.summary && typeof obj.summary === 'object') raw.summary = obj.summary
-    for (const k of ['key_terms', 'dates', 'obligations', 'risks', 'clauses']) raw[k].push(...arr(obj[k] ?? obj[k.replace('_', '')] ?? obj[k === 'key_terms' ? 'keyTerms' : k]))
+    for (const k of ['key_terms', 'dates', 'obligations', 'risks', 'clauses', 'glossary']) raw[k].push(...arr(obj[k] ?? obj[k.replace('_', '')] ?? obj[k === 'key_terms' ? 'keyTerms' : k]))
   }
   if (!raw.summary && !Object.values(raw).some((v) => Array.isArray(v) && v.length) && stats.errors.length) {
     throw new Error(`${name}: the model gave no usable answer (${stats.errors[0]})`)
@@ -435,11 +473,12 @@ async function analyseOne({ matterId, file, text, name, onProgress, signal, sour
       // Nothing to quote for a missing clause: shown as "please check", never as fact.
       if (seen.has(`missing|${wf.norm(title)}`)) continue
       seen.add(`missing|${wf.norm(title)}`)
-      clauses.push({ title, kind, note: str(it.note, 300), quote: '', location: { section: null, page: null, text: '', pos: Number.MAX_SAFE_INTEGER } })
+      const imp = str(it.importance, 20).toLowerCase()
+      clauses.push({ title, kind, importance: /crit|krit/.test(imp) ? 'critical' : /opt/.test(imp) ? 'optional' : 'recommended', note: str(it.note, 300), quote: '', location: { section: null, page: null, text: '', pos: Number.MAX_SAFE_INTEGER } })
       continue
     }
     const v = verified('clause', it)
-    if (v) clauses.push({ title, kind, note: str(it.note, 300), ...v })
+    if (v) clauses.push({ title, kind, category: str(it.category, 40), note: str(it.note, 300), ...v })
   }
   clauses.sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'notable' ? -1 : 1) || a.location.pos - b.location.pos)
 
@@ -447,7 +486,19 @@ async function analyseOne({ matterId, file, text, name, onProgress, signal, sour
   const folded = wf.norm(text)
   const parties = arr(s.parties).map((p) => ({ name: str(p.name, 160), role: str(p.role, 80) }))
     .filter((p) => p.name && folded.includes(wf.norm(p.name)))
-  const summary = { what: str(s.what, 400), parties, purpose: str(s.purpose, 600) }
+  const keyPoints = (Array.isArray(s.key_points || s.keyPoints) ? (s.key_points || s.keyPoints) : []).map((x) => str(x, 300)).filter(Boolean).slice(0, 6)
+  const summary = { type: str(s.type, 120), what: str(s.what, 400), parties, purpose: str(s.purpose, 600), keyPoints, governingLaw: str(s.governing_law || s.governingLaw, 200) }
+
+  // Glossary: only terms that are in the document.
+  const glossary = []
+  const gseen = new Set()
+  for (const it of raw.glossary) {
+    const term = str(it.term, 80)
+    const k = wf.norm(term)
+    if (!term || gseen.has(k) || !folded.includes(k)) continue
+    gseen.add(k)
+    glossary.push({ term, explanation: str(it.explanation || it.meaning, 300) })
+  }
 
   // ── law: only for high and medium risks ──
   const local = sources.local || lawSources.local
@@ -487,13 +538,18 @@ async function analyseOne({ matterId, file, text, name, onProgress, signal, sour
   }
 
   for (const lv of LEVELS) stats[lv] = risks.filter((r) => r.level === lv).length
+  const id = `an_${require('crypto').randomBytes(8).toString('hex')}`
   const analysis = {
-    version: 1,
+    version: 2,
     kind: 'analysis',
+    id,
     createdAt: new Date().toISOString(),
     matterId: matterId || null,
-    document: { name, ...(file ? { path: file } : {}), chars: text.length, language: lang, languageName: langName, jurisdiction: jurisdiction || null },
-    summary, keyTerms, deadlines, obligations, risks, clauses, stats,
+    document: { name, ...(file ? { path: file } : {}), ...(meta?.id ? { attachmentId: meta.id } : {}), chars: text.length, pages, ocrPages, language: lang, languageName: langName, jurisdiction: jurisdiction || null },
+    summary, keyTerms, deadlines, obligations, risks, clauses, glossary,
+    overall: overallRisk(risks, lang),
+    readability: readability(text, lang),
+    stats,
   }
 
   onProgress?.({ step: 'write', name })
@@ -508,7 +564,50 @@ async function analyseOne({ matterId, file, text, name, onProgress, signal, sour
   analysis.files = { ...out }
   const stored = stripPos(analysis)
   ws.writeFile(`${folder}/${base}.json`, JSON.stringify(stored, null, 2))
+  register(stored)
   return stored
+}
+
+// ── scores (the old Upload analysis showed these; deterministic here) ──
+/** Overall risk from the verified risks: 30 per high, 15 per medium, 5 per low (max 100). */
+function overallRisk(risks, lang = 'en') {
+  const n = { high: 0, medium: 0, low: 0 }
+  for (const r of risks) n[r.level]++
+  const score = Math.min(100, n.high * 30 + n.medium * 15 + n.low * 5)
+  const level = n.high ? 'high' : n.medium ? 'medium' : 'low'
+  const de = lang === 'de'
+  const explanation = de
+    ? `${n.high} hohe, ${n.medium} mittlere und ${n.low} geringe Risiken, jeweils mit wörtlichem Zitat belegt.`
+    : `${n.high} high, ${n.medium} medium and ${n.low} low risks, each backed by a verbatim quote.`
+  return { score, level, explanation }
+}
+
+/** Readability: words per sentence and share of very long sentences. */
+function readability(text, lang = 'en') {
+  const body = String(text || '').replace(/\[Page \d+(?: · OCR)?\]/g, ' ')
+  const sentences = body.split(/(?<=[.!?;])\s+|\n{2,}/).map((x) => x.trim()).filter((x) => x.split(/\s+/).length >= 3)
+  const words = sentences.map((x) => x.split(/\s+/).length)
+  const avg = words.length ? Math.round(words.reduce((a, b) => a + b, 0) / words.length) : 0
+  const long = words.length ? Math.round((words.filter((w) => w > 40).length / words.length) * 100) : 0
+  const grade = avg <= 18 && long < 10 ? 'easy' : avg <= 28 && long < 25 ? 'average' : 'hard'
+  return { avgSentenceWords: avg, longSentencesPct: long, grade }
+}
+
+// ── the analyses this computer made (for the chat card, exports, DocumentView) ──
+const REG_DIR = () => path.join(require('./config').DATA_DIR, 'analyses')
+const AN_ID = /^an_[a-f0-9]{16}$/
+
+function register(a) {
+  try {
+    fs.mkdirSync(REG_DIR(), { recursive: true })
+    fs.writeFileSync(path.join(REG_DIR(), `${a.id}.json`), JSON.stringify(a))
+  } catch (err) { console.warn('[analysis] could not register', err.message) }
+}
+
+/** A stored analysis by id (throws when unknown). */
+function get(id) {
+  if (!AN_ID.test(String(id || ''))) throw new Error('unknown analysis')
+  return JSON.parse(fs.readFileSync(path.join(REG_DIR(), `${id}.json`), 'utf8'))
 }
 
 /** JSON without the internal sort positions. */
@@ -540,9 +639,13 @@ function headline(a, L) {
 function toMarkdown(a) {
   const L = labelsFor(a.document.language)
   const md = [`# ${L.title}: ${a.document.name}`, '', headline(a, L), '', `> ${L.note}`, '', `## ${L.glance}`, '']
+  if (a.summary.type) md.push(`**${L.type}:** ${a.summary.type}`, '')
   if (a.summary.what) md.push(`**${L.what}:** ${a.summary.what}`, '')
   if (a.summary.parties.length) md.push(`**${L.parties}:** ${a.summary.parties.map((p) => `${p.name}${p.role ? ` (${p.role})` : ''}`).join('; ')}`, '')
   if (a.summary.purpose) md.push(`**${L.purpose}:** ${a.summary.purpose}`, '')
+  if (a.summary.governingLaw) md.push(`**${L.governingLaw}:** ${a.summary.governingLaw}`, '')
+  if (a.overall) md.push(`**${L.overall}:** ${L.lv[a.overall.level]} (${L.score} ${a.overall.score}/100) — ${a.overall.explanation}`, '')
+  if (a.summary.keyPoints?.length) md.push(`**${L.keyPoints}:**`, ...a.summary.keyPoints.map((k) => `- ${k}`), '')
 
   md.push(`## ${L.risks}`, '')
   if (!a.risks.length) md.push(L.noRisks, '')
@@ -584,10 +687,15 @@ function toMarkdown(a) {
   md.push(`## ${L.clauses}`, '')
   if (!a.clauses.length) md.push(L.none, '')
   for (const c of a.clauses) {
-    if (c.kind === 'missing') md.push(`- **${L.missing}:** ${c.title}${c.note ? ` — ${c.note}` : ''}`)
+    if (c.kind === 'missing') md.push(`- **${L.missing}:** ${c.title}${c.importance ? ` (${L.imp[c.importance]})` : ''}${c.note ? ` — ${c.note}` : ''}`)
     else md.push(`- **${L.notable}:** ${c.title}${c.note ? ` — ${c.note}` : ''}${c.location.text ? ` (${c.location.text})` : ''}`, `  > ${oneLine(c.quote)}`)
   }
+  if (a.glossary?.length) {
+    md.push('', `## ${L.glossary}`, '')
+    for (const g of a.glossary) md.push(`- **${g.term}:** ${g.explanation}`)
+  }
   md.push('', `## ${L.checks}`, '',
+    ...readLines(a, L).map((x) => `- ${x}`),
     `- ${a.stats.verified} ${L.verified}; ${a.stats.dropped} ${L.dropped}.`,
     `- ${a.stats.lawSearches} ${L.lawCount}.`,
     ...(a.stats.parts > 1 ? [`- ${L.parts} ${a.stats.parts} ${L.partsUnit}.`] : []),
@@ -601,9 +709,13 @@ function toDocx(a) {
   const b = [{ text: `${L.title}: ${a.document.name}`, style: 'Title' }, { text: headline(a, L) }, { runs: [{ text: L.note, color: '595959' }] }]
   b.push({ text: L.glance, style: 'Heading1' })
   const glance = []
+  if (a.summary.type) glance.push([L.type, a.summary.type])
   if (a.summary.what) glance.push([L.what, a.summary.what])
   if (a.summary.parties.length) glance.push([L.parties, a.summary.parties.map((p) => `${p.name}${p.role ? ` (${p.role})` : ''}`).join('\n')])
   if (a.summary.purpose) glance.push([L.purpose, a.summary.purpose])
+  if (a.summary.governingLaw) glance.push([L.governingLaw, a.summary.governingLaw])
+  if (a.overall) glance.push([L.overall, `${L.lv[a.overall.level]} (${L.score} ${a.overall.score}/100) — ${a.overall.explanation}`])
+  if (a.summary.keyPoints?.length) glance.push([L.keyPoints, a.summary.keyPoints.map((k) => `• ${k}`).join('\n')])
   if (glance.length) b.push({ table: [['', ''], ...glance] })
 
   b.push({ text: L.risks, style: 'Heading1' })
@@ -636,15 +748,120 @@ function toDocx(a) {
   b.push({ text: L.clauses, style: 'Heading1' })
   if (!a.clauses.length) b.push({ text: L.none })
   for (const c of a.clauses) {
-    b.push({ runs: [{ text: `${c.kind === 'missing' ? L.missing : L.notable}: `, bold: true }, { text: `${c.title}${c.note ? ` — ${c.note}` : ''}${c.location.text ? ` (${c.location.text})` : ''}` }] })
+    b.push({ runs: [{ text: `${c.kind === 'missing' ? L.missing : L.notable}: `, bold: true }, { text: `${c.title}${c.kind === 'missing' && c.importance ? ` (${L.imp[c.importance]})` : ''}${c.note ? ` — ${c.note}` : ''}${c.location.text ? ` (${c.location.text})` : ''}` }] })
     if (c.quote) b.push({ runs: [{ text: `"${oneLine(c.quote)}"`, color: '595959' }] })
   }
+  if (a.glossary?.length) {
+    b.push({ text: L.glossary, style: 'Heading1' })
+    b.push({ table: [[L.term, L.explanation], ...a.glossary.map((g) => [g.term, g.explanation])] })
+  }
   b.push({ text: L.checks, style: 'Heading1' },
+    ...readLines(a, L).map((x) => ({ text: x })),
     { text: `${a.stats.verified} ${L.verified}; ${a.stats.dropped} ${L.dropped}.` },
     { text: `${a.stats.lawSearches} ${L.lawCount}.` },
     ...(a.stats.web ? [] : [{ text: L.webOff }]),
     ...a.stats.errors.map((e) => ({ text: e })))
   return docxBuffer(b)
+}
+
+/** How the document was read (pages, OCR, in full or in parts, readability). */
+function readLines(a, L) {
+  const d = a.document || {}
+  const out = []
+  const st = a.stats?.strategy
+  if (d.pages) out.push(`${d.pages} ${L.pagesWord}${st ? `, ${L.read[st.mode] || ''}` : ''}${d.ocrPages ? `; ${d.ocrPages} ${L.ocrNote}` : ''}.`)
+  if (a.readability?.avgSentenceWords) out.push(`${L.readability}: ${L[`read${a.readability.grade[0].toUpperCase()}${a.readability.grade.slice(1)}`]} (${a.readability.avgSentenceWords} ${L.sentences}).`)
+  return out
+}
+
+/** Every finding as one table: risks, deadlines, obligations, key terms, clauses, legal terms. */
+function rows(a) {
+  const L = labelsFor(a.document.language)
+  const C = L.csv
+  const head = [C.type, C.level, C.title, C.detail, C.fix, C.check, C.party, C.date, C.where, C.quote, C.law]
+  const out = [head]
+  const loc = (x) => x.location?.text || ''
+  for (const r of a.risks) out.push([L.kinds.risk, L.lv[r.level], r.title, r.why, r.fixCheck === 'removed' ? L.fixRemoved : r.fix, r.fix || r.fixCheck === 'removed' ? ({ checked: L.fixChecked, corrected: L.fixCorrected, removed: L.fixRemoved, unchecked: L.fixUnchecked }[r.fixCheck] || '') : '', '', '', loc(r), r.quote, r.sources.map(sourceLine).join(' | ')])
+  for (const d of a.deadlines) out.push([L.kinds.deadline, L.lv[d.importance], d.what, d.when, '', '', '', d.date || '', loc(d), d.quote, ''])
+  for (const o of a.obligations) out.push([L.kinds.obligation, '', o.duty, '', '', '', o.party, '', loc(o), o.quote, ''])
+  for (const t of a.keyTerms) out.push([L.kinds.term, '', t.term, t.value, '', '', '', '', loc(t), t.quote, ''])
+  for (const c of a.clauses) out.push([c.kind === 'missing' ? L.kinds.missing : L.kinds.clause, c.kind === 'missing' ? L.imp[c.importance] || '' : c.category || '', c.title, c.note, '', '', '', '', loc(c), c.quote, ''])
+  for (const g of a.glossary || []) out.push([L.kinds.glossary, '', g.term, g.explanation, '', '', '', '', '', '', ''])
+  return out
+}
+
+/** CSV for Excel: UTF-8 with BOM, comma-separated, quoted where needed; formulas neutralised. */
+function toCsv(a) {
+  const cellCsv = (v) => {
+    let t = String(v ?? '').replace(/\r?\n/g, ' ')
+    if (/^[=+\-@]/.test(t)) t = `'${t}` // a cell starting with = must not run as a formula in Excel
+    return /[",;\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t
+  }
+  return '\uFEFF' + rows(a).map((r) => r.map(cellCsv).join(',')).join('\r\n') + '\r\n'
+}
+
+/** PDF report (pdf.js, no dependencies): the same sections as the Word report. */
+function toPdf(a) {
+  const { renderPdf } = require('./pdf')
+  const L = labelsFor(a.document.language)
+  const blocks = []
+  const glance = []
+  if (a.summary.type) glance.push([L.type, a.summary.type])
+  if (a.summary.what) glance.push([L.what, a.summary.what])
+  if (a.summary.parties.length) glance.push([L.parties, a.summary.parties.map((p) => `${p.name}${p.role ? ` (${p.role})` : ''}`).join('; ')])
+  if (a.summary.purpose) glance.push([L.purpose, a.summary.purpose])
+  if (a.summary.governingLaw) glance.push([L.governingLaw, a.summary.governingLaw])
+  if (a.overall) glance.push([L.overall, `${L.lv[a.overall.level]} (${a.overall.score}/100) — ${a.overall.explanation}`])
+  for (const k of a.summary.keyPoints || []) glance.push(['•', k])
+  blocks.push({ title: `${L.title}: ${a.document.name}`, rows: [[a.createdAt.slice(0, 10), headline(a, L)], ['', L.note], ...glance] })
+  blocks.push({ title: L.risks, rows: a.risks.length ? a.risks.flatMap((r) => [[L.lv[r.level].toUpperCase(), r.title], ...(r.why ? [[L.why, r.why]] : []), ...(fixLine(r, L) ? [[L.fix, fixLine(r, L)]] : []), ...(r.location.text ? [[L.where, r.location.text]] : []), [L.quote, `"${oneLine(r.quote)}"`], ...r.sources.map((x) => [L.law, sourceLine(x)])]) : [['', L.noRisks]] })
+  blocks.push({ title: L.deadlines, rows: a.deadlines.length ? a.deadlines.map((d) => [d.date || d.when, `${d.what} (${L.lv[d.importance]}${d.location.text ? ` · ${d.location.text}` : ''}) "${oneLine(d.quote).slice(0, 200)}"`]) : [['', L.noDates]] })
+  blocks.push({ title: L.obligations, rows: a.obligations.length ? a.obligations.map((o) => [o.party, `${o.duty}${o.location.text ? ` (${o.location.text})` : ''}`]) : [['', L.none]] })
+  blocks.push({ title: L.keyTerms, rows: a.keyTerms.length ? a.keyTerms.map((t) => [t.term, `${t.value || oneLine(t.quote)}${t.location.text ? ` (${t.location.text})` : ''}`]) : [['', L.none]] })
+  blocks.push({ title: L.clauses, rows: a.clauses.length ? a.clauses.map((c) => [c.kind === 'missing' ? L.missing.split(' (')[0] : L.notable, `${c.title}${c.kind === 'missing' && c.importance ? ` (${L.imp[c.importance]})` : ''}${c.note ? ` — ${c.note}` : ''}${c.location.text ? ` (${c.location.text})` : ''}`]) : [['', L.none]] })
+  if (a.glossary?.length) blocks.push({ title: L.glossary, rows: a.glossary.map((g) => [g.term, g.explanation]) })
+  blocks.push({ title: L.checks, rows: [...readLines(a, L), `${a.stats.verified} ${L.verified}; ${a.stats.dropped} ${L.dropped}.`, `${a.stats.lawSearches} ${L.lawCount}.`, ...(a.stats.web ? [] : [L.webOff])].map((x) => ['', x]) })
+  return renderPdf(blocks)
+}
+
+const EXPORTS = {
+  docx: { ext: 'docx', mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', make: (a) => toDocx(a) },
+  pdf: { ext: 'pdf', mime: 'application/pdf', make: (a) => toPdf(a) },
+  csv: { ext: 'csv', mime: 'text/csv', make: (a) => Buffer.from(toCsv(a), 'utf8') },
+  md: { ext: 'md', mime: 'text/markdown', make: (a) => Buffer.from(toMarkdown(a), 'utf8') },
+}
+
+/**
+ * Export a stored analysis as Word, PDF or CSV into its matter folder.
+ * @returns {{ file, name, mime, bytes, data }} data = base64 (the window offers it to save)
+ */
+function exportAnalysis(id, format) {
+  const fmt = EXPORTS[String(format || '').toLowerCase()]
+  if (!fmt) throw new Error('format must be docx, pdf, csv or md')
+  const a = get(id)
+  const buf = fmt.make(a)
+  const ws = require('./workspace')
+  const folder = ws.matterFolder(wf.matterLabel(a.matterId))
+  const name = `analysis-${safeBase(a.document.name)}.${fmt.ext}`
+  const file = ws.writeFileBinary(`${folder}/${name}`, buf)
+  return { file, name, mime: fmt.mime, bytes: buf.length, data: buf.toString('base64') }
+}
+
+/** One analysis progress event in plain words (the chat's live steps). */
+function stepWords(ev = {}) {
+  const name = ev.name ? `“${String(ev.name).slice(0, 60)}”` : 'the document'
+  switch (ev.step) {
+    case 'read': return ev.total > 1 ? `Reading ${name} (${ev.index} of ${ev.total})` : `Reading ${name}`
+    case 'plan': return ev.mode === 'full'
+      ? `${ev.kind === 'cloud' ? `${ev.label} reads` : 'Reading'} the whole document${ev.pages ? ` (${ev.pages} page${ev.pages === 1 ? '' : 's'})` : ''} at once${ev.cache ? ' — kept in the provider\'s cache for follow-up questions' : ''}`
+      : `The document is long${ev.pages ? ` (${ev.pages} pages)` : ''}: reading it in ${ev.parts} parts, guided by its outline`
+    case 'analyse': return ev.total > 1 ? `Finding parties, dates, obligations and risks — part ${ev.index} of ${ev.total}` : 'Finding parties, dates, obligations and risks'
+    case 'verify': return 'Checking every finding against the document (word for word)'
+    case 'law': return `Looking up the law for: ${String(ev.name || 'a risk').slice(0, 60)}${ev.total > 1 ? ` (${ev.index} of ${ev.total})` : ''}`
+    case 'judge': return 'Double-checking the suggested fixes'
+    case 'write': return 'Writing the report'
+    default: return 'Analysing the document'
+  }
 }
 
 /** A few plain lines for a terminal, the agent or a notification. */
@@ -658,4 +875,4 @@ function brief(a) {
   return lines.join('\n')
 }
 
-module.exports = { runAnalyse, detectLanguage, locate, firstObject, level, toMarkdown, toDocx, brief, splitParts, partChars, setLawSources, LABELS, searchLocal, searchWeb }
+module.exports = { stepWords, runAnalyse, detectLanguage, locate, firstObject, level, toMarkdown, toDocx, toCsv, toPdf, rows, exportAnalysis, get, brief, splitParts, partChars, setLawSources, overallRisk, readability, LABELS, searchLocal, searchWeb }

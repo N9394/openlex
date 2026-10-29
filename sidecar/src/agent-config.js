@@ -17,6 +17,8 @@ const DEFAULTS = {
   autopilot: false, // Batch 3: apply suggestions silently (tracked) instead of approval cards
   workspace: undefined, // workspace base folder (undefined → ~/LexVault, kept for existing installs)
   calendar: { enabled: false, provider: 'auto' }, // calendar integration (Batch W3)
+  localMemoryGB: null, // memory for the local AI (null = automatic)
+  maxFileMB: null, // file size limit (null = 100 MB)
 }
 
 function load() {
@@ -28,6 +30,10 @@ function load() {
       autopilot: !!saved.autopilot,
       workspace: typeof saved.workspace === 'string' ? saved.workspace : undefined,
       calendar: saved.calendar && typeof saved.calendar === 'object' ? saved.calendar : DEFAULTS.calendar,
+      // Memory for the local AI (local_memory.js): GB, or null = automatic.
+      localMemoryGB: Number(saved.localMemoryGB) > 0 ? Number(saved.localMemoryGB) : null,
+      // The one file size limit (limits.js), in MB; null = 100 MB.
+      maxFileMB: Number(saved.maxFileMB) > 0 ? Number(saved.maxFileMB) : null,
     }
   } catch {
     return { ...DEFAULTS }
@@ -80,7 +86,9 @@ function effectiveAgent() {
     }
   }
   const ramCtx = ramCtxFor(os.totalmem() / 1024 / 1024 / 1024)
-  return { CTX_BUDGET_TOKENS: Math.min(ctx, ramCtx, profile.ctx || Infinity), MAX_HOPS: hops, HOP_TIMEOUT_MS: 90000, DEPTH: depth, PROVIDER: 'local' }
+  // "Memory for the local AI" (local_memory.js), when the lawyer set it, decides the context size.
+  const chosen = require('./local_memory').chosenCtx()
+  return { CTX_BUDGET_TOKENS: chosen ? Math.min(chosen, profile.ctx || Infinity) : Math.min(ctx, ramCtx, profile.ctx || Infinity), MAX_HOPS: hops, HOP_TIMEOUT_MS: 90000, DEPTH: depth, PROVIDER: 'local' }
 }
 
 module.exports = { load, save, agentBudget, effectiveAgent, CONFIG_PATH, DEFAULTS }

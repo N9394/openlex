@@ -72,16 +72,24 @@ const SEVERITIES = new Set(['high', 'medium', 'low'])
  * llama truncated the PROMPT mid-JSON — the "writing… (truncated —
  * retrying)" loop, 2026-08-16).
  */
+// A long document read in full is the stable prefix a hosted provider can
+// cache (providers/common.js); everything that changes per turn (memory,
+// the conversation) comes after the mark.
+const { CACHE_MARK } = require('./providers/common')
 const FULL_TEXT_MIN_CHARS = 12000
 function fullTextMaxChars() {
-  const ctx = effectiveAgent().CTX_BUDGET_TOKENS
+  const eff = effectiveAgent()
+  const ctx = eff.CTX_BUDGET_TOKENS
+  // Hosted models: the whole document whenever it fits the window with
+  // headroom (strategy.js, the DeepSeek-harness rule), as a cached prefix.
+  if (eff.PROVIDER !== 'local') return Math.max(FULL_TEXT_MIN_CHARS, Math.floor((require('./strategy').fitLimit(ctx, AGENT.WRITE_MAX_TOKENS) - 3200) * 3.8))
   return Math.max(FULL_TEXT_MIN_CHARS, Math.floor((ctx * 0.85 - 3200) * 4))
 }
 function docCtx(ctx, phase) {
   const base = ctx.doc.summary()
   const mem = memorySummary(ctx.memory)
   const full = phase !== 'writing' && (ctx.doc.text || '').length <= fullTextMaxChars()
-    ? `\nFULL DOCUMENT TEXT:\n${ctx.doc.text}` : ''
+    ? `\nFULL DOCUMENT TEXT:\n${ctx.doc.text}${(ctx.doc.text || '').length >= 4000 ? CACHE_MARK : ''}` : ''
   // Conversation memory (Batch 1): the rolling per-doc history rides in
   // the system prompt as a CONVERSATION block — droppable-FIRST under
   // compaction (truncateSummary discards USER:/ASSISTANT: lines before
