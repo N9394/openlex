@@ -9,7 +9,7 @@ OpenLex handles confidential client data, so we take security reports seriously 
 **Please do not open a public issue, discussion or pull request for a security problem.** Report it privately through one of these channels:
 
 1. **GitHub private vulnerability reporting (preferred):** go to the repository's [Security tab](https://github.com/N9394/openlex/security) and choose **Report a vulnerability**. Only the maintainers can see the report.
-2. **E-mail:** `security@<domain>` <!-- TODO(founder): replace with the real security contact address before merging. -->
+2. **E-mail:** nicolas.jansa@outlook.com
 
 Please include:
 
@@ -25,7 +25,7 @@ These are **targets**, counted from the moment we have confirmed the report (rep
 
 | Step | Target |
 |---|---|
-| Acknowledgement of your report | within **1 business day** |
+| Acknowledgement of your report | within **72 hours** |
 | First assessment (confirmed or not, severity) | as soon as possible, normally within 5 business days |
 | **Critical** (e.g. client data leaves the machine against the data policy, remote code execution, signature or update bypass) | fix or mitigation within **72 hours** |
 | **High** | fix within **14 days** |
