@@ -50,6 +50,9 @@ async function ensureEngine({ engineDir, logPath, llmProxy, qdrantUrl }) {
     stdio: ['ignore', out, out],
     windowsHide: true,
   })
+  // The child has its own copy; holding ours would leak a handle per start
+  // and, on Windows, keep the log file (and its folder) from being deleted.
+  fs.closeSync(out)
   child.on('exit', (code) => {
     console.log(`[engine] exited (${code})`)
     child = null
