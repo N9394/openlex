@@ -83,6 +83,14 @@ const engine = http.createServer((req, res) => {
       case 'POST /api/matters/update': { const m = state.matters.find((x) => x.id === body.id); Object.assign(m, body.patch); return json({ ok: true, matter: m }) }
       case 'POST /api/matters/policy': { const m = state.matters.find((x) => x.id === body.id); m.policy = body.rule; return json({ ok: true, matter: m }) }
       case 'GET /api/activity': return json({ activity: state.activity || [] })
+      case 'GET /api/record': {
+        const qs = new URL(req.url, 'http://x').searchParams
+        state.recordQueries = [...(state.recordQueries || []), qs.toString()]
+        const entries = (state.record || []).filter((x) => qs.get('left') !== '1' || x.left)
+        return json({ matter: qs.get('matterId') ? { id: qs.get('matterId'), title: 'Alpine share deal' } : null, total: entries.length, nextCursor: null, entries, summary: { text: qs.get('left') === '1' ? '1 request · 1 sent to Claude (Anthropic, EU), names hidden · 1 online lookup' : '2 requests · 1 sent to Claude (Anthropic, EU), names hidden · 1 online lookup · 1 permission denied' }, verify: { ok: true, text: 'Record intact.', fingerprint: '3f2a 9c1d' } })
+      }
+      case 'GET /api/record/verify': return json({ ok: false, text: 'Record changed: Audit log — Line 7 was changed after it was written.', fingerprint: '3f2a 9c1d 77b0 e412', files: [{ name: 'Audit log (AI calls, online lookups, permissions)', ok: false, entries: 9, broken: { line: 7, why: 'Line 7 was changed after it was written.' }, notes: [] }] })
+      case 'POST /api/record/export': return json({ ok: true, file: `/ws/Alpine/ai-record-2026-10-29-14-02.${body.format}`, format: body.format, entries: 2, verified: true, fingerprint: '3f2a 9c1d' })
       case 'GET /api/law/section': return json({ source_name: 'ABGB', section: '§ 933', content: 'Das Recht auf die Gewährleistung muss gerichtlich geltend gemacht werden, und zwar, wenn es unbewegliche Sachen betrifft, binnen drei Jahren.' })
       case 'GET /api/workflows/documents':
         if (state.manyDocs) return json({ documents: Array.from({ length: 12 }, (_, i) => ({ name: `Lease ${String(i + 1).padStart(2, '0')}.docx`, path: `/docs/Lease ${i + 1}.docx` })), languages: { en: 'English' } })
@@ -1515,3 +1523,89 @@ test('an error: what happened, why, what to do — and the question is not lost'
 })
 
 test.after(() => fs.rmSync(FOLDERS, { recursive: true, force: true }))
+
+// ── the AI record (/record) ───────────────────────────────────────────────
+const RECORD = () => {
+  const t = new Date()
+  t.setHours(14, 2, 0, 0)
+  return [
+    { id: 'r1', type: 'request', kind: 'question', at: t.toISOString(), title: 'Question: “Can the seller limit liability?”', window: 'Word', left: true, outcome: 'done', calls: 3,
+      lines: ['Asked in: Word', 'Matter: Alpine share deal', 'AI: Claude (Anthropic, EU) — sent outside this computer, names hidden · 3 calls', 'Looked up online: RIS (Austria\'s federal law database) — only search words or a web address were sent', 'Permission to save a file: denied — decided by you', 'Result: Answered, 1 proposed change', 'Took 34 s'] },
+    { id: 'r2', type: 'request', kind: 'review', at: new Date(t.getTime() - 3600000).toISOString(), title: 'Checklist review: “spa”', window: 'Terminal app', left: false, outcome: 'done', calls: 24,
+      lines: ['Asked in: Terminal app', 'AI: on this computer · 24 calls', 'Result: Done, saved review.docx', 'Took 6 min'] },
+  ]
+}
+
+test('AI record (/record): summary line, entries with marks and details, only-sent-outside filter, export, check; Esc goes back', async () => {
+  prefs({ setupDone: true })
+  state.record = RECORD()
+  state.recordQueries = []
+  const r = show(h(App))
+  await openChat(r)
+  await press(r, '/record', 'enter')
+  let f = await waitFor(r, 'record intact')
+  capture('AI record', f)
+  assert.match(f, /OpenLex › AI record/)
+  assert.match(flat(f), /2 requests · 1 sent to Claude \(Anthropic, EU\), names hidden · 1 online lookup · 1 permission denied · record intact ✓/)
+  assert.match(f, /▸ ! \d+ \w+ \d{4} 14:02 · Question: “Can the seller limit liability\?” \(Word\)/)
+  assert.match(f, /✓ \d+ \w+ \d{4} 13:02 · Checklist review: “spa” \(Terminal app\)/)
+  assert.match(f, /! AI: Claude \(Anthropic, EU\) — sent outside this computer, names hidden/, 'the meaning is in a mark and words, not only colour')
+  assert.match(f, /Permission to save a file: denied — decided by you/)
+  assert.match(f, /l only sent outside · p PDF · c CSV · v check · Esc back/)
+  assert.match(state.recordQueries.at(-1), /matterId=m_1/)
+  await press(r, 'down')
+  f = await waitFor(r, 'AI: on this computer · 24 calls')
+  await press(r, 'l')
+  f = await waitFor(r, 'Showing only what left this computer')
+  assert.match(state.recordQueries.at(-1), /left=1/)
+  assert.ok(!f.includes('Checklist review'))
+  await press(r, 'p')
+  f = await waitFor(r, 'Saved (2 entries)')
+  assert.deepStrictEqual(posted('/api/record/export').at(-1).body, { matterId: 'm_1', left: true, format: 'pdf' })
+  await press(r, 'c')
+  await waitFor(r, 'ai-record-2026-10-29-14-02.csv')
+  await press(r, 'v')
+  f = await waitFor(r, 'Record changed')
+  capture('AI record: check failed', f)
+  assert.match(flat(f), /✗ Record changed: Audit log — Line 7 was changed after it was written\. Fingerprint: 3f2a 9c1d 77b0 e412/)
+  assert.match(flat(f), /record changed ✗/)
+  await press(r, 'esc')
+  await waitFor(r, 'Type your question')
+  // Also in the Ctrl+K list and the matter menu.
+  const mt = await import('../tui/matter.mjs')
+  assert.ok(mt.COMMANDS.some((c) => c.name === 'record'))
+  await press(r, 'esc')
+  f = await waitFor(r, 'AI record')
+  assert.match(f, /AI record\s+what the AI did, checkable, to show a client/)
+  r.unmount()
+})
+
+test('AI record in plain ASCII, and the CLI: openlex record [--left] [--verify] [--export]', async () => {
+  const cli = await import('../tui/cli.mjs')
+  const theme = await import('../tui/theme.mjs')
+  theme.configure({ ascii: true }, { tty: false })
+  try {
+    const text = cli.recordText({ matter: { id: 'm_1', title: 'Alpine share deal' }, total: 2, entries: RECORD(), summary: { text: '2 requests · 1 sent to Claude (Anthropic, EU), names hidden' }, verify: { ok: true } })
+    assert.ok(/^[\x20-\x7E\n]*$/.test(text), `ASCII only:\n${text}`)
+    assert.match(text, /record intact \+/)
+    assert.match(text, /^! \d+ \w+ \d{4} 14:02 \| Question: "Can the seller limit liability\?" \(Word\)$/m)
+  } finally { theme.configure({}, { tty: false }) }
+  const run = (...a) => new Promise((ok) => execFile(process.execPath, [path.join(__dirname, '..', 'bin', 'openlex.js'), ...a], { env: { ...process.env, OPENLEX_DATA_DIR: DATA } }, (err, out, errOut) => ok({ out, err: errOut, code: err?.code || 0 })))
+  state.record = RECORD()
+  let x = await run('record', '--matter', 'm_1', '--left', '--from', '2026-10-01')
+  capture('openlex record --left', x.out)
+  assert.match(x.out, /^AI record — Alpine share deal\n1 request · 1 sent to Claude \(Anthropic, EU\), names hidden · 1 online lookup · record intact ✓/)
+  assert.match(x.out, /\n    AI: Claude \(Anthropic, EU\) — sent outside this computer, names hidden · 3 calls\n/)
+  assert.match(state.recordQueries.at(-1), /matterId=m_1&from=2026-10-01&left=1&limit=50/)
+  x = await run('record', '--verify')
+  assert.match(x.out, /^✗ Record changed: Audit log — Line 7 was changed after it was written\.\nFingerprint: 3f2a 9c1d 77b0 e412/)
+  assert.match(x.out, /cannot stop someone with access to this computer/)
+  assert.strictEqual(x.code, 1, 'a changed record is a failure for scripts')
+  x = await run('record', '--export', 'csv', '--matter', 'm_1')
+  assert.match(x.out, /Saved the AI record \(2 entries, record intact ✓\):\n\/ws\/Alpine\/ai-record-2026-10-29-14-02\.csv/)
+  assert.deepStrictEqual(posted('/api/record/export').at(-1).body, { matterId: 'm_1', left: false, format: 'csv' })
+  x = await run('record', '--json')
+  assert.strictEqual(JSON.parse(x.out).entries.length, 2)
+  x = await run('record', '--from', '29.10.2026')
+  assert.match(x.err, /usage: --from takes a date like 2026-10-29/)
+})

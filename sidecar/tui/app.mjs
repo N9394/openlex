@@ -25,6 +25,7 @@ import { Matter } from './matter.mjs'
 import { Action } from './actions.mjs'
 import { Settings } from './settings.mjs'
 import { RecentActivity } from './activity.mjs'
+import { RecordView } from './record.mjs'
 import { Tour } from './tour.mjs'
 import { FolderCheck } from './folder.mjs'
 import { AppContext, useAppCtx, TypingContext } from './context.mjs'
@@ -33,7 +34,7 @@ export { AppContext, useAppCtx, TypingContext }
 
 const HUB_REFRESH = new Set(['provider-changed', 'policy-changed', 'matter-changed', 'permissions-changed'])
 
-const SCREENS = { setup: Setup, home: Home, newMatter: NewMatter, matter: Matter, action: Action, settings: Settings, help: Help, activity: RecentActivity, tour: Tour, folderCheck: FolderCheck }
+const SCREENS = { setup: Setup, home: Home, newMatter: NewMatter, matter: Matter, action: Action, settings: Settings, help: Help, activity: RecentActivity, record: RecordView, tour: Tour, folderCheck: FolderCheck }
 
 /**
  * @param {{ api?, folder?: string|null, startTimeoutMs?: number }} props
@@ -238,7 +239,7 @@ export function Help() {
         ${point(5, '"Based on:" lists the law and the passages the answer used. Ctrl+B shows them in full. Check them before relying on the answer.')}
         ${point(6, 'Each proposed change says whether it was checked. "Could not be verified" means: review it yourself.')}
         ${point(7, 'Esc stops at any time. What was written so far is kept; nothing more is sent.')}
-        ${point(8, 'Recent activity (in the matter menu) lists each request: what was asked, looked at and sent.')}
+        ${point(8, 'Recent activity (matter menu) lists each request: what was asked, looked at and sent. /record: the AI record, to show a client.')}
       <//>
     <//>`
   }

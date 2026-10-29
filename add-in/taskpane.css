@@ -353,3 +353,18 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--brass); width:
 @media (min-width: 420px) {
   .msg { max-width: 90%; }
 }
+
+/* The AI record view (lib/record.js) */
+.rec-summary { font-weight: 600; font-size: 0.82rem; margin: 0.2rem 0; }
+.rec-note { font-size: 0.74rem; margin: 0 0 0.4rem; }
+.rec-filters { display: grid; grid-template-columns: auto 1fr; gap: 0.25rem 0.5rem; align-items: center; font-size: 0.78rem; }
+.rec-filters .rec-left { grid-column: 1 / -1; display: flex; gap: 0.35rem; align-items: center; }
+.rec-list { display: flex; flex-direction: column; gap: 0.3rem; margin-top: 0.5rem; }
+.rec-item { background: var(--glass); border: 1px solid var(--hairline); border-radius: var(--r-card); padding: 0.4rem 0.6rem; font-size: 0.78rem; }
+.rec-item summary { cursor: pointer; list-style: none; display: flex; gap: 0.4rem; align-items: baseline; }
+.rec-item .rec-sym { flex: none; width: 1em; }
+.rec-item.left .rec-sym { color: var(--warn); font-weight: 700; }
+.rec-item .rec-sub { display: block; color: var(--text-dim); font-size: 0.72rem; }
+.rec-item ul { margin: 0.35rem 0 0; padding-left: 1.3rem; }
+.rec-bad { color: var(--bad, var(--warn)); font-weight: 600; }
+.dl-link { background: none; border: 0; padding: 0; margin-left: auto; color: var(--text-dim); text-decoration: underline; font: inherit; cursor: pointer; }
