@@ -78,7 +78,7 @@ function git(args, { cwd, onLine, signal } = {}) {
 
 /** { meta, body } of a Markdown file with YAML front matter (flat key: "value" lines). */
 function parseMd(raw) {
-  const s = String(raw)
+  const s = String(raw).replace(/\r\n?/g, '\n') // a Windows checkout may have CRLF
   const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(s)
   const meta = {}
   if (m) {
@@ -178,7 +178,7 @@ async function clone(country, { dir, opts = {}, progress, signal }) {
   const repo = path.join(dir, 'repo')
   fs.rmSync(repo, { recursive: true, force: true })
   progress({ message: `Downloading the laws of ${COUNTRIES[C]} from GitHub…`, done: 0, total: 100 })
-  const args = ['clone', '--progress', '--single-branch', ...(opts.history ? [] : ['--depth', '1']), `${GIT_BASE()}/${repoOf(C)}${/^https?:/.test(GIT_BASE()) ? '.git' : ''}`, repo]
+  const args = ['-c', 'core.autocrlf=false', 'clone', '--progress', '--single-branch', ...(opts.history ? [] : ['--depth', '1']), `${GIT_BASE()}/${repoOf(C)}${/^https?:/.test(GIT_BASE()) ? '.git' : ''}`, repo]
   await git(args, { signal, onLine: (l) => { const m = /Receiving objects:\s+(\d+)%/.exec(l); if (m) progress({ done: +m[1], total: 100, message: `Downloading the laws of ${COUNTRIES[C]}: ${m[1]}%` }) } })
   const n = indexAll(C, progress)
   const lic = licenceOf(repo)
