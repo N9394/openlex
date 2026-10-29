@@ -37,7 +37,16 @@
  * search_sources, and "server:tool" for connectors ("mcp:dms:*"; "mcp:*"
  * is every connector). "Always allow" answers are written to the user
  * layer: everywhere → permissions.allow, this matter only →
- * permissions.matters[<id>].allow.
+ * permissions.matters[<id>].allow, this working folder only → a
+ * path-scoped allow rule ("write_file:~/Clients/Alpine/**").
+ *
+ * Working folder (folder.js): a file tool aimed outside the working folder
+ * and the workspace, or at a protected place (hidden files, system
+ * folders, OpenLex's data, the firm's configuration), is refused before
+ * any rule is looked at — never asked. A path pattern that starts with
+ * "~/" or "/" (or "C:\\") is matched against the full path, others against
+ * the path inside the working folder or workspace. Deleting a file is
+ * asked every time: no rule, --allow or --yes skips that question.
  *
  * Every decision is audited (tool, decision, who decided; never arguments
  * or content).
@@ -47,7 +56,7 @@ const crypto = require('crypto')
 const path = require('path')
 const { AsyncLocalStorage } = require('async_hooks')
 
-const DECISIONS = ['once', 'deny', 'always', 'always_matter']
+const DECISIONS = ['once', 'deny', 'always', 'always_matter', 'always_folder']
 const LISTS = ['allow', 'ask', 'deny']
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000
 
@@ -104,7 +113,11 @@ const BUILTIN = {
   // Writes files into the workspace.
   write_file: 'ask',
   append_file: 'ask',
+  rename_file: 'ask',
   export_document: 'ask',
+
+  // Deletes a file (a copy is kept). Asked every time, whatever the rules say.
+  delete_file: 'ask',
 
   // Changes the lawyer's calendar.
   sync_calendar: 'ask',
@@ -121,6 +134,8 @@ const BUILTIN = {
 /** How a tool is described to the lawyer: group → title, risk. */
 const KINDS = {
   file: { title: 'OpenLex wants to save a file', risk: 'writes a file' },
+  file_delete: { title: 'OpenLex wants to delete a file', risk: 'deletes a file (a copy is kept so it can be restored)' },
+  file_rename: { title: 'OpenLex wants to rename a file', risk: 'renames or moves a file' },
   calendar: { title: 'OpenLex wants to add to your calendar', risk: 'changes your calendar' },
   command: { title: 'OpenLex wants to run a command', risk: 'runs a command' },
   web: { title: 'OpenLex wants to open a web page', risk: 'sends data to the web' },
@@ -128,11 +143,17 @@ const KINDS = {
   connector: { title: 'OpenLex wants to use a connector', risk: 'uses a connector' },
   other: { title: 'OpenLex wants to use a tool', risk: 'does something OpenLex cannot check in advance' },
 }
-const FILE_TOOLS = new Set(['write_file', 'append_file', 'read_file', 'list_directory', 'search_local_files', 'search_docs', 'export_document'])
+const FILE_TOOLS = new Set(['write_file', 'append_file', 'read_file', 'list_directory', 'search_local_files', 'search_docs', 'export_document', 'delete_file', 'rename_file'])
+/** File tools that change something (asked first; refused outside the allowed places). */
+const CHANGING = new Set(['write_file', 'append_file', 'delete_file', 'rename_file'])
+/** File tools checked against the working folder / workspace before any rule (export_document writes into the matter folder by name). */
+const SANDBOXED = new Set(['write_file', 'append_file', 'read_file', 'list_directory', 'search_local_files', 'search_docs', 'delete_file', 'rename_file'])
 const WEB_TOOLS = new Set(['web_fetch', 'web_save', 'download_to_matter'])
 
 function kindOf(tool) {
   if (String(tool).startsWith('mcp__')) return 'connector'
+  if (tool === 'delete_file') return 'file_delete'
+  if (tool === 'rename_file') return 'file_rename'
   if (FILE_TOOLS.has(tool)) return 'file'
   if (WEB_TOOLS.has(tool)) return 'web'
   if (tool === 'run_bash') return 'command'
@@ -171,11 +192,28 @@ function subjectOf(tool, args = {}) {
   if (String(tool).startsWith('mcp__')) { const [, server = '', ...rest] = String(tool).split('__'); return { type: 'mcp', value: `${server}:${rest.join('__')}` } }
   if (WEB_TOOLS.has(tool)) return { type: 'host', value: hostOf(args.url) }
   if (tool === 'run_bash') return { type: 'command', value: String(args.command || '').trim() }
-  if (tool === 'search_local_files' || tool === 'search_docs') return { type: 'path', value: cleanPath(args.directory) }
-  if (tool === 'export_document') return { type: 'path', value: cleanPath(args.matter) }
-  if (FILE_TOOLS.has(tool)) return { type: 'path', value: cleanPath(args.path) }
+  if (tool === 'search_local_files' || tool === 'search_docs') return pathSubject(args.directory)
+  if (tool === 'export_document') return { type: 'path', value: cleanPath(args.matter), abs: null }
+  if (FILE_TOOLS.has(tool)) return pathSubject(args.path)
   if (tool === 'search_sources') return { type: 'list', value: searchedSources(args).map((s) => s.name) }
   return { type: 'none', value: '' }
+}
+
+/** A path argument: as written (relative) and where it really is (abs, forward slashes; null when outside). */
+function pathSubject(p) {
+  const loc = require('./folder').tryLocate(p || '')
+  return { type: 'path', value: cleanPath(p), abs: loc ? loc.abs.replace(/\\/g, '/') : null }
+}
+
+/** "~/Clients/Alpine/**", "/Users/…", "C:\\…": a pattern for the full path. */
+const isAbsPattern = (a) => /^(~(\/|\\|$)|\/|[A-Za-z]:[\\/])/.test(a)
+function matchPath(arg, subject) {
+  if (!isAbsPattern(arg)) return globRe(cleanPath(arg), '/').test(subject.value)
+  if (!subject.abs) return false
+  const full = require('./folder').expandHome(arg).replace(/\\/g, '/')
+  if (globRe(full, '/').test(subject.abs)) return true
+  // "~/Alpine/**" also covers the folder itself.
+  return full.endsWith('/**') && globRe(full.slice(0, -3), '/').test(subject.abs)
 }
 
 /** Does one pattern cover this tool call? */
@@ -195,7 +233,7 @@ function matchPattern(pattern, tool, subject) {
   }
   if (!globRe(name).test(tool)) return false
   if (arg === null || arg === '*' || arg === '**') return true
-  if (subject.type === 'path') return globRe(cleanPath(arg), '/').test(subject.value)
+  if (subject.type === 'path') return matchPath(arg, subject)
   if (subject.type === 'host') return hostMatch(arg, subject.value)
   if (subject.type === 'command') {
     // "git *" also covers a bare "git".
@@ -271,19 +309,25 @@ function searchedSources(args = {}) {
  * @returns {{ decision: 'allow'|'deny'|'ask', source: 'firm'|'user'|'matter'|'default', rule?: string, canAlways: boolean }}
  */
 function evaluate(tool, args = {}, { matterId = null } = {}) {
+  // Outside the working folder and the workspace, or a protected place: refused, never asked.
+  const where = sandbox(tool, args)
+  if (where.refused) return { decision: 'deny', source: 'sandbox', reason: where.refused, canAlways: false }
   const r = rules()
   const subject = subjectOf(tool, args)
   const hit = (list) => asList(list).find((p) => matchPattern(p, tool, subject))
   let rule
   if ((rule = hit(r.firm.deny))) return { decision: 'deny', source: 'firm', rule, canAlways: false }
   if ((rule = hit(r.user.deny))) return { decision: 'deny', source: 'user', rule, canAlways: false }
+  // A delete is asked every time: no allow rule skips it, no "always" is offered.
+  if (tool === 'delete_file') return { decision: 'ask', source: (rule = hit(r.firm.ask)) ? 'firm' : 'default', ...(rule ? { rule } : {}), canAlways: false, area: where.area, root: where.root }
   if ((rule = hit(r.firm.ask))) return { decision: 'ask', source: 'firm', rule, canAlways: false }
   if ((rule = hit(r.firm.allow))) return { decision: 'allow', source: 'firm', rule, canAlways: false }
   if ((rule = hit(r.user.allow))) return { decision: 'allow', source: 'user', rule, canAlways: false }
   if (matterId && (rule = hit(r.firm.matters?.[matterId]?.allow) || hit(r.user.matters?.[matterId]?.allow))) return { decision: 'allow', source: 'matter', rule, canAlways: false }
   const canAlways = !r.locked
-  if ((rule = hit(r.user.ask))) return { decision: 'ask', source: 'user', rule, canAlways }
+  if ((rule = hit(r.user.ask))) return { decision: 'ask', source: 'user', rule, canAlways, area: where.area, root: where.root }
   let d = String(tool).startsWith('mcp__') ? 'ask' : BUILTIN[tool] || 'ask'
+  if (d === 'ask' && where.area) return { decision: 'ask', source: 'default', canAlways, area: where.area, root: where.root }
   if (d === 'sources') {
     const list = searchedSources(args)
     d = list.length && list.every((s) => s.local === true) ? 'allow' : list.length ? 'ask' : 'allow' // nothing configured → the tool only says so
@@ -291,14 +335,58 @@ function evaluate(tool, args = {}, { matterId = null } = {}) {
   return { decision: d, source: 'default', canAlways }
 }
 
+/**
+ * Where a file tool would act: { area: 'folder'|'workspace', root } or
+ * { refused: "plain reason" }; {} for every other tool.
+ */
+function sandbox(tool, args = {}) {
+  if (!SANDBOXED.has(tool)) return {}
+  const fo = require('./folder')
+  const write = CHANGING.has(tool)
+  const targets = tool === 'search_local_files' || tool === 'search_docs' ? [args.directory || ''] : tool === 'rename_file' ? [args.path, args.to] : [args.path || '']
+  let first = null
+  for (const [i, t] of targets.entries()) {
+    if (tool === 'rename_file' && i === 1) {
+      const to = String(t ?? '').trim()
+      if (!to) continue
+      // A bare new name stays next to the file.
+      const dest = /[\\/]/.test(to) || to.startsWith('~') ? to : path.join(path.dirname(first?.abs || ''), to)
+      try { fo.locate(dest, { write }) } catch (err) { return { refused: err.message } }
+      continue
+    }
+    try { const loc = fo.locate(t, { write }); first = first || loc } catch (err) { return { refused: err.message } }
+  }
+  return first ? { area: first.area, root: first.root, loc: first } : {}
+}
+
 // ── describing a call in plain words ──────────────────────────────────────
 const short = (s, n = 80) => { const t = String(s ?? '').replace(/\s+/g, ' ').trim(); return t.length > n ? `${t.slice(0, n - 1)}…` : t }
 function where(p) { const d = path.posix.dirname(cleanPath(p)); return d && d !== '.' ? `${d}/` : 'the workspace folder' }
 
-/** One plain-language line, e.g. "Save obligations.csv in Acme/". */
+/** "in this folder: ~/Clients/Alpine" or "in ~/Clients/Alpine/2024 (inside this folder)". */
+function inFolder(loc) {
+  const fo = require('./folder')
+  const dir = path.dirname(loc.abs)
+  return fo.within(loc.root, dir) && fo.within(dir, loc.root) ? `in this folder: ${fo.tilde(loc.root)}` : `in ${fo.tilde(dir)} (inside this folder)`
+}
+
+/** One plain-language line, e.g. "Save obligations.csv in Acme/" or "Save obligations.csv in this folder: ~/Clients/Alpine". */
 function summarize(tool, args = {}) {
   const a = args || {}
+  const loc = SANDBOXED.has(tool) ? sandbox(tool, a).loc : null
+  if (loc && loc.area === 'folder') {
+    const name = path.basename(loc.abs)
+    switch (tool) {
+      case 'write_file': return `Save ${name} ${inFolder(loc)}`
+      case 'append_file': return `Add to ${name} ${inFolder(loc)}`
+      case 'delete_file': return `Delete ${name} ${inFolder(loc)} (a copy is kept)`
+      case 'rename_file': return `Rename ${name} to ${path.basename(String(a.to || '')) || 'a new name'} ${inFolder(loc)}`
+      default: break
+    }
+  }
   switch (tool) {
+    case 'delete_file': return `Delete ${path.posix.basename(cleanPath(a.path)) || 'a file'} in ${where(a.path)} (a copy is kept)`
+    case 'rename_file': return `Rename ${path.posix.basename(cleanPath(a.path)) || 'a file'} to ${path.basename(String(a.to || '')) || 'a new name'} in ${where(a.path)}`
     case 'write_file': return `Save ${path.posix.basename(cleanPath(a.path)) || 'a file'} in ${where(a.path)}`
     case 'append_file': return `Add to ${path.posix.basename(cleanPath(a.path)) || 'a file'} in ${where(a.path)}`
     case 'export_document': return `Export the document as ${String(a.format || 'a file').toUpperCase()} into ${a.matter ? `${short(a.matter, 40)}/` : 'the matter folder'}`
@@ -361,6 +449,10 @@ function audit(entry) {
 async function authorize({ tool, args = {}, matterId = null }) {
   const ev = evaluate(tool, args, { matterId })
   const call = tool
+  if (ev.source === 'sandbox') {
+    audit({ matter: matterId, call, decision: 'blocked', by: 'sandbox' })
+    return { allowed: false, by: 'sandbox', output: `ERROR: ${ev.reason}. This is never allowed, so nobody was asked. Do not retry; work with the files in the working folder or the matter folder, and tell the lawyer what you could not reach.` }
+  }
   const summary = summarize(tool, args)
   const base = { matter: matterId, call, ...(ev.rule ? { rule: ev.rule } : {}) }
   if (ev.decision === 'allow') {
@@ -373,7 +465,8 @@ async function authorize({ tool, args = {}, matterId = null }) {
   }
   const sess = store.getStore()
   const subject = subjectOf(tool, args)
-  if (sess && (sess.yes || sess.allow.some((p) => matchPattern(p, tool, subject)))) {
+  // A delete always needs a person: --yes and --allow do not cover it.
+  if (sess && tool !== 'delete_file' && (sess.yes || sess.allow.some((p) => matchPattern(p, tool, subject)))) {
     audit({ ...base, decision: 'allowed', by: 'session' })
     return { allowed: true, by: 'session' }
   }
@@ -392,10 +485,16 @@ async function authorize({ tool, args = {}, matterId = null }) {
 function ask(sess, { tool, args, matterId, summary, ev }) {
   const id = `perm_${crypto.randomBytes(9).toString('hex')}`
   const kind = KINDS[kindOf(tool)]
-  const choices = ['once', ...(ev.canAlways && matterId ? ['always_matter'] : []), ...(ev.canAlways ? ['always'] : []), 'deny']
+  // In the working folder, "always" means: in this folder.
+  const inFolderArea = ev.area === 'folder' && ev.root
+  const choices = inFolderArea
+    ? ['once', ...(ev.canAlways ? ['always_folder'] : []), 'deny']
+    : ['once', ...(ev.canAlways && matterId ? ['always_matter'] : []), ...(ev.canAlways ? ['always'] : []), 'deny']
+  const fo = require('./folder')
   const event = {
     type: 'permission', id, tool, title: kind.title, summary, detail: trimArgs(args), risk: kind.risk,
-    matterId: matterId || null, choices, always: ev.canAlways ? suggestPattern(tool, args) : null,
+    matterId: matterId || null, choices, always: ev.canAlways && !inFolderArea ? suggestPattern(tool, args) : null,
+    ...(inFolderArea ? { folder: fo.tilde(ev.root), ...(ev.canAlways ? { alwaysFolder: `${tool}:${fo.tilde(ev.root)}/**` } : {}) } : {}),
     ...(ev.source === 'firm' ? { firmRule: true } : {}),
   }
   const timeoutMs = Number(sess.timeoutMs) || Number(process.env.OPENLEX_PERMISSION_TIMEOUT_MS) || DEFAULT_TIMEOUT_MS
@@ -430,9 +529,9 @@ function answer(id, decision) {
   if (!DECISIONS.includes(decision)) return { ok: false, error: `decision must be one of ${DECISIONS.join(', ')}` }
   if (!p.choices.includes(decision)) return { ok: false, error: `"${decision}" is not offered for this request (${p.choices.join(', ')})` }
   let saved
-  if (decision === 'always' || decision === 'always_matter') {
+  if (decision === 'always' || decision === 'always_matter' || decision === 'always_folder') {
     try {
-      saved = p.event.always
+      saved = decision === 'always_folder' ? p.event.alwaysFolder : p.event.always
       addRule('allow', saved, decision === 'always_matter' ? { matterId: p.event.matterId } : {})
     } catch (err) {
       saved = undefined
@@ -511,6 +610,6 @@ function describe() {
 }
 
 module.exports = {
-  BUILTIN, KINDS, DECISIONS, session, authorize, answer, evaluate, validate, matchPattern, subjectOf, summarize, suggestPattern,
+  BUILTIN, KINDS, DECISIONS, session, authorize, answer, evaluate, validate, matchPattern, subjectOf, summarize, suggestPattern, sandbox,
   rules, addRule, removeRule, describe, waiting, kindOf,
 }

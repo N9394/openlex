@@ -86,7 +86,7 @@ export function Setup({ firstRun = false, dataOnly = false }) {
   const finish = async () => {
     ctx.setPrefs({ setupDone: true })
     await ctx.refresh().catch(() => {})
-    if (firstRun) ctx.replace('home')
+    if (firstRun) ctx.afterSetup()
     else ctx.back()
   }
 
@@ -199,7 +199,10 @@ export function Setup({ firstRun = false, dataOnly = false }) {
   }
 
   const status = ctx.status()
-  const keys = step === 'field' ? `Enter continue ${sym.sep} Esc back ${sym.sep} Ctrl+C quit` : undefined
+  const keys = step === 'field' ? `Enter continue ${sym.sep} Esc back` : `↑↓ move ${sym.sep} Enter choose ${sym.sep} Esc back`
+  // "Step 2 of 4": where the AI runs · which service · the key · client data · the check.
+  const STEPS = { where: 1, local: 1, pickKey: 2, pickCloud: 2, field: 3, data: 4, extras: 4, saving: 4, testing: 5, result: 5 }
+  const stepNo = dataOnly ? null : STEPS[step]
   let body = null
 
   if (busy) body = html`<${Spinner} label=${busy} />`
@@ -277,7 +280,7 @@ export function Setup({ firstRun = false, dataOnly = false }) {
       }} /><//>
     <//>`
   }
-  return html`<${Frame} title=${firstRun ? 'Getting started' : 'Set up the AI'} status=${status} keys=${keys}>${body}<//>`
+  return html`<${Frame} title=${firstRun ? 'Getting started' : 'Set up the AI'} subtitle=${stepNo ? `Step ${stepNo} of 5` : ''} status=${status} keys=${keys}>${body}<//>`
 }
 
 export { fieldsFor }

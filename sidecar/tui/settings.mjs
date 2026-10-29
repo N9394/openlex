@@ -1,15 +1,22 @@
 /**
- * Settings: which AI, your keys, where client data may go, what
- * OpenLex may do without asking, and the folder where it saves its work.
+ * Settings: which AI, your keys, where client data may go, what OpenLex
+ * may do without asking, the folder it works in, the folder where it saves
+ * its work, and how it looks (Accessibility). Each row: what it is · what
+ * it is now · one line on what it means. Changes are saved at once.
  */
 
 import { useEffect, useState } from 'react'
 import { Box, Text, useInput } from 'ink'
-import { html, Frame, Menu, TextField, Field, Spinner, Note, sym } from './ui.mjs'
+import { html, Frame, Menu, TextField, Field, Spinner, Note, sym, look } from './ui.mjs'
 import { useAppCtx } from './context.mjs'
 import { describeModel, describeRule, nameOf, friendly } from './api.mjs'
 import { cleanPath, completePath, shortPath } from './paths.mjs'
 import { PermissionRules } from './permission.mjs'
+import { FolderPicker } from './folder.mjs'
+
+const row = (label, value) => `${label.padEnd(36)}${value}`
+const COLOURS = ['auto', 'none', 'high']
+const COLOUR_WORDS = { auto: 'Auto (your terminal\'s colours)', none: 'None', high: 'High contrast' }
 
 export function Settings() {
   const ctx = useAppCtx()
@@ -25,6 +32,7 @@ export function Settings() {
     if (!k.escape || busy) return
     if (mode === 'menu') return ctx.back()
     setMode(mode === 'key' || mode === 'keyInput' ? 'keys' : 'menu')
+    setNote(null)
   })
 
   const run = async (label, fn) => {
@@ -43,18 +51,22 @@ export function Settings() {
   if (busy) body = html`<${Spinner} label=${busy} />`
   else if (mode === 'menu') {
     const items = [
-      { value: 'model', label: 'Which AI', hint: describeModel(ctx.info) },
-      { value: 'keys', label: 'Your keys', hint: `${withKeys.filter((p) => p.hasKey).length} saved` },
-      { value: 'data', label: 'Where client data may go', hint: describeRule(ctx.info.policy?.default) },
-      { value: 'perms', label: 'What OpenLex may do without asking', hint: 'saving files, web pages, commands, connectors' },
-      { value: 'workspace', label: 'Folder for results', hint: shortPath(workspace) },
+      { value: 'model', label: row('Which AI', describeModel(ctx.info)), hint: 'Where the AI runs: on this computer, or an online service with your key.' },
+      { value: 'keys', label: row('Your keys', `${withKeys.filter((p) => p.hasKey).length} saved`), hint: 'Keys for online AI services, kept in this computer\'s keychain.' },
+      { value: 'data', label: row('Where client data may go', describeRule(ctx.info.policy?.default)), hint: 'Which AI services may receive client documents. Privileged matters never leave this computer.' },
+      { value: 'perms', label: row('What OpenLex may do without asking', 'your rules'), hint: 'Saving files, opening web pages, running commands, using connectors.' },
+      { value: 'folder', label: row('Working folder', ctx.folder?.short || 'none'), hint: 'The folder OpenLex reads (and asks before changing). Usually the folder you started OpenLex in.' },
+      { value: 'workspace', label: row('Folder for results', shortPath(workspace)), hint: 'Where OpenLex keeps each matter\'s results and its history of earlier versions.' },
+      { value: 'access', label: row('Accessibility', [look.accessible ? 'screen reader' : '', look.reducedMotion && !look.accessible ? 'reduced motion' : '', ctx.prefs.colours && ctx.prefs.colours !== 'auto' ? `colours: ${ctx.prefs.colours}` : '', look.ascii ? 'ASCII' : ''].filter(Boolean).join(', ') || 'standard'), hint: 'Screen-reader mode, reduced motion, colours, plain ASCII symbols, the bell.' },
+      { value: 'tour', label: 'Take the short tour again', hint: 'What OpenLex can do, how to ask, where your data goes.' },
       { value: 'back', label: 'Back' },
     ]
     body = html`<${Box} flexDirection="column">
       ${note ? html`<${Note} kind=${note.kind}>${note.text}<//>` : null}
-      <${Menu} items=${items} onSelect=${(it) => {
+      <${Menu} items=${items} describe onSelect=${(it) => {
         setNote(null)
         if (it.value === 'back') return ctx.back()
+        if (it.value === 'tour') return ctx.go('tour', {})
         if (it.value === 'model') return ctx.go('setup', {})
         if (it.value === 'data') {
           if (!active || active === 'local') return setNote({ kind: 'ok', text: 'The AI runs on this computer, so client data stays here. Choose an online AI service first to allow anything else.' })
@@ -102,6 +114,32 @@ export function Settings() {
     body = html`<${Box} flexDirection="column">
       ${note ? html`<${Note} kind=${note.kind}>${note.text}<//>` : null}
       <${PermissionRules} api=${ctx.api} onNote=${setNote} />
+    <//>`
+  } else if (mode === 'folder') {
+    keys = `Enter use it ${sym.sep} Tab complete ${sym.sep} Esc back`
+    body = html`<${FolderPicker} onDone=${(n) => { setNote(n); setMode('menu') }} />`
+  } else if (mode === 'access') {
+    const p = ctx.prefs
+    const onOff = (v) => (v ? 'On' : 'Off')
+    const items = [
+      { value: 'accessible', label: row('Screen-reader mode', onOff(look.accessible)), hint: 'Plain lines without boxes, colours or animation; menus as numbered lists.' },
+      { value: 'reducedMotion', label: row('Reduced motion', onOff(look.reducedMotion)), hint: 'No spinners or other animation.' },
+      { value: 'colours', label: row('Colours', COLOUR_WORDS[p.colours || 'auto']), hint: 'Auto uses your terminal\'s own colour scheme. None turns colour off (meaning is always also in words).' },
+      { value: 'ascii', label: row('Plain ASCII symbols', onOff(look.ascii)), hint: 'For terminals that show ✓ or ─ as boxes or question marks.' },
+      { value: 'bell', label: row('Bell when OpenLex asks you', onOff(p.bell !== false)), hint: 'A short sound when a permission question appears.' },
+      { value: 'back', label: 'Back' },
+    ]
+    keys = `↑↓ move ${sym.sep} Enter change ${sym.sep} Esc back`
+    body = html`<${Box} flexDirection="column">
+      ${note ? html`<${Note} kind=${note.kind}>${note.text}<//>` : null}
+      <${Menu} items=${items} describe onSelect=${(it) => {
+        if (it.value === 'back') return setMode('menu')
+        const patch = it.value === 'colours' ? { colours: COLOURS[(COLOURS.indexOf(p.colours || 'auto') + 1) % COLOURS.length] }
+          : it.value === 'bell' ? { bell: p.bell === false }
+            : { [it.value]: !(it.value === 'accessible' ? look.accessible : it.value === 'reducedMotion' ? look.reducedMotion : look.ascii) }
+        ctx.setPrefs(patch)
+        setNote({ kind: 'ok', text: 'Saved.' })
+      }} />
     <//>`
   } else if (mode === 'workspace') {
     keys = `Enter save ${sym.sep} Tab complete ${sym.sep} Esc back`

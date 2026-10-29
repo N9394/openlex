@@ -180,6 +180,7 @@ Before the agent runs any tool, OpenLex decides whether it may: right away, only
 
 **Order: deny wins.** For each tool call:
 
+0. a file tool aimed outside the working folder and the workspace, or at a protected place (hidden files such as `.git`, system folders, OpenLex's data folder, and for writes the firm's `openlex.json`, `skills/`, `playbooks/`) → refused, nobody is asked, no rule can allow it;
 1. a `deny` rule (firm or user) matches → refused, nobody is asked;
 2. a firm `ask` rule matches → asked, and "Always allow" is not offered (the firm wants a yes every time);
 3. an `allow` rule matches (firm, user, or this matter's `matters.<id>.allow`) → allowed;
@@ -192,7 +193,8 @@ Both layers are read separately: a user's own `allow` never removes a firm `deny
 
 | Tool | After the `:` | Example |
 |---|---|---|
-| File tools (`write_file`, `append_file`, `read_file`, `list_directory`, `export_document`, …) | Path in the workspace; `*` stays inside a folder, `**` crosses folders | `write_file:Acme/**` |
+| File tools (`write_file`, `append_file`, `read_file`, `list_directory`, `rename_file`, `delete_file`, `export_document`, …) | Path inside the working folder or workspace; `*` stays inside a folder, `**` crosses folders. A path starting with `~/` or `/` (or `C:\`) is a full path: `~/Clients/Alpine/**` covers that folder and everything in it | `write_file:Acme/**`, `write_file:~/Clients/Alpine/**` |
+| Any tool | `*` as the tool name with a full path forbids or allows every file tool there | `*:~/Clients/Alpine/**` |
 | Web tools (`web_fetch`, `web_save`, `download_to_matter`) | Host; `*.europa.eu` includes `europa.eu` | `web_fetch:*.europa.eu` |
 | `run_bash` | The command; `git *` also covers a bare `git` | `run_bash:git *` |
 | `search_sources` | Source names, comma-separated | `search_sources:beck,juris` |
@@ -206,16 +208,17 @@ Both layers are read separately: a user's own `allow` never removes a firm `deny
 | allow | `propose_suggestions` | Each proposed change is a card the lawyer accepts or rejects. |
 | allow | `search_law`, `get_law_section`, `search_ris`, `search_eurlex`, `get_eu_law` | The law: local packs and the official sources, read-only. Their web access still follows the data policy. |
 | allow | `search_firm_library`, `find_clause` | The firm's own knowledge, indexed on this computer. |
-| allow | `read_file`, `list_directory`, `search_local_files`, `search_docs` | Reading the workspace folder (never outside it). |
+| allow | `read_file`, `list_directory`, `search_local_files`, `search_docs` | Reading the working folder or the workspace (never outside them). |
 | allow | `get_tool_schemas`, `tool_picker`, `compress_context`, `delegate_task` | Housekeeping. `delegate_task` is a fresh model call without tools. |
 | allow / ask | `search_sources` | Allowed when every source searched is on this computer or the firm network; asked when the query goes outside. |
-| ask | `write_file`, `append_file`, `export_document` | Writes a file. |
+| ask | `write_file`, `append_file`, `rename_file`, `export_document` | Writes or renames a file. |
+| ask, every time | `delete_file` | Deletes a file (a copy is kept in the workspace history). No `allow` rule, `--allow` or `--yes` skips this question, and "Always allow" is not offered. |
 | ask | `sync_calendar` | Changes the lawyer's calendar. |
 | ask | `run_bash` | Runs a command (also needs `features.shell`, off by default). |
 | ask | `web_fetch`, `web_save`, `download_to_matter` | Opens the web with the lawyer's saved logins. |
 | ask | every connector tool (`mcp__…`), any tool not listed | Unknown effects. |
 
-**Asking.** The front end that started the run gets a `permission` event and the engine waits for the answer: *Allow once*, *Always allow (this matter)*, *Always allow*, or *Don't allow*. "Always" answers are saved to your layer (`permissions.allow`, or `permissions.matters.<id>.allow` for one matter), as narrow as is still useful: the host for web tools, `server:tool` for connectors, the program for commands, the tool for file writes. No answer within 5 minutes (`OPENLEX_PERMISSION_TIMEOUT_MS`), a closed window, or a caller that cannot answer (a script, `openlex ask --json` or piped, the MCP server, scheduled monitors) means **no**. A refused call reaches the model as a tool error ("The lawyer declined: …"), so the agent continues and says what it could not do. Every decision is audited (tool, decision, who decided; never arguments or content).
+**Asking.** The front end that started the run gets a `permission` event and the engine waits for the answer: *Allow once*, *Always allow (this matter)*, *Always allow*, or *Don't allow*. For a file in the working folder the choices are *Allow once*, *Always allow (this folder)* and *Don't allow*; "this folder" saves a path rule to your layer, e.g. `write_file:~/Clients/Alpine/**`, so the next save there is not asked but a save in another folder is. "Always" answers are saved to your layer (`permissions.allow`, or `permissions.matters.<id>.allow` for one matter), as narrow as is still useful: the host for web tools, `server:tool` for connectors, the program for commands, the tool for file writes. No answer within 5 minutes (`OPENLEX_PERMISSION_TIMEOUT_MS`), a closed window, or a caller that cannot answer (a script, `openlex ask --json` or piped, the MCP server, scheduled monitors) means **no**. A refused call reaches the model as a tool error ("The lawyer declined: …"), so the agent continues and says what it could not do. Every decision is audited (tool, decision, who decided; never arguments or content).
 
 Change the rules with `openlex permissions allow|ask|deny PATTERN [--matter ID]`, `openlex permissions remove PATTERN`, the terminal app (Settings → *What OpenLex may do without asking*, or `/permissions` in a chat), or `openlex map set permissions FILE.json`.
 

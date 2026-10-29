@@ -38,7 +38,9 @@ Start with [Getting started](docs/guides/getting-started.md). All guides: [docs/
 
 ## Terminal app
 
-Type `openlex` (no arguments) in a terminal and a full-screen app opens: no commands to learn. It starts OpenLex in the background if needed, walks you through choosing where the AI runs and where client data may go, and then shows your matters. In a matter you can ask questions (answers come with what they are based on and proposed changes, each marked as checked or not), drag files into a question to ask about them, add documents, and run the larger tasks: checklist review, chronology, translation, comparing two versions, a review grid, or a plan you approve step by step. While it works you see each step in plain words, how far it is and how long is left, and where your data went ("Stayed on this computer" or "Sent to: Claude (Anthropic, EU) — names hidden"); Recent activity lists every request. The bar at the bottom always shows the matter, the AI and where client data may go. Arrow keys and Enter to choose, Esc to go back, `?` for help. See [docs/guides/terminal-app.md](docs/guides/terminal-app.md).
+Type `openlex` (no arguments) in a terminal and a full-screen app opens: no commands to learn. It starts OpenLex in the background if needed, walks you through choosing where the AI runs and where client data may go, and then shows your matters. In a matter you can ask questions (answers come with what they are based on and proposed changes, each marked as checked or not), drag files into a question to ask about them, add documents, and run the larger tasks: checklist review, chronology, translation, comparing two versions, a review grid, or a plan you approve step by step. While it works you see each step in plain words, how far it is and how long is left, and where your data went ("Stayed on this computer" or "Sent to: Claude (Anthropic, EU) — names hidden"); Recent activity lists every request. The bar at the bottom always shows the matter, the folder it works in, the AI and where client data may go. Arrow keys and Enter to choose, Esc to go back, `?` for help, Ctrl+K for every command; a short tour on first start and examples wherever a screen is empty.
+
+**Work in a folder.** Start it in a client's folder (`cd ~/Clients/Alpine && openlex`, or `--folder`) and OpenLex works there, the way a coding assistant works in its folder: it reads the Word, PDF and text files there when a question needs them, asks before it saves, renames or deletes anything (*"OpenLex wants to **save** obligations.csv in this folder: ~/Clients/Alpine. Allow?"* — once, always for this folder, or no; deleting is asked every time and keeps a copy), and refuses everything outside that folder and your matter folders without asking. The whole home folder is never used without a warning. `openlex ask` does the same, with the same plain sentences while it works and where the data went at the end. Screen-reader mode, reduced motion, no-colour and plain-ASCII settings are under Settings → Accessibility. See [docs/guides/terminal-app.md](docs/guides/terminal-app.md).
 
 ## Install the CLI
 
@@ -60,7 +62,7 @@ Start the engine once (`openlex serve`, or open Word with the add-in, or the des
 
 ```bash
 openlex serve                                   # the local engine (keeps running)
-openlex                                         # the terminal app (same as: openlex tui)
+openlex                                         # the terminal app, working in this folder (same as: openlex tui; --folder DIR)
 openlex status                                  # engine, model, readiness
 openlex use anthropic                           # or: use local · use openrouter:qwen/qwen3.5-9b · use azure --base-url …
 openlex key anthropic                           # your own API key, stored in the OS keychain

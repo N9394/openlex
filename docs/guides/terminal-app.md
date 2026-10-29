@@ -30,20 +30,30 @@ openlex
 
 OpenLex starts in the background if it isn't running yet. This takes a few seconds the first time. When you quit the app, it stops OpenLex again unless Word or the desktop app started it.
 
+Start it **in the folder of a client or matter** and OpenLex works there: `cd ~/Clients/Alpine` and then `openlex` (or `openlex --folder ~/Clients/Alpine` from anywhere). See *Working in a folder* below.
+
+The very first time, after the two setup questions, three short screens show what OpenLex can do, how to ask and where your data goes. Esc skips them; `?` then `t` shows them again.
+
 ## Keys
 
 | Key | What it does |
 |---|---|
-| ↑ ↓ | Move through a list |
+| ↑ ↓ | Move through a list. In an empty question field: your earlier questions |
 | Enter | Choose, or send your question |
-| Esc | Go back one step, or stop the work in progress (what is done is kept) |
+| Ctrl+J (or Alt+Enter) | A new line in a question |
+| Esc | Go back one step, close a question box, or stop the work in progress (what is done is kept). Esc never quits. With text typed it first says the text is kept |
+| Ctrl+C | Stop the answer being written. Pressed twice: quit (the bottom line says "Press Ctrl+C again to quit") |
+| Ctrl+K | All commands, as a list |
 | Ctrl+B | In a conversation: what the last answer is based on, in full |
-| Tab | In a question: choose who OpenLex works as. In a file name: complete it |
-| 1 to 9 | Choose that item in a list directly |
-| ? | Help (when you are not typing) |
-| Ctrl+C | Quit |
+| PgUp PgDn | Scroll the conversation (Fn+↑ / Fn+↓ on a Mac keyboard) |
+| Tab | In a question: choose who OpenLex works as, or complete a `/` command. In a file name: complete it |
+| 1 to 9 | Choose that item in a list or a question box directly |
+| ? | Help (when nothing is typed) |
+| Ctrl+L | Draw the screen again |
 
-The bar at the bottom always shows the matter you are in, which AI is used, where client data may go, and the keys you can use on that screen.
+The top line shows where you are (*OpenLex › Alpine share deal › Review*). The bar at the bottom always shows the matter you are in, the folder you work in, which AI is used, where client data may go, and the keys you can use on that screen.
+
+You can also type `help` or `?` as a question to see the commands, and `exit` or `quit` to leave. A mistyped command gets a suggestion (*"There is no command /modle. Did you mean /model? Press Enter to use it."*).
 
 ## First start: two questions
 
@@ -66,13 +76,34 @@ The app then checks that the AI answers, and shows ✓ or ✗ with a plain expla
 The first screen lists your matters. Privileged ones are marked **[privileged]**. You can also choose:
 
 - **New matter.** Give it a name, optionally the client, and say whether it is privileged. *Privileged* means nothing from this matter ever leaves this computer, whatever the other settings say.
-- **Quick question (no matter).** Ask a legal question without opening a matter.
-- **Settings.** Which AI, your keys, where client data may go, and the folder where results are saved.
+- **Quick question (no matter).** Ask a legal question without opening a matter (Q). In a working folder: about the documents there.
+- **Settings.** Which AI, your keys, where client data may go, what OpenLex may do without asking, the working folder, the folder where results are saved, and *Accessibility*.
+
+N creates a new matter, Q opens a quick question, `/` filters the list by name or client.
+
+## Working in a folder
+
+Like a coding assistant works in the folder you start it in, OpenLex works in the folder of a client or matter:
+
+```
+cd ~/Clients/Alpine
+openlex
+```
+
+- **Reading is allowed.** OpenLex reads the Word, PDF and text files in this folder (and its subfolders) when your question needs them: *"Summarise the contract in this folder"*, *"Which deadlines are in these documents?"*. The first time OpenLex works in a folder it says so — *"OpenLex can read the files in this folder: ~/Clients/Alpine (12 documents)"* — and you can answer **Don't let OpenLex read this folder**.
+- **Every change is asked first.** Before OpenLex saves, adds to, renames or deletes a file there, it asks: *"OpenLex wants to **save** obligations.csv in this folder: ~/Clients/Alpine. Allow?"* — **1 Allow once** (Enter), **2 Always allow (this folder)** (a), **3 Don't allow** (n or Esc). *Always allow (this folder)* is remembered for this folder only. Deleting is asked **every time** (there is no "always"), and a copy of the deleted file is kept in OpenLex's history, so it can be restored.
+- **Nothing outside.** Files outside this folder and your matter folders are refused without asking — also through links (aliases) that point elsewhere, `..` or another spelling of the same name. Hidden files and folders (like `.git`), system folders, OpenLex's own data and your firm's configuration are off-limits too.
+- **The whole home folder** (what a new terminal window usually opens in) or the whole computer is too broad: OpenLex warns *"That's your whole home folder"* and offers to work without a folder, to choose the folder of one client, or — only if you say so — to use it anyway.
+- **Big folders** are fine: listings and searches stop after a set number of files and say so.
+- **The documents of the folder for a matter.** In a matter, *Use the 12 documents in this folder for this matter* adds the folder to the matter in one step (your files stay where they are), so reviews, chronologies and grids include them.
+- **Changing it.** `/folder ~/Clients/Beta` (or drag a folder in after `/folder`), `/folder none` to stop, or Settings → *Working folder*. The bottom bar shows *Working in: ~/Clients/Alpine*.
+
+While OpenLex works, the steps say what it does with files in plain words: *Reading “SPA.docx” in this folder*, *Saving “obligations.csv” in this folder*, *Not done — “x.csv” is outside the folder you are working in (never allowed)*.
 
 ## Inside a matter
 
 - **Ask a question.** Type it and press Enter. While OpenLex works you see what it is doing, step by step (see *What the screens tell you* below). The answer appears as it is written, followed by **Based on** (the law and passages it used) and any **proposed changes** as cards. Esc stops an answer. PgUp and PgDn scroll back.
-- **Ask about a file.** Drag one or more files into the question field (or paste their paths). They appear above the field as *📎 SPA draft 3.docx · 2.1 MB*; Backspace in the empty field removes the last one. With one file the question is about that file; with several, all of them are included. The files are also copied into the matter's folder (your originals are unchanged). Word, PDF and text files work; a scanned PDF without text is sent without it, and the app says so. Pasting a block of text with line breaks keeps it as one question: nothing is sent until you press Enter.
+- **Ask about a file.** Drag one or more files into the question field (or paste their paths). They appear above the field as *+ SPA draft 3.docx · 2.1 MB*; Backspace in the empty field removes the last one. With one file the question is about that file; with several, all of them are included. The files are also copied into the matter's folder (your originals are unchanged). Word, PDF and text files work; a scanned PDF without text is sent without it, and the app says so. Pasting a block of text with line breaks keeps it as one question: nothing is sent until you press Enter. A long block (five lines or more, an email for example) is shown as one chip, *[Pasted 214 lines]*, and sent with your question; Ctrl+O puts it into the field to edit.
 - **Add documents.** Drag files or a whole folder from Finder or Explorer into the window and press Enter. Typing the path works too, and Tab completes file names. Files are copied into the matter's folder and your originals are not changed. Folders are added where they are.
 - **Actions…**
   - *Review the documents against a checklist.* Every document is checked point by point. A finding is kept only if its quote really appears in the document.
@@ -86,7 +117,8 @@ The first screen lists your matters. Privileged ones are marked **[privileged]**
   While an action runs you see how far it is and how long it will take (see below). At the end you can open each result file, or the folder, directly.
 - **Recent activity.** The last requests in this matter: when, what was asked, what OpenLex looked at, where the data went and the result. `/activity` opens it from the conversation.
 - **Working as.** Changes how OpenLex approaches your questions: *Associate* (the default), *Researcher* (legal research memo with exact citations, no document edits), *Reviewer* (risks, with proposed fixes) or *Drafter* (drafts in your firm's wording). Your firm may add its own. The choice is kept for the matter. You never need to type "@" (hard to find on German and Austrian keyboards). Press Tab in the question field, or start a question with `as researcher:`.
-- **Privileged: keep on this computer (On/Off).** Turning it on takes effect immediately. Turning it off asks you to confirm first.
+- **Privileged: keep on this computer (On/Off).** Turning it on takes effect immediately. Turning it off needs you to type *yes*.
+- **Use the documents in this folder for this matter.** Shown when you work in a folder whose documents the matter doesn't have yet.
 - **Client data for this matter.** Shown when a cloud AI is set up. Allows or blocks sending this matter's documents to it.
 
 ## What the screens tell you
@@ -157,32 +189,74 @@ Type `/` in the question field to see the commands. They change things without l
 | `/as` | Who OpenLex works as (`/as researcher`). |
 | `/privileged on` / `off` | Keep this matter on this computer. Turning it off asks you to confirm. |
 | `/permissions` | What OpenLex may do without asking (see below). |
+| `/folder` | The folder OpenLex works in: `/folder ~/Clients/Beta`, `/folder none`. |
 | `/sources` | What the last answer is based on, in full (same as Ctrl+B). |
+| `/copy` | Copy the last answer, to paste it into an email or Word. |
+| `/save` | Save the last answer as a file (Markdown) in the working folder, or the matter's folder. Asked first, like any save. |
+| `/transcript` | When you quit, the conversation is printed in the terminal window, where you can scroll, select and copy it. |
 | `/activity` | Recent activity: what OpenLex did, and where the data went. |
 | `/clear` | Start a new conversation in this matter. |
 | `/help` | The list of commands. |
 
-A change of AI applies from your next question; an answer that is being written finishes with the AI it started with. Other words after `/` use your firm's instructions of that name. Changes made in Word or with the `openlex` command appear here too.
+Ctrl+K shows the same list without typing `/`. Under the newest answer a dim line suggests what to do next. A change of AI applies from your next question; an answer that is being written finishes with the AI it started with. Other words after `/` use your firm's instructions of that name. Changes made in Word or with the `openlex` command appear here too.
 
 ## When OpenLex asks first
 
-OpenLex reads documents and searches the law without asking. Before it **saves a file, opens a web page, runs a command, adds to your calendar or uses a connector** to another system, it stops and asks, for example *"OpenLex wants to save a file: Save obligations.csv in Acme/"*. You choose:
+OpenLex reads documents and searches the law without asking. Before it **saves, renames or deletes a file, opens a web page, runs a command, adds to your calendar or uses a connector** to another system, it stops and asks in one sentence, for example *"OpenLex wants to **save** obligations.csv in Acme/. Allow?"*, with a short bell (Settings → Accessibility turns it off). The choices are numbered; *Allow once* is always the one highlighted at first:
 
-- **Allow once** (Enter): just this time.
-- **Always allow (this matter)** (a): don't ask again in this matter.
+- **1 Allow once** (Enter): just this time.
+- **Always allow (this matter)** (a): don't ask again in this matter. In a working folder: **Always allow (this folder)**.
 - **Always allow** (A): don't ask again anywhere.
 - **Don't allow** (n or Esc): OpenLex carries on without it and tells you what it could not do.
 
-Nothing happens until you choose. If you don't answer within five minutes, the answer is no. Your firm can allow or block things for everyone; a firm block always wins. To see or remove what you allowed: Settings → *What OpenLex may do without asking*, or `/permissions`. The Word pane shows the same question as a card with the same four buttons.
+Deleting a file is asked every time. Nothing happens until you choose. If you don't answer within five minutes, the answer is no. Your firm can allow or block things for everyone; a firm block always wins. To see or remove what you allowed: Settings → *What OpenLex may do without asking*, or `/permissions`. The Word pane shows the same question as a card with the same four buttons.
 
 ## When something goes wrong
 
-The app shows one plain sentence and what to do, for example *"The AI service did not accept your key. Check the key in Settings → Which AI."* The technical details are written to `~/.lexvault/logs/tui.log`, and the background engine's to `~/.lexvault/logs/engine.log`. Send these to IT if you need help.
+The app says what happened, why, and what to do, for example:
+
+```
+ ✗ The AI service could not be reached.
+   The internet connection may be off, or the firm server may not be running.
+   Check the connection and try again.
+```
+
+Your question goes back into the field, so pressing Enter tries again. The technical details are written to `~/.lexvault/logs/tui.log`, and the background engine's to `~/.lexvault/logs/engine.log`. Send these to IT if you need help.
+
+## Accessibility
+
+Settings → *Accessibility*:
+
+- **Screen-reader mode** — plain lines without boxes, colours or animation; lines start with *you:*, *OpenLex:*, *error:*, *Permission required:*; lists are numbered (answer with the number). Also on with `OPENLEX_ACCESSIBLE=1`.
+- **Reduced motion** — no spinners.
+- **Colours** — *Auto* uses your terminal's own colour scheme (so its contrast settings apply), *None*, or *High contrast*. Nothing is shown by colour alone: every coloured mark also has a symbol or a word (*✓ Stayed on this computer*, *! Sent to …*, *[privileged]*).
+- **Plain ASCII symbols** — for terminals that show ✓ or ─ as boxes.
+- **Bell** when OpenLex asks you something.
+
+The app lays itself out for 80×24 and larger; smaller windows drop the AI line first, then the client-data line; below 60 columns it asks for a wider window.
+
+## The plain commands
+
+`openlex ask "…"` works in the folder you run it in, like the app (`--folder DIR` for another, `--no-folder` for none; the whole home folder is not used without asking). It shows the same plain sentences while it works (a spinner line with the time so far in a terminal), then what the answer is based on and where the data went:
+
+```
+OpenLex can read the files in this folder: ~/Clients/Alpine (3 documents). It asks before it saves, renames or deletes anything here.
+  • Reading “SPA.docx” in this folder
+  • Searching Austrian law: “Gewährleistung Frist”
+The warranty period is two years …
+Based on:
+  [1] ABGB § 933
+Done after 9 s · 4 steps
+✓ Stayed on this computer
+```
+
+The answer goes to standard output and everything else to standard error, so `openlex ask … > answer.txt` keeps only the answer. `openlex review` and `openlex chronology` show *Document 3 of 12: Lease 3.docx* and end with what was saved and where the data went.
 
 ## For IT
 
 - `openlex tui` opens the same app. Without a terminal, for example in scripts, `openlex` prints the command list as before, and every command (`openlex status`, `openlex ask …`, …) works unchanged.
 - Permissions from scripts: `openlex ask` in a terminal asks on one line (*[y]es once / [a]lways / [n]o*). Piped or with `--json` it never asks and anything that would need a yes is refused, unless you pass `--allow write_file:Acme/**` (patterns, this run only) or `--yes` (everything that would be asked, this run only). Firm blocks still apply. Rules: `openlex permissions [list | allow PATTERN [--matter ID] | ask PATTERN | deny PATTERN | remove PATTERN]`; the format is in `docs/HARNESS.md` → `permissions`.
-- `NO_COLOR=1` turns colours off. `OPENLEX_ASCII=1` uses plain ASCII symbols, which old consoles need. `OPENLEX_KEEP_ENGINE=1` keeps the background engine running after the app quits.
+- `NO_COLOR=1` turns colours off. `OPENLEX_ASCII=1` (or `--ascii`) uses plain ASCII symbols, which old consoles need; a non-UTF-8 locale and `TERM=dumb` do the same. `OPENLEX_ACCESSIBLE=1` (or `INK_SCREEN_READER=true`) starts in screen-reader mode, `OPENLEX_REDUCED_MOTION=1` without animation. `OPENLEX_FULL_REPAINT=1` redraws the whole screen each time, for terminals that garble partial updates. `OPENLEX_KEEP_ENGINE=1` keeps the background engine running after the app quits.
+- Working folder: `openlex --folder DIR`, `openlex ask … --folder DIR | --no-folder`. The engine takes it per request (`folder` in the local API, see `docs/LOCAL_API.md`); rules for it are path patterns like `write_file:~/Clients/Alpine/**` (`docs/HARNESS.md` → `permissions`). To forbid a folder for good: `openlex permissions deny '*:~/Clients/Alpine/**'`.
 - Windows: Windows Terminal is recommended. The old console window (conhost) gets plain ASCII symbols automatically (`OPENLEX_ASCII=0` turns the symbols back on). In Git Bash's own window (mintty) Node may not see an interactive terminal, and `openlex` then prints the command list; use Windows Terminal. Logs are in `%USERPROFILE%\.lexvault\logs`. Install for all users or offline: unpack the release `.tar.gz` anywhere and run its `openlex.cmd`; `OPENLEX_HOME` and `OPENLEX_BIN_DIR` move the installer's folders.
 - The app needs a terminal of at least 80×24 characters.

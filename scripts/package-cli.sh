@@ -4,7 +4,7 @@
 #
 #   scripts/package-cli.sh            → dist/openlex-<version>.tar.gz (+ .sha256)
 #
-# Contents: sidecar/{src,bin/openlex.js,bin/client.js,tui,playbooks,skills,package.json} with
+# Contents: sidecar/{src,bin/*.js,tui,playbooks,skills,package.json} with
 # production node_modules (optional native deps left out: better-sqlite3,
 # onnxruntime, transformers — the engine runs without them), the Word add-in
 # files the engine serves, docs, LICENSE, README. Models are not included:
@@ -19,7 +19,7 @@ rm -rf "$STAGE" "$DIST/$NAME.tar.gz" "$DIST/$NAME.tar.gz.sha256"
 mkdir -p "$STAGE/sidecar/bin" "$STAGE/add-in"
 
 cp -R sidecar/src sidecar/playbooks sidecar/skills "$STAGE/sidecar/"
-cp sidecar/bin/openlex.js sidecar/bin/client.js "$STAGE/sidecar/bin/"
+cp sidecar/bin/*.js "$STAGE/sidecar/bin/"
 cp -R sidecar/tui "$STAGE/sidecar/"
 cp sidecar/package.json sidecar/package-lock.json sidecar/README.md "$STAGE/sidecar/"
 cp add-in/commands.html add-in/manifest.xml add-in/taskpane.css add-in/taskpane.html add-in/taskpane.js "$STAGE/add-in/"

@@ -41,6 +41,14 @@ function toolDetail(tool, args = {}, section = null) {
   if (a.name && tool === 'run_playbook') d.name = clip(a.name, 60)
   if (a.format) d.format = clip(a.format, 8)
   if (a.path && typeof a.path === 'string') d.file = path.basename(a.path).slice(0, 80)
+  if (a.to && typeof a.to === 'string' && tool === 'rename_file') d.to = path.basename(a.to).slice(0, 80)
+  // File tools: in the working folder (folder.js) or the OpenLex workspace? Never the full path.
+  if (/^(read_file|write_file|append_file|list_directory|search_local_files|search_docs|delete_file|rename_file)$/.test(tool)) {
+    try {
+      const fo = require('./folder')
+      if (fo.current()) { const loc = fo.tryLocate(tool.startsWith('search') ? a.directory || '' : a.path || ''); if (loc) d.where = loc.area }
+    } catch { /* no folder module in old tests */ }
+  }
   if (a.topic) d.topic = clip(a.topic, 60)
   const sec = section || null
   if (sec && (sec.heading || Number.isInteger(sec.index))) d.clause = { index: sec.index ?? null, heading: sec.heading ? clip(sec.heading, 80) : null }

@@ -632,7 +632,8 @@ async function runAction(ctx, userMessage, onEvent, opts = {}) {
         emit('step', { text: `blocked: ${toolName}`, kind: 'blocked', tool: toolName, detail: stepDetail })
       } else if (!perm.allowed) {
         r = { output: perm.output }
-        emit('step', { text: `${['rule', 'non-interactive'].includes(perm.by) ? 'not allowed' : 'declined'}: ${toolName}`, kind: ['rule', 'non-interactive'].includes(perm.by) ? 'not_allowed' : 'declined', tool: toolName, detail: stepDetail })
+        if (perm.by === 'sandbox') emit('step', { text: `outside: ${toolName}`, kind: 'outside', tool: toolName, detail: stepDetail })
+        else emit('step', { text: `${['rule', 'non-interactive'].includes(perm.by) ? 'not allowed' : 'declined'}: ${toolName}`, kind: ['rule', 'non-interactive'].includes(perm.by) ? 'not_allowed' : 'declined', tool: toolName, detail: stepDetail })
       } else {
         try {
           r = await dispatch(ctx, toolName, call.args || {})

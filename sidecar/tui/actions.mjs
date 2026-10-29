@@ -85,6 +85,12 @@ export function Action({ kind, matterId }) {
     if (step === 'running') { abort.current?.abort(); return }
     ctx.back()
   })
+  // Ctrl+C stops the running work (a second Ctrl+C then quits).
+  useEffect(() => {
+    if (step !== 'running') return undefined
+    ctx.interrupt.current = () => { abort.current?.abort(); return true }
+    return () => { ctx.interrupt.current = null }
+  }, [step])
 
   /** Run a workflow (review, chronology, translate, compare) with progress. */
   const runWorkflow = async (body) => {
@@ -96,7 +102,7 @@ export function Action({ kind, matterId }) {
     let done = null
     let failed = ''
     try {
-      await ctx.api.runWorkflow({ ...body, matterId }, (ev) => {
+      await ctx.api.runWorkflow({ ...body, matterId, ...ctx.folderBody() }, (ev) => {
         track(ev)
         if (ev.type === 'error') failed = friendly(ev.message)
         else if (ev.type === 'done') done = ev
@@ -124,7 +130,7 @@ export function Action({ kind, matterId }) {
         track(ev)
         if (ev.type === 'error') failed = friendly(ev.message)
         else if (ev.type === 'done') stats = ev.stats
-      }, ac.signal)
+      }, ac.signal, ctx.folderBody())
       if (ac.signal.aborted) return stopped()
       if (failed) throw new Error(failed)
       const ex = await ctx.api.exportGrid(g.id)
@@ -160,7 +166,7 @@ export function Action({ kind, matterId }) {
         else if (ev.type === 'permission_result' && ev.by !== 'lawyer') setPerm((p) => { if (p?.id === ev.id) line(`No answer in time, so not allowed: ${p.summary}`); return p?.id === ev.id ? null : p })
         else if (ev.type === 'error') failed = friendly(ev.message)
         else if (ev.type === 'done') done = ev
-      }, ac.signal)
+      }, ac.signal, ctx.folderBody())
       setPerm(null)
       if (ac.signal.aborted) return stopped()
       if (failed) throw new Error(failed)
@@ -262,7 +268,7 @@ export function Action({ kind, matterId }) {
       }} />
     <//>`
   } else if (step === 'running') {
-    keys = `Esc stop ${sym.sep} ${kind === 'plan' ? 'finished steps keep their results' : 'what is done so far is kept'} ${sym.sep} Ctrl+C quit`
+    keys = `Esc or Ctrl+C stop ${sym.sep} ${kind === 'plan' ? 'finished steps keep their results' : 'what is done so far is kept'}`
     const lines = work ? workLines(work, { now, width: Math.max(cols - 2, 20), maxItems: Math.max(rows - 18, 3), stopHint: kind === 'plan' ? 'finished steps keep their results' : 'what is done so far is saved in the matter folder' }) : []
     body = html`<${Box} flexDirection="column">
       <${Spinner} label=${`${TITLES[kind] || 'Working'}${docs.length && kind !== 'plan' && kind !== 'translate' && kind !== 'compare' ? ` of ${docs.length} document${docs.length === 1 ? '' : 's'}` : ''}…`} />
@@ -292,5 +298,5 @@ export function Action({ kind, matterId }) {
   }
 
   const label = ACTIONS.find((a) => a.value === kind)?.label
-  return html`<${Frame} title=${TITLES[kind] || label || 'Action'} subtitle=${matter?.title || ''} status=${ctx.status(matter)} keys=${keys}>${body}<//>`
+  return html`<${Frame} title=${TITLES[kind] || label || 'Action'} crumbs=${[matter?.title || 'Quick question']} status=${ctx.status(matter, undefined, { busy: step === 'running' })} keys=${keys}>${body}<//>`
 }

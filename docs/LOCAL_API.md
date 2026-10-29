@@ -43,7 +43,7 @@ Long-running routes answer with Server-Sent Events: `Content-Type: text/event-st
 ### Asking and drafting
 | Method | Path | Body / query | What |
 |---|---|---|---|
-| POST | `/api/chat` | `{ message, text?, docId, matterId?, interactive?, allow?, yes?, files? }` | Runs the agent on a document (`text`) or a free question. SSE events: `step`, `reasoning`, `law` (sources found), `text` (answer, possibly streamed in pieces), `suggestion` (a proposed change: `{ type, severity, summary, anchor, proposed_text, basis, verdict }`), `scorecard`, `note`, `model` (see *What OpenLex is doing*), `permission` / `permission_result` (see *Permissions*), `done`. `files` (optional): the names of the files whose text is in `text`, for the activity log. |
+| POST | `/api/chat` | `{ message, text?, docId, matterId?, interactive?, allow?, yes?, files?, folder?, folderConfirmed? }` | Runs the agent on a document (`text`) or a free question. SSE events: `step`, `reasoning`, `law` (sources found), `text` (answer, possibly streamed in pieces), `suggestion` (a proposed change: `{ type, severity, summary, anchor, proposed_text, basis, verdict }`), `scorecard`, `note`, `model` (see *What OpenLex is doing*), `permission` / `permission_result` (see *Permissions*), `done`. `files` (optional): the names of the files whose text is in `text`, for the activity log. |
 | POST | `/api/session/clear` | `{ docId }` | Forgets the conversation for a document. |
 | GET | `/api/law/section` | `?chunk_id=` | Full text of a law chunk from the local packs: `{ source_name, section, content }`. |
 | GET | `/api/activity` | `?matterId=&limit=20` | What OpenLex did for each recent request of a matter (no `matterId`: requests without a matter), newest first. See *What OpenLex is doing*. |
@@ -70,7 +70,24 @@ Before each tool call the engine decides: allow, ask the lawyer, or refuse (rule
 
 and the run waits until someone answers. `risk` is one of `writes a file`, `runs a command`, `sends data to the web`, `uses a connector`, `changes your calendar`. `always` is the rule an "Always allow" answer would save. When the request is settled the stream carries `{ "type": "permission_result", "id", "decision", "by": "lawyer"|"timeout"|"disconnect" }`.
 
+In a working folder (see *Working folder* below) the event also names the folder, and "always" means this folder: `"choices": ["once", "always_folder", "deny"]`, `"folder": "~/Clients/Alpine"`, `"alwaysFolder": "write_file:~/Clients/Alpine/**"`. Deleting a file (`delete_file`) is offered `["once", "deny"]` only, every time. A file tool aimed outside the working folder and the workspace is refused without a `permission` event; the stream carries a `step` with `kind: "outside"`.
+
 Only a caller that sends `interactive: true` is asked. Everyone else (scripts, `--json`, the MCP server, monitors) gets **deny** for anything that would be asked, unless a rule allows it or the request pre-approves it: `allow: ["write_file:Acme/**"]` (patterns, this run only) or `yes: true` (every ask, this run only). Deny rules always win. No answer within 5 minutes or a closed connection = deny.
+
+### Working folder
+
+A front end started in a folder (the terminal app, `openlex ask`) sends it with each request: `folder` (absolute path) on `/api/chat`, `/api/workflows/run`, `/api/grids/run` and `/api/plans/run`. Without it everything works as before (file tools in the workspace only). With it:
+
+- `read_file`, `list_directory` and `search_local_files` work in that folder; relative paths start there. Word (`.docx`), PDF and text files are read as text. Listings stop at 100 files and searches after a fixed number of files, and say so.
+- The folder and the workspace are the only places a file tool reaches — checked on the path as written and after resolving symlinks, case-insensitively on macOS and Windows. Hidden files and folders, system folders, the data folder and the firm's configuration are protected.
+- Saving, adding to, renaming (`rename_file`) and deleting (`delete_file`, a copy is kept in the workspace history) ask first.
+- The whole home folder or the filesystem root needs `folderConfirmed: true` (the front end asked the lawyer); otherwise the stream ends with an `error`. A folder that does not exist, a file, the data folder or a system folder is an `error` too.
+- For review and chronology, `folder` also adds the folder's documents (as before).
+
+| Method | Path | Body | What |
+|---|---|---|---|
+| GET | `/api/folder` | `?path=` | Can this be a working folder? `{ ok, path, short, broad: null\|"home"\|"root", documents, truncated }` or `{ ok: false, error }` (a plain sentence). `documents` counts Word, PDF and text files (not for a broad folder). |
+| POST | `/api/folder/save` | `{ path, content, folder?, folderConfirmed?, matterId?, decision? }` | A front end saves something itself (the terminal app's `/save`) under the same rules as `write_file`. Without `decision` and when the rules say ask: `{ ask: <permission event> }`; send again with `decision: "once"` or `"always_folder"`. Refused: 403 `{ error }`. Saved: `{ saved, short }`. |
 
 | Method | Path | Body | What |
 |---|---|---|---|

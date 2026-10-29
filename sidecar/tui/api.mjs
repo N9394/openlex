@@ -33,27 +33,9 @@ export const NAMES = {
 }
 export const nameOf = (id) => NAMES[id] || (String(id).startsWith('mcp:') ? `connector ${String(id).slice(4)}` : String(id).startsWith('source:') ? `source ${String(id).slice(7)}` : id)
 
-/**
- * One line a lawyer can act on, from whatever went wrong. The raw message is
- * logged; this is what goes on screen.
- */
-export function friendly(err) {
-  const m = String(err?.message || err || '')
-  if (/Blocked by data policy|POLICY_BLOCKED|local-only|not on the allow-list/i.test(m)) return 'Your client-data rule does not allow sending this to the AI service. Change it in Settings → Where client data may go, or use the AI on this computer.'
-  if (/outside the approved regions|no pinned region/i.test(m)) return 'This AI service is not in an approved region (EU only). Pick an EU service in Settings, or change the client-data rule.'
-  if (/no API key|NO_KEY|no AWS credentials/i.test(m)) return 'There is no key for this AI service yet. Add it in Settings → Which AI.'
-  if (/401|403|invalid.*key|unauthori[sz]ed|authentication|permission denied/i.test(m)) return 'The AI service did not accept your key. Check the key in Settings → Which AI (copy it again from your account page).'
-  if (/429|rate limit|quota|insufficient/i.test(m)) return 'The AI service says the account has reached its limit. Try again in a minute, or check your plan with the provider of your key.'
-  if (/ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ETIMEDOUT|timed? ?out|network|socket hang up/i.test(m) && !/engine/i.test(m)) return 'The AI service could not be reached. Check the internet connection (or that the firm server is running) and try again.'
-  if (/cannot reach the engine|engine is not running|registry is stale|did not start/i.test(m)) return 'OpenLex is not running in the background. Restart this app; if it keeps happening, see the log file.'
-  if (/model not installed|local engine unavailable/i.test(m)) return 'No AI model is installed on this computer yet. Choose Settings → Which AI to set one up (or use your own key).'
-  if (/model unavailable|not loaded|no model|llama/i.test(m)) return 'The AI is not ready. Open Settings → Which AI to set it up.'
-  if (/not a folder|ENOENT|no such file/i.test(m)) return 'That file or folder was not found. Check the path (you can drag the file into this window).'
-  if (/matter title is required/i.test(m)) return 'Please give the matter a name.'
-  if (/privileged/i.test(m)) return 'This matter is privileged, so its documents stay on this computer. Turn "Privileged" off first if that is really intended.'
-  const first = m.split('\n')[0].replace(/^Error:\s*/, '')
-  return first.length > 160 ? `${first.slice(0, 157)}…` : first || 'Something went wrong.'
-}
+/** Errors in plain words (bin/friendly.js): friendly() in one line, errorParts() as what · why · what to do. */
+const { friendly, errorParts } = require('../bin/friendly.js')
+export { friendly, errorParts }
 
 const q = (o) => { const s = new URLSearchParams(Object.entries(o).filter(([, v]) => v !== undefined && v !== null && v !== '')).toString(); return s ? `?${s}` : '' }
 
@@ -90,11 +72,11 @@ export function createApi(c = client) {
     chat: (body, onEvent, signal) => stream('/api/chat', body, onEvent, signal),
     runWorkflow: (body, onEvent, signal) => stream('/api/workflows/run', body, onEvent, signal),
     createGrid: (g) => call('POST', '/api/grids', g),
-    runGrid: (id, onEvent, signal) => stream('/api/grids/run', { id }, onEvent, signal),
+    runGrid: (id, onEvent, signal, extra = {}) => stream('/api/grids/run', { id, ...extra }, onEvent, signal),
     exportGrid: (id) => call('POST', '/api/grids/export', { id }),
     proposePlan: (goal, matterId) => call('POST', '/api/plans', { goal, matterId }),
     approvePlan: (id) => call('POST', '/api/plans/approve', { id }),
-    runPlan: (id, onEvent, signal) => stream('/api/plans/run', { id, interactive: true }, onEvent, signal),
+    runPlan: (id, onEvent, signal, extra = {}) => stream('/api/plans/run', { id, interactive: true, ...extra }, onEvent, signal),
     answerPermission: (id, decision) => call('POST', '/api/permissions/answer', { id, decision }),
     permissions: () => call('GET', '/api/permissions'),
     permissionRule: (action, pattern, matterId) => call('POST', '/api/permissions/rules', { action, pattern, ...(matterId ? { matterId } : {}) }),
@@ -104,6 +86,8 @@ export function createApi(c = client) {
     getPlan: (id) => call('GET', `/api/plans/get${q({ id })}`),
     activity: (matterId, limit = 20) => call('GET', `/api/activity${q({ matterId, limit })}`),
     lawSection: (chunkId) => call('GET', `/api/law/section${q({ chunk_id: chunkId })}`),
+    folderInfo: (p) => call('GET', `/api/folder${q({ path: p })}`),
+    saveInFolder: (body) => call('POST', '/api/folder/save', body),
   }
 }
 

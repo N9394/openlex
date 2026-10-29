@@ -87,6 +87,17 @@ const engine = http.createServer((req, res) => {
       case 'GET /api/workflows/playbooks': return json({ playbooks: [{ name: '', title: 'Standard contract review', builtIn: true }, { name: 'spa', title: 'Share purchase checklist', checks: 14, firm: true }] })
       case 'GET /api/workspace': return json({ base: path.join(DATA, 'workspace') })
       case 'POST /api/library/folders': return json({ ok: true })
+      case 'GET /api/folder': {
+        // As the engine does it (folder.js check), with the documents counted.
+        const fo = require('../src/folder')
+        const c = fo.check(new URL(req.url, 'http://x').searchParams.get('path'))
+        if (!c.ok) return json({ ok: false, error: c.error })
+        return json({ ok: true, path: c.path, short: c.short, broad: c.broad, documents: c.broad ? null : fo.documents(c.path).count, truncated: false })
+      }
+      case 'POST /api/folder/save':
+        if (!body.decision) return json({ ask: { type: 'permission', id: 'save', tool: 'write_file', title: 'OpenLex wants to save a file', summary: `Save ${body.path} in this folder: ~/Clients/Alpine`, risk: 'writes a file', choices: ['once', 'always_folder', 'deny'], folder: '~/Clients/Alpine' } })
+        state.saved = body
+        return json({ saved: `/x/${body.path}`, short: `~/Clients/Alpine/${body.path}` })
       case 'POST /api/chat':
         // A scripted answer (transparency tests): its events, then held open until finishChat().
         if (state.chatScript) {
@@ -104,6 +115,19 @@ const engine = http.createServer((req, res) => {
           res.writeHead(200, { 'Content-Type': 'text/event-stream' })
           res.write(`data: ${JSON.stringify({ type: 'text', text: 'Part one of a long answer…' })}\n\n`)
           state.finishChat = () => res.end(`data: ${JSON.stringify({ type: 'done' })}\n\n`)
+          return
+        }
+        if (/cannot reach/i.test(body.message)) return sse(res, [{ type: 'error', message: 'fetch failed: ECONNREFUSED api.anthropic.com' }])
+        if (body.folder && /here/i.test(body.message)) {
+          // Saving in the working folder: "Always allow (this folder)" instead of matter/everywhere.
+          res.writeHead(200, { 'Content-Type': 'text/event-stream' })
+          const ev = { type: 'permission', id: `perm_${seen.length}`, tool: 'write_file', title: 'OpenLex wants to save a file', summary: 'Save obligations.csv in this folder: ~/Clients/Alpine', detail: { path: 'obligations.csv', content: 'party,obligation' }, risk: 'writes a file', matterId: body.matterId || null, choices: ['once', 'always_folder', 'deny'], always: null, folder: '~/Clients/Alpine', alwaysFolder: 'write_file:~/Clients/Alpine/**' }
+          res.write(`data: ${JSON.stringify({ type: 'step', kind: 'tool', tool: 'write_file', detail: { file: 'obligations.csv', where: 'folder' } })}\n\n`)
+          res.write(`data: ${JSON.stringify(ev)}\n\n`)
+          state.pending = (decision, by = 'lawyer') => {
+            res.write(`data: ${JSON.stringify({ type: 'permission_result', id: ev.id, decision, by })}\n\n`)
+            res.end(`data: ${JSON.stringify({ type: 'text', text: decision === 'deny' ? 'I did not save the file.' : 'Saved obligations.csv.' })}\n\ndata: ${JSON.stringify({ type: 'done' })}\n\n`)
+          }
           return
         }
         if (/export|save/i.test(body.message)) {
@@ -150,7 +174,7 @@ const engine = http.createServer((req, res) => {
           { type: 'progress', step: 'document', index: 2, total: 2, name: 'SPA draft 4.docx' },
           { type: 'done', files: ['/ws/Alpine/review.xlsx', '/ws/Alpine/review.docx'], stats: { documents: 2, verified: 5 } },
         ])
-      case 'POST /api/permissions/answer': { const fn = state.pending; state.pending = null; fn?.(body.decision); return json(fn ? { ok: true, ...(body.decision.startsWith('always') ? { saved: 'write_file' } : {}) } : { ok: false, error: 'no such permission request' }, fn ? 200 : 404) }
+      case 'POST /api/permissions/answer': { const fn = state.pending; state.pending = null; fn?.(body.decision); return json(fn ? { ok: true, ...(body.decision === 'always_folder' ? { saved: 'write_file:~/Clients/Alpine/**' } : body.decision.startsWith('always') ? { saved: 'write_file' } : {}) } : { ok: false, error: 'no such permission request' }, fn ? 200 : 404) }
       case 'GET /api/permissions': return json({ firm: { allow: [], ask: [], deny: ['run_bash'], matters: {} }, user: state.perms, locked: false, defaults: [], pending: [] })
       case 'POST /api/permissions/rules': {
         if (body.action === 'remove') {
@@ -272,7 +296,8 @@ test('home lists matters with the privileged marker and the status bar', async (
   assert.match(f, /Quick question \(no matter\)/)
   assert.match(f, /Internal investigation\s+\[privileged\]/)
   assert.match(f, /Matter: none/)
-  assert.match(f, /Ctrl\+C quit/)
+  assert.match(f, /N new matter · Q quick question · \/ filter/)
+  assert.match(f, /\? help/)
   capture('home', f)
   r.unmount()
 })
@@ -305,7 +330,7 @@ test('matter chat: streamed answer, sources, suggestion card; "as researcher:" p
   await waitFor(r, 'Working as: Drafter')
   assert.deepStrictEqual(posted('/api/matters/update').at(-1).body, { id: 'm_1', patch: { agent: 'drafter' } })
   await press(r, 'Redraft clause 7', 'enter')
-  await waitFor(r, 'You: Redraft clause 7')
+  await waitFor(r, 'as Drafter')
   await sleep(50)
   assert.strictEqual(posted('/api/chat').at(-1).body.agent, 'drafter')
   r.unmount()
@@ -325,12 +350,14 @@ test('privileged toggle: on at once, off only after confirming', async () => {
   const before = posted('/api/matters/update').length
   await press(r, '5')
   f = await waitFor(r, 'Turn privileged off?')
-  await press(r, 'enter') // "No, keep it privileged" is first
+  // A severe change: it needs "yes" typed; anything else keeps it privileged.
+  await press(r, 'ok', 'enter')
+  await waitFor(r, 'Still privileged.')
   await waitFor(r, 'Privileged — keep on this computer: On')
   assert.strictEqual(posted('/api/matters/update').length, before)
   await press(r, '5')
   await waitFor(r, 'Turn privileged off?')
-  await press(r, 'down', 'enter')
+  await press(r, 'yes', 'enter')
   await waitFor(r, 'Privileged — keep on this computer: Off')
   assert.deepStrictEqual(posted('/api/matters/update').at(-1).body, { id: 'm_1', patch: { privileged: false } })
   r.unmount()
@@ -437,14 +464,17 @@ test('help with "?", quick question works without a matter', async () => {
   const r = show(h(App))
   await waitFor(r, 'Alpine share deal')
   await press(r, '?')
-  let f = await waitFor(r, 'Add documents:')
-  assert.match(f, /Esc\s+go back one step/)
+  let f = await waitFor(r, 'Work with files')
+  capture('help', f)
+  assert.match(f, /Esc\s+stop the answer/)
+  assert.match(f, /\/folder\s+the folder OpenLex works in/)
   await press(r, 'esc')
   await waitFor(r, 'Quick question (no matter)')
   await press(r, 'down', 'enter')
   await waitFor(r, 'Ask a legal question.')
   await press(r, 'Is ? typed, not help', 'enter')
-  f = await waitFor(r, 'You: Is ? typed, not help')
+  f = await waitFor(r, 'enforceable only if reasonable')
+  assert.strictEqual(posted('/api/chat').at(-1).body.message, 'Is ? typed, not help')
   assert.strictEqual(posted('/api/chat').at(-1).body.matterId, undefined)
   r.unmount()
 })
@@ -491,6 +521,8 @@ async function openMatterChat(r) {
   await press(r, 'down', 'down', 'enter')
   await waitFor(r, 'Ask a question')
   await press(r, 'enter')
+  await waitFor(r, 'Tab to change')
+  await press(r, '\u0015') // Ctrl+U: text kept from an earlier test (drafts survive going back)
   await waitFor(r, 'Type your question')
 }
 const answered = () => posted('/api/permissions/answer').map((x) => x.body.decision)
@@ -510,13 +542,13 @@ test('permission prompt: plain words over the chat; Enter = allow once, a = this
   let f = await waitFor(r, 'OpenLex wants to save a file')
   capture('permission prompt', f)
   assert.strictEqual(posted('/api/chat').at(-1).body.interactive, true, 'the TUI says it can answer')
-  assert.match(f, /Save obligations\.csv in Alpine\//)
+  assert.match(flat(f), /OpenLex wants to save obligations\.csv in Alpine\/\. Allow\?/)
   assert.match(f, /path: Alpine\/obligations\.csv/)
-  assert.match(f, /This writes a file\. Nothing happens until you choose\./)
-  assert.match(f, /▸ Allow once\s+Enter/, 'the default is visible')
-  assert.match(f, /Always allow \(this matter\)\s+a/)
-  assert.match(f, /Always allow\s+A/)
-  assert.match(f, /Don't allow\s+n \/ Esc/)
+  assert.match(flat(f), /This writes a file\. Nothing happens until you choose\./)
+  assert.match(f, /▸ 1 Allow once\s+Enter/, 'the default is visible, numbered')
+  assert.match(f, /2 Always allow \(this matter\)\s+a/)
+  assert.match(f, /3 Always allow\s+A/)
+  assert.match(f, /4 Don't allow\s+n \/ Esc/)
   await sleep(150)
   assert.strictEqual(answered().length, 0, 'never answered by itself')
   await press(r, 'enter')
@@ -611,7 +643,7 @@ test('chat commands: "/" shows hints; /model, /key, /data, /as, /privileged, /pe
   assert.deepStrictEqual(posted('/api/matters/update').at(-1).body, { id: 'm_1', patch: { privileged: true } })
   await press(r, '/privileged off', 'enter')
   await waitFor(r, 'Turn privileged off?')
-  await press(r, 'down', 'enter')
+  await press(r, 'yes', 'enter')
   await waitFor(r, 'No longer privileged')
   assert.deepStrictEqual(posted('/api/matters/update').at(-1).body, { id: 'm_1', patch: { privileged: false } })
   await waitFor(r, 'Type your question')
@@ -829,11 +861,7 @@ test('explain: progress and time left for 12 documents', () => {
 
 const scriptStep = (tool, detail) => ({ type: 'step', text: `tool: ${tool}`, kind: 'tool', tool, detail })
 async function openChat(r) {
-  await waitFor(r, 'Alpine share deal')
-  await press(r, 'down', 'down', 'enter')
-  await waitFor(r, 'Ask a question')
-  await press(r, 'enter')
-  await waitFor(r, 'Type your question')
+  await openMatterChat(r)
 }
 
 test('chat in progress (AI on this computer): numbered steps, times, data line, how to stop; then "Based on" and Ctrl+B', async () => {
@@ -1033,8 +1061,8 @@ test('files dropped into the question: chips, Backspace removes, sent with the q
   await press(r, `\u001b[200~'${a}' '${b}'\u001b[201~`)
   let f = await waitFor(r, 'All 2 files are included in this question.')
   capture('two files dropped into the question', f)
-  assert.match(f, /📎 SPA draft 3\.txt · 56 bytes/)
-  assert.match(f, /📎 Side letter\.txt · 35 bytes/)
+  assert.match(f, /\+ SPA draft 3\.txt · 56 bytes/)
+  assert.match(f, /\+ Side letter\.txt · 35 bytes/)
   assert.match(f, /Type your question about the file/)
   await press(r, '\u007f') // Backspace in the empty field: the last chip goes
   f = await waitFor(r, 'Your question will be about SPA draft 3.txt.')
@@ -1084,3 +1112,401 @@ test('help: a second page explains what OpenLex is doing and why', async () => {
   assert.match(flat(f), /Esc stops at any time\. What was written so far is kept; nothing more is sent\./)
   r.unmount()
 })
+
+// ── working in a folder; friendlier for everyone ─────────────────────────
+
+const FOLDERS = fs.mkdtempSync(path.join(os.tmpdir(), 'openlex-tui-folder-'))
+const ALPINE = path.join(FOLDERS, 'Alpine')
+fs.mkdirSync(ALPINE, { recursive: true })
+for (const n of ['SPA.docx', 'Side letter.pdf', 'notes.md']) fs.writeFileSync(path.join(ALPINE, n), 'x')
+fs.writeFileSync(path.join(ALPINE, 'photo.jpg'), 'x')
+const tuiPrefs = () => JSON.parse(fs.readFileSync(path.join(DATA, 'tui.json'), 'utf8'))
+/** Render at another size (e.g. too narrow). */
+function showAt(tree, cols, rows = 24) {
+  const r = ink.render(tree)
+  rendered.push(r)
+  Object.defineProperty(r.stdout, 'columns', { value: cols })
+  Object.defineProperty(r.stdout, 'rows', { value: rows })
+  r.stdout.emit('resize')
+  return r
+}
+const CTRL = { c: '\u0003', u: '\u0015', k: '\u000B', o: '\u000F', j: '\n' }
+
+test('working folder: a one-time notice, "Working in" in the status bar, its documents for the matter, questions carry it', async () => {
+  prefs({ setupDone: true })
+  Object.assign(state, { active: 'local', keys: {}, models: {}, policy: { mode: 'local-only' } })
+  state.matters[0].privileged = false
+  let r = show(h(App, { folder: ALPINE }))
+  let f = await waitFor(r, 'OpenLex can read the files in this folder')
+  capture('first time in a folder', f)
+  assert.match(f.replace(/\n /g, ''), /Alpine \(3 documents\)/, 'Word, PDF and text count; the photo does not')
+  assert.match(f, /It asks before it saves, renames or deletes anything here\./)
+  assert.match(f, /▸ 1 OK, continue/)
+  assert.match(f, /2 Don't let OpenLex read this folder/)
+  await press(r, 'enter')
+  f = await waitFor(r, 'Your matters')
+  capture('status bar with the working folder', f)
+  assert.match(f, /Matter: none {2}· {2}Working in: .*Alpine/)
+  assert.match(f, /3 documents OpenLex can read/)
+  assert.strictEqual(tuiPrefs().folders[fs.realpathSync(ALPINE)] || tuiPrefs().folders[ALPINE], 'ok')
+
+  // The matter can take the folder's documents in one step.
+  await press(r, 'down', 'down', 'enter')
+  f = await waitFor(r, 'Use the 3 documents in this folder for this matter')
+  await press(r, '7')
+  f = await waitFor(r, 'Use the 3 documents in this folder for this matter?')
+  capture('use the folder for the matter', f)
+  await press(r, 'enter')
+  await waitFor(r, 'now belong to this matter')
+  assert.deepStrictEqual(posted('/api/library/folders').at(-1).body, { path: ALPINE, matterId: 'm_1' })
+
+  // Questions carry the folder; the activity says "in this folder".
+  await press(r, '1')
+  await waitFor(r, 'Tab to change')
+  await press(r, CTRL.u, 'What does the side letter change?', 'enter')
+  await waitFor(r, 'enforceable only if reasonable')
+  const chat = posted('/api/chat').at(-1).body
+  assert.strictEqual(chat.folder, ALPINE)
+  assert.strictEqual(chat.folderConfirmed, undefined)
+  r.unmount()
+
+  // The second time in the same folder: no notice.
+  r = show(h(App, { folder: ALPINE }))
+  f = await waitFor(r, 'Your matters')
+  assert.ok(!f.includes('OpenLex can read the files in this folder'))
+  r.unmount()
+})
+
+test('the whole home folder: a warning, the safe choice first; "anyway" is confirmed per request. Forbidding a folder saves a rule', async () => {
+  prefs({ setupDone: true })
+  let r = show(h(App, { folder: os.homedir() }))
+  let f = await waitFor(r, "That's your whole home folder")
+  capture('home folder warning', f)
+  assert.match(f, /▸ 1 Don't use a folder \(work with matters only\)/, 'the safe choice is first')
+  assert.match(f, /3 Use your whole home folder anyway/)
+  await press(r, '3')
+  f = await waitFor(r, 'Working in your whole home folder')
+  assert.match(f, /Working in: ~/)
+  await press(r, 'Q')
+  await waitFor(r, 'Tab to change')
+  await press(r, CTRL.u, 'Anything?', 'enter')
+  await waitFor(r, 'enforceable only if reasonable')
+  assert.deepStrictEqual([posted('/api/chat').at(-1).body.folder, posted('/api/chat').at(-1).body.folderConfirmed], [os.homedir(), true])
+  r.unmount()
+
+  const other = path.join(FOLDERS, 'Beta')
+  fs.mkdirSync(other, { recursive: true })
+  r = show(h(App, { folder: other }))
+  await waitFor(r, 'OpenLex can read the files in this folder')
+  await press(r, '2')
+  f = await waitFor(r, 'OpenLex will not read')
+  assert.ok(!/Working in:/.test(f))
+  const rule = posted('/api/permissions/rules').at(-1).body
+  assert.strictEqual(rule.action, 'deny')
+  assert.match(rule.pattern, /^\*:.*Beta\/\*\*$/)
+  r.unmount()
+})
+
+test('/folder changes the working folder in the chat; saving there asks with "Always allow (this folder)"; /save asks too', async () => {
+  prefs({ setupDone: true, folders: { [ALPINE]: 'ok' } })
+  const r = show(h(App, { folder: ALPINE }))
+  await openMatterChat(r)
+  await press(r, '/folder none', 'enter')
+  await waitFor(r, 'Not working in a folder any more')
+  let f = r.lastFrame()
+  assert.ok(!/Working in:/.test(f))
+  await press(r, `/folder ${ALPINE}`, 'enter')
+  f = await waitFor(r, 'Now working in')
+  assert.match(f, /Working in: .*Alpine/)
+
+  await press(r, 'Save the obligations here', 'enter')
+  f = await waitFor(r, 'OpenLex wants to save a file')
+  capture('saving in the working folder', f)
+  assert.match(f, /OpenLex wants to save obligations\.csv in this folder:/)
+  assert.match(f, /~\/Clients\/Alpine\. Allow\?/)
+  assert.match(f, /▸ 1 Allow once/)
+  assert.match(f, /2 Always allow \(this folder\)\s+a/)
+  assert.match(f, /3 Don't allow\s+n \/ Esc/)
+  assert.ok(!/path: obligations\.csv/.test(f), 'the folder sentence says where; no raw path line')
+  await press(r, 'a')
+  f = await waitFor(r, 'Allowed in this folder from now on')
+  assert.match(flat(f), /saving files in ~\/Clients\/Alpine\//)
+  assert.strictEqual(answered().at(-1), 'always_folder')
+
+  // /save: the last answer as a file, asked like any save.
+  await waitFor(r, 'Saved obligations.csv.')
+  await press(r, '/save', 'enter')
+  await waitFor(r, 'OpenLex wants to save a file')
+  await press(r, 'enter')
+  f = await waitFor(r, 'Saved the answer as')
+  assert.strictEqual(state.saved.folder, ALPINE)
+  assert.strictEqual(state.saved.decision, 'once')
+  assert.match(state.saved.path, /^answer-\d{8}-\d{4}\.md$/)
+  assert.match(state.saved.content, /Saved obligations\.csv\./)
+  r.unmount()
+})
+
+test('forgiving input: "Did you mean /model?", help and quit as words, Esc keeps the text, ↑ brings questions back, a long paste is one chip', async () => {
+  prefs({ setupDone: true })
+  const r = show(h(App))
+  await openMatterChat(r)
+  const n = posted('/api/chat').length
+  await press(r, '/modle', 'enter')
+  let f = await waitFor(r, 'Did you mean /model?')
+  capture('did you mean', f)
+  assert.match(f, /› \/model/, 'the suggestion is in the field: Enter uses it')
+  await press(r, CTRL.u, '/zzzzzz', 'enter')
+  await waitFor(r, 'There is no command /zzzzzz. Type /help to see the commands.')
+  await press(r, CTRL.u, 'help', 'enter')
+  await waitFor(r, '/help — these commands')
+  assert.strictEqual(posted('/api/chat').length, n, 'none of these went to the AI')
+
+  // Esc with text typed: first a hint, the text stays; it is still there when coming back.
+  await press(r, 'a draft question')
+  await press(r, 'esc')
+  f = await waitFor(r, 'Your text is kept. Press Esc again to go back')
+  assert.match(f, /a draft question/)
+  await press(r, 'esc')
+  await waitFor(r, 'Ask a question')
+  await press(r, 'enter')
+  f = await waitFor(r, 'a draft question')
+
+  // ↑ in an empty field: the earlier questions.
+  await press(r, CTRL.u, 'First question?', 'enter')
+  await waitFor(r, 'enforceable only if reasonable')
+  await press(r, '\u001B[A')
+  await waitFor(r, '› First question?')
+  await press(r, CTRL.u)
+
+  // A long paste stays out of the way as one chip; Ctrl+O puts it into the field.
+  const block = Array.from({ length: 8 }, (_, i) => `Line ${i + 1} of the email`).join('\n')
+  await press(r, `\u001B[200~${block}\u001B[201~`)
+  f = await waitFor(r, '[Pasted 8 lines]')
+  capture('a long paste', f)
+  const sent = posted('/api/chat').length
+  await press(r, 'Summarise this', 'enter')
+  for (let i = 0; i < 100 && posted('/api/chat').length === sent; i++) await sleep(20)
+  assert.match(posted('/api/chat').at(-1).body.message, /^Summarise this\n\nLine 1 of the email\nLine 2/)
+
+  // "/" opens the command list, filtered as you type; Tab completes; Esc closes it and keeps the text.
+  await press(r, '/')
+  f = await waitFor(r, '/permissions · what OpenLex may do without asking')
+  capture('slash menu', f)
+  await press(r, 'pe')
+  f = await waitFor(r, '/pe')
+  assert.ok(!/\/model ·/.test(f), 'filtered')
+  await press(r, 'tab')
+  await waitFor(r, '› /permissions')
+  await press(r, 'esc')
+  f = await waitFor(r, 'Tab to change')
+  assert.match(f, /› \/permissions/)
+  await press(r, CTRL.u)
+
+  // Ctrl+K: every command, also without typing "/".
+  await press(r, CTRL.k)
+  f = await waitFor(r, 'All commands')
+  capture('all commands (Ctrl+K)', f)
+  assert.match(f, /\/model\s+where the AI runs/)
+  await press(r, 'esc')
+  await waitFor(r, 'Tab to change')
+
+  // "quit" as a word is not a question for the AI.
+  const m = posted('/api/chat').length
+  await press(r, 'quit', 'enter')
+  await sleep(100)
+  assert.strictEqual(posted('/api/chat').length, m)
+  r.unmount()
+})
+
+test('every command is in a menu (Ctrl+K) and the examples suit the folder', async () => {
+  const mt = await import('../tui/matter.mjs')
+  for (const c of ['model', 'key', 'data', 'as', 'privileged', 'permissions', 'folder', 'sources', 'copy', 'save', 'transcript', 'activity', 'clear', 'help']) assert.ok(mt.COMMANDS.some((x) => x.name === c), c)
+  assert.strictEqual(mt.didYouMean('modle', mt.COMMANDS.map((c) => c.name)), 'model')
+  assert.strictEqual(mt.didYouMean('perm', mt.COMMANDS.map((c) => c.name)), 'permissions')
+  assert.strictEqual(mt.didYouMean('xyzzy', mt.COMMANDS.map((c) => c.name)), null)
+  assert.deepStrictEqual(mt.examples({ folder: true }).slice(0, 2), ['Summarise the contract in this folder', 'Which deadlines are in these documents?'])
+  const lines = mt.emptyLines({ folder: true, folderShort: '~/Clients/Alpine' }).map((l) => l.segs.map((s) => s.t).join(''))
+  assert.match(lines[0], /Ask about the documents in ~\/Clients\/Alpine/)
+  assert.ok(lines.some((l) => /Try:/.test(l)))
+})
+
+test('keys: Esc never quits; Ctrl+C stops a running answer, then twice quits (with a hint)', async () => {
+  prefs({ setupDone: true })
+  const r = show(h(App))
+  await waitFor(r, 'Your matters')
+  await press(r, 'esc', 'esc', 'esc')
+  let f = await waitFor(r, 'Your matters')
+  assert.match(f, /Enter open · N new matter/)
+  await press(r, CTRL.c)
+  f = await waitFor(r, 'Press Ctrl+C again to quit')
+  capture('Ctrl+C once', f)
+  await sleep(2100)
+  f = r.lastFrame()
+  assert.ok(!f.includes('Press Ctrl+C again'), 'the hint goes away')
+
+  // A running answer: Ctrl+C stops it (and does not quit).
+  state.chatScript = [{ type: 'step', kind: 'tool', tool: 'search_law', detail: { jurisdiction: 'AT', query: 'Gewährleistung' } }]
+  await press(r, 'down', 'down', 'enter')
+  await waitFor(r, 'Ask a question')
+  await press(r, 'enter')
+  await waitFor(r, 'Tab to change')
+  await press(r, CTRL.u, 'Long research question', 'enter')
+  await waitFor(r, 'Searching Austrian law')
+  await press(r, CTRL.c)
+  f = await waitFor(r, 'Stopped by you')
+  assert.ok(state.chatClosed)
+  assert.ok(!f.includes('Press Ctrl+C again'))
+  r.unmount()
+})
+
+test('first-run tour: three short screens after setup, skippable', async () => {
+  prefs({})
+  Object.assign(state, { active: 'local', keys: {}, models: {}, policy: { mode: 'local-only' } })
+  const r = show(h(App))
+  await waitFor(r, 'Where should the AI run?')
+  await press(r, 'up', 'enter') // "Skip for now"
+  let f = await waitFor(r, 'What OpenLex can do')
+  capture('tour 1 of 3', f)
+  assert.match(f, /Welcome \(1 of 3\)/)
+  await press(r, 'enter')
+  f = await waitFor(r, 'How to ask')
+  capture('tour 2 of 3', f)
+  assert.match(f, /Summarise the contract in this folder/)
+  await press(r, 'enter')
+  await waitFor(r, 'Where your data goes')
+  await press(r, 'esc')
+  await waitFor(r, 'Your matters')
+  assert.strictEqual(tuiPrefs().tourDone, true)
+  r.unmount()
+})
+
+test('look: no colour with NO_COLOR, plain ASCII when asked, a screen-reader mode, and a message below 60 columns', async () => {
+  const theme = await import('../tui/theme.mjs')
+  const env = { ...process.env }
+  try {
+    // NO_COLOR (set for these tests): no colours at all, even on a terminal.
+    theme.configure({}, { tty: true })
+    assert.strictEqual(theme.look.colorLevel, 0)
+    assert.deepStrictEqual(Object.values(theme.color).filter(Boolean), [])
+    delete process.env.NO_COLOR
+    delete process.env.COLORTERM
+    theme.configure({}, { tty: true })
+    assert.strictEqual(theme.color.accent, 'yellow', 'the terminal\'s own yellow, not a fixed shade')
+    process.env.COLORTERM = 'truecolor'
+    process.env.COLORFGBG = '15;0'
+    theme.configure({}, { tty: true })
+    assert.strictEqual(theme.color.accent, '#d9a86c', 'the exact amber only on a known dark background')
+    theme.configure({ colours: 'none' }, { tty: true })
+    assert.strictEqual(theme.look.colorLevel, 0)
+    process.env.NO_COLOR = '1'
+
+    prefs({ setupDone: true })
+    let r = show(h(App))
+    let f = await waitFor(r, 'Your matters')
+    assert.ok(!/\x1b\[(3[0-9]|9[0-7]|38;)/.test(f), 'no colour codes')
+    r.unmount()
+
+    // ASCII: header, menu marks and the bottom lines are plain ASCII.
+    process.env.OPENLEX_ASCII = '1'
+    theme.configure({}, { tty: false })
+    r = show(h(App))
+    f = await waitFor(r, 'Your matters')
+    capture('ASCII mode', f)
+    const lines = f.split('\n')
+    for (const l of [lines[0], ...lines.slice(-5)]) assert.match(l, /^[\x20-\x7e]*$/, `not ASCII: ${l}`)
+    assert.match(f, /> New matter/)
+    assert.match(f, /-{20}/)
+    r.unmount()
+    delete process.env.OPENLEX_ASCII
+
+    // Screen-reader mode: labelled lines, numbered menus, nothing that moves.
+    process.env.OPENLEX_ACCESSIBLE = '1'
+    theme.configure({}, { tty: true })
+    assert.ok(theme.look.reducedMotion && theme.look.accessible)
+    r = show(h(App))
+    f = await waitFor(r, 'Your matters')
+    assert.match(f, /1\. New matter \(selected\)/)
+    await press(r, 'down', 'down', 'enter')
+    await waitFor(r, 'Ask a question')
+    await press(r, 'enter')
+    await waitFor(r, 'Tab to change')
+    await press(r, CTRL.u, 'Is it valid?', 'enter')
+    f = await waitFor(r, 'enforceable only if reasonable')
+    capture('screen-reader mode', f)
+    assert.match(f, /Proposed change:\n {3}HIGH/, 'cards without box characters')
+    const mt = await import('../tui/matter.mjs')
+    const said = mt.transcript([{ role: 'you', text: 'Is it valid?' }, { id: 1, role: 'ai', text: 'Yes.', suggestions: [] }], 78).map((l) => l.segs.map((s) => s.t).join('')).join('\n')
+    assert.match(said, /you: Is it valid\?\nOpenLex:\nYes\./)
+    assert.ok(!/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏╭╮╰╯]/.test(f))
+    r.unmount()
+    delete process.env.OPENLEX_ACCESSIBLE
+  } finally {
+    for (const k of ['NO_COLOR', 'COLORTERM', 'COLORFGBG', 'OPENLEX_ASCII', 'OPENLEX_ACCESSIBLE']) { if (env[k] === undefined) delete process.env[k]; else process.env[k] = env[k] }
+    theme.configure({}, { tty: false })
+  }
+
+  // Too narrow: a plain request instead of a broken layout.
+  const r = showAt(h(App), 50)
+  const f = await waitFor(r, 'Window too small')
+  assert.match(flat(f), /please make it wider \(at least 60 columns\)/)
+  r.unmount()
+})
+
+test('CLI: plain sentences while it works, "Based on" and where the data went; the folder it runs in', async () => {
+  const run = (args, opts = {}) => new Promise((ok) => execFile(process.execPath, [path.join(__dirname, '..', 'bin', 'openlex.js'), ...args], { env: { ...process.env, OPENLEX_DATA_DIR: DATA }, cwd: opts.cwd || process.cwd() }, (err, out, errOut) => ok({ out, err: errOut })))
+  fs.writeFileSync(path.join(DATA, 'tui.json'), JSON.stringify({ setupDone: true }))
+  let r = await run(['ask', 'Is a two-year non-compete valid?'], { cwd: ALPINE })
+  assert.match(r.out, /A two-year non-compete is enforceable only if reasonable\./)
+  assert.match(r.out, /\[high\] Shorten the non-compete/)
+  assert.match(r.err, /OpenLex can read the files in this folder: .*Alpine \(3 documents\)\. It asks before it saves/)
+  assert.match(r.err, /Based on:\n {2}\[1\] ABGB § 879/)
+  assert.match(r.err, /Done after \d+ s · \d+ steps?\n✓ Stayed on this computer/)
+  assert.ok(!/searching local law packs|tool: /.test(r.err), 'no raw step text')
+  let chat = posted('/api/chat').at(-1).body
+  assert.strictEqual(chat.folder, fs.realpathSync(ALPINE) === ALPINE ? ALPINE : chat.folder)
+  assert.ok(chat.folder.endsWith('Alpine'))
+  // The second time: no notice. --no-folder: none.
+  r = await run(['ask', 'Again?'], { cwd: ALPINE })
+  assert.ok(!/OpenLex can read the files/.test(r.err))
+  await run(['ask', 'Without?', '--no-folder'], { cwd: ALPINE })
+  assert.strictEqual(posted('/api/chat').at(-1).body.folder, undefined)
+  // Started in the home folder: not used, and it says how to choose one.
+  r = await run(['ask', 'From home?'], { cwd: os.homedir() })
+  assert.strictEqual(posted('/api/chat').at(-1).body.folder, undefined)
+  assert.match(r.err, /Not working in your whole home folder/)
+
+  // A workflow: documents in words, the result files on stdout.
+  r = await run(['review', '--matter', 'm_1'])
+  assert.match(r.err, /Document 1 of 2: SPA draft 3\.docx/)
+  assert.match(r.err, /✓ Done after \d+ s: 2 documents, 5 verified/)
+  assert.match(r.out, /\/ws\/Alpine\/review\.xlsx/)
+
+  // The printer by itself: a read in the working folder, in words.
+  const { askPrinter } = await import('../tui/cli.mjs')
+  let out = ''
+  const p = askPrinter({ out: { write: (s) => { out += s }, isTTY: false }, tty: false })
+  p.onEvent({ type: 'step', kind: 'tool', tool: 'read_file', detail: { file: 'SPA.docx', where: 'folder' } })
+  p.onEvent({ type: 'step', kind: 'outside', tool: 'write_file', detail: { file: 'x.csv' } })
+  p.onEvent({ type: 'model', provider: 'anthropic', model: 'claude-x', region: 'eu', redacted: true })
+  p.finish()
+  assert.match(out, /Reading “SPA\.docx” in this folder/)
+  assert.match(out, /! Not done — “x\.csv” is outside the folder you are working in/)
+  assert.match(out, /Sent to: Claude \(Anthropic, EU\) — names hidden · once/)
+})
+
+test('an error: what happened, why, what to do — and the question is not lost', async () => {
+  prefs({ setupDone: true })
+  const r = show(h(App))
+  await openMatterChat(r)
+  await press(r, 'Why cannot reach it?', 'enter')
+  const f = await waitFor(r, 'press Enter to try again')
+  capture('error in three parts', f)
+  assert.match(f, /✗ The AI service could not be reached\./)
+  assert.match(f, /The internet connection may be off/)
+  assert.match(f, /Check the connection and try again\./)
+  assert.match(f, /› Why cannot reach it\?/, 'the question is back in the field')
+  assert.ok(!/ECONNREFUSED|at \w+ \(/.test(f), 'no codes, no stack')
+  r.unmount()
+})
+
+test.after(() => fs.rmSync(FOLDERS, { recursive: true, force: true }))
