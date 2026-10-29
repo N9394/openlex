@@ -76,7 +76,9 @@ function streamSha256(p) {
 
 /** Extract a zip with bsdtar (ships with macOS and Windows 10+). */
 async function extractZip(zipPath, destDir) {
-  const tar = process.platform === 'win32' ? 'tar.exe' : '/usr/bin/tar'
+  // Windows: the system's bsdtar by full path. A GNU tar from Git for Windows
+  // earlier on PATH cannot read zip files and takes "C:" for a remote host.
+  const tar = process.platform === 'win32' ? path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe') : '/usr/bin/tar'
   fs.mkdirSync(destDir, { recursive: true })
   execFileSync(tar, ['-xf', zipPath, '-C', destDir], { stdio: 'pipe' })
 }

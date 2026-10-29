@@ -43,7 +43,7 @@ fs.writeFileSync(path.join(PAYLOAD_DIR, 'sidecar', 'src', 'server.js'), '// NEW 
 fs.writeFileSync(path.join(PAYLOAD_DIR, 'add-in', 'taskpane.html'), '<title>NEW</title>')
 const ZIP = path.join(tmp, 'payload.zip')
 // Windows has no zip command; its bsdtar (tar.exe) writes zip with -a.
-if (process.platform === 'win32') execFileSync('tar.exe', ['-a', '-cf', ZIP, 'sidecar', 'add-in'], { cwd: PAYLOAD_DIR })
+if (process.platform === 'win32') execFileSync(path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe'), ['-a', '-cf', ZIP, 'sidecar', 'add-in'], { cwd: PAYLOAD_DIR })
 else execFileSync('zip', ['-qr', ZIP, 'sidecar', 'add-in'], { cwd: PAYLOAD_DIR })
 const ZIP_SHA = crypto.createHash('sha256').update(fs.readFileSync(ZIP)).digest('hex')
 

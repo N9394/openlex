@@ -1062,7 +1062,8 @@ test('files dropped into the question: chips, Backspace removes, sent with the q
   const r = show(h(App))
   await openChat(r)
   // A drop arrives as a bracketed paste (or one chunk): two quoted paths → two chips.
-  await press(r, `\u001b[200~'${a}' '${b}'\u001b[201~`)
+  const q = process.platform === 'win32' ? '"' : "'" // Windows terminals quote with "…" only
+  await press(r, `\u001b[200~${q}${a}${q} ${q}${b}${q}\u001b[201~`)
   let f = await waitFor(r, 'All 2 files are included in this question.')
   capture('two files dropped into the question', f)
   assert.match(f, /\+ SPA draft 3\.txt · 56 bytes/)
