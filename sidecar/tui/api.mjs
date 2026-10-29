@@ -96,6 +96,10 @@ export function createApi(c = client) {
     lawSources: (matterId) => call('GET', `/api/sources/law${q({ matterId })}`),
     enableSource: (name, on) => call('POST', '/api/sources/enable', { name, on }),
     saveSourceKey: (name, key) => call('POST', '/api/sources/key', { name, key }),
+    startSourceSignIn: (name) => call('POST', '/api/sources/law/signin', { name }),
+    sourceSignInStatus: (name) => call('GET', `/api/sources/law/signin${q({ name })}`),
+    cancelSourceSignIn: (name) => call('POST', '/api/sources/law/signin/cancel', { name }),
+    setSourceNightCopy: (name, on) => call('POST', '/api/sources/law/nightcopy', { name, on }),
   }
 }
 
