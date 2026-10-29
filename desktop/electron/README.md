@@ -57,7 +57,7 @@ cd product/client-vite && npm run dev   # serves http://localhost:5173
 # Terminal 2 — Electron shell
 cd product/electron && npm install
 npm run start:dev
-# (env: LEXVAULT_DEV_BACKEND=http://localhost:8000 LEXVAULT_DEV_FRONTEND=http://localhost:5173)
+# (env: LEXVAULT_DEV_BACKEND=http://127.0.0.1:8000 LEXVAULT_DEV_FRONTEND=http://localhost:5173)
 ```
 
 Pointing `LEXVAULT_DEV_BACKEND` at `http://<your-server>:8000` works too, if

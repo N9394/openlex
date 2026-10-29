@@ -9,7 +9,7 @@
   "private": true,
   "scripts": {
     "start": "electron .",
-    "start:dev": "LEXVAULT_DEVTOOLS=1 LEXVAULT_DEV_BACKEND=http://localhost:8000 LEXVAULT_DEV_FRONTEND=http://localhost:5173 electron .",
+    "start:dev": "LEXVAULT_DEVTOOLS=1 LEXVAULT_DEV_BACKEND=http://127.0.0.1:8000 LEXVAULT_DEV_FRONTEND=http://localhost:5173 electron .",
     "package": "node scripts/prepare-resources.js && electron-builder",
     "package:mac": "npm run package:mac:arm64 && npm run package:mac:x64",
     "package:mac:arm64": "rm -rf resources/server resources/client && FETCH_ALL_MAC=1 PACKAGE_TARGETS=mac PACKAGE_ARCH=arm64 node scripts/prepare-resources.js && electron-builder --mac --arm64",
