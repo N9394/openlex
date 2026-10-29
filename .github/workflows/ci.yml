@@ -78,3 +78,71 @@ jobs:
           second=$(cut -d' ' -f1 dist/*.tar.gz.sha256)
           echo "first $first"; echo "second $second"
           [ "$first" = "$second" ] || { echo "::error::the CLI tarball is not reproducible"; exit 1; }
+
+  # The install scripts against the latest published release, on real
+  # Linux, macOS and Windows runners (Windows: PowerShell 5.1 and 7, the way
+  # users run it: the script text piped into Invoke-Expression).
+  installers:
+    name: install script (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 20
+      # Asked with the workflow token, so the scripts need not call the
+      # (rate-limited, unauthenticated) GitHub API on a shared runner.
+      - name: Latest release
+        id: latest
+        shell: bash
+        run: echo "version=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName | sed 's/^v//')" >> "$GITHUB_OUTPUT"
+      - name: install.sh
+        if: runner.os != 'Windows'
+        env:
+          OPENLEX_VERSION: ${{ steps.latest.outputs.version }}
+        run: |
+          bash -n scripts/install.sh
+          OPENLEX_HOME="$RUNNER_TEMP/ol" OPENLEX_BIN_DIR="$RUNNER_TEMP/olbin" bash scripts/install.sh | tee "$RUNNER_TEMP/install.log"
+          grep -q "sha256 matches" "$RUNNER_TEMP/install.log"
+          OPENLEX_DATA_DIR="$RUNNER_TEMP/data" "$RUNNER_TEMP/olbin/openlex" help > "$RUNNER_TEMP/help.txt"
+          head -3 "$RUNNER_TEMP/help.txt"
+      - name: install.ps1 (Windows PowerShell 5.1)
+        if: runner.os == 'Windows'
+        shell: powershell
+        env:
+          OPENLEX_VERSION: ${{ steps.latest.outputs.version }}
+        run: |
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile("$PWD\scripts\install.ps1", [ref]$null, [ref]$errors)
+          if ($errors) { $errors; throw 'install.ps1 does not parse' }
+          $env:OPENLEX_HOME = "$env:RUNNER_TEMP\ol51"
+          Get-Content scripts\install.ps1 -Raw | Invoke-Expression
+          $cmd = "$env:OPENLEX_HOME\bin\openlex.cmd"
+          if (-not (Test-Path $cmd)) { throw 'openlex.cmd was not installed' }
+          $env:OPENLEX_DATA_DIR = "$env:RUNNER_TEMP\data51"
+          $out = & $cmd help; $code = $LASTEXITCODE
+          $out | Select-Object -First 3
+          if ($code -ne 0) { throw "openlex help exited with $code" }
+      - name: install.ps1 (PowerShell 7)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          OPENLEX_VERSION: ${{ steps.latest.outputs.version }}
+        run: |
+          $env:OPENLEX_HOME = "$env:RUNNER_TEMP\ol7"
+          Get-Content scripts\install.ps1 -Raw | Invoke-Expression
+          $cmd = "$env:OPENLEX_HOME\bin\openlex.cmd"
+          if (-not (Test-Path $cmd)) { throw 'openlex.cmd was not installed' }
+          $env:OPENLEX_DATA_DIR = "$env:RUNNER_TEMP\data7"
+          $out = & $cmd help; $code = $LASTEXITCODE
+          $out | Select-Object -First 3
+          if ($code -ne 0) { throw "openlex help exited with $code" }
