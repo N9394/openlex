@@ -34,8 +34,10 @@
  *   openlex agents                     agent profiles (use one with "@name …" in ask)
  *   openlex models [MODEL] [--local]   model profiles, and which one each role's model gets
  *   openlex prompts ["message"] [--after TOOL]   which instruction blocks and tools each step would get (the prompt roadmap)
- *   openlex sources                    law sources (RIS, EUR-Lex, NeuRIS, Slov-Lex, e-Sbírka, Ansvar) and the firm's own, in plain words
+ *   openlex sources                    law sources (official, community and gateways, by country) and the firm's own, in plain words
  *   openlex sources on|off SOURCE | key SOURCE [KEY] [--remove] | signin SOURCE [--no-browser] | nightcopy SOURCE on|off | test SOURCE | search "q" --law [--jurisdiction AT | --source ris,eurlex]  (without --law: the firm's own, [--kind k])
+ *   openlex sources download SOURCE [PART] [--yes] [--history] | remove SOURCE [PART]   keep a source on this computer (size shown first)
+ *   openlex sources offline on|off [--countries AT,DE] [--yes]                          work fully offline (shows what it downloads first)
  *   openlex sources add PRESET|NAME --file def.json | remove NAME     the firm's own sources (sources.js)
  *   openlex plan "goal" --matter ID | plan list | plan show ID | plan run ID (approves) | plan decide ID STEP continue|stop [--note text]
  *   openlex serve                      run the engine in the foreground
@@ -64,7 +66,7 @@ function parseArgs(argv) {
     else if (a === '--json') out.json = true
     else if (a === '--force') out.force = true
     else if (a === '--clear') out.clear = true
-    else if (['--local', '--remove', '--redact', '--privileged', '--off', '--yes', '--ascii', '--summary', '--left', '--verify', '--law'].includes(a)) out[a.slice(2)] = true
+    else if (['--local', '--remove', '--redact', '--privileged', '--off', '--yes', '--ascii', '--summary', '--left', '--verify', '--law', '--history'].includes(a)) out[a.slice(2)] = true
     else if (a === '--no-folder') out.folder = false
     else if (a === '--no-browser') out.browser = false
     else if (a === '--allow') out.allow = [...(out.allow || []), ...String(argv[++i] || '').split(',').map((x) => x.trim()).filter(Boolean)]
@@ -554,7 +556,11 @@ async function main() {
         return console.log(`${r.id} is now ${r.enabled ? 'on' : 'off'}`)
       }
       if (sub === 'add') { const r = await request('POST', '/api/sources/add', { name, source: a.file ? JSON.parse(fs.readFileSync(a.file, 'utf8')) : undefined }); return console.log(`added ${r.source.name} (${r.source.type}, ${r.source.kind}) to your layer — remote sources also need "source:${name}" allowed in the data policy`) }
-      if (sub === 'remove') { await request('POST', '/api/sources/remove', { name }); return console.log(`removed ${name}`) }
+      if (sub === 'remove') {
+        // A law source: its copy on this computer; otherwise one of the firm's own sources.
+        if (name && ((await request('GET', '/api/sources/law')).sources || []).some((x) => x.id === name)) { await request('POST', '/api/sources/law/download/remove', { name, part: val || null }); return console.log(`removed ${name}${val ? ` ${val}` : ''} from this computer`) }
+        await request('POST', '/api/sources/remove', { name }); return console.log(`removed ${name}`)
+      }
       if (sub === 'key') {
         if (!name) throw new Error('usage: openlex sources key SOURCE [KEY] [--remove]')
         const key = a.remove ? null : (val || (await readSecret(`${name} key (hidden): `)).trim())
@@ -579,6 +585,31 @@ async function main() {
         }
         if (st.state !== 'done') { process.exitCode = 1; return console.log(st.error || 'The sign-in did not finish.') }
         return console.log(`Signed in. The tokens are kept in this computer's keychain.`)
+      }
+      if (sub === 'download') {
+        if (!name) throw new Error('usage: openlex sources download SOURCE [PART] [--yes] [--history]')
+        const part = val || null
+        const r = await request('POST', '/api/sources/law/download', { name, part })
+        console.log(`${r.plan.label}: ${r.plan.size}, from ${r.plan.from || name}${r.plan.note ? ` (${r.plan.note})` : ''}${r.plan.updated ? `; last updated ${r.plan.updated}${r.plan.stale ? ' (over 60 days ago)' : ''}` : ''}`)
+        if (!a.yes) return console.log(`To download it: openlex sources download ${name}${part ? ` ${part}` : ''} --yes`)
+        await request('POST', '/api/sources/law/download', { name, part, confirm: true, history: !!a.history })
+        for (;;) {
+          const { job } = await request('GET', `/api/sources/law/download?name=${encodeURIComponent(name)}${part ? `&part=${encodeURIComponent(part)}` : ''}`)
+          if (!job || job.state !== 'running') { if (job?.state === 'failed') process.exitCode = 1; return console.log(job ? (job.state === 'done' ? `done: ${job.message}` : `${job.state}: ${job.error || job.message}`) : 'done') }
+          process.stdout.write(`\r${String(job.message || '').slice(0, 70).padEnd(70)}`)
+          await new Promise((ok) => setTimeout(ok, 1500))
+        }
+      }
+      if (sub === 'offline') {
+        if (!['on', 'off'].includes(name)) throw new Error('usage: openlex sources offline on|off [--countries AT,DE] [--yes]')
+        const countries = a.countries ? String(a.countries).split(',') : undefined
+        if (name === 'off') { await request('POST', '/api/sources/law/offline', { on: false }); return console.log('OpenLex looks things up online again (copies on this computer stay until removed).') }
+        const p = await request('POST', '/api/sources/law/offline', { plan: true, countries })
+        for (const d of p.downloads || []) console.log(`  ${d.label}: ${d.error || d.size}`)
+        console.log(`Together: ${p.total?.size || '—'} (countries: ${p.countries.join(', ')})`)
+        if (!a.yes) return console.log('To download them and work fully offline: openlex sources offline on --yes')
+        await request('POST', '/api/sources/law/offline', { on: true, confirm: true, countries: p.countries })
+        return console.log('OpenLex now works fully offline; the downloads run in the background (openlex sources shows them).')
       }
       if (sub === 'test') { const r = await request('POST', '/api/sources/test', { name, query: val, matterId: a.matter }); if (!r.ok) process.exitCode = 1; return console.log(r.ok ? `ok: ${r.results} results${r.sample ? ` — ${r.sample.citation || r.sample.title}` : ''}` : `failed: ${r.error}`) }
       if (sub === 'search') {

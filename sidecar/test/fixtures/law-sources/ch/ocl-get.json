@@ -1,0 +1,63 @@
+{
+ "structuredContent": {
+  "decision_id": "bge_115 II 83",
+  "court": "bge",
+  "canton": "CH",
+  "chamber": "Ire Cour civile",
+  "branch": "oeffentlich",
+  "proceeding_type": null,
+  "procedural_code": null,
+  "appealed_court_raw": null,
+  "appealed_date": null,
+  "appealed_docket": null,
+  "docket_number": "115 II 83",
+  "docket_number_2": null,
+  "decision_date": "1989-01-11",
+  "publication_date": null,
+  "marked_for_publication": null,
+  "language": "fr",
+  "title": null,
+  "legal_area": null,
+  "regeste": "Regeste\n Art. 18 Abs. 3 BMM. Nichtigkeit einer Kündigung, die im Zusammenhang mit einer Mietzinserhöhung ausgesprochen wird. Die Anwendung von Art. 18 Abs. 3 BMM setzt voraus, dass die Kündigung in direkter Beziehung zu einer Mietzinserhöhung steht. Das ist der Fall, wenn die Kündigung den Zweck hat",
+  "abstract_de": "<br/>\nRegeste\n<br/>Art. 18 Abs. 3 BMM. Nichtigkeit einer Kündigung, die im Zusammenhang mit einer Mietzinserhöhung ausgesprochen wird. Die Anwendung von Art. 18 Abs. 3 BMM setzt voraus, dass die Kündigung in direkter Beziehung zu einer Mietzinserhöhung steht. Das ist der Fall, wenn die Kündigung den",
+  "abstract_fr": "<br/>\nRegeste\n<br/>Art. 18 al. 3 AMSL. Nullité d'une résiliation du bail signifiée à l'occasion d'une majoration de loyer. L'application de l'art. 18 al. 3 AMSL suppose que la résiliation se trouve en rapport direct avec une majoration de loyer. Tel est le cas si elle a pour but de placer le locatai",
+  "abstract_it": "<br/>\nRegesto\n<br/>Art. 18 cpv. 3 DAL. Nullità della disdetta notificata in occasione di un aumento della pigione. L'applicazione dell'art. 18 cpv. 3 DAL presuppone che la disdetta sia in relazione diretta con un aumento di pigione. Tale è il caso ove essa abbia per scopo di porre il conduttore dina",
+  "full_text": "Urteilskopf\n115 II 83\n15. Extrait de l'arrêt de la Ire Cour civile du 11 janvier 1989 dans la cause S.I. E. contre C. (recours en réforme)\nRegeste\nArt. 18 Abs. 3 BMM\n. Nichtigkeit einer Kündigung, die im Zusammenhang mit einer Mietzinserhöhung ausgesprochen wird.\nDie Anwendung von\nArt. 18 Abs. 3 BMM\nsetzt voraus, dass die Kündigung in direkter Beziehung zu einer Mietzinserhöhung steht. Das ist der Fall, wenn die Kündigung den Zweck hat, den Mieter vor die Wahl zu stellen, entweder die Mieträume zu verlassen oder einen höheren Mietzins zu zahlen. Ist diese Voraussetzung gegeben, kommt es nicht darauf an, ob der Vermieter die Absicht zu kündigen vor oder nach der Mietzinserhöhung bekundet hat.\nSachverhalt\nab Seite 83\nBGE 115 II 83 S. 83\nA.-\nSelon un contrat de bail du 15 octobre 1981, conclu pour une durée de 5 ans avec échéance au 30 avril 1987, la S.I. E., propriétaire d'un immeuble à Genève, loue à C. des locaux commerciaux. Le capital-actions de la société propriétaire a changé de mains en 1985 et 1986. Par lettre du 5 septembre 1986, la bailleresse a signifié au locataire son congé pour l'échéance du 30 avril 1987.\nBGE 115 II 83 S. 84\nB.-\nLe 9 octobre 1986, C. a déposé une requête en prolongation du bail. En cours d'instance il a invoqué la nullité du congé, en faisant valoir que la résiliation n'avait pour but que d'obtenir du locataire une hausse de loyer substantielle, ce qui entraînerait sa nullité selon l'\nart. 18 al. 3 AMSL\n.\nPar jugement du 15 octobre 1987, le Tribunal des baux et loyers a déclaré nul et de nul effet le congé notifié le 5 septembre 1986.\nLa Chambre d'appel en matière de baux et loyers du canton de Genève a confirmé ce jugement par arrêt du 24 juin 1988.\nC.-\nLa défenderesse recourt en réforme au Tribunal fédéral en concluant principalement à ce que la résiliation du bail notifiée le 5 septembre 1986 soit reconnue valable, subsidiairement au renvoi de la cause à l'autorité cantonale pour qu'elle examine le mérite de ses conclusions subsidiaires, tendant à la prolongation du bail.\nLe Tribunal fédéral rejette le recours dans la mesure où il est recevable et confirme l'arrêt attaqué.\nErwägungen\nConsidérant en droit:\n2.\nAux termes de l'\nart. 18 al. 3 AMSL\n, une résiliation signifiée par le bailleur à l'occasion d'une majoration de loyer est nulle (texte allemand: \"im Zusammenhang mit\"). La Chambre d'appel considère que cette disposition vise également le congé qui précède une majoration. Examinant ensuite les circonstances de l'espèce,",
+  "decision_type": null,
+  "outcome": null,
+  "source_url": "https://search.bger.ch/ext/eurospider/live/de/php/clir/http/index.php?highlight_docid=atf%3A%2F%2F115-II-83%3Ade&lang=de&zoom=&type=show_document",
+  "pdf_url": null,
+  "cited_decisions": "[\"BGE 110 II 292\", \"BGE 110 II 78\", \"BGE 113 II 27\", \"BGE 115 II 83\"]",
+  "scraped_at": "2026-02-11T23:11:25.621934",
+  "source": null,
+  "source_id": null,
+  "source_spider": null,
+  "content_hash": "4414e360bf9d627cd776b82d60a2a0aec4307d0dca4a0f48fe6083394786e26d",
+  "canonical_key": "ECLI:CH:BGER:1989:115II83",
+  "date_provenance": "source_metadata",
+  "canonical_decision_id": "bge_115 II 83",
+  "is_canonical": true,
+  "date_is_estimated": false,
+  "cli_ch": "cli:ch:bge:115-II-83",
+  "court_name": "Bundesgericht (BGE)",
+  "court_level": "federal_supreme",
+  "statutes": [
+   "Art. 18 Abs. 3 AMSL",
+   "Art. 18 Abs. 3 BMM",
+   "Art. 2 CC",
+   "Art. 63 BGE"
+  ],
+  "citation_count": 85,
+  "citation_string_de": "BGE 115 II 83",
+  "citation_string_fr": "ATF 115 II 83",
+  "citation_string_it": "DTF 115 II 83",
+  "canonical_url": "https://mcp.opencaselaw.ch/entscheid/bge_115%20II%2083",
+  "rule_statement": "Regeste\n Art. 18 Abs. 3 BMM. Nichtigkeit einer Kündigung, die im Zusammenhang mit einer Mietzinserhöhung ausgesprochen wird. Die Anwendung von Art. 18 Abs. 3 BMM setzt voraus, dass die Kündigung in direkter Beziehung zu einer Mietzinserhöhung steht. Das ist der Fall, wenn die Kündigung den Zweck hat"
+ },
+ "content": [
+  {
+   "type": "text",
+   "text": "# 115 II 83"
+  }
+ ]
+}

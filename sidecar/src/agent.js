@@ -700,6 +700,8 @@ async function runAction(ctx, userMessage, onEvent, opts = {}) {
     // Laws pulled from the database → surfacing card in the pane. The
     // model cites sources in prose; the pane shows the actual laws found
     // (source + section + snippet) so the lawyer can verify the basis.
+    // A source's key: the front end shows a secure field (the key never enters the conversation).
+    if (r?.keyRequest) emit('key_request', r.keyRequest)
     if (r?.lawSources?.length) {
       emit('law', { sources: r.lawSources, tool: call.tool })
       lawUsed.push(...r.lawSources)

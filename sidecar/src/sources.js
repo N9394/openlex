@@ -44,7 +44,7 @@ const isConnector = (s) => s?.type === 'connector'
 // Ready-made sources a firm can add with `openlex sources add <preset>`.
 // Only presets whose responses were checked against the live API.
 const PRESETS = {
-  openlegaldata: {
+  oldp: { // Open Legal Data as a firm http source (the built-in connector "openlegaldata" does the same, with full texts)
     type: 'http', kind: 'caselaw', title: 'Open Legal Data (German court decisions)', jurisdictions: ['DE'],
     url: 'https://de.openlegaldata.io/api/cases/search/?text={query}&format=json',
     results: 'results',

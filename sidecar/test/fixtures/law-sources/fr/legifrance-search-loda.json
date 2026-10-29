@@ -1,0 +1,38 @@
+{
+ "totalResultNumber": 1,
+ "executionTime": 40,
+ "typePagination": "ARTICLE",
+ "facets": [],
+ "results": [
+  {
+   "titles": [
+    {
+     "id": "LEGITEXT000006068884",
+     "cid": "JORFTEXT000000886460",
+     "title": "Loi n° 85-677 du 5 juillet 1985 tendant à l'amélioration de la situation des victimes d'accidents de la circulation",
+     "legalStatus": "VIGUEUR",
+     "nature": "LOI"
+    }
+   ],
+   "nature": "LOI",
+   "etat": "VIGUEUR",
+   "date": "1985-07-05",
+   "sections": [
+    {
+     "title": "Chapitre Ier",
+     "extracts": [
+      {
+       "id": "LEGIARTI000006475070",
+       "num": "1",
+       "legalStatus": "VIGUEUR",
+       "dateDebut": 489369600000,
+       "values": [
+        "… victimes d'un accident de la circulation dans lequel est impliqué un véhicule terrestre à moteur …"
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

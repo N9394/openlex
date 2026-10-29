@@ -1,0 +1,76 @@
+{
+ "links": [
+  {
+   "rel": "self",
+   "href": "https://www.saos.org.pl/api/judgments/551289"
+  }
+ ],
+ "data": {
+  "id": 551289,
+  "courtType": "COMMON",
+  "href": "https://www.saos.org.pl/api/judgments/551289",
+  "courtCases": [
+   {
+    "caseNumber": "VIII U 3041/24"
+   }
+  ],
+  "judgmentType": "REASONS",
+  "judgmentDate": "2026-08-25",
+  "judges": [
+   {
+    "name": "Monika Pawłowska-Radzimierska",
+    "function": null,
+    "specialRoles": [
+     "PRESIDING_JUDGE"
+    ]
+   }
+  ],
+  "source": {
+   "code": "COMMON_COURT",
+   "judgmentUrl": "https://apiorzeczenia.wroclaw.sa.gov.pl/ncourt-api/judgement/details?id=152510000004021_VIII_U_003041_2024_Uz_2026-08-25_001",
+   "judgmentId": "152510000004021_VIII_U_003041_2024_Uz_2026-08-25_001",
+   "publisher": "Agnieszka Kurczewska",
+   "reviser": "Agnieszka Kurczewska",
+   "publicationDate": "2026-09-07"
+  },
+  "courtReporters": [],
+  "decision": null,
+  "summary": null,
+  "textContent": "<p>Sygn. akt VIII U 3041/24</p>\n    <div>\n      <h2>UZASADNIENIE</h2>\n      <p>Decyzją nr <span class=\"anon-block\">(...)</span> z dnia 21 października 2024 r. Zakład Ubezpieczeń Społecznych <span class=\"anon-block\">(...)</span> Oddział w <span class=\"anon-block\">W.</span>, stwierdził, że <strong>\n<!-- -->\n<span class=\"anon-block\">I. R.</span>\n</strong> (błędne wskazanie - <span class=\"anon-block\">R. T.</span>) podlega obowiązkowym ubezpieczeniom społecznym tj. emerytalnemu, rentowym i wypadkowemu w okresach: od 1.04.2020 do 22.04.2020, od 5.05.2020 do 26.05.2020, od 5.06.2020 do 29.06.2020, od 18.06.2020 do 20.07.2020, od 13.07.2020 do 10.08.2020, od 7.09.2020 do 28.09.2020, od 1.10.2020 do 21.10.2020, od 5.10.2020 do 14.12.2020, od 2.11.2020 do 29.12.2020, od 8.02.2021 do 22.03.2021, od 20.12.2021 do 28.03.2022 jako zleceniobiorca u płatnika składek <strong>\n<!-- -->\n<span class=\"anon-block\">(...)</span> Sp. z o.o. z siedzibą w <span class=\"anon-block\">W.</span>\n</strong> oraz określił miesięczne podstawy wymiaru składek z tego tytułu:</p>\n      <table>\n        <colgroup>\n          <col width=\"87\"/>\n          <col width=\"98\"/>\n          <col width=\"129\"/>\n          <col width=\"100\"/>\n          <col width=\"98\"/>\n          <col width=\"109\"/>\n          <col width=\"87\"/>\n        </colgroup>\n        <tr>\n          <td rowspan=\"3\">\n            <p>Miesiąc/rok</p>\n          </td>\n          <td rowspan=\"3\">\n            <p>Kod</p>\n            <p>ubezpieczenia</p>\n          </td>\n     </p></div>",
+  "legalBases": [
+   "art. 627 kc, art. 734 kc"
+  ],
+  "referencedRegulations": [
+   {
+    "journalTitle": "Ustawa z dnia 17 listopada 1964 r. - Kodeks postępowania cywilnego",
+    "journalNo": 43,
+    "journalYear": 1964,
+    "journalEntry": 296,
+    "text": "Ustawa z dnia 17 listopada 1964 r. - Kodeks postępowania cywilnego (Dz. U. z 1964 r. Nr 43, poz. 296 - art. 1; art. 235(2); art. 235(2) § 1; art. 235(2) § 1 pkt. 5; art. 477(14); art. 477(14) § 1; art. 98; art. 98 § 1(1))"
+   }
+  ],
+  "keywords": [
+   "podleganie ubezpieczeniom społecznym",
+   "podstawa wymiaru składki"
+  ],
+  "referencedCourtCases": [],
+  "receiptDate": "",
+  "meansOfAppeal": null,
+  "judgmentResult": null,
+  "lowerCourtJudgments": [],
+  "division": {
+   "id": 1023,
+   "name": "VIII Wydział Pracy i Ubezpieczeń Społecznych",
+   "href": "https://www.saos.org.pl/api/ccDivisions/1023",
+   "code": "0004021",
+   "type": "Pracy i Ubezpieczeń Społecznych",
+   "court": {
+    "href": "https://www.saos.org.pl/api/commonCourts/159",
+    "id": 159,
+    "name": "Sąd Okręgowy w Łodzi",
+    "code": "15251000",
+    "type": "REGIONAL"
+   }
+  }
+ }
+}

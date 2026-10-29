@@ -48,12 +48,12 @@ test.after(() => { kb.close(); fs.rmSync(DATA, { recursive: true, force: true })
 test('validation catches bad definitions', () => {
   const p = sources.validate({ 'Bad Name': { type: 'http' }, ok1: { type: 'ftp' }, ok2: { type: 'http', url: 'https://x.example/search' }, ok3: { type: 'mcp', tool: 'search' }, ok4: { type: 'folder' }, ok5: { type: 'http', url: 'https://x/?q={query}', kind: 'gossip' } })
   assert.strictEqual(p.length, 8, p.join('\n'))
-  assert.deepStrictEqual(sources.validate({ openlegaldata: sources.PRESETS.openlegaldata }), [])
+  assert.deepStrictEqual(sources.validate({ oldp: sources.PRESETS.oldp }), [])
 })
 
 test('field mapping: dotted paths, array indexes and templates', () => {
-  const items = sources.mapItems({ results: [{ id: 1, court: 'LGK', decision_type: 'Urteil', date: '2018-10-22', slug: 'lg-koln-x', snippets: [{ text: 'Die <em>Vertragsstrafe</em> ist überhöht.' }] }] }, sources.PRESETS.openlegaldata, 'openlegaldata')
-  assert.deepStrictEqual(items[0], { source: 'openlegaldata', kind: 'caselaw', id: '1', title: 'LGK Urteil 2018-10-22', text: 'Die Vertragsstrafe ist überhöht.', citation: 'LGK 2018-10-22 (Urteil)', url: 'https://de.openlegaldata.io/case/lg-koln-x', date: '2018-10-22', jurisdiction: 'DE' })
+  const items = sources.mapItems({ results: [{ id: 1, court: 'LGK', decision_type: 'Urteil', date: '2018-10-22', slug: 'lg-koln-x', snippets: [{ text: 'Die <em>Vertragsstrafe</em> ist überhöht.' }] }] }, sources.PRESETS.oldp, 'oldp')
+  assert.deepStrictEqual(items[0], { source: 'oldp', kind: 'caselaw', id: '1', title: 'LGK Urteil 2018-10-22', text: 'Die Vertragsstrafe ist überhöht.', citation: 'LGK 2018-10-22 (Urteil)', url: 'https://de.openlegaldata.io/case/lg-koln-x', date: '2018-10-22', jurisdiction: 'DE' })
 })
 
 test('a local http source: allowed under local-only, key from the keychain, results mapped with citations', async () => {
@@ -70,7 +70,7 @@ test('a local http source: allowed under local-only, key from the keychain, resu
 })
 
 test('a remote source needs "source:<name>" in the matter policy; filters by kind and jurisdiction', async () => {
-  setSources({ 'firm-kb': kbSource(), cases: { ...sources.PRESETS.openlegaldata } })
+  setSources({ 'firm-kb': kbSource(), cases: { ...sources.PRESETS.oldp } })
   policy.setRule(null, { mode: 'local-only' })
   let r = await policy.withMatter(null, () => sources.search({ query: 'x' }))
   assert.deepStrictEqual(r.searched, ['firm-kb'])
@@ -93,7 +93,7 @@ test('mcp sources map JSON tool output and fall back to plain text', async () =>
 })
 
 test('the agent tool reports results and what was not searched', async () => {
-  setSources({ 'firm-kb': kbSource(), cases: { ...sources.PRESETS.openlegaldata } })
+  setSources({ 'firm-kb': kbSource(), cases: { ...sources.PRESETS.oldp } })
   policy.setRule(null, { mode: 'local-only' })
   const { dispatch } = require('../src/tools')
   const r = await policy.withMatter(null, () => dispatch({}, 'search_sources', { query: 'Vertragsstrafe' }))
@@ -104,15 +104,15 @@ test('the agent tool reports results and what was not searched', async () => {
 
 test('add / remove presets in the user layer', () => {
   setSources({})
-  sources.add('openlegaldata')
-  assert.ok(sources.list().some((s) => s.name === 'openlegaldata' && s.kind === 'caselaw' && s.local === false))
+  sources.add('oldp')
+  assert.ok(sources.list().some((s) => s.name === 'oldp' && s.kind === 'caselaw' && s.local === false))
   assert.throws(() => sources.add('nope'), /no preset/)
-  sources.remove('openlegaldata')
-  assert.ok(!sources.list().some((s) => s.name === 'openlegaldata'))
+  sources.remove('oldp')
+  assert.ok(!sources.list().some((s) => s.name === 'oldp'))
 })
 
 test('live: Open Legal Data preset', { skip: process.env.OPENLEX_TEST_NETWORK !== '1' }, async () => {
-  setSources({ openlegaldata: sources.PRESETS.openlegaldata })
+  setSources({ oldp: sources.PRESETS.oldp })
   policy.setRule(null, { mode: 'allow-list', providers: ['source:openlegaldata'] })
   const r = await policy.withMatter(null, () => sources.search({ query: 'Vertragsstrafe', limit: 3 }))
   assert.ok(r.results.length > 0, JSON.stringify(r.skipped))

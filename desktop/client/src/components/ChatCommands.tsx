@@ -19,6 +19,7 @@ import { ModelPicker, PickerProvider } from './ModelPicker'
 import { useWordLink } from '../lib/hub'
 import { ChatCommand, PROVIDER_WORDS, didYouMean, engine, filterCommands, loadCommands, matterFolderName, menuQuery, parseCommand } from '../lib/commands'
 import { Basis, friendly, patternWords } from '../lib/turn'
+import LawSources from './LawSources'
 
 interface Matter { id: string; title: string; number?: string; client?: string; privileged?: boolean; agent?: string | null }
 interface Agent { name: string; title: string; description?: string }
@@ -379,7 +380,7 @@ function CommandDialog({ dialog, commands, onClose, onRun, onSaveOnce, say, quic
           )}
           {dialog.kind === 'permissions' && <PermissionRules say={say} />}
           {dialog.kind === 'sources' && <SourcesList items={dialog.items} />}
-          {dialog.kind === 'law' && <LawSources say={say} />}
+          {dialog.kind === 'law' && <LawSources say={say} matter={activeMatter} />}
           {dialog.kind === 'save' && (
             <div className="space-y-4">
               <p className="text-parchment">{t('commands.saveAsk', 'OpenLex wants to save a file:')} <span className="font-mono text-cream">{dialog.summary}</span></p>
@@ -646,67 +647,3 @@ function SourcesList({ items }: { items: Basis[] }) {
   )
 }
 
-interface LawSource { id: string; label: string; status: string; description?: string; state: string; enabled: boolean; needsKey: boolean; optionalKey: boolean; hasKey: boolean; keyHelp?: string | null; managedByFirm: boolean; licence?: string }
-
-/** /law: the law databases OpenLex looks things up in (engine connectors): on/off, paste a key. */
-function LawSources({ say }: { say: (text: string, kind?: 'ok' | 'warn' | 'bad') => void }) {
-  const { t } = useTranslation()
-  const [list, setList] = useState<LawSource[] | null>(null)
-  const [error, setError] = useState('')
-  const [keyFor, setKeyFor] = useState<LawSource | null>(null)
-  const [secret, setSecret] = useState('')
-  const [busy, setBusy] = useState(false)
-  const load = useCallback(() => {
-    (async () => {
-      const m = await activeMatter()
-      const r = await engine()!.call('GET', `/api/sources/law${m ? `?matterId=${encodeURIComponent(m.id)}` : ''}`)
-      setList(r.sources || [])
-    })().catch((err) => setError(friendly(err)))
-  }, [])
-  useEffect(() => { load() }, [load])
-  const act = async (fn: () => Promise<unknown>, done: string) => {
-    setBusy(true)
-    try { await fn(); say(done) } catch (err) { say(friendly(err), 'bad') }
-    setBusy(false); setKeyFor(null); setSecret(''); load()
-  }
-  if (error) return <p className="text-red-400">{error}</p>
-  if (!list) return <p className="text-antique">{t('common.loading', 'Loading…')}</p>
-  if (keyFor) {
-    return (
-      <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); if (secret.trim()) act(() => engine()!.call('POST', '/api/sources/key', { name: keyFor.id, key: secret.trim() }), t('commands.keySavedFor', 'Saved the {{name}} key.', { name: keyFor.label })) }}>
-        <label className="block text-cream">{t('commands.yourKey', 'Your {{name}} key', { name: keyFor.label })}</label>
-        <input type="password" autoFocus value={secret} onChange={(e) => setSecret(e.target.value)} className="input w-full" autoComplete="off" />
-        <p className="text-xs text-antique">{keyFor.keyHelp ? `${keyFor.keyHelp} ` : ''}{t('commands.keyKept', 'It is kept in this computer\'s keychain and only sent to {{name}}.', { name: keyFor.label })}</p>
-        <div className="flex gap-2">
-          <button type="submit" disabled={busy || !secret.trim()} className="btn-primary flex-1">{t('commands.saveKey', 'Save the key')}</button>
-          <button type="button" className="btn-secondary flex-1" onClick={() => { setKeyFor(null); setSecret('') }}>{t('common.cancel', 'Cancel')}</button>
-        </div>
-      </form>
-    )
-  }
-  const offline = list.some((s) => s.state === 'offline')
-  return (
-    <div className="space-y-2">
-      <ul className="space-y-1">
-        {list.map((s) => (
-          <li key={s.id} className="rounded px-2 py-1.5 hover:bg-leather/30">
-            <div className="flex items-center gap-2">
-              <span aria-hidden="true" className={s.state === 'ready' ? 'text-forest' : s.state === 'off' ? 'text-antique' : 'text-amber-400'}>{s.state === 'ready' ? '✓' : s.state === 'off' ? '–' : '!'}</span>
-              <span className="flex-1 text-cream">{s.status}</span>
-              {(s.needsKey || s.optionalKey) && <button type="button" disabled={busy} className="text-xs text-antique underline hover:text-cream" onClick={() => setKeyFor(s)}>{s.hasKey ? t('commands.replaceKey', 'Replace the key') : t('commands.pasteKey', 'Paste your key')}</button>}
-              {!s.managedByFirm && (
-                <button type="button" disabled={busy} className="text-xs text-antique underline hover:text-cream" onClick={() => act(() => engine()!.call('POST', '/api/sources/enable', { name: s.id, on: !s.enabled }), s.enabled ? t('commands.nowOff', '{{name}} is now off.', { name: s.label }) : t('commands.nowOn', '{{name}} is now on.', { name: s.label }))}>
-                  {s.enabled ? t('commands.switchOff', 'Switch off') : t('commands.switchOn', 'Switch on')}
-                </button>
-              )}
-            </div>
-            {s.description && <div className="ml-6 text-xs text-antique">{s.description}</div>}
-          </li>
-        ))}
-      </ul>
-      <p className="text-xs text-antique">
-        {t('commands.lawNote', 'Only your search words are sent, never your documents.')} {offline ? t('commands.lawOffline', 'Online look-ups are off in your client-data rule (/data).') : ''} {list[0]?.managedByFirm ? t('commands.lawFirm', 'Your firm manages this list.') : ''}
-      </p>
-    </div>
-  )
-}

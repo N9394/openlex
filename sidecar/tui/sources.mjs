@@ -27,8 +27,14 @@ export function sourceChoices(s) {
   if (s.needsKey || s.optionalKey) out.push({ value: 'key', label: s.hasKey ? 'Replace the key' : s.signIn ? 'Paste a service credential' : s.optionalKey ? 'Add your free key (optional)' : 'Paste your key', hint: s.keyHelp || '' })
   if ((s.needsKey || s.optionalKey) && s.guide) out.push({ value: 'guide', label: 'How to get it', hint: s.guide })
   if (s.nightCopy === true || s.nightCopy === false) out.push(s.nightCopy ? { value: 'nocopy', label: 'Stop keeping a local copy' } : { value: 'copy', label: 'Keep a local copy (fetched at night)', hint: 'RIS only allows live look-ups 20:00–05:00 and at weekends; OpenLex then fetches what you asked for during the day.' })
+  if (s.manual) for (const p of s.pages || []) out.push({ value: `page:${p.url}`, label: `Open ${p.label} in your browser`, hint: p.url })
+  if (s.local) {
+    for (const it of s.local.items || []) out.push({ value: `rm:${it.part}`, label: `Remove ${it.label} from this computer`, hint: `${it.updated ? `last updated ${it.updated}` : ''}${it.stale ? ' (over 60 days old)' : ''}` })
+    if ((s.local.parts || []).length) out.push({ value: 'keep', label: 'Keep a country on this computer (for offline work)…' })
+    else if (!(s.local.items || []).length) out.push({ value: 'keep:', label: 'Keep it on this computer (for offline work)…' })
+  }
   if (s.hasKey) out.push({ value: 'nokey', label: s.signIn ? 'Sign out (remove the key)' : 'Remove the key' })
-  if (!s.managedByFirm) out.push(s.enabled ? { value: 'off', label: 'Switch it off', hint: 'OpenLex will not look anything up there.' } : { value: 'on', label: 'Switch it on' })
+  if (!s.managedByFirm && !s.manual) out.push(s.enabled ? { value: 'off', label: 'Switch it off', hint: 'OpenLex will not look anything up there.' } : { value: 'on', label: 'Switch it on' })
   out.push({ value: 'back', label: 'Back to the list' })
   return out
 }
@@ -54,7 +60,19 @@ export function LawSources({ api, matterId = null, onNote }) {
   const [busy, setBusy] = useState('')
   const [note, setNote] = useState(null)
   const [signin, setSignin] = useState(null)
-  const load = () => api.lawSources(matterId).then((r) => setList(r.sources || [])).catch((err) => setList({ error: err.message }))
+  const [offline, setOffline] = useState(null)
+  const [ask, setAsk] = useState(null) // { title, lines, onYes }
+  const [countryPick, setCountryPick] = useState(false)
+  const load = () => api.lawSources(matterId).then((r) => { setList(r.sources || []); setOffline(r.offline || null) }).catch((err) => setList({ error: err.message }))
+  /** Size first, then a yes: one local copy. */
+  const planDownload = (src, part) => act('Checking the size…', async () => {
+    const r = await api.sourceDownload(src.id, part)
+    setAsk({ title: `Keep ${r.plan.label} on this computer?`, lines: [`Size: ${r.plan.size}, from ${r.plan.from || src.label}.`, r.plan.note || '', r.plan.updated ? `Last updated ${r.plan.updated}${r.plan.stale ? ' (over 60 days ago: may be out of date)' : ''}` : ''].filter(Boolean), onYes: () => act('Starting the download…', () => api.sourceDownload(src.id, part, true), `Downloading ${r.plan.label}; it shows here when it is done.`) })
+  }, 'Here is what it would download.')
+  const planOffline = () => act('Checking the sizes…', async () => {
+    const r = await api.lawOffline({ plan: true })
+    setAsk({ title: 'Work fully offline: OpenLex downloads these, then answers only from this computer', lines: [...(r.downloads || []).map((d) => `${d.label}: ${d.error || d.size}`), `Together: ${r.total?.size || '—'}`], onYes: () => act('Starting…', () => api.lawOffline({ on: true, confirm: true, countries: r.countries }), 'OpenLex now works fully offline; the downloads are running.') })
+  }, 'Here is what it would download.')
   useEffect(() => { load() }, [])
   const say = (n) => { setNote(n); onNote?.(n) }
   const act = async (label, fn, done) => {
@@ -91,6 +109,19 @@ export function LawSources({ api, matterId = null, onNote }) {
     <//>`
   }
   if (!list || busy) return html`<${Spinner} label=${busy || 'Loading…'} />`
+  if (ask) {
+    return html`<${Box} flexDirection="column">
+      <${Text} bold wrap="wrap">${ask.title}<//>
+      ${ask.lines.map((l, i) => html`<${Text} key=${i} wrap="wrap">${l}<//>`)}
+      <${Box} marginTop=${1}><${Menu} items=${[{ value: 'yes', label: 'Download' }, { value: 'no', label: 'Cancel' }]} onSelect=${(it) => { const f = ask.onYes; setAsk(null); if (it.value === 'yes') f() }} /><//>
+    <//>`
+  }
+  if (picked && countryPick) {
+    const parts = (picked.local?.parts || []).filter((p) => !(picked.local.items || []).some((i) => i.part === p.part))
+    return html`<${Field} label="Which country?">
+      <${Menu} items=${[...parts.map((p) => ({ value: p.part, label: p.label, hint: p.updated ? `last updated ${p.updated}${p.stale ? ' (over 60 days old)' : ''}` : '' })), { value: '__back', label: 'Back' }]} describe onSelect=${(it) => { setCountryPick(false); if (it.value !== '__back') planDownload(picked, it.value) }} />
+    <//>`
+  }
   if (list.error) return html`<${Note} kind="bad">${list.error}<//>`
 
   if (picked && keyMode) {
@@ -115,17 +146,21 @@ export function LawSources({ api, matterId = null, onNote }) {
             .catch((err) => { say({ kind: 'bad', text: err.message }); setPicked(null) })
             .finally(() => setBusy(''))
         }
+        if (it.value.startsWith('page:')) { say({ kind: 'info', text: `Open in your browser: ${it.value.slice(5)}` }); return setPicked(null) }
+        if (it.value === 'keep') return setCountryPick(true)
+        if (it.value === 'keep:') return planDownload(picked, null)
+        if (it.value.startsWith('rm:')) return act('Removing…', () => api.removeSourceDownload(picked.id, (picked.local?.parts || []).length ? it.value.slice(3) : null), 'Removed from this computer.')
         if (it.value === 'nokey') return act('Removing…', () => api.saveSourceKey(picked.id, null), `Removed the ${picked.label} key.`)
         return act(it.value === 'on' ? 'Switching on…' : 'Switching off…', () => api.enableSource(picked.id, it.value === 'on'), `${picked.label} is now ${it.value}.`)
       }} /><//>
     <//>`
   }
-  const offline = list.some((s) => s.state === 'offline')
-  const items = [...sourceItems(list), ...(offline ? [{ value: '__web', label: 'Allow online look-ups (only search words leave this computer)' }] : [])]
+  const offlineRule = list.some((s) => s.state === 'offline')
+  const items = [...(offlineRule ? [{ value: '__web', label: 'Allow online look-ups (only search words leave this computer)' }] : []), ...sourceItems(list), offline?.on ? { value: '__online', label: 'Working fully offline: go back online' } : { value: '__offline', label: 'Work fully offline… (shows what it would download first)' }]
   return html`<${Box} flexDirection="column">
     <${Text} bold>Where OpenLex looks up the law<//>
     ${note ? html`<${Note} kind=${note.kind}>${note.text}<//>` : null}
-    <${Box} marginTop=${1}><${Menu} items=${items} onSelect=${(it) => (it.value === '__web' ? act('Saving…', () => allowWeb(api, matterId), `Online look-ups are allowed${matterId ? ' for this matter' : ''}.`) : setPicked(list.find((s) => s.id === it.value)))} /><//>
-    <${Box} marginTop=${1}><${Text} dimColor wrap="wrap">Only your search words are sent, never your documents. ${offline ? 'Online look-ups are off in your client-data rule (/data or Settings). ' : ''}${list[0]?.managedByFirm ? 'Your firm manages this list.' : 'Enter on a source to switch it or add a key.'}<//><//>
+    <${Box} marginTop=${1}><${Menu} items=${items} onSelect=${(it) => (it.value === '__web' ? act('Saving…', () => allowWeb(api, matterId), `Online look-ups are allowed${matterId ? ' for this matter' : ''}.`) : it.value === '__offline' ? planOffline() : it.value === '__online' ? act('Saving…', () => api.lawOffline({ on: false }), 'OpenLex looks things up online again.') : setPicked(list.find((s) => s.id === it.value)))} /><//>
+    <${Box} marginTop=${1}><${Text} dimColor wrap="wrap">Only your search words are sent, never your documents. ${offlineRule ? 'Online look-ups are off in your client-data rule (/data or Settings). ' : ''}${list[0]?.managedByFirm ? 'Your firm manages this list.' : 'Enter on a source to switch it or add a key.'}<//><//>
   <//>`
 }

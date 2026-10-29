@@ -1,0 +1,41 @@
+{
+ "id": "5fca7d162a251e6bf9c78514",
+ "jurisdiction": "cc",
+ "chamber": "civ3",
+ "number": "17-18.194",
+ "numbers": [
+  "17-18.194",
+  "16-21.165"
+ ],
+ "ecli": "ECLI:FR:CCASS:2018:C301117",
+ "formation": "fs",
+ "publication": [
+  "c",
+  "b"
+ ],
+ "decision_date": "2018-12-20",
+ "update_date": "2018-12-26",
+ "type": "arret",
+ "solution": "rejet",
+ "text": "CIV. 3\r\nCOUR DE CASSATION\r\nAudience publique du 20 décembre 2018\r\nRejet\r\nLA COUR DE CASSATION, TROISIÈME CHAMBRE CIVILE, a rendu l'arrêt suivant :\r\nMais attendu qu'ayant relevé que l'autorisation d'occupation était en vigueur au moment de la procédure d'expropriation, la cour d'appel en a exactement déduit que la société pouvait prétendre à une indemnité ;\r\nPAR CES MOTIFS, la Cour :\r\nREJETTE le pourvoi ;\r\n",
+ "zones": {
+  "introduction": [
+   {
+    "start": 0,
+    "end": 148
+   }
+  ],
+  "motivations": [
+   {
+    "start": 148,
+    "end": 360
+   }
+  ],
+  "dispositif": [
+   {
+    "start": 360,
+    "end": 409
+   }
+  ]
+ }
+}
