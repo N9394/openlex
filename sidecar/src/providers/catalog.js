@@ -21,6 +21,7 @@
 
 // The order below is the order the picker shows (recommended first):
 //   local       on this computer — the only option without third-party disclosure
+//   recommended Claude on AWS Bedrock, EU profile from Frankfurt, retention "none"
 //   eu          EU providers without a US parent (OpenAI-compatible base URLs)
 //   firm-cloud  big models through the firm's own cloud account, EU region
 //   gateway     OpenRouter, strict preset (ZDR, no data collection, no fallbacks)
@@ -55,6 +56,27 @@ const PROVIDERS = {
     group: 'local',
     about: { en: 'An AI program you run on this computer (Ollama or llama.cpp). Nothing leaves it.', de: 'Ein KI-Programm auf diesem Computer (Ollama oder llama.cpp). Nichts verlässt ihn.' },
   },
+  // Recommended cloud (research 2026-10-29): Claude through the firm's own
+  // AWS account, EU geo inference profile called from Frankfurt, so the
+  // request is processed only in EU regions (from London or Zurich those
+  // regions would be added). Data retention "none" is set through the API
+  // (bedrock_retention.js). https://docs.aws.amazon.com/bedrock/latest/userguide/data-retention.html
+  bedrock: {
+    label: 'Claude on AWS Bedrock (EU)',
+    kind: 'bedrock',
+    local: false,
+    needsKey: true,
+    baseUrl: null, // https://bedrock-runtime.<region>.amazonaws.com
+    region: 'eu-central-1',
+    ctx: 200000,
+    defaultModel: 'eu.anthropic.claude-sonnet-5-5',
+    models: ['eu.anthropic.claude-sonnet-5-5', 'eu.anthropic.claude-opus-5-5'],
+    group: 'recommended',
+    usParent: true,
+    company: { en: 'Amazon Web Services, through your firm\'s AWS account (Anthropic does not receive your text)', de: 'Amazon Web Services, über das AWS-Konto Ihrer Kanzlei (Anthropic erhält Ihre Texte nicht)' },
+    keyHelp: { en: 'A Bedrock API key made in Europe (Frankfurt): AWS console → Amazon Bedrock → API keys. Or ACCESS_KEY_ID:SECRET_ACCESS_KEY.', de: 'Ein Bedrock-API-Schlüssel aus der Region Europa (Frankfurt): AWS-Konsole → Amazon Bedrock → API-Schlüssel. Oder ACCESS_KEY_ID:SECRET_ACCESS_KEY.' },
+    about: { en: 'Recommended for fast, high-quality work: Claude Sonnet 5.5 (Opus 5.5 for hard tasks) in your firm\'s own AWS account, EU data centres only, storage switched off. US company.', de: 'Empfohlen für schnelle Arbeit in hoher Qualität: Claude Sonnet 5.5 (Opus 5.5 für schwierige Aufgaben) im eigenen AWS-Konto Ihrer Kanzlei, nur EU-Rechenzentren, Speicherung abgeschaltet. US-Unternehmen.' },
+  },
   mistral: {
     label: 'Mistral (EU)',
     kind: 'openai',
@@ -63,11 +85,14 @@ const PROVIDERS = {
     baseUrl: 'https://api.mistral.ai/v1',
     region: 'eu', // La Plateforme is hosted in the EU
     ctx: 128000,
-    defaultModel: 'mistral-large-latest',
+    // Runner-up (research 2026-10-29). Never Large 4 (a preview: Mistral may
+    // train on it, zero retention does not apply) — blocked in policy_models.js.
+    defaultModel: 'mistral-medium-3-5-26-04',
+    models: ['mistral-medium-3-5-26-04', 'mistral-small-4-0-26-03'],
     group: 'eu',
     company: { en: 'Mistral AI (France)', de: 'Mistral AI (Frankreich)' },
     keyHelp: { en: 'Key from console.mistral.ai → API keys', de: 'Schlüssel unter console.mistral.ai → API keys' },
-    about: { en: 'French company, EU data centres. Ask Mistral to switch on zero data retention.', de: 'Französisches Unternehmen, Rechenzentren in der EU. Zero-Data-Retention bei Mistral beantragen.' },
+    about: { en: 'Mistral Medium 3.5: French company, EU data centres. Zero retention only after Mistral approves your request; until then Mistral keeps what you send for 30 days.', de: 'Mistral Medium 3.5: französisches Unternehmen, Rechenzentren in der EU. Zero-Data-Retention erst, wenn Mistral Ihren Antrag genehmigt; bis dahin speichert Mistral Ihre Eingaben 30 Tage.' },
   },
   // https://www.scaleway.com/en/docs/generative-apis/quickstart/ (base_url)
   scaleway: {
@@ -145,20 +170,6 @@ const PROVIDERS = {
     company: { en: 'Microsoft, through your firm\'s Azure account', de: 'Microsoft, über das Azure-Konto Ihrer Kanzlei' },
     about: { en: 'GPT in your firm\'s own Microsoft account; choose a deployment in the EU Data Zone. US company.', de: 'GPT im eigenen Microsoft-Konto Ihrer Kanzlei; Bereitstellung in der EU-Datenzone wählen. US-Unternehmen.' },
   },
-  bedrock: {
-    label: 'AWS Bedrock (your account)',
-    kind: 'bedrock',
-    local: false,
-    needsKey: true,
-    baseUrl: null, // https://bedrock-runtime.<region>.amazonaws.com
-    region: 'eu-central-1',
-    ctx: 200000,
-    defaultModel: 'eu.anthropic.claude-sonnet-4-5-20250929-v1:0',
-    group: 'firm-cloud',
-    usParent: true,
-    company: { en: 'Amazon Web Services, through your firm\'s AWS account', de: 'Amazon Web Services, über das AWS-Konto Ihrer Kanzlei' },
-    about: { en: 'Claude in your firm\'s own AWS account, EU region (Frankfurt by default). US company.', de: 'Claude im eigenen AWS-Konto Ihrer Kanzlei, EU-Region (standardmäßig Frankfurt). US-Unternehmen.' },
-  },
   vertex: {
     label: 'Google Vertex AI (your project)',
     kind: 'vertex',
@@ -206,7 +217,7 @@ const PROVIDERS = {
     usParent: true,
     company: { en: 'Anthropic (USA)', de: 'Anthropic (USA)' },
     keyHelp: { en: 'Key from console.anthropic.com → API keys', de: 'Schlüssel unter console.anthropic.com → API keys' },
-    about: { en: 'Claude directly from Anthropic. US company; data is not kept in the EU.', de: 'Claude direkt von Anthropic. US-Unternehmen; Daten bleiben nicht in der EU.' },
+    about: { en: 'Claude directly from Anthropic. No EU option; data is stored in the US.', de: 'Claude direkt von Anthropic. Keine EU-Option; Daten werden in den USA gespeichert.' },
   },
   openai: {
     label: 'OpenAI',
@@ -222,7 +233,7 @@ const PROVIDERS = {
     usParent: true,
     company: { en: 'OpenAI (USA)', de: 'OpenAI (USA)' },
     keyHelp: { en: 'Key from platform.openai.com → API keys', de: 'Schlüssel unter platform.openai.com → API keys' },
-    about: { en: 'GPT directly from OpenAI. US company.', de: 'GPT direkt von OpenAI. US-Unternehmen.' },
+    about: { en: 'GPT directly from OpenAI. US company; EU processing only with zero retention approved by OpenAI\'s sales team.', de: 'GPT direkt von OpenAI. US-Unternehmen; Verarbeitung in der EU nur mit Zero-Data-Retention, die der OpenAI-Vertrieb genehmigt.' },
   },
   custom: {
     label: 'Custom OpenAI-compatible endpoint',
@@ -242,7 +253,7 @@ const PROVIDERS = {
 }
 
 /** The picker's sections, in the recommended order. */
-const GROUPS = ['local', 'eu', 'firm-cloud', 'gateway', 'direct', 'other']
+const GROUPS = ['local', 'recommended', 'eu', 'firm-cloud', 'gateway', 'direct', 'other']
 
 function getProvider(id) {
   const p = PROVIDERS[id]

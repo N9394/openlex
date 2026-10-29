@@ -85,11 +85,17 @@ test('EU presets: OpenAI-compatible base URLs from the providers\' docs, EU regi
     assert.ok(!p.usParent, `${id} has no US parent`)
     assert.ok(p.defaultModel && p.about.en && p.about.de && p.company.de, id)
   }
-  // Catalog order = picker order: local, EU, firm cloud, OpenRouter, direct, other.
+  // Catalog order = picker order: local, recommended (Bedrock EU), EU, firm cloud, OpenRouter, direct, other.
   const order = Object.values(PROVIDERS).map((p) => GROUPS.indexOf(p.group))
   assert.ok(order.every((g) => g >= 0), 'every provider has a known group')
   assert.deepStrictEqual(order, [...order].sort((a, b) => a - b))
-  assert.deepStrictEqual(['azure', 'bedrock', 'vertex'].map((id) => PROVIDERS[id].group), ['firm-cloud', 'firm-cloud', 'firm-cloud'])
+  assert.deepStrictEqual(['azure', 'vertex'].map((id) => PROVIDERS[id].group), ['firm-cloud', 'firm-cloud'])
+  assert.deepStrictEqual(Object.values(PROVIDERS).filter((p) => !p.local).map((p) => p.group)[0], 'recommended')
+  assert.deepStrictEqual([PROVIDERS.bedrock.group, PROVIDERS.bedrock.region, PROVIDERS.bedrock.defaultModel], ['recommended', 'eu-central-1', 'eu.anthropic.claude-sonnet-5-5'])
+  assert.ok(PROVIDERS.bedrock.models.includes('eu.anthropic.claude-opus-5-5'))
+  assert.strictEqual(PROVIDERS.mistral.defaultModel, 'mistral-medium-3-5-26-04')
+  assert.match(PROVIDERS.mistral.about.en, /only after Mistral approves/)
+  assert.match(PROVIDERS.anthropic.about.en, /No EU option; data is stored in the US/)
   assert.strictEqual(PROVIDERS['local-server'].local, true)
 })
 
@@ -205,6 +211,80 @@ test('cloud notice: who gets the data, provider promises, CLOUD Act for US compa
   assert.strictEqual(notice.seen('openrouter'), false, 'per service')
 })
 
+test('never for client data: Claude Fable, Mistral previews, Bedrock outside the EU — blocked before anything is sent', async () => {
+  const blocked = require('../src/providers/blocked')
+  const R = (id, extra) => blocked.reason({ ...settings.resolve(id), ...extra })
+  assert.match(R('bedrock', { model: 'eu.anthropic.claude-fable-5-1' }).en, /30 days/)
+  assert.match(R('anthropic', { model: 'claude-fable-5' }).de, /bis zu 30 Tage/)
+  assert.match(R('mistral', { model: 'mistral-large-4-0-26-09' }).en, /preview/)
+  assert.match(R('mistral', { model: 'labs-devstral-small' }).en, /preview/)
+  assert.match(R('bedrock', { model: 'global.anthropic.claude-sonnet-5-5' }).en, /outside the EU/)
+  assert.match(R('bedrock', { model: 'us.anthropic.claude-opus-5-5' }).en, /outside the EU/)
+  assert.match(R('bedrock', { region: 'eu-central-2' }).en, /not an EU region/)
+  for (const ok of [['bedrock', { model: 'eu.anthropic.claude-sonnet-5-5' }], ['bedrock', { model: 'eu.anthropic.claude-opus-5-5' }], ['mistral', { model: 'mistral-medium-3-5-26-04' }], ['mistral', { model: 'mistral-small-4-0-26-03' }]]) assert.strictEqual(R(...ok), null, ok[1].model)
+  assert.throws(() => settings.update({ provider: 'bedrock', overrides: { region: 'eu-west-2' } }), /EU region/)
+  // In a real call: nothing leaves.
+  settings.update({ provider: 'scaleway', overrides: { model: 'mistral-large-4-0-26-09', baseUrl: `${base}/v1` } })
+  settings.update({ active: 'scaleway' })
+  policy.setRule(null, { mode: 'allow-list', providers: ['scaleway'] })
+  seen.length = 0
+  await assert.rejects(() => llm.chat([{ role: 'user', content: 'x' }]), (e) => e.code === 'MODEL_BLOCKED')
+  assert.strictEqual(seen.length, 0)
+  settings.update({ provider: 'scaleway', overrides: { model: 'gpt-oss-120b' } })
+  settings.update({ active: 'local' })
+  policy.setRule(null, { mode: 'local-only' })
+})
+
+test('Bedrock zero retention: read, switch on with PUT {"mode":"none"}, remembered; a key without permission gets the manual step', async () => {
+  const retention = require('../src/providers/bedrock_retention')
+  let mode = 'inherit'
+  let allowPut = true
+  const ctl = http.createServer((req, res) => {
+    let raw = ''
+    req.on('data', (c) => { raw += c })
+    req.on('end', () => {
+      seen.push({ method: req.method, url: req.url, headers: req.headers, body: raw ? JSON.parse(raw) : {} })
+      if (req.url !== '/data-retention') { res.writeHead(404); return res.end() }
+      if (req.method === 'PUT') {
+        if (!allowPut) { res.writeHead(403, { 'Content-Type': 'application/json' }); return res.end('{"message":"not authorized to perform: bedrock:PutAccountDataRetention"}') }
+        mode = JSON.parse(raw).mode
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ mode, updated_at: '2026-10-29T10:00:00Z' }))
+    })
+  })
+  await new Promise((r) => ctl.listen(0, '127.0.0.1', r))
+  try {
+    settings.update({ provider: 'bedrock', overrides: { controlUrl: `http://127.0.0.1:${ctl.address().port}` } })
+    const p = settings.resolve('bedrock')
+    assert.strictEqual(p.region, 'eu-central-1')
+    seen.length = 0
+    let st = await retention.check(p, 'bedrock-api-key-test')
+    assert.deepStrictEqual([st.mode, st.confirmed], ['inherit', false])
+    assert.strictEqual(seen[0].headers.authorization, 'Bearer bedrock-api-key-test')
+    st = await retention.setNone(p, 'bedrock-api-key-test')
+    assert.deepStrictEqual([st.ok, st.mode, st.confirmed], [true, 'none', true])
+    assert.deepStrictEqual(seen.find((x) => x.method === 'PUT').body, { mode: 'none' })
+    assert.strictEqual(retention.remembered('eu-central-1').confirmed, true)
+    // Access keys are SigV4-signed for the bedrock service in eu-central-1.
+    seen.length = 0
+    await retention.check(p, 'AKIAIOSFODNN7EXAMPLE:wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY')
+    assert.match(seen[0].headers.authorization, /^AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE\/\d{8}\/eu-central-1\/bedrock\/aws4_request/)
+    allowPut = false
+    mode = 'default'
+    st = await retention.setNone(p, 'bedrock-api-key-test')
+    assert.strictEqual(st.ok, false)
+    assert.match(st.manual.command, /^curl -X PUT https:\/\/bedrock\.eu-central-1\.amazonaws\.com\/data-retention .*\{"mode":"none"\}/)
+    assert.match(st.manual.de, /bedrock:PutAccountDataRetention/)
+    // The free connection test reads the setting too.
+    process.env.OPENLEX_KEY_BEDROCK = 'bedrock-api-key-test'
+    const t = await llm.testProvider('bedrock')
+    assert.deepStrictEqual([t.ok, t.checked, t.retention.mode], [true, 'data-retention', 'default'])
+    assert.strictEqual(retention.remembered('eu-central-1').confirmed, false)
+    delete process.env.OPENLEX_KEY_BEDROCK
+  } finally { ctl.close(); settings.update({ provider: 'bedrock', overrides: { controlUrl: null } }) }
+})
+
 // ── the engine's routes, with fake programs on a fake PATH and a fake Ollama ──
 
 function startEngine(env) {
@@ -284,7 +364,7 @@ test('engine: detection with fake programs, a pull with progress, the picker dat
 
     const pv = await call(eng.port, 'GET', '/api/providers')
     assert.strictEqual(pv.active, 'local-server')
-    assert.deepStrictEqual(pv.groups, ['local', 'eu', 'firm-cloud', 'gateway', 'direct', 'other'])
+    assert.deepStrictEqual(pv.groups, ['local', 'recommended', 'eu', 'firm-cloud', 'gateway', 'direct', 'other'])
     assert.deepStrictEqual(pv.display, { en: 'On this computer · Qwen3 14B', de: 'Auf diesem Computer · Qwen3 14B', local: true, viaUs: false })
     const ls = pv.providers.find((x) => x.id === 'local-server')
     assert.strictEqual(ls.baseUrl, `${base}/v1`)

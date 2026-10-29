@@ -3,6 +3,10 @@
   "usdToEur": 0.86,
   "usdToEurAsOf": "2026-10-29",
   "models": [
+    { "match": "^eu\\.anthropic\\.claude-sonnet-5-5", "provider": "bedrock", "in": 2.20, "out": 11.0, "currency": "USD", "asOf": "2026-10-29", "source": "AWS Bedrock price list, EU geo profile" },
+    { "match": "^eu\\.anthropic\\.claude-opus-5-5", "provider": "bedrock", "in": 4.40, "out": 22.0, "currency": "USD", "asOf": "2026-10-29", "source": "AWS Bedrock price list, EU geo profile" },
+    { "match": "mistral-medium-3", "provider": "mistral", "in": 1.50, "out": 7.50, "currency": "USD", "asOf": "2026-10-29", "source": "Mistral price list" },
+    { "match": "mistral-small-4", "provider": "mistral", "in": 0.15, "out": 0.60, "currency": "USD", "asOf": "2026-10-29", "source": "Mistral price list" },
     { "match": "claude-opus-5-5|claude-opus-5\\.5", "in": 4.0, "out": 20.0, "currency": "USD", "asOf": "2026-09-25", "source": "Anthropic list price" },
     { "match": "claude-opus-(5|4)", "in": 5.0, "out": 25.0, "currency": "USD", "asOf": "2026-09-25", "source": "Anthropic list price" },
     { "match": "claude-sonnet-5", "in": 2.0, "out": 10.0, "currency": "USD", "asOf": "2026-09-25", "source": "Anthropic list price" },

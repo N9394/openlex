@@ -32,8 +32,10 @@ function save(next) {
   return next
 }
 
-const OVERRIDE_FIELDS = ['baseUrl', 'model', 'ctx', 'local', 'apiVersion', 'nativeTools', 'region', 'project', 'plan', 'euProviders']
+const OVERRIDE_FIELDS = ['baseUrl', 'model', 'ctx', 'local', 'apiVersion', 'nativeTools', 'region', 'project', 'plan', 'euProviders', 'controlUrl']
 const LOOPBACK = new Set(['127.0.0.1', 'localhost', '[::1]'])
+// EU member-state AWS regions (no London eu-west-2, no Zurich eu-central-2).
+const BEDROCK_EU = ['eu-central-1', 'eu-west-1', 'eu-west-3', 'eu-north-1', 'eu-south-1', 'eu-south-2']
 
 /** Set the active provider and/or merge overrides for one provider. */
 function update({ active, provider, overrides } = {}) {
@@ -52,6 +54,19 @@ function update({ active, provider, overrides } = {}) {
       clean.baseUrl = clean.baseUrl.replace(/\/+$/, '')
       // An AI program "on this computer" must really be on this computer.
       if (provider === 'local-server' && !LOOPBACK.has(u.hostname)) throw new Error('an AI program on this computer must use a 127.0.0.1 or localhost address')
+    }
+    // Bedrock: called from an EU member region only, so the "eu." profile
+    // stays in EU regions (London or Zurich would add themselves).
+    if (provider === 'bedrock' && clean.region !== undefined && clean.region !== null && !BEDROCK_EU.includes(String(clean.region))) {
+      throw new Error(`AWS Bedrock must be called from an EU region (eu-central-1 Frankfurt recommended), not ${clean.region}`)
+    }
+    if (clean.controlUrl !== undefined) {
+      if (provider !== 'bedrock') delete clean.controlUrl
+      else if (clean.controlUrl !== null) {
+        const c = new URL(clean.controlUrl)
+        if (c.protocol !== 'https:' && !LOOPBACK.has(c.hostname)) throw new Error('controlUrl must be https')
+        clean.controlUrl = clean.controlUrl.replace(/\/+$/, '')
+      }
     }
     // OpenRouter: the firm's plan decides the gateway (Business: EU).
     if (clean.plan !== undefined) {
@@ -94,4 +109,4 @@ function resolve(id) {
   return out
 }
 
-module.exports = { load, update, resolve, SETTINGS_PATH }
+module.exports = { load, update, resolve, SETTINGS_PATH, BEDROCK_EU }

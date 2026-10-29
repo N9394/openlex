@@ -912,11 +912,34 @@ async function handle(req, res) {
           group: d.group || 'other', about: d.about || null, company: d.company || null, keyHelp: d.keyHelp || null,
           usParent: !!d.usParent, noticeSeen: d.local ? null : cloudNotice.seen(id),
           ...(id === 'openrouter' ? { plan: d.plan, euProviders: d.euProviders } : {}),
+          ...(id === 'bedrock' ? { retention: require('./providers/bedrock_retention').remembered(d.region || 'eu-central-1') } : {}),
+          blocked: require('./providers/blocked').reason({ ...d, model: d.model || d.defaultModel || null }),
           display: describeProvider.label({ ...d, model: d.model || d.defaultModel || null }, { localModel: localModels.currentName() }),
         })
       }
       const act = list.find((x) => x.id === cur.active)
       return sendJson(res, 200, { active: cur.active, groups: PROVIDER_GROUPS, providers: list, display: act ? act.display : null })
+    }
+
+    // Zero data retention on AWS Bedrock (providers/bedrock_retention.js): check, or switch on.
+    if (p === '/api/providers/retention') {
+      try {
+        const retention = require('./providers/bedrock_retention')
+        const id = req.method === 'GET' ? (url.searchParams.get('provider') || 'bedrock') : ((await readBody(req)).provider || 'bedrock')
+        if (id !== 'bedrock') return sendJson(res, 400, { error: 'zero retention can be set here only for AWS Bedrock' })
+        const d = providerSettings.resolve('bedrock')
+        const key = await secrets.getKey('bedrock')
+        if (!key) return sendJson(res, 400, { error: 'AWS Bedrock: no API key set yet', code: 'NO_KEY' })
+        if (req.method === 'GET') return sendJson(res, 200, { ok: true, ...(await retention.check(d, key)) })
+        if (req.method === 'POST') {
+          const r = await retention.setNone(d, key)
+          hub.publish('provider-changed', { provider: 'bedrock' }, clientOf(req))
+          return sendJson(res, 200, r)
+        }
+        return sendJson(res, 405, { error: 'use GET or POST' })
+      } catch (err) {
+        return sendJson(res, 200, { ok: false, error: err.message })
+      }
     }
 
     // The cloud notice (cloud_notice.js): once per service, then from "About data".

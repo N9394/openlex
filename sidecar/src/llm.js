@@ -37,7 +37,7 @@ const hooks = require('./hooks')
 /** Errors worth trying the next candidate for: network, timeouts, 429, 5xx, missing key. */
 function retryable(err) {
   if (!err) return false
-  if (err.code === 'POLICY_BLOCKED' || err.code === 'NO_KEY' || err.code === 'HOOK_BLOCKED' || err.code === 'SPEND_CAP') return true
+  if (err.code === 'POLICY_BLOCKED' || err.code === 'NO_KEY' || err.code === 'HOOK_BLOCKED' || err.code === 'SPEND_CAP' || err.code === 'MODEL_BLOCKED') return true
   const m = String(err.message || err)
   return /ECONN|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|socket hang up|fetch failed|timed? ?out|aborted due to timeout|HTTP (429|5\d\d)|\b(429|50[0-4])\b|overloaded|rate limit|returned no content/i.test(m) && !/AbortError|cancel/i.test(m)
 }
@@ -88,6 +88,12 @@ async function prepare(p, kind) {
     const err = new Error(`Blocked by data policy: ${decision.reason}. Change it in Settings → Data policy (or "openlex policy"), or switch to a local model.`)
     err.code = 'POLICY_BLOCKED'
     throw err
+  }
+  // Models that keep or train on what they get, or run outside the EU (providers/blocked.js).
+  const blocked = require('./providers/blocked').reason(p)
+  if (blocked) {
+    policy.audit({ provider: p.id, model: p.model || null, matter, call: kind, decision: 'blocked', reason: 'model not allowed for client data' })
+    const e = new Error(blocked.en); e.code = 'MODEL_BLOCKED'; e.de = blocked.de; throw e
   }
   const key = await secrets.getKey(p.id)
   if (p.needsKey && !key) { const e = new Error(`${p.label}: no API key set (Settings → Model provider)`); e.code = 'NO_KEY'; throw e }

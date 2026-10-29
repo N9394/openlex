@@ -106,7 +106,18 @@ async function stream(p, key, messages, opts = {}) {
   return { content: r.content, reasoning: r.reasoning }
 }
 
+/**
+ * Connection check: reading the account's data-retention setting costs
+ * nothing, sends no text and confirms the key (and whether zero retention
+ * is on). A key without that permission gets one tiny "Reply with OK.".
+ */
 async function test(p, key) {
+  try {
+    const st = await require('./bedrock_retention').check(p, key)
+    return { ok: true, sample: null, checked: 'data-retention', retention: st }
+  } catch (err) {
+    if (err.status !== 403 && err.status !== 404) throw err
+  }
   const r = await complete(p, key, [{ role: 'user', content: 'Reply with OK.' }], { maxTokens: 16, temperature: 0, timeoutMs: 30000 })
   return { ok: true, sample: r.content.slice(0, 40) }
 }
