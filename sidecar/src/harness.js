@@ -47,20 +47,22 @@ function firmPath() {
   try { return require('./workspace').resolve('openlex.json') } catch { return null }
 }
 
-const cache = new Map() // path → { mtime, data, error }
+// Keyed on mtime AND size: two writes within one timestamp tick (coarse
+// mtimes on Windows/NTFS and some file systems) must not serve stale data.
+const cache = new Map() // path → { mtime, size, data, error }
 function readLayer(file) {
   if (!file) return { data: null, error: null }
   let st
   try { st = fs.statSync(file) } catch { cache.delete(file); return { data: null, error: null } }
   const hit = cache.get(file)
-  if (hit && hit.mtime === st.mtimeMs) return hit
+  if (hit && hit.mtime === st.mtimeMs && hit.size === st.size) return hit
   let entry
   try {
     const data = JSON.parse(fs.readFileSync(file, 'utf8'))
     if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('must be a JSON object')
-    entry = { mtime: st.mtimeMs, data, error: null }
+    entry = { mtime: st.mtimeMs, size: st.size, data, error: null }
   } catch (err) {
-    entry = { mtime: st.mtimeMs, data: null, error: `${file}: ${err.message}` }
+    entry = { mtime: st.mtimeMs, size: st.size, data: null, error: `${file}: ${err.message}` }
   }
   cache.set(file, entry)
   return entry

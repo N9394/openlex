@@ -26,6 +26,9 @@ const { execFile } = require('child_process')
 const DATA = fs.mkdtempSync(path.join(os.tmpdir(), 'openlex-tui-'))
 process.env.OPENLEX_DATA_DIR = DATA
 process.env.NO_COLOR = '1'
+// The Unicode look everywhere, also on the old Windows console (CI has no
+// Windows Terminal); the ASCII fallback has its own test below.
+process.env.OPENLEX_ASCII = '0'
 
 // ── fake engine ──────────────────────────────────────────────────────────
 const seen = []
@@ -449,7 +452,8 @@ test('add documents: a dragged-in (quoted) file is copied into the matter folder
   await waitFor(r, 'Add documents')
   await press(r, '2')
   await waitFor(r, 'Which documents?')
-  await press(r, `'${file}' `, 'enter')
+  const q = process.platform === 'win32' ? '"' : "'" // Windows terminals quote with "…" only
+  await press(r, `${q}${file}${q} `, 'enter')
   const f = await waitFor(r, 'copied into the matter folder')
   assert.match(f, /Lease 2024\.docx/)
   const dest = path.join(DATA, 'workspace', 'Alpine_share_deal', 'documents')
@@ -1417,7 +1421,7 @@ test('look: no colour with NO_COLOR, plain ASCII when asked, a screen-reader mod
     assert.match(f, /> New matter/)
     assert.match(f, /-{20}/)
     r.unmount()
-    delete process.env.OPENLEX_ASCII
+    process.env.OPENLEX_ASCII = '0'
 
     // Screen-reader mode: labelled lines, numbered menus, nothing that moves.
     process.env.OPENLEX_ACCESSIBLE = '1'

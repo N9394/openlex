@@ -45,11 +45,14 @@ jobs:
       - name: Install engine dependencies
         working-directory: sidecar
         run: npm ci --no-audit --no-fund
+      # File list via bash: Node 20 takes a directory, Node 22 only files or globs.
       - name: Engine and CLI tests
         working-directory: sidecar
-        run: node --test test/
+        shell: bash
+        run: node --test test/*.test.js
       - name: Desktop shell tests
-        run: node --test desktop/electron/test/
+        shell: bash
+        run: node --test desktop/electron/test/*.test.js
 
   package:
     name: package CLI tarball (smoke test)

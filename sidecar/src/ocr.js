@@ -61,8 +61,13 @@ function run(argv) {
 }`
 
 // PowerShell 5.1 + WinRT. Await helper per the documented AsTask pattern.
+// UTF-8 both ways (no BOM): Windows PowerShell otherwise reads and writes the
+// console code page, which turns "ä" and "§" into "?".
 const WIN_SCRIPT = `
 $ErrorActionPreference = 'Stop'
+$utf8 = New-Object System.Text.UTF8Encoding $false
+[Console]::InputEncoding = $utf8
+[Console]::OutputEncoding = $utf8
 Add-Type -AssemblyName System.Runtime.WindowsRuntime
 $asTask = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation\`1' })[0]
 function Await($op, [Type]$t) { $task = $asTask.MakeGenericMethod($t).Invoke($null, @($op)); $task.Wait(-1) | Out-Null; $task.Result }
@@ -100,7 +105,7 @@ function run(cmd, args, { input, timeout } = {}) {
   return new Promise((resolve, reject) => {
     const child = execFile(cmd, args, { timeout, maxBuffer: 64 * 1024 * 1024, windowsHide: true }, (err, stdout, stderr) => {
       if (err) return reject(new Error(`${path.basename(cmd)}: ${String(stderr || err.message).trim().split('\n').slice(-2).join(' ')}`))
-      resolve(String(stdout))
+      resolve(String(stdout).replace(/^\uFEFF/, ''))
     })
     if (input !== undefined) child.stdin.end(input)
   })

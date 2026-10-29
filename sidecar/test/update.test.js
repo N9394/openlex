@@ -18,6 +18,13 @@ const http = require('http')
 const crypto = require('crypto')
 const { execFileSync } = require('child_process')
 
+// The plugin updater exists for macOS and Windows only (no Linux plugin build).
+if (process.platform !== 'darwin' && process.platform !== 'win32') {
+  console.log('update.test.js: skipped, the plugin updater is macOS/Windows only')
+  process.exit(0)
+}
+const KEY = process.platform === 'win32' ? 'win' : 'mac'
+
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'lexvault-upd-test-'))
 process.env.LEXVAULT_DATA_DIR = tmp
 
@@ -35,12 +42,14 @@ fs.mkdirSync(path.join(PAYLOAD_DIR, 'add-in'), { recursive: true })
 fs.writeFileSync(path.join(PAYLOAD_DIR, 'sidecar', 'src', 'server.js'), '// NEW SERVER v0.1.1')
 fs.writeFileSync(path.join(PAYLOAD_DIR, 'add-in', 'taskpane.html'), '<title>NEW</title>')
 const ZIP = path.join(tmp, 'payload.zip')
-execFileSync('zip', ['-qr', ZIP, 'sidecar', 'add-in'], { cwd: PAYLOAD_DIR })
+// Windows has no zip command; its bsdtar (tar.exe) writes zip with -a.
+if (process.platform === 'win32') execFileSync('tar.exe', ['-a', '-cf', ZIP, 'sidecar', 'add-in'], { cwd: PAYLOAD_DIR })
+else execFileSync('zip', ['-qr', ZIP, 'sidecar', 'add-in'], { cwd: PAYLOAD_DIR })
 const ZIP_SHA = crypto.createHash('sha256').update(fs.readFileSync(ZIP)).digest('hex')
 
 const MANIFEST = {
   version: '0.9.9', // always newer than whatever the local package.json says
-  filename: 'lexvault-word-plugin-mac-0.9.9.zip',
+  filename: `lexvault-word-plugin-${KEY}-0.9.9.zip`,
   sha256: ZIP_SHA,
   size_bytes: fs.statSync(ZIP).size,
   notes: 'test update',
@@ -52,7 +61,7 @@ const seenAuths = []
 function mockServer() {
   return http.createServer((req, res) => {
     const u = new URL(req.url, 'http://localhost')
-    if (u.pathname === '/api/app/update/plugin-mac') {
+    if (u.pathname === `/api/app/update/plugin-${KEY}`) {
       seenAuths.push(req.headers.authorization || null)
       if (req.headers.authorization !== `Bearer ${GOOD_TOKEN}`) {
         res.writeHead(401); return res.end('{"error":"bad token"}')
@@ -125,14 +134,14 @@ const test = async (name, fn) => {
     const events = []
     u.onEvent = (e) => events.push(e)
     const art = await u.download()
-    assert.strictEqual(path.basename(art), 'lexvault-word-plugin-mac-0.9.9.zip')
+    assert.strictEqual(path.basename(art), `lexvault-word-plugin-${KEY}-0.9.9.zip`)
     assert.strictEqual(fs.readFileSync(art).length, fs.statSync(ZIP).size)
     assert.ok(events.some((e) => e.kind === 'downloading'), 'progress events emitted')
   })
 
   await test('apply → files swapped in install tree', async () => {
     const u = new Updater({})
-    u.pendingArtifactPath = path.join(tmp, 'updates', 'lexvault-word-plugin-mac-0.9.9.zip')
+    u.pendingArtifactPath = path.join(tmp, 'updates', `lexvault-word-plugin-${KEY}-0.9.9.zip`)
     u.pendingVersion = '0.9.9'
     // Point apply at the fake install root by temporarily overriding
     // __dirname resolution: applyUpdate resolves installRoot from __dirname,
