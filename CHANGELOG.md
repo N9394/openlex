@@ -20,6 +20,9 @@ All notable changes to OpenLex are listed here. The format follows [Keep a Chang
 ### Fixed
 - Windows: on-device OCR kept umlauts and the section sign (PowerShell now reads and writes UTF-8).
 - Changes to `openlex.json` made twice within the same second are no longer missed.
+- Two saves of a file within the same millisecond no longer overwrite each other's earlier-version copy.
+- Windows: the plugin updater extracts with the system `tar.exe`, not a GNU tar from Git for Windows on PATH.
+- Desktop app: the engine log file handle is no longer leaked on every engine start.
 
 ## [0.2.2] - 2026-10-29
 
