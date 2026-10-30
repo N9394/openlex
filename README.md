@@ -134,7 +134,7 @@ cd desktop/client && npm install && npm run dev        # UI
 cd desktop/electron && npm install && npm run start:dev
 ```
 
-Packaging: `cd desktop/electron && npm run package:mac` (or `package:win`, `package:linux`). This builds the UI, stages the server with `server-fixes/`, the engine, skills and playbooks, and fetches llama.cpp and Qdrant. See [desktop/server/README.md](desktop/server/README.md) for the server's settings.
+Packaging: `cd desktop/electron && npm ci && npm run package:mac:arm64` (or `package:mac:x64`, `package:win`, `package:linux`). This builds the UI, stages the engine (the app's backend), skills and playbooks, fetches llama.cpp and Qdrant from their official releases (sha256-pinned) and builds an unsigned installer in `desktop/electron/dist/`; `npm run smoke` then starts the packaged engine. No model weights and no obfuscation; the old desktop server is only bundled with `OPENLEX_BUNDLE_LEGACY_SERVER=1`. Release installers are built by [the release workflow](.github/workflows/release.yml); users get them from [Releases](https://github.com/N9394/openlex/releases) ([how to install](docs/guides/desktop-app.md)).
 
 ## Use OpenLex from another MCP client
 

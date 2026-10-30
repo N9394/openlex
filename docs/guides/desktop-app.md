@@ -1,16 +1,52 @@
 # Desktop app
 
-The desktop app brings research, document analysis and due diligence together in one window. It includes a local AI runtime (llama.cpp), so it can work fully offline.
+The desktop app brings research, document analysis and due diligence together in one window. It includes a local AI runtime (llama.cpp), so it can work fully offline. No account is needed.
 
-## Install
+## Download
 
-Download it from the [download page](https://openlex.pinemarshlands.com/download): Apple Silicon or Intel Mac (`.zip`), Windows (`.exe`) or Linux (`.AppImage`).
+Get the newest version from [GitHub Releases](https://github.com/N9394/openlex/releases/latest):
 
-- **macOS:** unzip, move OpenLex to Applications, then right-click it and choose **Open** the first time. The app isn't notarised yet.
-- **Windows:** run the installer. If SmartScreen warns you, choose **More info → Run anyway**.
-- **Linux:** `chmod +x` the AppImage and run it.
+| Your computer | File |
+|---|---|
+| Mac with Apple Silicon (M1 or newer) | `OpenLex-X.Y.Z-mac-arm64.dmg` |
+| Mac with an Intel processor | `OpenLex-X.Y.Z-mac-x64.dmg` |
+| Windows 10 or 11 | `OpenLex-X.Y.Z-windows-x64-setup.exe` |
+| Linux | `OpenLex-X.Y.Z-linux-x64.AppImage` |
 
-> The current installers still use the old name LexVault and ask you to sign in on first start. The next release removes both, and no account will be needed.
+No model is included in the download. Use your own cloud key, your firm's cloud account, a llama-server or Ollama endpoint, or a `.gguf` model file (see [Choose your AI](choose-your-ai.md)).
+
+## Install and open it the first time
+
+These downloads are not signed by Apple or Microsoft, so your computer warns you the first time. That is expected. You only have to do this once.
+
+**macOS**
+
+1. Open the `.dmg` and drag **OpenLex** into **Applications**.
+2. Open OpenLex. macOS says it cannot check the app ("Apple could not verify…"). Click **Done** (or **OK**).
+3. Open **System Settings → Privacy & Security**, scroll down to the message about OpenLex and click **Open Anyway**. Confirm with your password.
+
+On older macOS versions (14 Sonoma and earlier) you can instead right-click OpenLex in Applications, choose **Open**, then **Open** again.
+
+**Windows**
+
+1. Run the `.exe`. If Windows shows "Windows protected your PC" (SmartScreen), click **More info**, then **Run anyway**.
+2. The installer puts OpenLex in your Start menu. It needs no administrator rights.
+
+**Linux**
+
+Make the AppImage executable and run it: `chmod +x OpenLex-*.AppImage && ./OpenLex-*.AppImage`. Some distributions need `libfuse2` for AppImages.
+
+## Check your download
+
+Each installer has a `.sha256` checksum, a signature (`.bundle`) and a GitHub attestation that show it was built from this repository by its release workflow. How to check them: [Verify your download](../VERIFY.md).
+
+Firms that need installers signed by Apple (notarised) or Microsoft (Authenticode) can get signed builds through support.
+
+## Updating
+
+Download the new version and install it over the old one. Your settings, matters and models stay where they are.
+
+If you used the older app called **LexVault**, OpenLex picks up its settings and data. On a Mac, you can delete `LexVault.app` from Applications afterwards; on Windows, the OpenLex installer replaces it.
 
 ## Hardware for local models
 

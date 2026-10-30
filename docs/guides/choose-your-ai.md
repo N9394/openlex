@@ -7,7 +7,7 @@ OpenLex doesn't come with its own AI service, and it never sends your work throu
 The most private choice: nothing leaves the machine. You need a capable computer, for example Apple Silicon with 16 GB of memory or more, or an NVIDIA graphics card with 8 GB or more.
 
 - **Ollama:** if [Ollama](https://ollama.com) is running on your computer, OpenLex uses it. Pull a model first, for example `ollama pull qwen3:8b`.
-- **llama.cpp:** put a `.gguf` model file in `~/.lexvault/models/`, have `llama-server` on your PATH, and set `OPENLEX_LLM_MODEL` to the file's name without `.gguf`. The desktop app ships with llama.cpp and downloads a model for you.
+- **llama.cpp:** put a `.gguf` model file in `~/.lexvault/models/`, have `llama-server` on your PATH, and set `OPENLEX_LLM_MODEL` to the file's name without `.gguf`. The desktop app ships with llama.cpp; choose a `.gguf` file in its model settings.
 
 ```bash
 openlex use local

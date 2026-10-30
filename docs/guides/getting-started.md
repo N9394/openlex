@@ -8,7 +8,7 @@ There are three ways in. They share one engine on your computer, so your matters
 |---|---|---|
 | **Terminal app** | Everyone, on macOS, Linux and Windows. The leanest version. | One line in the terminal (below) |
 | **Word add-in** | Working inside contracts: review, suggested edits as tracked changes, law search | Installer from the [download page](https://openlex.pinemarshlands.com/download) |
-| **Desktop app** | Research, document analysis, due diligence | Installer from the [download page](https://openlex.pinemarshlands.com/download) |
+| **Desktop app** | Research, document analysis, due diligence | Installer from [GitHub Releases](https://github.com/N9394/openlex/releases/latest) ([how to install](desktop-app.md)) |
 
 ## 1. Install
 
