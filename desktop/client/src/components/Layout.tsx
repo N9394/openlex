@@ -5,6 +5,7 @@ import MatterPicker from './MatterPicker'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../contexts/AuthContext'
 import CommandPalette from './CommandPalette'
+import { initTheme } from '../lib/theme'
 import { useWindowWidth, useWindowHeight, NARROW_APP } from '../lib/viewport'
 import {
   MessageSquare,
@@ -76,13 +77,8 @@ export default function Layout() {
     })
   }, [navigate])
 
-  // Restore saved theme on app load
-  useEffect(() => {
-    const saved = localStorage.getItem('theme')
-    if (saved === 'dark') {
-      document.documentElement.classList.add('dark')
-    }
-  }, [])
+  // Colours and text size (Settings → Appearance); 'same as this computer' follows the system.
+  useEffect(() => { initTheme() }, [])
 
   const handleLogout = () => {
     logout()

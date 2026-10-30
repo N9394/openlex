@@ -666,7 +666,8 @@
       "ragOnlyHint": "Always search the legal database for every question. When off, the AI decides whether a search is needed.",
       "saveSettings": "Save settings",
       "judge": "Check answers with a second pass (recommended)",
-      "judgeLocked": "set by your firm"
+      "judgeLocked": "set by your firm",
+      "guided": "Set up the AI step by step (on this computer, your own key, or with help)"
     },
     "account": {
       "title": "Account",
@@ -684,7 +685,11 @@
     "theme": {
       "title": "Appearance",
       "light": "Light",
-      "dark": "Dark"
+      "dark": "Dark",
+      "system": "Same as this computer",
+      "lightWord": "Light",
+      "darkWord": "Dark",
+      "colours": "Colours"
     },
     "organization": {
       "title": "Organization",
@@ -709,7 +714,52 @@
       "activationToken": "Activation token",
       "activationTokenDesc": "Stored on this machine. Use it to re-activate after a fresh install — paste it into OpenLex's first-run screen on a new device."
     },
-    "nameSavedHere": "Saved on this computer."
+    "nameSavedHere": "Saved on this computer.",
+    "items": {
+      "ai": "AI",
+      "law": "Law sources",
+      "permissions": "Permissions",
+      "language": "Language",
+      "appearance": "Appearance",
+      "licence": "Licence and updates"
+    },
+    "sum": {
+      "services": "{{n}} services allowed",
+      "names": "names hidden",
+      "law": "{{n}} of {{total}} on",
+      "perms": "{{n}} things allowed without asking",
+      "permsNone": "OpenLex asks every time",
+      "aiNone": "Not set up yet"
+    },
+    "lang": {
+      "same": "same as my question",
+      "answersShort": "answers: {{x}}",
+      "ui": "OpenLex in",
+      "answers": "Answers in",
+      "saved": "Saved. Word and the terminal app follow.",
+      "hint": "Quotes from documents and the law stay in their own language."
+    },
+    "size": {
+      "title": "Text size",
+      "s": "small text",
+      "m": "normal text",
+      "l": "large text"
+    },
+    "advanced": "Advanced",
+    "licence": {
+      "activated": "Activated: OpenLex restarts…",
+      "failed": "Activation did not work.",
+      "checking": "Checking for updates…",
+      "checked": "Checked. A new version shows at the top of the window when it is ready.",
+      "community": "Community edition",
+      "licensed": "Licensed: {{tier}}",
+      "communityText": "OpenLex works fully without an account. A licence is only needed for your distributor's downloads and updates.",
+      "activate": "Activate a licence (optional)",
+      "activateButton": "Activate",
+      "version": "Version {{v}}",
+      "check": "Check for updates",
+      "diagnostics": "Diagnostics…"
+    }
   },
   "auth": {
     "loginTitle": "Welcome back",

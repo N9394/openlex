@@ -565,7 +565,7 @@ function AgentChoice({ quickAgent, setQuickAgent, onDone, onRun }: { quickAgent?
 }
 
 /** /permissions: allowed without asking (everywhere / per matter), never allowed, and the firm's own (shown, not editable). */
-function PermissionRules({ say }: { say: (text: string, kind?: 'ok' | 'warn' | 'bad') => void }) {
+export function PermissionRules({ say }: { say: (text: string, kind?: 'ok' | 'warn' | 'bad') => void }) {
   const { t } = useTranslation()
   const [data, setData] = useState<any>(null)
   const [error, setError] = useState('')

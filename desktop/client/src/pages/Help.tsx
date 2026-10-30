@@ -2,7 +2,7 @@
 // wrong" → Diagnostics (the technical status page that used to be the
 // Dependencies tab in Settings).
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { BookOpen, CalendarClock, ChevronDown, ChevronRight, LifeBuoy, Slash, Stethoscope } from 'lucide-react'
 import { ChatCommand, engine, loadCommands } from '../lib/commands'
@@ -13,7 +13,9 @@ export default function Help() {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const [cmds, setCmds] = useState<ChatCommand[]>([])
-  const [diag, setDiag] = useState(() => typeof window !== 'undefined' && window.location.hash === '#diagnostics')
+  const location = useLocation()
+  const [diag, setDiag] = useState(location.hash === '#diagnostics')
+  useEffect(() => { if (location.hash === '#diagnostics') setDiag(true) }, [location.hash])
   const isElectron = typeof window !== 'undefined' && !!(window as any).lexvault?.isElectron
   useEffect(() => { if (engine()) loadCommands(/^de/i.test(i18n.language || '') ? 'de' : 'en').then(setCmds).catch(() => {}) }, [i18n.language])
   const isMac = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform || navigator.userAgent || '')

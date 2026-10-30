@@ -666,7 +666,8 @@
       "ragOnlyHint": "Sucht für jede Anfrage in der Rechtsdatenbank. Wenn aus, entscheidet die KI selbst, ob gesucht wird.",
       "saveSettings": "Einstellungen speichern",
       "judge": "Antworten in einem zweiten Durchgang prüfen (empfohlen)",
-      "judgeLocked": "von Ihrer Kanzlei festgelegt"
+      "judgeLocked": "von Ihrer Kanzlei festgelegt",
+      "guided": "KI Schritt für Schritt einrichten (auf diesem Computer, eigener Schlüssel oder mit Hilfe)"
     },
     "account": {
       "title": "Konto",
@@ -684,7 +685,11 @@
     "theme": {
       "title": "Erscheinungsbild",
       "light": "Hell",
-      "dark": "Dunkel"
+      "dark": "Dunkel",
+      "system": "Wie dieser Computer",
+      "lightWord": "Hell",
+      "darkWord": "Dunkel",
+      "colours": "Farben"
     },
     "organization": {
       "title": "Organisation",
@@ -709,7 +714,52 @@
       "activationToken": "Aktivierungstoken",
       "activationTokenDesc": "Auf diesem Gerät gespeichert. Fügen Sie es nach einer Neuinstallation in den Erstanmeldebildschirm ein, um die App auf einem neuen Gerät zu reaktivieren."
     },
-    "nameSavedHere": "Auf diesem Computer gespeichert."
+    "nameSavedHere": "Auf diesem Computer gespeichert.",
+    "items": {
+      "ai": "KI",
+      "law": "Rechtsquellen",
+      "permissions": "Erlaubnisse",
+      "language": "Sprache",
+      "appearance": "Darstellung",
+      "licence": "Lizenz und Updates"
+    },
+    "sum": {
+      "services": "{{n}} Dienste erlaubt",
+      "names": "Namen verborgen",
+      "law": "{{n}} von {{total}} an",
+      "perms": "{{n}} Dinge ohne Nachfrage erlaubt",
+      "permsNone": "OpenLex fragt jedes Mal",
+      "aiNone": "Noch nicht eingerichtet"
+    },
+    "lang": {
+      "same": "wie meine Frage",
+      "answersShort": "Antworten: {{x}}",
+      "ui": "OpenLex auf",
+      "answers": "Antworten auf",
+      "saved": "Gespeichert. Word und die Terminal-App übernehmen das.",
+      "hint": "Zitate aus Dokumenten und Gesetzen bleiben in ihrer Sprache."
+    },
+    "size": {
+      "title": "Schriftgröße",
+      "s": "kleine Schrift",
+      "m": "normale Schrift",
+      "l": "große Schrift"
+    },
+    "advanced": "Erweitert",
+    "licence": {
+      "activated": "Aktiviert: OpenLex startet neu…",
+      "failed": "Die Aktivierung hat nicht funktioniert.",
+      "checking": "Suche nach Updates…",
+      "checked": "Geprüft. Eine neue Version erscheint oben im Fenster, sobald sie bereit ist.",
+      "community": "Community-Edition",
+      "licensed": "Lizenziert: {{tier}}",
+      "communityText": "OpenLex funktioniert vollständig ohne Konto. Eine Lizenz brauchen Sie nur für Downloads und Updates Ihres Anbieters.",
+      "activate": "Lizenz aktivieren (optional)",
+      "activateButton": "Aktivieren",
+      "version": "Version {{v}}",
+      "check": "Nach Updates suchen",
+      "diagnostics": "Diagnose…"
+    }
   },
   "auth": {
     "loginTitle": "Willkommen zurück",
