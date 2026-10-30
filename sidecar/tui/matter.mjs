@@ -999,7 +999,7 @@ export function Matter({ matterId = null }) {
     pageRef.current = { height, total: lines.length }
     body = html`<${Box} flexDirection="column" flexGrow=${1}>
       <${Box} flexDirection="column" flexGrow=${1}>
-        ${shown.map((l, i) => html`<${Text} key=${i} wrap="truncate-end">${l.segs.map((g, k) => html`<${Text} key=${k} dimColor=${!!g.dim} bold=${!!g.bold} color=${g.color}>${g.t}<//>`)}<//>`)}
+        ${(rcheck ? [] : shown).map((l, i) => html`<${Text} key=${i} wrap="truncate-end">${l.segs.map((g, k) => html`<${Text} key=${k} dimColor=${!!g.dim} bold=${!!g.bold} color=${g.color}>${g.t}<//>`)}<//>`)}
       <//>
       ${slash.map((s) => html`<${Text} key=${s.key} dimColor wrap="truncate-end">  ${s.text}<//>`)}
       ${rcheck

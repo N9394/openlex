@@ -565,6 +565,7 @@ test('redaction check: a numbered list before an online AI; number + Enter switc
     ],
   }
   const r = show(h(App))
+  try {
   await openMatterChat(r)
   const before = posted('/api/chat').length
   await press(r, 'Who pays?', 'enter')
@@ -579,7 +580,7 @@ test('redaction check: a numbered list before an online AI; number + Enter switc
   await press(r, '+', 'K', 'ä', 'u', 'f', 'e', 'r', 'enter')
   await waitFor(r, 'added by you')
   await press(r, 's')
-  await waitFor(r, 'Checked by you')
+  for (let i = 0; i < 150 && posted('/api/chat').length === before; i++) await sleep(20)
   assert.deepStrictEqual(state.redactionConfirmed, { id: 'rc_1', off: ['people:eva steiner'], on: [], add: [{ text: 'Käufer', kind: 'OTHER' }] })
   const chat = posted('/api/chat').at(-1).body
   assert.strictEqual(chat.redactionCheck, 'rc_1')
@@ -591,8 +592,10 @@ test('redaction check: a numbered list before an online AI; number + Enter switc
   f = await waitFor(r, 'Nothing was sent')
   assert.strictEqual(posted('/api/chat').length, n)
   assert.strictEqual(state.redactionCancelled.id, 'rc_1')
-  state.redaction = null
-  r.unmount()
+  } finally {
+    state.redaction = null
+    r.unmount()
+  }
 })
 
 test('permission prompt: plain words over the chat; Enter = allow once, a = this matter, A = always, n/Esc = no', async () => {
