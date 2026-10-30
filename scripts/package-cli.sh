@@ -6,7 +6,9 @@
 #
 # Contents: sidecar/{src,bin/*.js,tui,playbooks,skills,package.json} with
 # production node_modules (optional native deps left out: better-sqlite3,
-# onnxruntime, transformers — the engine runs without them), the Word add-in
+# onnxruntime-node and its tokenizer — the engine runs without them; the
+# redaction check's name finder then says it needs the desktop app, which
+# bundles the runtime for its platform), the Word add-in
 # files the engine serves, docs, LICENSE, README. Models are not included:
 # use a cloud key, or a local llama.cpp (`brew install llama.cpp`) plus a GGUF.
 #

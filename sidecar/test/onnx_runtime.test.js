@@ -92,6 +92,17 @@ test('the runtime is tried once and cached; "not bundled" vs "cannot load here"'
   assert.throws(() => runtime.ort(), /cannot load on this computer/)
 })
 
+test('a desktop build without a runtime for its platform (Intel Mac): "cannot run here", with the reason', () => {
+  const note = path.join(__dirname, '..', 'onnx-runtime.json')
+  assert.ok(!fs.existsSync(note), 'no note in a source checkout')
+  fs.writeFileSync(note, JSON.stringify({ bundled: false, unsupported: 'The ONNX runtime is not available for Intel Macs.' }))
+  try {
+    runtime.setLoader(loaderWith(missing('onnxruntime-node')))
+    assert.deepStrictEqual(runtime.info(), { available: false, reason: 'load-failed', error: 'The ONNX runtime is not available for Intel Macs.' })
+    assert.strictEqual(ner.status().available, false)
+  } finally { fs.rmSync(note, { force: true }); runtime.setLoader(null) }
+})
+
 test('no runtime: the download is refused, nothing is fetched', async () => {
   runtime.setLoader(loaderWith(missing('onnxruntime-node')))
   const realFetch = global.fetch

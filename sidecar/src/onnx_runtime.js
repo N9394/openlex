@@ -40,7 +40,13 @@ function probe() {
     // a package that is there but cannot load on this computer (a missing
     // system library, a binary for another platform).
     const missing = err?.code === 'MODULE_NOT_FOUND' && new RegExp(`Cannot find (module|package) '(${RUNTIME}|${TOKENIZERS.replace('/', '\\/')})'`).test(first)
-    state = { ok: false, reason: missing ? 'not-bundled' : 'load-failed', error: first.slice(0, 300) }
+    // The desktop app for a platform the runtime does not support (Intel
+    // Macs) has no runtime either, but a note saying why (stage-onnx.js).
+    let unsupported = null
+    if (missing) { try { unsupported = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'onnx-runtime.json'), 'utf8')).unsupported || null } catch { /* the CLI: no note */ } }
+    state = unsupported
+      ? { ok: false, reason: 'load-failed', error: String(unsupported).slice(0, 300) }
+      : { ok: false, reason: missing ? 'not-bundled' : 'load-failed', error: first.slice(0, 300) }
   }
   return state
 }
@@ -98,6 +104,7 @@ async function selfTest() {
     const session = await o.InferenceSession.create(tinyModel(), { executionProviders: ['cpu'] })
     const out = await session.run({ x: new o.Tensor('float32', Float32Array.from([1.5, -2]), [2]) })
     const y = Array.from(out.y.data)
+    await session.release?.()
     if (y[0] !== 3 || y[1] !== -4) throw new Error(`wrong result ${JSON.stringify(y)}`)
     return { ok: true, version: o.env?.versions?.common || null, ms: Date.now() - t }
   } catch (err) {
