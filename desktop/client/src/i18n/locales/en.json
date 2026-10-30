@@ -113,7 +113,11 @@
     "grid": "Review grid",
     "plans": "Plans",
     "desk": "Matter desk",
-    "record": "AI record"
+    "record": "AI record",
+    "chat": "Chat & research",
+    "matters": "Matters",
+    "more": "More tools",
+    "help": "Help"
   },
   "dashboard": {
     "welcome": "What would you like to work on today?",
@@ -810,7 +814,7 @@
     "didYouMean": "There is no command /{{name}}. Did you mean /{{guess}}? Press Enter to use it.",
     "title": "Commands",
     "menuKeys": "↑ ↓ choose · Enter run · Tab add details · Esc close",
-    "hint": "Type / for commands · {{key}} · /help",
+    "hint": "/ for commands · {{key}} search · /help",
     "helpTitle": "Commands",
     "modelTitle": "Where the AI runs",
     "matterTitle": "Choose a matter",
@@ -1526,7 +1530,10 @@
     "title": "Search",
     "placeholder": "Search matters, conversations, saved items, documents, commands",
     "nothing": "Nothing found for “{{q}}”.",
-    "keys": "↑↓ choose · ↵ open · esc close"
+    "keys": "↑↓ choose · ↵ open · esc close",
+    "matters": "Matters",
+    "moreHint": "review grid, plans, matter desk, hub",
+    "helpHint": "commands, guides, diagnostics"
   },
   "panel": {
     "debateN": "Debate, {{n}} rounds",
@@ -1651,5 +1658,61 @@
     "euOnly": "Only data centres in the EU",
     "euOnlyHint": "AWS Bedrock in Frankfurt, Mistral, Azure or Google in an EU region.",
     "privileged": "Privileged matters always stay on this computer, whatever is ticked here."
+  },
+  "matters": {
+    "label": "Matter",
+    "title": "Matters",
+    "search": "Search by name, number or client",
+    "none": "No matters yet. Start one with “New matter”.",
+    "nothing": "No matter matches “{{q}}”.",
+    "privileged": "privileged",
+    "current": "current",
+    "noMatter": "Work without a matter (quick questions)",
+    "noneChosen": "No matter (quick questions)",
+    "titleNeeded": "Give the matter a name.",
+    "name": "Name of the matter",
+    "client": "Client (optional)",
+    "number": "Matter number (optional)",
+    "hide": "Names to hide from online AI (optional, comma-separated)",
+    "privilegedLabel": "Privileged: everything stays on this computer",
+    "create": "Create the matter",
+    "new": "New matter",
+    "newShort": "New",
+    "choose": "Choose a matter",
+    "localOnly": "stays on this computer",
+    "followsRule": "follows your client-data rule",
+    "appOnly": "Matters are kept by the desktop app."
+  },
+  "more": {
+    "inChat": "In the chat",
+    "pages": "Pages of their own",
+    "analyse": "Analyse a document",
+    "analyseText": "Summary, key terms, dates, duties and risks of one contract, with quotes.",
+    "investigate": "Investigate several documents",
+    "investigateText": "One question across many documents: what they say, where they conflict.",
+    "draft": "Write a draft",
+    "draftText": "A first draft from your instructions or precedents, checked against the law.",
+    "diligence": "Due diligence of a data room",
+    "diligenceText": "Red flags per document and an overview for the deal.",
+    "gridText": "A table: one row per document, one column per question.",
+    "plansText": "Longer pieces of work, step by step, with your approval.",
+    "deskText": "Checklists, trackers and watches on official sources for this matter.",
+    "hub": "Hub (for IT and power users)",
+    "hubText": "Firm library, workflows over a whole matter, firm clauses, connectors."
+  },
+  "help": {
+    "guides": "Guides",
+    "guidesText": "Step by step, in plain words.",
+    "call": "Book a setup call",
+    "callText": "We set it up with you.",
+    "wrong": "Something is wrong",
+    "wrongText": "Diagnostics and what to send to support.",
+    "commands": "Commands in the chat",
+    "commandsIntro": "Type / in the question field, or press {{key}} to search everything. Click a command to run it.",
+    "noCommands": "The commands appear when the OpenLex engine runs.",
+    "diagnostics": "Diagnostics",
+    "diagIntro": "The technical state of this computer's OpenLex parts. Support may ask you for it.",
+    "troubleshooting": "Troubleshooting guide",
+    "diagAppOnly": "Diagnostics are part of the desktop app."
   }
 }

@@ -1,5 +1,5 @@
-// The App's search (Ctrl+K / ⌘K outside the chat; in the chat the same keys
-// open the "/" commands). Pages and chat tools are listed at once; typing
+// The App's one palette (Ctrl+K / ⌘K, everywhere, the chat too): pages,
+// chat commands and search. Pages and chat tools are listed at once; typing
 // searches the engine (GET /api/find): matters, conversations from every
 // window, saved items, drafts, documents in the matter folders, commands.
 // The old palette searched the legacy server's documents and vault.
@@ -7,8 +7,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { createPortal } from 'react-dom'
-import { Archive, Briefcase, ClipboardList, FileSearch, FileText, Folder, LayoutDashboard, MessageSquare, ScanSearch, Search, Settings, Slash, Wrench } from 'lucide-react'
-import { engine } from '../lib/commands'
+import { HelpCircle, Archive, Briefcase, ClipboardList, FileSearch, FileText, Folder, LayoutDashboard, MessageSquare, ScanSearch, Search, Settings, Slash, Wrench } from 'lucide-react'
+import { ChatCommand, engine, loadCommands } from '../lib/commands'
 
 interface Target { page?: string; matterId?: string | null; sessionId?: string; id?: string; draftId?: string; command?: string; file?: string }
 interface Entry { key: string; group: string; title: string; detail?: string; icon: React.ReactNode; target: Target }
@@ -31,7 +31,6 @@ export default function CommandPalette() {
   const listRef = useRef<HTMLDivElement>(null)
 
   const pages: Entry[] = useMemo(() => [
-    { key: 'p-home', group: 'go', title: t('palette.home', 'Home'), icon: <LayoutDashboard size={16} />, target: { page: '/dashboard' } },
     { key: 'p-chat', group: 'go', title: t('palette.chat', 'Chat'), detail: t('palette.chatHint', 'questions, documents, the law'), icon: <MessageSquare size={16} />, target: { page: '/research' } },
     { key: 'p-analyse', group: 'go', title: t('palette.analyse', 'Analyse a document'), detail: '/analyse', icon: <FileSearch size={16} />, target: { page: '/research', command: 'analyse' } },
     { key: 'p-investigate', group: 'go', title: t('palette.investigate', 'Investigate several documents'), detail: '/investigate', icon: <ScanSearch size={16} />, target: { page: '/research', command: 'investigate' } },
@@ -39,14 +38,32 @@ export default function CommandPalette() {
     { key: 'p-diligence', group: 'go', title: t('palette.diligence', 'Due diligence of a data room'), detail: '/diligence', icon: <Briefcase size={16} />, target: { page: '/research', command: 'diligence' } },
     { key: 'p-saved', group: 'go', title: t('palette.saved', 'Saved'), detail: t('palette.savedHint', 'answers, notes, clauses, documents, drafts'), icon: <Archive size={16} />, target: { page: '/vault' } },
     { key: 'p-record', group: 'go', title: t('palette.record', 'AI record'), icon: <ClipboardList size={16} />, target: { page: '/audit' } },
+    { key: 'p-matters', group: 'go', title: t('palette.matters', 'Matters'), icon: <Folder size={16} />, target: { page: '/matters' } },
+    { key: 'p-more', group: 'go', title: t('nav.more', 'More tools'), detail: t('palette.moreHint', 'review grid, plans, matter desk, hub'), icon: <LayoutDashboard size={16} />, target: { page: '/more' } },
     { key: 'p-settings', group: 'go', title: t('palette.settings', 'Settings'), icon: <Settings size={16} />, target: { page: '/settings' } },
+    { key: 'p-help', group: 'go', title: t('nav.help', 'Help'), detail: t('palette.helpHint', 'commands, guides, diagnostics'), icon: <HelpCircle size={16} />, target: { page: '/help' } },
   ], [t])
 
+  // The chat's "/" commands (the engine's one list): typing "/" or a word finds them.
+  const [cmds, setCmds] = useState<ChatCommand[]>([])
+  useEffect(() => {
+    if (!isOpen || cmds.length || !engine()) return
+    loadCommands(/^de/i.test(i18n.language || '') ? 'de' : 'en').then(setCmds).catch(() => {})
+  }, [isOpen, cmds.length, i18n.language])
   const shownPages = useMemo(() => {
     const q = query.trim().toLowerCase()
     return q ? pages.filter((p) => `${p.title} ${p.detail || ''}`.toLowerCase().includes(q)) : pages
   }, [pages, query])
-  const results = useMemo(() => [...shownPages, ...found], [shownPages, found])
+  const shownCommands = useMemo(() => {
+    const q = query.trim().toLowerCase().replace(/^\//, '')
+    if (!query.trim()) return []
+    return cmds.filter((c) => `${c.name} ${c.help}`.toLowerCase().includes(q)).slice(0, query.trim().startsWith('/') ? 30 : 6)
+      .map((c): Entry => ({ key: `cmd:${c.name}`, group: 'command', title: `/${c.name}`, detail: c.help, icon: <Slash size={16} />, target: { page: '/research', command: c.name } }))
+  }, [cmds, query])
+  const results = useMemo(() => {
+    const seen = new Set(shownCommands.map((c) => c.key))
+    return [...shownPages, ...shownCommands, ...found.filter((f) => f.group !== 'command' || !seen.has(`cmd:${String(f.title).replace(/^\//, '')}`))]
+  }, [shownPages, shownCommands, found])
 
   // Search the engine (debounced).
   useEffect(() => {

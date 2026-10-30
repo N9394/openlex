@@ -1,7 +1,7 @@
 // "/" commands in the App's chat — the same commands as the terminal app
 // and the Word pane (the engine's one list: GET /api/commands). Typing "/"
 // opens one small menu above the question field (↑ ↓ choose, Enter run,
-// Tab fill in, Esc close; Ctrl+K / ⌘K opens it too). Commands run through
+// Tab fill in, Esc close; Ctrl+K / ⌘K opens the search, which lists them too). Commands run through
 // the engine; the few that need a choice open a small dialog (which AI,
 // which matter, the AI record). A quiet hint line under the field says how
 // to find them. /as, /privileged, /permissions, /sources and /law work like
@@ -14,7 +14,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import i18n from '../i18n'
-import { Check, Download, Folder, Lock, X } from 'lucide-react'
+import { Check, Download, Lock, X } from 'lucide-react'
 import { ModelPicker, PickerProvider } from './ModelPicker'
 import AgentEditor from './AgentEditor'
 import { useWordLink } from '../lib/hub'
@@ -22,6 +22,7 @@ import { ChatCommand, PROVIDER_WORDS, didYouMean, engine, filterCommands, loadCo
 import { Basis, friendly, patternWords } from '../lib/turn'
 import LawSources from './LawSources'
 import DataRule from './DataRule'
+import { MatterList, useMatters } from './MatterPicker'
 
 interface Matter { id: string; title: string; number?: string; client?: string; privileged?: boolean; agent?: string | null }
 interface Agent { name: string; title: string; description?: string }
@@ -277,18 +278,7 @@ export function useChatCommands(opts: {
     focusInput()
   }, [commands.length, focusInput, input, setInput])
 
-  // Ctrl+K / ⌘K on the chat page opens this menu (elsewhere: the App's search palette).
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey) || e.altKey || e.key.toLowerCase() !== 'k' || !commands.length) return
-      e.preventDefault()
-      e.stopPropagation()
-      if (menuOpen) { setDismissed(input); return }
-      openMenu()
-    }
-    window.addEventListener('keydown', onKey, true)
-    return () => window.removeEventListener('keydown', onKey, true)
-  }, [commands.length, input, menuOpen, openMenu])
+  // Ctrl+K / ⌘K is the App's one search palette everywhere (it lists the commands too); "/" opens this menu.
 
   /** On the question field: arrows, Enter, Tab and Esc while the menu is open. */
   const onKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -458,32 +448,15 @@ function HelpList({ commands, onRun }: { commands: ChatCommand[]; onRun: (name: 
   )
 }
 
-/** /matter: choose the matter the App works on (shared with Word). */
+/** /matter: choose the matter the App works on (shared with Word): the same searchable list as the sidebar. */
 function MatterChoice({ onDone }: { onDone: (text: string) => void }) {
   const { t } = useTranslation()
-  const [list, setList] = useState<Matter[] | null>(null)
-  const [active, setActive] = useState('')
-  useEffect(() => {
-    mattersBridge()?.list().then((r: { matters: Matter[]; active: string | null }) => { setList(r.matters || []); setActive(r.active || '') }).catch(() => setList([]))
-  }, [])
-  const choose = async (m: Matter | null) => {
-    await mattersBridge()!.setActive(m ? m.id : null)
-    window.dispatchEvent(new CustomEvent('openlex:matter-changed'))
-    onDone(m ? t('commands.nowMatter', 'Now working on {{title}}.', { title: m.title }) : t('commands.noMatterNow', 'Not working on a matter.'))
-  }
-  if (!list) return <p className="text-antique">{t('common.loading', 'Loading…')}</p>
+  const { matters, active, choose } = useMatters()
   return (
-    <div className="space-y-1">
-      {!list.length && <p className="text-antique">{t('commands.noMatters', 'No matters yet. Start one in the sidebar.')}</p>}
-      {list.map((m) => (
-        <button key={m.id} type="button" onClick={() => choose(m)} className="w-full flex items-center gap-3 rounded px-2 py-2 text-left hover:bg-leather/40 focus:bg-leather/40 outline-none">
-          <Folder size={15} className="text-antique shrink-0" />
-          <span className="flex-1 text-cream">{m.number ? `${m.number} · ` : ''}{m.title}{m.client ? <span className="text-antique"> — {m.client}</span> : null}</span>
-          {m.id === active && <Check size={16} className="text-forest" />}
-        </button>
-      ))}
-      {active && <button type="button" onClick={() => choose(null)} className="mt-2 text-xs text-antique underline">{t('commands.noMatterChoice', 'Work without a matter')}</button>}
-    </div>
+    <MatterList matters={matters} active={active} onChoose={async (m) => {
+      await choose(m ? m.id : null)
+      onDone(m ? t('commands.nowMatter', 'Now working on {{title}}.', { title: m.title }) : t('commands.noMatterNow', 'Not working on a matter.'))
+    }} />
   )
 }
 

@@ -1,32 +1,30 @@
 import { useState, useEffect } from 'react'
-import { Outlet, NavLink, useNavigate } from 'react-router-dom'
+import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { hubBridge } from '../lib/hub'
-import { Network, Table2, Route, ListTodo } from 'lucide-react'
 import MatterPicker from './MatterPicker'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../contexts/AuthContext'
 import CommandPalette from './CommandPalette'
 import { useWindowWidth, useWindowHeight, NARROW_APP } from '../lib/viewport'
 import {
-  LayoutDashboard,
-  FileSearch,
-  Search,
+  MessageSquare,
+  FolderOpen,
+  LayoutGrid,
+  HelpCircle,
   Archive,
   ClipboardList,
   Settings,
   LogOut,
   PanelLeftClose,
   PanelLeft,
-  ScanSearch,
   Users,
-  Wrench,
-  Briefcase,
 } from 'lucide-react'
 
 export default function Layout() {
   const { t } = useTranslation()
   const { logout } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     const saved = localStorage.getItem('sidebar-collapsed')
     return saved === 'true'
@@ -46,17 +44,15 @@ export default function Layout() {
   // Short windows (13–14" laptops): tighter rows so every item fits.
   const short = useWindowHeight() < 820
 
-  // Analyse, Investigate, Draft and Due diligence are chat tools now: these
-  // entries open the chat and run the command (/analyse, /investigate …).
-  const navItems: { to: string; icon: any; label: string; command?: string; badge?: string }[] = [
-    { to: '/dashboard', icon: LayoutDashboard, label: t('nav.home') },
-    { to: '/research', icon: FileSearch, label: t('nav.analyse'), command: 'analyse' },
-    { to: '/research', icon: Search, label: t('nav.research') },
-    { to: '/research', icon: ScanSearch, label: t('nav.investigate'), command: 'investigate' },
-    { to: '/research', icon: Wrench, label: t('nav.draft', 'Draft'), command: 'draft' },
-    { to: '/research', icon: Briefcase, label: t('nav.diligence', 'Due diligence'), command: 'diligence' },
+  // Seven entries (UI audit 2026-10-30): the chat, matters, saved items, the
+  // AI record, More tools (Analyse/Investigate/Draft/Due diligence as chat
+  // launchers, Review grid, Plans, Matter desk, Hub), Settings and Help.
+  const navItems: { to: string; icon: any; label: string; command?: string; also?: string[] }[] = [
+    { to: '/research', icon: MessageSquare, label: t('nav.chat', 'Chat & research') },
+    { to: '/matters', icon: FolderOpen, label: t('nav.matters', 'Matters') },
     { to: '/vault', icon: Archive, label: t('nav.saved', 'Saved') },
-    ...((window as any).lexvault?.engine ? [{ to: '/hub', icon: Network, label: t('nav.hub', 'OpenLex hub') }, { to: '/grid', icon: Table2, label: t('nav.grid', 'Review grid') }, { to: '/plans', icon: Route, label: t('nav.plans', 'Plans') }, { to: '/desk', icon: ListTodo, label: t('nav.desk', 'Matter desk') }] : []),
+    { to: '/audit', icon: ClipboardList, label: t('nav.record', 'AI record') },
+    { to: '/more', icon: LayoutGrid, label: t('nav.more', 'More tools'), also: ['/grid', '/plans', '/desk', '/hub'] },
   ]
 
   // Electron App build: identity is the license file, so logout / signup /
@@ -64,8 +60,8 @@ export default function Layout() {
   const isElectron = typeof window !== 'undefined' && (window as any).lexvault?.isElectron
   const bottomItems = [
     ...(isElectron ? [] : [{ to: '/admin', icon: Users, label: t('nav.team') }]),
-    { to: '/audit', icon: ClipboardList, label: t('nav.record', 'AI record') },
     { to: '/settings', icon: Settings, label: t('nav.settings') },
+    { to: '/help', icon: HelpCircle, label: t('nav.help', 'Help') },
   ]
 
   // Word plugin → App handoff: "continue in the app" opens Research with the
@@ -156,22 +152,16 @@ export default function Layout() {
                   className={({ isActive }) =>
                     `flex items-center gap-3 px-3 ${short ? 'py-2' : 'py-3'} rounded-button transition-all duration-200 focus:outline-none
                     ${collapsed ? 'justify-center' : ''}
-                    ${isActive && !item.command
+                    ${(isActive && !item.command) || item.also?.some((p) => location.pathname.startsWith(p))
                       ? 'bg-accent/10 text-accent'
                       : 'text-cream hover:bg-leather hover:text-parchment'
                     }`
                   }
                   title={collapsed ? item.label : undefined}
+                  aria-label={collapsed ? item.label : undefined}
                 >
                   <item.icon size={20} className="flex-shrink-0" />
-                  {!collapsed && (
-                    <span className="font-medium flex items-center gap-1.5">
-                      {item.label}
-                      {'badge' in item && item.badge && (
-                        <span className="text-[9px] bg-accent/20 text-accent px-1 py-px rounded font-semibold tracking-wider leading-none">{item.badge}</span>
-                      )}
-                    </span>
-                  )}
+                  {!collapsed && <span className="font-medium truncate">{item.label}</span>}
                 </NavLink>
               </li>
             ))}
@@ -195,6 +185,7 @@ export default function Layout() {
                     }`
                   }
                   title={collapsed ? item.label : undefined}
+                  aria-label={collapsed ? item.label : undefined}
                 >
                   <item.icon size={18} className="flex-shrink-0" />
                   {!collapsed && <span className="text-sm">{item.label}</span>}

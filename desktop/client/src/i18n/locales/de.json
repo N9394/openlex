@@ -113,7 +113,11 @@
     "grid": "Prüfraster",
     "plans": "Pläne",
     "desk": "Aktenschreibtisch",
-    "record": "KI-Protokoll"
+    "record": "KI-Protokoll",
+    "chat": "Chat & Recherche",
+    "matters": "Akten",
+    "more": "Weitere Werkzeuge",
+    "help": "Hilfe"
   },
   "dashboard": {
     "welcome": "Woran möchten Sie heute arbeiten?",
@@ -810,7 +814,7 @@
     "didYouMean": "Es gibt keinen Befehl /{{name}}. Meinten Sie /{{guess}}? Mit Enter verwenden.",
     "title": "Befehle",
     "menuKeys": "↑ ↓ wählen · Enter ausführen · Tab Details ergänzen · Esc schließen",
-    "hint": "/ für Befehle · {{key}} · /help",
+    "hint": "/ für Befehle · {{key}} Suche · /help",
     "helpTitle": "Befehle",
     "modelTitle": "Wo die KI läuft",
     "matterTitle": "Akte wählen",
@@ -1526,7 +1530,10 @@
     "title": "Suche",
     "placeholder": "Akten, Gespräche, Gespeichertes, Dokumente, Befehle durchsuchen",
     "nothing": "Nichts gefunden für „{{q}}“.",
-    "keys": "↑↓ wählen · ↵ öffnen · Esc schließen"
+    "keys": "↑↓ wählen · ↵ öffnen · Esc schließen",
+    "matters": "Akten",
+    "moreHint": "Prüfraster, Pläne, Aktenschreibtisch, Hub",
+    "helpHint": "Befehle, Anleitungen, Diagnose"
   },
   "law": {
     "several": "Mehrere Länder",
@@ -1698,5 +1705,61 @@
     "euOnly": "Nur Rechenzentren in der EU",
     "euOnlyHint": "AWS Bedrock in Frankfurt, Mistral, Azure oder Google in einer EU-Region.",
     "privileged": "Vertrauliche Akten bleiben immer auf diesem Computer, egal was hier angehakt ist."
+  },
+  "matters": {
+    "label": "Akte",
+    "title": "Akten",
+    "search": "Nach Name, Nummer oder Mandant suchen",
+    "none": "Noch keine Akten. Legen Sie eine mit „Neue Akte“ an.",
+    "nothing": "Keine Akte passt zu „{{q}}“.",
+    "privileged": "vertraulich",
+    "current": "aktuell",
+    "noMatter": "Ohne Akte arbeiten (schnelle Fragen)",
+    "noneChosen": "Keine Akte (schnelle Fragen)",
+    "titleNeeded": "Geben Sie der Akte einen Namen.",
+    "name": "Name der Akte",
+    "client": "Mandant (optional)",
+    "number": "Aktenzeichen (optional)",
+    "hide": "Namen, die vor Online-KI verborgen werden (optional, mit Komma getrennt)",
+    "privilegedLabel": "Vertraulich: alles bleibt auf diesem Computer",
+    "create": "Akte anlegen",
+    "new": "Neue Akte",
+    "newShort": "Neu",
+    "choose": "Akte wählen",
+    "localOnly": "bleibt auf diesem Computer",
+    "followsRule": "folgt Ihrer Mandantendaten-Regel",
+    "appOnly": "Akten werden von der Desktop-App verwaltet."
+  },
+  "more": {
+    "inChat": "Im Chat",
+    "pages": "Eigene Seiten",
+    "analyse": "Ein Dokument analysieren",
+    "analyseText": "Zusammenfassung, Eckdaten, Fristen, Pflichten und Risiken eines Vertrags, mit Zitaten.",
+    "investigate": "Mehrere Dokumente untersuchen",
+    "investigateText": "Eine Frage über viele Dokumente: was sie sagen, wo sie sich widersprechen.",
+    "draft": "Einen Entwurf schreiben",
+    "draftText": "Ein erster Entwurf nach Ihren Vorgaben oder Mustern, am Gesetz geprüft.",
+    "diligence": "Due Diligence eines Datenraums",
+    "diligenceText": "Red Flags je Dokument und ein Überblick für die Transaktion.",
+    "gridText": "Eine Tabelle: eine Zeile je Dokument, eine Spalte je Frage.",
+    "plansText": "Größere Aufgaben, Schritt für Schritt, mit Ihrer Freigabe.",
+    "deskText": "Checklisten, Listen und Beobachtung amtlicher Quellen für diese Akte.",
+    "hub": "Hub (für IT und Fortgeschrittene)",
+    "hubText": "Kanzleibibliothek, Abläufe über eine ganze Akte, Kanzleiklauseln, Anbindungen."
+  },
+  "help": {
+    "guides": "Anleitungen",
+    "guidesText": "Schritt für Schritt, in einfachen Worten.",
+    "call": "Einrichtungstermin buchen",
+    "callText": "Wir richten es mit Ihnen ein.",
+    "wrong": "Etwas stimmt nicht",
+    "wrongText": "Diagnose und was Sie dem Support schicken.",
+    "commands": "Befehle im Chat",
+    "commandsIntro": "Tippen Sie / ins Fragefeld oder drücken Sie {{key}}, um alles zu durchsuchen. Klicken Sie auf einen Befehl, um ihn auszuführen.",
+    "noCommands": "Die Befehle erscheinen, sobald die OpenLex-Engine läuft.",
+    "diagnostics": "Diagnose",
+    "diagIntro": "Der technische Zustand der OpenLex-Teile auf diesem Computer. Der Support fragt eventuell danach.",
+    "troubleshooting": "Anleitung zur Fehlersuche",
+    "diagAppOnly": "Die Diagnose ist Teil der Desktop-App."
   }
 }
