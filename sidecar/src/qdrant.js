@@ -30,6 +30,7 @@ function writeConfig() {
 service:
   host: 127.0.0.1
   http_port: ${port}
+  enable_cors: false
 `)
 }
 

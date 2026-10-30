@@ -16,7 +16,8 @@
  */
 
 const PATTERNS = [
-  { kind: 'EMAIL', re: /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi },
+  // Bounded parts (RFC limits): unbounded runs made long dotted strings take seconds (quadratic).
+  { kind: 'EMAIL', re: /\b[A-Z0-9._%+-]{1,64}@(?:[A-Z0-9-]{1,63}\.){1,8}[A-Z]{2,24}\b/gi },
   { kind: 'IBAN', re: /\b[A-Z]{2}\d{2}(?:[ ]?[A-Z0-9]{4}){2,7}(?:[ ]?[A-Z0-9]{1,4})?\b/g },
   { kind: 'CARD', re: /\b(?:\d[ -]?){13,19}\b/g },
   { kind: 'PHONE', re: /(?<![\w])\+?\d{1,3}[ /.-]?\(?\d{1,4}\)?(?:[ /.-]?\d{2,4}){2,4}(?!\d)/g },
