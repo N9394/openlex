@@ -159,6 +159,7 @@ function explainStep(ev = {}) {
     else if (/^writing… \(truncated|retrying|rewrite must land/.test(text)) kind = 'retry'
     else if (/^writing/.test(text)) kind = 'writing'
     else if (/^judge: verifying/.test(text)) kind = 'judge'
+    else if (/^judge: checking the answer/.test(text)) kind = 'judge_answer'
     else if (/^judge: (\d+)\/(\d+)/.test(text)) { const j = /^judge: (\d+)\/(\d+)/.exec(text); return explainStep({ kind: 'judged', verified: +j[1], total: +j[2] }) }
     else if (/time limit/.test(text)) kind = 'timeout'
     else if (/rethinking/.test(text)) kind = 'rethink'
@@ -174,6 +175,7 @@ function explainStep(ev = {}) {
     case 'writing': return { text: 'Writing the answer', phase: 'writing' }
     case 'retry': return { text: 'Writing the answer again (the first try was cut off)', phase: 'writing' }
     case 'judge': return { text: 'Checking each suggestion against the law it cites', phase: 'judge' }
+    case 'judge_answer': return { text: 'Checking the answer against its sources (second pass)', phase: 'judge' }
     case 'judged': return { text: `Checked the suggestions: ${ev.verified} of ${ev.total} hold up`, phase: 'judge', judged: { verified: ev.verified, total: ev.total } }
     case 'timeout': return { text: 'Enough research for this question — writing the answer now', phase: 'writing' }
     case 'rethink': return { text: 'Trying a different approach' }

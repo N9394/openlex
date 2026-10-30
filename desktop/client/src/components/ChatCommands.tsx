@@ -16,6 +16,7 @@ import { useTranslation } from 'react-i18next'
 import i18n from '../i18n'
 import { Check, Download, Folder, Lock, X } from 'lucide-react'
 import { ModelPicker, PickerProvider } from './ModelPicker'
+import AgentEditor from './AgentEditor'
 import { useWordLink } from '../lib/hub'
 import { ChatCommand, PROVIDER_WORDS, didYouMean, engine, filterCommands, loadCommands, matterFolderName, menuQuery, parseCommand } from '../lib/commands'
 import { Basis, friendly, patternWords } from '../lib/turn'
@@ -36,6 +37,7 @@ type Dialog =
   | { kind: 'permissions' }
   | { kind: 'sources'; items: Basis[] }
   | { kind: 'law' }
+  | { kind: 'agent'; edit: string | null; proposal: boolean }
 
 const mattersBridge = () => (typeof window !== 'undefined' && (window as any).lexvault?.matters) || null
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent || '')
@@ -60,6 +62,11 @@ export function useChatCommands(opts: {
   analyse?: (arg: string) => void
   /** /investigate, /diligence, /draft: the chat's tools from the old desktop app (they become cards). */
   tool?: (name: string, arg: string) => void
+  /** /team: a Panel of agents (Research). */
+  panel?: (arg: string) => void
+  /** The conversation (for /agent from-chat) and the matter. */
+  sessionId?: string | null
+  matterId?: string | null
   /** Who OpenLex works as for questions without a matter (a matter keeps its own). */
   quickAgent?: string
   setQuickAgent?: (name: string) => void
@@ -180,6 +187,31 @@ export function useChatCommands(opts: {
       }
       case 'save': return keep(arg)
       case 'saved': return navigate('/vault')
+      case 'agent': {
+        const m = /^(new|neu|edit|ändern|from-chat|aus-gespräch)?\s*(.*)$/i.exec(arg.trim()) || []
+        const verb = (m[1] || '').toLowerCase()
+        if (/^(from-chat|aus-gespräch)$/.test(verb)) {
+          if (!opts.sessionId) return say(t('agentEditor.noChat', 'Ask something first: then OpenLex can propose an agent from this conversation.'), 'warn')
+          return setDialog({ kind: 'agent', edit: null, proposal: true })
+        }
+        const name = (m[2] || '').trim()
+        if ((verb === 'edit' || verb === 'ändern' || !verb) && name) return setDialog({ kind: 'agent', edit: name, proposal: false })
+        return setDialog({ kind: 'agent', edit: null, proposal: false })
+      }
+      case 'team': return opts.panel ? opts.panel(arg) : say(t('commands.notHere', 'This command does not work here.'), 'warn')
+      case 'judge': {
+        const on = /^(on|yes|ja|ein|an|true|1)$/i.test(arg)
+        const off = /^(off|no|nein|aus|false|0)$/i.test(arg)
+        try {
+          if (!on && !off) {
+            const st = await e.call('GET', '/api/config/judge')
+            return say(st.enabled ? t('commands.judgeIsOn', 'Answers are checked with a second pass{{lock}}. /judge off switches it off.', { lock: st.locked ? t('commands.judgeFirm', ' (set by your firm)') : '' }) : t('commands.judgeIsOff', 'Answers are not double-checked. /judge on switches the second pass on (recommended).'), st.enabled ? 'ok' : 'warn')
+          }
+          const st = await e.call('POST', '/api/config/judge', { enabled: on })
+          if (st?.error) return say(st.error, 'warn')
+          return say(on ? t('commands.judgeOn', 'Answers are checked with a second pass from now on.') : t('commands.judgeOff', 'Second pass off: answers are no longer double-checked. /judge on brings it back.'), on ? 'ok' : 'warn')
+        } catch (err) { return say(friendly(err), 'bad') }
+      }
       case 'investigate': case 'diligence': case 'draft':
         return opts.tool ? opts.tool(name, arg) : say(t('commands.notHere', 'This command does not work here.'), 'warn')
       case 'word': {
@@ -315,6 +347,8 @@ export function useChatCommands(opts: {
       say={say}
       quickAgent={opts.quickAgent}
       setQuickAgent={setQuickAgent}
+      sessionId={opts.sessionId || null}
+      matterId={opts.matterId || null}
     />
   ) : null
 
@@ -323,7 +357,7 @@ export function useChatCommands(opts: {
 
 // ── the small dialogs ──────────────────────────────────────────────────────
 
-function CommandDialog({ dialog, commands, onClose, onRun, onSaveOnce, say, quickAgent, setQuickAgent }: {
+function CommandDialog({ dialog, commands, onClose, onRun, onSaveOnce, say, quickAgent, setQuickAgent, sessionId = null, matterId = null }: {
   dialog: Dialog
   commands: ChatCommand[]
   onClose: () => void
@@ -332,6 +366,8 @@ function CommandDialog({ dialog, commands, onClose, onRun, onSaveOnce, say, quic
   say: (text: string, kind?: 'ok' | 'warn' | 'bad') => void
   quickAgent?: string
   setQuickAgent?: (name: string) => void
+  sessionId?: string | null
+  matterId?: string | null
 }) {
   const { t } = useTranslation()
   const boxRef = useRef<HTMLDivElement>(null)
@@ -354,21 +390,22 @@ function CommandDialog({ dialog, commands, onClose, onRun, onSaveOnce, say, quic
     permissions: t('commands.permsTitle', 'What OpenLex may do without asking'),
     sources: t('commands.sourcesTitle', 'What the last answer is based on'),
     law: t('commands.lawTitle', 'Where OpenLex looks up the law'),
+    agent: dialog.kind === 'agent' && dialog.edit ? t('agentEditor.editTitle', 'Change the agent') : t('agentEditor.newTitle', 'Your own agent'),
   }
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-[12vh]">
       <div className="fixed inset-0 bg-ink/70" onClick={onClose} />
-      <div ref={boxRef} role="dialog" aria-modal="true" aria-label={titles[dialog.kind]} className={`relative w-full ${dialog.kind === 'model' ? 'max-w-2xl' : 'max-w-lg'} rounded-card border border-tobacco bg-deep-brown shadow-2xl animate-fade-in`}>
+      <div ref={boxRef} role="dialog" aria-modal="true" aria-label={titles[dialog.kind]} className={`relative w-full ${dialog.kind === 'model' || dialog.kind === 'agent' ? 'max-w-2xl' : 'max-w-lg'} rounded-card border border-tobacco bg-deep-brown shadow-2xl animate-fade-in`}>
         <div className="flex items-center justify-between px-4 py-3 border-b border-tobacco">
           <h2 className="font-serif text-lg text-parchment">{titles[dialog.kind]}</h2>
           <button type="button" onClick={onClose} className="text-antique hover:text-cream" aria-label={t('common.close', 'Close')}><X size={18} /></button>
         </div>
-        <div className={`${dialog.kind === 'model' ? 'max-h-[72vh]' : 'max-h-[60vh]'} overflow-y-auto p-4 text-sm`}>
+        <div className={`${dialog.kind === 'model' || dialog.kind === 'agent' ? 'max-h-[72vh]' : 'max-h-[60vh]'} overflow-y-auto p-4 text-sm`}>
           {dialog.kind === 'help' && <HelpList commands={commands} onRun={onRun} />}
           {dialog.kind === 'model' && <ModelPicker pick={dialog.pick} onDone={(text) => { say(text); onClose() }} />}
           {dialog.kind === 'matter' && <MatterChoice onDone={(text) => { say(text); onClose() }} />}
           {(dialog.kind === 'record' || dialog.kind === 'activity') && <RecordList all={dialog.kind === 'record' && dialog.all} recent={dialog.kind === 'activity'} say={say} />}
-          {dialog.kind === 'as' && <AgentChoice quickAgent={quickAgent} setQuickAgent={setQuickAgent} onDone={(text) => { say(text); onClose() }} />}
+          {dialog.kind === 'as' && <AgentChoice quickAgent={quickAgent} setQuickAgent={setQuickAgent} onDone={(text) => { say(text); onClose() }} onRun={onRun} />}
           {dialog.kind === 'unprivilege' && (
             <div className="space-y-4">
               <p className="text-parchment">{t('commands.unprivAsk', 'Then this matter follows your client-data rule, which may allow sending its documents to an online AI service.')}</p>
@@ -381,6 +418,7 @@ function CommandDialog({ dialog, commands, onClose, onRun, onSaveOnce, say, quic
           {dialog.kind === 'permissions' && <PermissionRules say={say} />}
           {dialog.kind === 'sources' && <SourcesList items={dialog.items} />}
           {dialog.kind === 'law' && <LawSources say={say} matter={activeMatter} />}
+          {dialog.kind === 'agent' && <AgentEditor edit={dialog.edit} proposal={dialog.proposal} sessionId={sessionId} matterId={matterId} onCancel={onClose} onDone={(text) => { say(text); window.dispatchEvent(new CustomEvent('openlex:setup-changed')); onClose() }} />}
           {dialog.kind === 'save' && (
             <div className="space-y-4">
               <p className="text-parchment">{t('commands.saveAsk', 'OpenLex wants to save a file:')} <span className="font-mono text-cream">{dialog.summary}</span></p>
@@ -517,7 +555,7 @@ async function setPrivileged(m: Matter, on: boolean) {
   window.dispatchEvent(new CustomEvent('openlex:matter-changed'))
 }
 
-function AgentChoice({ quickAgent, setQuickAgent, onDone }: { quickAgent?: string; setQuickAgent?: (name: string) => void; onDone: (text: string) => void }) {
+function AgentChoice({ quickAgent, setQuickAgent, onDone, onRun }: { quickAgent?: string; setQuickAgent?: (name: string) => void; onDone: (text: string) => void; onRun?: (name: string) => void }) {
   const { t } = useTranslation()
   const [list, setList] = useState<Agent[] | null>(null)
   const [current, setCurrent] = useState('associate')
@@ -544,6 +582,7 @@ function AgentChoice({ quickAgent, setQuickAgent, onDone }: { quickAgent?: strin
           {a.name === current && <Check size={16} className="text-forest mt-0.5" />}
         </button>
       ))}
+      {onRun && <button type="button" onClick={() => onRun('agent')} className="mt-2 text-xs text-antique underline hover:text-cream" data-testid="agent-new">{t('agentEditor.makeOwn', '+ Make your own agent (/agent new) — /agent edit NAME changes one')}</button>}
     </div>
   )
 }

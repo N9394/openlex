@@ -34,7 +34,7 @@ test('one list: names unique, every command described in plain words in English 
 
 test('per window: only what that window can run, in its language', () => {
   const tui = commands.list({ surface: 'tui' }).map((c) => c.name)
-  assert.deepStrictEqual(tui, ['model', 'key', 'data', 'as', 'privileged', 'permissions', 'folder', 'sources', 'law', 'analyse', 'investigate', 'diligence', 'draft', 'saved', 'copy', 'save', 'transcript', 'activity', 'record', 'clear', 'help'])
+  assert.deepStrictEqual(tui, ['model', 'key', 'data', 'as', 'privileged', 'permissions', 'folder', 'sources', 'law', 'analyse', 'investigate', 'diligence', 'draft', 'saved', 'agent', 'team', 'judge', 'copy', 'save', 'transcript', 'activity', 'record', 'clear', 'help'])
   const app = commands.list({ surface: 'app' })
   for (const n of ['help', 'model', 'data', 'matter', 'copy', 'save', 'word', 'activity', 'record', 'clear']) assert.ok(app.some((c) => c.name === n), `app has /${n}`)
   // The app's chat runs on the engine, so these work there too (as in the terminal app).

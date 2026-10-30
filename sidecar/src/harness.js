@@ -19,6 +19,8 @@
  *   prompts  the prompt roadmap: change or add instruction blocks and when they are injected (prompts.js)
  *   permissions  what the agent may do without asking: allow / ask / deny patterns (permissions.js)
  *   spending the monthly limit for online AI in euros: { cap, warnAt } (spend.js)
+ *   judge    the second pass that checks answers: { answers: true } (judge.js; on by default)
+ *   panel    agents working together: { concurrency: 3, rounds: 2 } (panel.js)
  *
  * Files are re-read when they change (mtime), so edits apply without a
  * restart. Invalid JSON never takes the engine down: that layer is
@@ -30,7 +32,7 @@ const path = require('path')
 const { DATA_DIR } = require('./config')
 
 const USER_PATH = path.join(DATA_DIR, 'openlex.json')
-const SECTIONS = ['routes', 'hooks', 'agents', 'features', 'sources', 'models', 'prompts', 'permissions', 'spending']
+const SECTIONS = ['routes', 'hooks', 'agents', 'features', 'sources', 'models', 'prompts', 'permissions', 'spending', 'judge', 'panel']
 
 const DEFAULTS = {
   routes: { roles: {}, rules: [], fallback: [] },
@@ -41,6 +43,8 @@ const DEFAULTS = {
   prompts: {},
   permissions: { allow: [], ask: [], deny: [] },
   spending: { cap: null, warnAt: 0.8 },
+  judge: { answers: true },
+  panel: { concurrency: 3, rounds: 2 },
   // shell (run_bash) is off unless a firm turns it on; it also needs an OS sandbox.
   features: { monitors: true, browser: true, skillSuggestions: true, grid: true, plans: true, lists: true, shell: false },
 }
@@ -140,4 +144,23 @@ function setUserSection(section, value) {
   return load()
 }
 
-module.exports = { load, errors, feature, layers, setUserSection, SECTIONS, USER_PATH, DEFAULTS }
+/**
+ * Write one section of the firm layer (<workspace>/openlex.json) — for
+ * firm-wide agents made in the app by whoever looks after the firm's setup.
+ * Other sections and "lock" are kept as they are.
+ */
+function setFirmSection(section, value) {
+  if (!SECTIONS.includes(section)) throw new Error(`unknown section "${section}" (${SECTIONS.join(', ')})`)
+  const file = firmPath()
+  if (!file) throw new Error('no firm folder (workspace) is set up')
+  const cur = readLayer(file).data || {}
+  if (readLayer(file).error) throw new Error('the firm\'s openlex.json cannot be read; fix it first')
+  if (value === null) delete cur[section]
+  else cur[section] = value
+  fs.mkdirSync(path.dirname(file), { recursive: true })
+  fs.writeFileSync(file, JSON.stringify(cur, null, 2))
+  cache.delete(file)
+  return load()
+}
+
+module.exports = { load, errors, feature, layers, setUserSection, setFirmSection, SECTIONS, USER_PATH, DEFAULTS }

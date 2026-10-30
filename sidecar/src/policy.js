@@ -162,7 +162,10 @@ function currentMatter() {
 function audit(entry) {
   try {
     const rid = matterStore.getStore()?.rid
-    require('./chain').append(AUDIT_PATH, { ts: new Date().toISOString(), ...entry, ...(rid && !entry.rid ? { rid } : {}) })
+    // The agent profile a call ran under (a panel's agents, "@drafter") — its name only.
+    let agent = null
+    try { const a = require('./agents').current(); if (a && a.name !== 'associate') agent = a.name } catch { /* no profiles */ }
+    require('./chain').append(AUDIT_PATH, { ts: new Date().toISOString(), ...entry, ...(rid && !entry.rid ? { rid } : {}), ...(agent && !entry.agent ? { agent } : {}) })
   } catch (err) {
     console.warn('[policy] audit write failed:', err.message)
   }

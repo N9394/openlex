@@ -108,6 +108,8 @@ class Session {
           ...(data.length ? { data } : {}),
           ...(online.length ? { online } : {}),
           ...(meta.stopped ? { stopped: true } : {}),
+          // Whether the second pass (judge.js) checked this answer.
+          ...(meta.judge && typeof meta.judge === 'object' ? { judge: { ran: !!meta.judge.ran, ...(meta.judge.ran ? { ok: meta.judge.ok !== false } : { reason: str(meta.judge.reason, 20) }), ...(Array.isArray(meta.judge.notes) && meta.judge.notes.length ? { notes: meta.judge.notes.slice(0, 5).map((n) => str(n, 300)) } : {}) } } : {}),
           // Results a window shows as a card again (e.g. { kind: 'analysis', id, name }).
           ...(Array.isArray(meta.results) && meta.results.length ? { results: meta.results.slice(0, 20).map((r) => ({ kind: str(r.kind, 20), id: str(r.id, 60), name: str(r.name, 200) })) } : {}),
         },
