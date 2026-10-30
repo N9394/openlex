@@ -6,8 +6,10 @@
  * community mode. This file:
  *  1. Reads + verifies the license (Ed25519), else community mode
  *  2. Resolves runtime paths (sidecars, models, server, client)
- *  3. Spawns the Qdrant + embeddings + LLM sidecars and waits for them
- *  4. Spawns the Express backend with env wiring it to the local sidecars
+ *  3. Spawns Qdrant, the LLM proxy (and an embeddings service, when a
+ *     distribution ships one) and waits for them
+ *  4. Starts the OpenLex engine (sidecar/) as the backend; the old desktop
+ *     server only with OPENLEX_LEGACY_SERVER=1 (main/legacy.js)
  *  5. Loads the SPA from disk (file://) into a window
  *  6. Tears it all down on quit
  *
@@ -17,6 +19,11 @@
  */
 
 const { app, BrowserWindow, dialog, ipcMain, shell, Notification } = require('electron')
+
+// The product is called OpenLex now, but existing installs keep their
+// settings, licence and models: the settings folder stays "LexVault"
+// (with the app id com.lexvault.app). Must run before anything reads userData.
+app.setPath('userData', require('path').join(app.getPath('appData'), 'LexVault'))
 const path = require('path')
 const fs = require('fs')
 const crypto = require('crypto')

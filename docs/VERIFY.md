@@ -22,6 +22,11 @@ For version `X.Y.Z` (replace it in the commands below, e.g. `0.3.0`):
 | `openlex-X.Y.Z.tar.gz.sha256` | Its SHA-256 checksum. |
 | `openlex-X.Y.Z.cdx.json` | SBOM: the npm packages inside the tarball, in [CycloneDX](https://cyclonedx.org) format. |
 | `install.sh`, `install.ps1` | The install scripts for macOS/Linux and Windows. |
+| `OpenLex-X.Y.Z-mac-arm64.dmg`, `OpenLex-X.Y.Z-mac-x64.dmg` | The desktop app for Apple Silicon and Intel Macs. |
+| `OpenLex-X.Y.Z-windows-x64-setup.exe` | The desktop app for Windows. |
+| `OpenLex-X.Y.Z-linux-x64.AppImage` | The desktop app for Linux. |
+| `<installer>.sha256` | The installer's SHA-256 checksum. |
+| `<installer>.cdx.json` | SBOM: everything inside the installed app (npm packages, Electron, Qdrant, llama.cpp), CycloneDX, made with [syft](https://github.com/anchore/syft). |
 | `SHA256SUMS` | Checksums of all of the above. |
 | `<file>.bundle` | The Sigstore signature bundle for each file above. |
 
@@ -131,7 +136,25 @@ The formula in [N9394/homebrew-openlex](https://github.com/N9394/homebrew-openle
 
 ## Desktop installers
 
-Signed desktop installers (notarized for macOS, Authenticode-signed for Windows) are delivered to clients individually, not on the public release page. Besides the operating system's own check (`spctl -a -vv /Applications/<the app>.app` on macOS, *Properties → Digital Signatures* or `Get-AuthenticodeSignature` on Windows), each one has a GitHub build attestation: `gh attestation verify <installer> --repo N9394/openlex`.
+The installers on the release page are built by the same workflow and checked the same way, for example:
+
+```sh
+shasum -a 256 -c OpenLex-X.Y.Z-mac-arm64.dmg.sha256
+gh attestation verify OpenLex-X.Y.Z-mac-arm64.dmg --repo N9394/openlex
+gh attestation verify OpenLex-X.Y.Z-mac-arm64.dmg --repo N9394/openlex --predicate-type https://cyclonedx.org/bom   # its SBOM
+cosign verify-blob OpenLex-X.Y.Z-mac-arm64.dmg --bundle OpenLex-X.Y.Z-mac-arm64.dmg.bundle \
+  --certificate-identity-regexp '^https://github\.com/N9394/openlex/\.github/workflows/release\.yml@refs/tags/v' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
+```powershell
+(Get-FileHash OpenLex-X.Y.Z-windows-x64-setup.exe -Algorithm SHA256).Hash.ToLower()
+Get-Content OpenLex-X.Y.Z-windows-x64-setup.exe.sha256        # the first word must be the same
+```
+
+They are **not signed by Apple or Microsoft** (macOS: ad hoc signature, not notarised; Windows: no Authenticode signature), so macOS and Windows warn on first start; [the desktop app guide](guides/desktop-app.md) shows how to open them. The Sigstore signature and the attestation above are what tie them to this repository. They contain no model weights.
+
+When the release workflow has signing certificates, it builds signed and notarised installers instead, under the same names. Signed installers (from the release page or through support) can also be checked by the operating system: `spctl -a -vv /Applications/OpenLex.app` on macOS, *Properties → Digital Signatures* or `Get-AuthenticodeSignature` on Windows.
 
 ## Found something that does not verify?
 
