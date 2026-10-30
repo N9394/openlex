@@ -22,7 +22,7 @@ OpenLex reads the whole document and writes a report in the document's own langu
 How you can trust it:
 
 - **Every finding quotes the document word for word**, with where it is ("§ 9 Liability · page 2"). If the AI quotes something that is not in the document, the finding is removed. The report says how many were removed.
-- **Law is looked up only for high and medium risks.** OpenLex always searches the law packs on your computer. It searches the official online sources (RIS for Austrian law, EUR-Lex for EU law) only if this matter's [data rules](client-data-rules.md) allow web access.
+- **Law is looked up only for high and medium risks.** OpenLex looks it up in the law sources connected in `/law` (for example RIS for Austrian law, EUR-Lex for EU law), online per question, but only if this matter's [data rules](client-data-rules.md) allow web access. In "Work fully offline" mode it uses the copies kept on your computer instead.
 - **A second pass checks every suggested fix.** A fix can be kept, corrected, or removed. When it is removed, the report says so and the decision is yours.
 - A dated deadline must match the date written in its quote. Otherwise it is shown as a period (for example "14 days after notice").
 
