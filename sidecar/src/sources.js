@@ -173,7 +173,7 @@ const adapters = {
     if (s.auth && key) headers[s.auth.header || 'Authorization'] = `${s.auth.prefix ?? 'Bearer '}${key}`
     const init = { method: s.body ? 'POST' : 'GET', headers, signal: AbortSignal.timeout(TIMEOUT_MS) }
     if (s.body) { init.body = JSON.stringify(fillDeep(s.body, vars)); headers['Content-Type'] = 'application/json' }
-    const res = await fetch(url, init)
+    const res = await guard.safeFetch(url, init, { check: !isLocal(name, s) }) // every redirect hop re-checked
     if (!res.ok) throw new Error(`${hostOf(s)} → HTTP ${res.status}`)
     return mapItems(await res.json(), s, name)
   },

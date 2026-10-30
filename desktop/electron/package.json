@@ -20,7 +20,7 @@
     "smoke": "node scripts/smoke-packaged.js"
   },
   "devDependencies": {
-    "electron": "^33.0.0",
+    "electron": "^45.2.0",
     "electron-builder": "^25.0.0"
   },
   "build": {

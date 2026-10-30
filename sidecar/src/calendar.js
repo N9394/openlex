@@ -21,6 +21,8 @@ function setProviderConfig(patch) {
 }
 
 function openICS(filePath) {
+  // Only calendar files: `open` / Invoke-Item would also start a program or script.
+  if (!/\.ics$/i.test(String(filePath || ''))) return Promise.reject(new Error('only .ics calendar files can be opened'))
   return new Promise((resolve) => {
     if (process.platform === 'darwin') execFile('open', [String(filePath)], () => resolve(true))
     // Windows: the path goes through the environment, never through cmd's parser.

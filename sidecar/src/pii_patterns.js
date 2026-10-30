@@ -252,7 +252,7 @@ function phoneOk(m, before = '') {
 
 // ── building blocks ─────────────────────────────────────────────────────
 
-const L = '\\p{Lu}[\\p{L}\'’-]*' // a capitalised word
+const L = '\\p{Lu}[\\p{L}\'’-]{0,40}' // a capitalised word (bounded: long runs must stay linear)
 const W = '[\\p{L}\'’.-]+' // any word
 const NUM = '\\d{1,5}[a-zA-Z]?(?:\\s?[-/]\\s?\\d{1,5}[a-zA-Z]?)*' // house number: 12, 12a, 12/3/7, 12-14
 const MONTHS = 'Jänner|Januar|Jan\\.?|Februar|Feber|Feb\\.?|März|Mär\\.?|April|Apr\\.?|Mai|Juni|Juli|August|Aug\\.?|September|Sept?\\.?|Oktober|Okt\\.?|November|Nov\\.?|Dezember|Dez\\.?|January|February|March|May|June|July|October|Oct\\.?|December|Dec\\.?|ledna|února|března|dubna|května|června|července|srpna|září|října|listopadu|prosince|januára|februára|marca|apríla|mája|júna|júla|augusta|septembra|októbra|novembra|decembra|stycznia|lutego|kwietnia|maja|czerwca|lipca|sierpnia|września|października|listopada|grudnia|ianuarie|februarie|martie|aprilie|mai|iunie|iulie|septembrie|octombrie|noiembrie|decembrie|január|február|március|április|május|június|július|augusztus|szeptember|október|december'
@@ -272,7 +272,7 @@ const CITY_DE = `${L}(?:\\s(?:am|an der|im|in der|bei|ob der)\\s${L}|[\\s-]${L})
 
 const PATTERNS = [
   // Contact
-  { id: 'email', country: '*', kind: 'EMAIL', label: { en: 'E-mail address', de: 'E-Mail-Adresse' }, re: /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, confidence: 0.99 },
+  { id: 'email', country: '*', kind: 'EMAIL', label: { en: 'E-mail address', de: 'E-Mail-Adresse' }, re: /\b[A-Z0-9._%+-]{1,64}@(?:[A-Z0-9-]{1,63}\.){1,8}[A-Z]{2,24}\b/gi, confidence: 0.99 },
   { id: 'phone', country: '*', kind: 'PHONE', label: { en: 'Phone number', de: 'Telefonnummer' }, re: /(?<![\w+./-])(?:\+|00)?\d{1,4}[ /.-]?\(?\d{1,5}\)?(?:[ /.-]?\d{2,6}){1,4}(?![\w/-]|\.\d)/g, validate: phoneOk, confidence: 0.75 },
 
   // Money and payment
@@ -314,7 +314,7 @@ const PATTERNS = [
   { id: 'us.ein', country: 'US', kind: 'TAXID', label: { en: 'US employer ID (EIN)', de: 'US-Arbeitgeber-ID (EIN)' }, re: /\b\d{2}-\d{7}\b/g, validate: einOk, confidence: 0.75 },
 
   // Passports and identity cards (only with the words around them)
-  { id: 'passport', country: '*', kind: 'ID', label: { en: 'Passport or ID card number', de: 'Reisepass- oder Ausweisnummer' }, re: /(?<![A-Z0-9])((?=[A-Z0-9 ]*\d)[A-Z0-9]{1,3}\s?[A-Z0-9]{5,9})\b/g, context: /(?:Reisepass(?:nummer|-Nr\.?)?|Pass(?:nummer|-Nr\.?|nr\.)|Personalausweis(?:nummer|-Nr\.?)?|Ausweis(?:nummer|-Nr\.?)|Identitätsausweis|passport(?: no\.?| number| #)?|ID card(?: no\.?| number)?|identity card(?: no\.?| number)?|driver'?s licen[cs]e(?: no\.?| number)?|Führerschein(?:nummer|-Nr\.?)?|číslo pasu|cestovní pas|č\.\s?OP|občanský průkaz|občiansky preukaz|číslo OP|numer paszportu|paszport(?:u)?(?: nr)?|dowód osobisty|dowodu osobistego|seria i numer|pașaport|paşaport|carte de identitate|CI seria|seria|útlevél(?:szám)?|személyi igazolvány(?:szám)?)\s*(?:Nr\.?|No\.?|number|nr\.?|číslo|szám|:|#)?\s*[:.]?\s*$/iu, window: 45, confidence: 0.9 },
+  { id: 'passport', country: '*', kind: 'ID', label: { en: 'Passport or ID card number', de: 'Reisepass- oder Ausweisnummer' }, re: /(?<![A-Z0-9])((?=[A-Z0-9 ]{0,13}\d)[A-Z0-9]{1,3}\s?[A-Z0-9]{5,9})\b/g, context: /(?:Reisepass(?:nummer|-Nr\.?)?|Pass(?:nummer|-Nr\.?|nr\.)|Personalausweis(?:nummer|-Nr\.?)?|Ausweis(?:nummer|-Nr\.?)|Identitätsausweis|passport(?: no\.?| number| #)?|ID card(?: no\.?| number)?|identity card(?: no\.?| number)?|driver'?s licen[cs]e(?: no\.?| number)?|Führerschein(?:nummer|-Nr\.?)?|číslo pasu|cestovní pas|č\.\s?OP|občanský průkaz|občiansky preukaz|číslo OP|numer paszportu|paszport(?:u)?(?: nr)?|dowód osobisty|dowodu osobistego|seria i numer|pașaport|paşaport|carte de identitate|CI seria|seria|útlevél(?:szám)?|személyi igazolvány(?:szám)?)\s*(?:Nr\.?|No\.?|number|nr\.?|číslo|szám|:|#)?\s*[:.]?\s*$/iu, window: 45, confidence: 0.9 },
 
   // Company register and tax numbers of businesses
   { id: 'at.fn', country: 'AT', kind: 'REGNO', label: { en: 'Company register number (FN)', de: 'Firmenbuchnummer (FN)' }, re: /\bFN\s?\d{1,6}\s?[a-z]\b/g, confidence: 0.95 },
@@ -331,7 +331,7 @@ const PATTERNS = [
   { id: 'hu.vat', country: 'HU', kind: 'TAXID', label: { en: 'Hungarian tax number (adószám)', de: 'Steuernummer (adószám)' }, re: /\b\d{8}-\d-\d{2}\b/g, confidence: 0.9 },
 
   // Court file numbers
-  { id: 'case.ctx', country: '*', kind: 'CASENO', label: { en: 'Court file number', de: 'Aktenzeichen / Geschäftszahl' }, re: /([A-Za-zÀ-ž0-9][\wÀ-ž.]*(?:\s[\wÀ-ž.]+){0,4}\/\d{2,4}(?:[-/][\w]+)?)/gu, context: /(?:Az\.|AZ|Aktenzeichen|GZ|Gz\.|Geschäftszahl|Gesch\.\s?Z\.|sp\.\s?zn\.|spisová značka|č\.\s?j\.|sygn\.\s?akt|sygnatura(?: akt)?|dosar(?:ul)?(?: nr\.?)?|nr\. dosar|ügyszám|Case No\.?|Case Number|Docket No\.?|File No\.?)\s*[:.]?\s*$/iu, window: 30, confidence: 0.9 },
+  { id: 'case.ctx', country: '*', kind: 'CASENO', label: { en: 'Court file number', de: 'Aktenzeichen / Geschäftszahl' }, re: /([A-Za-zÀ-ž0-9][\wÀ-ž.]{0,40}(?:\s[\wÀ-ž.]{1,40}){0,4}\/\d{2,4}(?:[-/][\w]+)?)/gu, context: /(?:Az\.|AZ|Aktenzeichen|GZ|Gz\.|Geschäftszahl|Gesch\.\s?Z\.|sp\.\s?zn\.|spisová značka|č\.\s?j\.|sygn\.\s?akt|sygnatura(?: akt)?|dosar(?:ul)?(?: nr\.?)?|nr\. dosar|ügyszám|Case No\.?|Case Number|Docket No\.?|File No\.?)\s*[:.]?\s*$/iu, window: 30, confidence: 0.9 },
   { id: 'case.dach', country: 'AT DE', kind: 'CASENO', label: { en: 'Court file number', de: 'Aktenzeichen / Geschäftszahl' }, re: /\b(?:\d{1,3}|[IVX]{1,5})\s(?:[A-Z][a-z]{0,3}|[A-Z]{1,3}[a-z]{0,2})\s\d{1,5}\/\d{2,4}[a-z]?\b/g, confidence: 0.45 },
 ]
 

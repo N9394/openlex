@@ -98,9 +98,13 @@ function untar(packPath, destDir) {
   // Native zstd may or may not be available; tar with --zstd if it is
   const r = spawnSync('tar', ['--zstd', '-xf', packPath, '-C', destDir], { stdio: 'pipe' })
   if (r.status === 0) return
-  // Fallback: pipe through `zstd -d`
-  const z = spawnSync('sh', ['-c', `zstd -dc "${packPath}" | tar -xf - -C "${destDir}"`], { stdio: 'pipe' })
-  if (z.status === 0) return
+  // Fallback: `zstd -d` to a temporary .tar, then tar. Arguments only —
+  // never a shell, so a file name cannot run commands.
+  const tmpTar = path.join(destDir, '.openlex-pack.tar')
+  try {
+    const z = spawnSync('zstd', ['-d', '-q', '-f', '-o', tmpTar, '--', packPath], { stdio: 'pipe' })
+    if (z.status === 0 && spawnSync('tar', ['-xf', tmpTar, '-C', destDir], { stdio: 'pipe' }).status === 0) return
+  } finally { try { fs.rmSync(tmpTar, { force: true }) } catch { /* gone */ } }
   throw new Error(`failed to extract ${packPath} (no zstd or tar in PATH?)`)
 }
 

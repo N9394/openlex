@@ -61,12 +61,35 @@ function compareVersion(a, b) {
   return 0
 }
 
-function fetchBuffer(url, headers, onProgress) {
+/** Update traffic only over https (plain http only to this computer, for tests and a local feed). */
+function transportOk(raw) {
+  let u
+  try { u = new URL(String(raw)) } catch { return false }
+  if (u.protocol === 'https:') return true
+  return u.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(u.hostname)
+}
+
+/** Headers for a request to `url` when they were meant for `origin`: the licence token never goes to another host. */
+function headersFor(url, headers, origin) {
+  let same = false
+  try { same = new URL(url).origin === new URL(origin).origin } catch { /* different */ }
+  if (same) return headers
+  const out = { ...headers }
+  for (const k of Object.keys(out)) if (k.toLowerCase() === 'authorization') delete out[k]
+  return out
+}
+
+function fetchBuffer(url, headers, onProgress, hops = 0) {
   return new Promise((resolve, reject) => {
+    if (!transportOk(url)) return reject(new Error(`refusing insecure update URL ${String(url).slice(0, 80)}`))
     const lib = url.startsWith('https://') ? https : http
     const req = lib.get(url, { headers }, res => {
-      if (res.statusCode === 301 || res.statusCode === 302) {
-        return fetchBuffer(res.headers.location, headers, onProgress).then(resolve, reject)
+      if (res.statusCode === 301 || res.statusCode === 302 || res.statusCode === 307 || res.statusCode === 308) {
+        res.resume()
+        if (hops >= 5) return reject(new Error('too many redirects'))
+        let next
+        try { next = new URL(res.headers.location, url).href } catch { return reject(new Error('bad redirect')) }
+        return fetchBuffer(next, headersFor(next, headers, url), onProgress, hops + 1).then(resolve, reject)
       }
       if (res.statusCode !== 200) {
         return reject(new Error(`HTTP ${res.statusCode} ${url}`))
@@ -102,6 +125,7 @@ async function downloadResumable(url, headers, destPath, onProgress) {
   const partPath = destPath + '.part'
   const maxAttempts = 4
 
+  if (!transportOk(url)) throw new Error(`refusing insecure update URL ${String(url).slice(0, 80)}`)
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const startBytes = fs.existsSync(partPath) ? fs.statSync(partPath).size : 0
     let total = 0
@@ -394,7 +418,8 @@ class Updater {
       } catch {}
 
       let lastEmitPct = -1
-      await downloadResumable(loc.href, headers, artifactPath, (got, total) => {
+      // The licence token goes only to the feed's own host.
+      await downloadResumable(loc.href, headersFor(loc.href, headers, this.feedBaseUrl), artifactPath, (got, total) => {
         const pct = Math.floor((got / total) * 100)
         // Throttle to whole percentage steps to avoid flooding IPC.
         if (pct !== lastEmitPct) {
@@ -630,6 +655,8 @@ module.exports.parseYml = parseYml
 module.exports.pickArtifact = pickArtifact
 module.exports.artifactLocation = artifactLocation
 module.exports.platformKey = platformKey
+module.exports.transportOk = transportOk
+module.exports.headersFor = headersFor
 module.exports.macAppBundle = macAppBundle
 module.exports.macInstallBlocker = macInstallBlocker
 module.exports.macUpdateScript = macUpdateScript

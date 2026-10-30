@@ -261,6 +261,8 @@ service:
   host: 127.0.0.1
   http_port: ${PORTS.qdrant}
   grpc_port: ${PORTS.qdrant + 1}
+  # No CORS: web pages must not read the index (firm documents) from the browser.
+  enable_cors: false
 storage:
   storage_path: ${this.paths.qdrantData}/storage
   snapshots_path: ${this.paths.qdrantData}/snapshots

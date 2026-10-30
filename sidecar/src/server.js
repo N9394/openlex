@@ -164,25 +164,18 @@ if (process.platform === 'win32' && !process.env.LEXVAULT_KEEPALIVE) {
 }
 
 // ── helpers ────────────────────────────────────────────────────────────────
-/**
- * Settings that decide where client data goes (provider, keys, data
- * policy) may only be changed by the add-in itself or a local process —
- * never by an arbitrary web page through the permissive CORS below.
- * Browsers always send Origin on cross-origin POSTs; local tools don't.
- */
-function trustedOrigin(req) {
-  const origin = req.headers.origin
-  if (!origin) return true
-  if (TRUSTED_ORIGINS.has(origin)) return true
-  try {
-    const u = new URL(origin)
-    return ['localhost', '127.0.0.1', '[::1]'].includes(u.hostname) && String(u.port || (u.protocol === 'https:' ? 443 : 80)) === String(config.PORT)
-  } catch { return false }
-}
-
-// Extra origins allowed to call the sidecar (the desktop app's renderer,
-// dev servers): OPENLEX_TRUSTED_ORIGINS="http://localhost:5173,app://openlex"
-const TRUSTED_ORIGINS = new Set(String(process.env.OPENLEX_TRUSTED_ORIGINS || '').split(',').map((x) => x.trim()).filter(Boolean))
+// Which requests are answered at all (request_guard.js): addressed to this
+// machine's loopback on our port (no DNS rebinding), no foreign Origin, no
+// cross-site browser request. Settings that decide where client data goes
+// may therefore only be changed by the panes or a local process.
+const requestGuard = require('./request_guard')
+const TRUSTED_ORIGINS = requestGuard.trustedOrigins()
+/** The add-in's own files (served to the Word and Outlook panes). */
+const isPaneFile = (p) => p === '/' || p.startsWith('/taskpane') || p.startsWith('/commands') || p.startsWith('/assets/') || p.startsWith('/lib/') || p.startsWith('/outlook')
+// Who may show the pane in a frame: the desktop hosts load it directly;
+// Office on the web and the new Outlook frame it from Microsoft's sites.
+// No other site may frame it (clickjacking the Allow buttons).
+const PANE_FRAME_ANCESTORS = "frame-ancestors 'self' https://*.office.com https://*.office365.com https://*.officeapps.live.com https://*.microsoft.com https://*.sharepoint.com https://*.cloud.microsoft https://*.live.com"
 
 // One library sync at a time; callers share the in-flight run.
 let librarySyncing = null
@@ -381,9 +374,10 @@ async function handle(req, res) {
   // explicitly trusted origins get CORS headers, and any request carrying a
   // foreign Origin is refused outright — a web page could otherwise drive
   // the agent (and the lawyer's files) with a no-preflight "simple" POST.
-  if (!trustedOrigin(req)) {
-    res.writeHead(403, { 'Content-Type': 'application/json' })
-    return res.end(JSON.stringify({ error: 'forbidden origin' }))
+  const gate = requestGuard.check(req, { port: config.PORT, trusted: TRUSTED_ORIGINS, isStatic: () => isPaneFile(p) })
+  if (!gate.ok) {
+    res.writeHead(gate.status, { 'Content-Type': 'application/json' })
+    return res.end(JSON.stringify({ error: gate.error }))
   }
   if (req.headers.origin) res.setHeader('Access-Control-Allow-Origin', req.headers.origin)
   res.setHeader('Vary', 'Origin')
@@ -396,14 +390,14 @@ async function handle(req, res) {
 
   try {
     // Static add-in assets
-    if (p === '/' || p.startsWith('/taskpane') || p.startsWith('/commands') || p.startsWith('/assets/') || p.startsWith('/lib/') || p.startsWith('/outlook')) {
+    if (isPaneFile(p)) {
       const file = p === '/' ? '/taskpane.html' : p
       const fp = path.normalize(path.join(config.ADDIN_ROOT, file))
-      if (!fp.startsWith(config.ADDIN_ROOT)) return sendJson(res, 403, { error: 'forbidden' })
+      if (!fp.startsWith(path.resolve(config.ADDIN_ROOT) + path.sep) || /[\\/]\./.test(fp.slice(path.resolve(config.ADDIN_ROOT).length))) return sendJson(res, 403, { error: 'forbidden' }) // inside the add-in folder, no dot-files (.git)
       if (!fs.existsSync(fp)) return sendJson(res, 404, { error: 'not found' })
       const ext = path.extname(fp)
       const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.xml': 'text/xml' }
-      res.writeHead(200, { 'Content-Type': types[ext] || 'application/octet-stream', 'Cache-Control': 'no-cache' })
+      res.writeHead(200, { 'Content-Type': types[ext] || 'application/octet-stream', 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff', ...(ext === '.html' ? { 'Content-Security-Policy': PANE_FRAME_ANCESTORS } : {}) })
       return fs.createReadStream(fp).pipe(res)
     }
 

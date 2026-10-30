@@ -106,3 +106,36 @@ test('the agent cannot write the firm configuration', async () => {
   const ok = await dispatch({}, 'write_file', { path: 'Acme/out.md', content: 'fine' })
   assert.match(ok.output, /^written:/)
 })
+
+test('git in run_bash never runs programs from the workspace repository config', { skip: process.platform === 'win32' && 'run_bash is not available on Windows' }, () => {
+  const { args } = ws.checkCommand('git status')
+  for (const o of ['core.fsmonitor=false', 'core.hooksPath=/dev/null', 'core.pager=cat']) assert.ok(args.includes(o), o)
+  assert.ok(args.indexOf('core.fsmonitor=false') < args.indexOf('status'), '-c before the subcommand')
+})
+
+test('only .ics files are opened by the calendar helper (open / Invoke-Item would start programs)', async () => {
+  const cal = require('../src/calendar')
+  for (const f of ['evil.command', 'x.app', 'run.bat', 'folder', '', 'deadlines.ics.exe']) await assert.rejects(() => cal.openICS(f), /only .ics/, f)
+})
+
+test('pack extraction never goes through a shell (a file name cannot run commands)', () => {
+  for (const f of ['../src/pack_ingest.js', '../../desktop/electron/sidecars/pack_ingest.js']) {
+    const src = fs.readFileSync(path.join(__dirname, f), 'utf8')
+    assert.doesNotMatch(src, /spawnSync\('sh'|['"]-c['"],\s*`/, f)
+  }
+})
+
+test('a Word file that inflates to gigabytes (zip bomb) is refused instead of exhausting memory', () => {
+  const zlib = require('zlib')
+  const { readZipEntry } = require('../src/docx_text')
+  const name = 'word/document.xml'
+  const data = zlib.deflateRawSync(Buffer.alloc(300 * 1024 * 1024, 0x20), { level: 9 })
+  const nb = Buffer.from(name)
+  const local = Buffer.alloc(30); local.writeUInt32LE(0x04034b50, 0); local.writeUInt16LE(8, 8); local.writeUInt32LE(data.length, 18); local.writeUInt16LE(nb.length, 26)
+  const cd = Buffer.alloc(46); cd.writeUInt32LE(0x02014b50, 0); cd.writeUInt16LE(8, 10); cd.writeUInt32LE(data.length, 20); cd.writeUInt16LE(nb.length, 28); cd.writeUInt32LE(0, 42)
+  const cdOff = 30 + nb.length + data.length
+  const eocd = Buffer.alloc(22); eocd.writeUInt32LE(0x06054b50, 0); eocd.writeUInt16LE(1, 10); eocd.writeUInt32LE(46 + nb.length, 12); eocd.writeUInt32LE(cdOff, 16)
+  const zip = Buffer.concat([local, nb, data, cd, nb, eocd])
+  assert.ok(zip.length < 2 * 1024 * 1024, 'small on disk')
+  assert.throws(() => readZipEntry(zip, name), /Cannot create a Buffer larger|maxOutputLength|larger than/i)
+})

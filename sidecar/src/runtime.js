@@ -354,6 +354,10 @@ async function ensureLlama() {
   // mid-content with finish=stop — every long JSON reply came back cut
   // ("JSON.parse FAIL" at the last brace). Lotus 2 closes </think> on its
   // own anyway; the client guard in llm.js bounds runaway thinking.
+  // No /slots endpoint: it shows what the model is working on (client text)
+  // to anything that can reach the port, web pages included (llama-server
+  // answers CORS for every origin). Known builds only (older ones lack the flag).
+  if (build >= 4000 && build < 999999) args.push('--no-slots')
   if (build >= 10353) {
     args.push('--reasoning-budget', String(require('./models').forLocal(require('./local_models').currentName()).thinkingBudget || AGENT.THINKING_BUDGET || 400))
   }

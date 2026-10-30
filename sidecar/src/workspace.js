@@ -286,7 +286,9 @@ function checkCommand(command) {
     if (args.some((a) => /^(-c|-C|--exec|--output|--upload-pack|--receive-pack|--git-dir|--work-tree|--ext-diff|--textconv)/.test(a))) throw new Error('that git option is not allowed')
     // --no-pager goes before the subcommand; external diff/textconv drivers never run
     const at = args.indexOf(sub)
-    args = ['--no-pager', ...args.slice(0, at + 1), ...(sub === 'diff' || sub === 'show' || sub === 'log' ? ['--no-ext-diff', '--no-textconv'] : []), ...args.slice(at + 1)]
+    // Repository config inside the workspace (.git/config) must not run
+    // programs: no fsmonitor hook, no pager, no hooks, no external diff.
+    args = ['-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=/dev/null', '-c', 'core.pager=cat', '--no-pager', ...args.slice(0, at + 1), ...(sub === 'diff' || sub === 'show' || sub === 'log' ? ['--no-ext-diff', '--no-textconv'] : []), ...args.slice(at + 1)]
   } else {
     pathArgs.push(...nonFlags)
   }

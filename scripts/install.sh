@@ -63,11 +63,17 @@ if [ "$WANT_CLI" = 1 ]; then
 fi
 
 if [ -z "$VERSION" ]; then
-  VERSION=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" | sed -n 's/.*"tag_name": *"v\{0,1\}\([^"]*\)".*/\1/p' | head -1)
+  VERSION=$(curl --proto =https --tlsv1.2 -fsSL "https://api.github.com/repos/$REPO/releases/latest" | sed -n 's/.*"tag_name": *"v\{0,1\}\([^"]*\)".*/\1/p' | head -1)
   [ -n "$VERSION" ] || die "could not find the latest release (GitHub API); pass --version X.Y.Z"
 fi
 BASE="${RELEASE_URL:-https://github.com/$REPO/releases/download/v$VERSION}"
 BASE="${BASE%/}"
+# Downloads over https only (never a silent downgrade on a redirect); plain
+# http only for a release served from this computer (the install tests).
+case "$BASE" in
+  http://127.0.0.1:*|http://localhost:*) PROTO="--proto =http,https" ;;
+  *) PROTO="--proto =https --tlsv1.2" ;;
+esac
 
 TMP=$(mktemp -d)
 MOUNT=""
@@ -86,10 +92,10 @@ trap cleanup EXIT
 # release workflow. A failed check stops the install; a missing tool does not.
 fetch() {
   local f="$1" expected="" actual checked=""
-  curl -fsSL "$BASE/$f" -o "$TMP/$f" || die "${2:-download failed: $BASE/$f}"
-  if curl -fsSL "$BASE/$f.sha256" -o "$TMP/$f.sha256" 2>/dev/null; then
+  curl $PROTO -fsSL "$BASE/$f" -o "$TMP/$f" || die "${2:-download failed: $BASE/$f}"
+  if curl $PROTO -fsSL "$BASE/$f.sha256" -o "$TMP/$f.sha256" 2>/dev/null; then
     expected=$(cut -d' ' -f1 "$TMP/$f.sha256")
-  elif curl -fsSL "$BASE/SHA256SUMS" -o "$TMP/SHA256SUMS" 2>/dev/null; then
+  elif curl $PROTO -fsSL "$BASE/SHA256SUMS" -o "$TMP/SHA256SUMS" 2>/dev/null; then
     expected=$(awk -v f="$f" '{ n=$2; sub(/^\*/, "", n); if (n == f) { print $1; exit } }' "$TMP/SHA256SUMS")
   else
     die "checksum download failed for $f"
@@ -101,7 +107,7 @@ fetch() {
 
   local identity="https://github.com/$REPO/.github/workflows/release.yml@refs/tags/v$VERSION"
   local issuer="https://token.actions.githubusercontent.com"
-  if curl -fsSL "$BASE/$f.bundle" -o "$TMP/$f.bundle" 2>/dev/null; then
+  if curl $PROTO -fsSL "$BASE/$f.bundle" -o "$TMP/$f.bundle" 2>/dev/null; then
     if command -v cosign >/dev/null; then
       if cosign verify-blob --bundle "$TMP/$f.bundle" --certificate-identity "$identity" \
           --certificate-oidc-issuer "$issuer" "$TMP/$f" >"$TMP/cosign.log" 2>&1; then

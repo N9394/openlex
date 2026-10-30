@@ -108,8 +108,7 @@ function remove(id) {
 // ── sources ──────────────────────────────────────────────────────────────
 async function getText(url, accept) {
   const guard = require('./web/guard')
-  await guard.assertPublicUrl(url)
-  const res = await fetch(url, { headers: { Accept: accept, 'User-Agent': UA }, signal: AbortSignal.timeout(45000), redirect: 'follow' })
+  const res = await guard.safeFetch(url, { headers: { Accept: accept, 'User-Agent': UA }, signal: AbortSignal.timeout(45000) })
   if (!res.ok) throw new Error(`${new URL(url).hostname} → HTTP ${res.status}`)
   return res.text()
 }

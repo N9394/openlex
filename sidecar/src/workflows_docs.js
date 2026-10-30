@@ -32,13 +32,37 @@ function paragraphs(text) {
 }
 
 /** Resolve a document: absolute path, or a file name inside the matter's folders. */
-function resolveDoc(matterId, file) {
+/**
+ * A document of a matter: a file name in the matter's folders, or a path.
+ * strict (the agent's tools): a path must lie in the matter's folders, the
+ * working folder or the workspace — a model told by a document to "analyse
+ * ~/.ssh/id_rsa" must not read it. Without strict (the lawyer's own front
+ * ends, which pick files themselves) any path is taken as given.
+ */
+function resolveDoc(matterId, file, { strict = false } = {}) {
   if (!file) throw new Error('no document given')
+  if (strict && (path.isAbsolute(file) || /[\\/]/.test(file) || file.startsWith('~'))) return allowedPath(matterId, file)
   if (path.isAbsolute(file)) return file
   const docs = wf.listDocs(wf.matterFolders(matterId))
   const hit = docs.find((d) => path.basename(d) === file) || docs.find((d) => path.basename(d).toLowerCase().includes(String(file).toLowerCase()))
   if (!hit) throw new Error(`"${file}" is not in this matter's folders`)
   return hit
+}
+
+/** An explicit path the agent named: only inside the matter's folders, the working folder or the workspace (after symlinks). */
+function allowedPath(matterId, file) {
+  const fs = require('fs')
+  const fo = require('./folder')
+  const real = (p) => { try { return fs.realpathSync(p) } catch { return path.resolve(p) } }
+  const inside = (p, root) => { const r = path.relative(root, p); return r === '' || (!!r && !r.startsWith('..') && !path.isAbsolute(r)) }
+  const loc = fo.tryLocate(file)
+  if (loc) return loc.abs
+  if (path.isAbsolute(file)) {
+    const abs = path.resolve(file)
+    const target = real(abs)
+    if (wf.matterFolders(matterId).some((d) => inside(abs, path.resolve(d)) && inside(target, real(d)))) return abs
+  }
+  throw new Error(`"${file}" is not in this matter's folders, the working folder or the workspace — OpenLex may not read it`)
 }
 
 const stamp = () => new Date().toISOString().slice(0, 10)

@@ -90,6 +90,12 @@ const PATHS = {
   notificationsPref: path.join(app.getPath('userData'), 'notifications.txt'),
 }
 
+// Renderer hardening (main/security.js): links never open App windows,
+// navigation stays on the App's pages, openExternal only for http(s)/mailto,
+// and every IPC handler registered below answers only the App's own page.
+const security = require('./security')
+security.install({ app, ipcMain, shell, clientDir: PATHS.client, devFrontend: DEV_FRONTEND })
+
 // User pref for desktop notifications. Default ON. Persisted via IPC handler.
 let _notificationsEnabled = true
 try {
@@ -352,6 +358,7 @@ function startHub() {
   // Engine API for the renderer's OpenLex pages (same endpoints as the Word
   // pane). JSON calls + SSE streams, restricted to ENGINE_PATHS.
   ipcMain.handle('lexvault:engine', async (_e, { method = 'GET', path: p, body } = {}) => {
+    if (!['GET', 'POST'].includes(method)) throw new Error(`engine method not allowed: ${method}`)
     if (!ENGINE_PATHS.test(String(p))) throw new Error(`engine path not allowed: ${p}`)
     return hub.request(method, p, body)
   })
@@ -418,6 +425,10 @@ async function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true,
+      webSecurity: true,
+      webviewTag: false,
+      navigateOnDragDrop: false,
     },
   })
 
@@ -440,8 +451,10 @@ async function createWindow() {
   mainWindow.webContents.on('did-fail-load', (_e, code, desc, url) => {
     console.error(`[renderer] did-fail-load code=${code} url=${url}: ${desc}`)
   })
-  mainWindow.webContents.on('console-message', (_e, level, message, line, source) => {
-    const tag = level === 3 ? 'ERROR' : level === 2 ? 'WARN' : 'log'
+  mainWindow.webContents.on('console-message', (e, level, message, line, source) => {
+    // Electron 35+ passes one event object (level is a word); older ones positional args.
+    if (e && typeof e.message === 'string') ({ level, message, lineNumber: line, sourceId: source } = e)
+    const tag = level === 3 || level === 'error' ? 'ERROR' : level === 2 || level === 'warning' ? 'WARN' : 'log'
     console.log(`[renderer:${tag}] ${source}:${line}  ${message}`)
   })
   mainWindow.webContents.on('render-process-gone', (_e, details) => {
