@@ -53,6 +53,8 @@ const ROLE_WORDS = new Set(['klägerin', 'kläger', 'beklagte', 'beklagten', 'be
 const PERSON_RE = new RegExp(`(?<![\\p{L}])((?:${TITLES}\\s+)+)((?:${CAP}|\\p{Lu}\\.)(?:\\s(?:(?:von|van|de|der|den|zu|da|di|del|la|le)\\s)?(?:${CAP}|\\p{Lu}\\.)){0,3})(?![\\p{L}])`, 'gu')
 
 const FORMS = "(?:GmbH(?:\\s&\\sCo\\.?\\sKG)?|AG|KG|OG|OHG|SE|KGaA|e\\.\\s?U\\.|e\\.\\s?V\\.|UG(?:\\s\\(haftungsbeschränkt\\))?|PartG(?:\\smbB)?|spol\\.\\ss\\s?r\\.\\s?o\\.|s\\.\\s?r\\.\\s?o\\.|a\\.\\s?s\\.|v\\.\\s?o\\.\\s?s\\.|k\\.\\s?s\\.|sp\\.\\sz\\so\\.\\s?o\\.|sp\\.\\sj\\.|sp\\.\\sk\\.|sp\\.\\sp\\.|S\\.A\\.|SA|S\\.R\\.L\\.|SRL|S\\.C\\.S\\.|Kft\\.|Zrt\\.|Nyrt\\.|Bt\\.|Kkt\\.|LLC|L\\.L\\.C\\.|Inc\\.|Corp\\.|Corporation|Ltd\\.?|Limited|LLP|L\\.P\\.|plc|PLC|N\\.V\\.|B\\.V\\.|S\\.p\\.A\\.|S\\.r\\.l\\.|SAS|SARL)"
+const FORM_END = new RegExp(`\\s${FORMS}$`, 'u')
+const FORM_ONLY = new RegExp(`^${FORMS}$`, 'u')
 const ORG_WORD = "(?:\\p{Lu}[\\p{L}\\d&'’.-]*|\\d+[\\p{L}\\d]*|&)"
 const ORG_RE = new RegExp(`(?<![\\p{L}\\d])(${ORG_WORD}(?:\\s(?:${ORG_WORD}|und|and|a|i|és|și|şi|e|&\\sCo\\.?|von|der|des|de|la|du)){0,5})\\s(${FORMS})(?![\\p{L}\\d])`, 'gu')
 const LEAD_STOP = new Set(['die', 'der', 'das', 'den', 'dem', 'des', 'the', 'a', 'an', 'eine', 'einer', 'ein', 'firma', 'gesellschaft', 'společnost', 'spoločnosť', 'spółka', 'spółki', 'spółką', 'firmą', 'firma', 'societatea', 'societății', 'cég', 'társaság', 'mit', 'und', 'and', 'zwischen', 'between', 'von', 'bei', 'für', 'for', 'with', 'gegen', 'against', 'v.', 'vs.', 'gegenüber', 'sowie', 'als', 'as', 'by', 'to', 'of', 'in', 'zur', 'zum', 'beklagte', 'klägerin', 'kläger', 'beklagten', 'auftraggeber', 'auftragnehmer', 'käufer', 'käuferin', 'verkäufer', 'verkäuferin', 'mieter', 'mieterin', 'vermieter', 'vermieterin', 'lieferant', 'kunde', 'does', 'do', 'did', 'is', 'are', 'was', 'were', 'has', 'have', 'if', 'when', 'why', 'how', 'what', 'who', 'can', 'could', 'should', 'would', 'will', 'may', 'must', 'ist', 'hat', 'haben', 'wird', 'kann', 'soll', 'muss', 'darf', 'wenn', 'ob', 'wie', 'was', 'wer', 'warum', 'nach', 'gemäß', 'laut', 'durch', 'über', 'unter', 'auch', 'dass', 'bitte', 'please', 'check', 'prüfe', 'prüfen', 'schreibe', 'write', 'draft', 'entwirf', 'hier', 'here', 'dear', 'sehr', 'geehrte', 'liebe', 'an', 'am', 'im', 'vom', 'beim'])
@@ -89,14 +91,17 @@ function heuristics(text) {
 function patterns(text, extra = []) {
   const out = []
   for (const p of [...PATTERNS, ...extra]) {
-    p.re.lastIndex = 0
-    for (const m of text.matchAll(p.re)) {
+    const re = new RegExp(p.re.source, p.re.flags.includes('g') ? p.re.flags : `${p.re.flags}g`)
+    let m
+    while ((m = re.exec(text))) {
+      if (m[0] === '') { re.lastIndex++; continue }
       const sub = m[1] !== undefined && p.re.source.startsWith('(') ? m[1] : m[0]
       const start = m.index + (sub === m[0] ? 0 : m[0].indexOf(sub))
       const value = sub.replace(/[\s,.;:]+$/, '')
       if (!value) continue
       const before = text.slice(Math.max(0, start - (p.window || 40)), start)
-      if (p.context && !p.context.test(before)) continue
+      // Without the words before it, try again one character later ("Az. 2 O 123/20": the match must not swallow "Az.").
+      if (p.context && !p.context.test(before)) { re.lastIndex = m.index + 1; continue }
       if (p.validate && !p.validate(value, before)) continue
       out.push({ kind: p.kind, start, end: start + value.length, confidence: p.confidence ?? 0.8, source: p.firm ? 'firm' : 'pattern', label: p.label, pattern: p.id })
     }
@@ -106,9 +111,23 @@ function patterns(text, extra = []) {
 
 // ── terms ───────────────────────────────────────────────────────────────
 
+/** A listed person's last name counts too ("Huber" for "Mag. Johann Huber"). */
+function withLastNames(terms) {
+  const out = [...terms]
+  for (const t of terms) {
+    const kind = t.kind || 'PARTY'
+    const value = String(t.text || '').trim()
+    if (!['PERSON', 'PARTY'].includes(kind) || FORM_END.test(value)) continue
+    const words = value.split(/\s+/)
+    const last = words[words.length - 1]
+    if (words.length > 1 && last.length >= 4 && /^\p{Lu}\p{Ll}/u.test(last) && !FORM_ONLY.test(last)) out.push({ text: last, kind: 'PERSON', source: t.source })
+  }
+  return out
+}
+
 function termHits(text, terms) {
   const out = []
-  const list = [...new Map(terms.filter((t) => t && String(t.text || '').trim().length >= 2).map((t) => [norm(t.text), t])).values()]
+  const list = [...new Map(withLastNames(terms).filter((t) => t && String(t.text || '').trim().length >= 2).map((t) => [norm(t.text), t])).values()]
     .sort((a, b) => b.text.length - a.text.length)
   for (const t of list) {
     const re = new RegExp(`(?<![\\p{L}\\p{N}])${escapeRe(String(t.text).trim()).replace(/\s+/g, '\\s+')}(?![\\p{L}\\p{N}])`, 'giu')
@@ -117,24 +136,36 @@ function termHits(text, terms) {
   return out
 }
 
-/** Other places where a found person or organisation appears again ("Huber" after "Mag. Johann Huber"). */
-function spread(text, found) {
+/**
+ * Other places where a found person or organisation appears again: the
+ * last name alone ("Huber" after "Mag. Johann Huber"), an organisation's
+ * name without its legal form, and the same words where no title stood.
+ */
+function spread(text, found, keep) {
   const out = []
   const seen = new Set()
   for (const f of found) {
-    if (!['PERSON', 'ORG'].includes(f.kind) || f.source === 'term') continue
+    if (!['PERSON', 'ORG', 'PARTY'].includes(f.kind)) continue
     const value = text.slice(f.start, f.end)
-    const forms = [value]
-    // A person's last name alone; an organisation's name without the legal form.
+    if (keep.has(norm(value))) continue
+    const listed = f.source === 'term' || f.source === 'firm'
+    const forms = []
+    if (!listed) forms.push([value, f.kind])
     const words = value.split(/\s+/)
-    if (f.kind === 'PERSON' && words.length > 1 && words[words.length - 1].length >= 4) forms.push(words[words.length - 1])
-    if (f.kind === 'ORG') { const core = value.replace(new RegExp(`\\s${FORMS}$`, 'u'), ''); if (core !== value && core.length >= 4) forms.push(core) }
-    for (const form of forms) {
-      const key = `${f.kind}:${norm(form)}`
-      if (seen.has(key)) continue
+    const isOrg = f.kind === 'ORG' || FORM_END.test(value)
+    if (isOrg) {
+      const core = value.replace(FORM_END, '')
+      if (core !== value && core.length >= 4) forms.push([core, 'ORG'])
+    } else if (words.length > 1) {
+      const last = words[words.length - 1]
+      if (last.length >= 4 && /^\p{Lu}/u.test(last) && !FORM_ONLY.test(last)) forms.push([last, f.kind === 'PARTY' ? 'PERSON' : f.kind])
+    }
+    for (const [form, kind] of forms) {
+      const key = `${kind}:${norm(form)}`
+      if (seen.has(key) || keep.has(norm(form))) continue
       seen.add(key)
       const re = new RegExp(`(?<![\\p{L}\\p{N}])${escapeRe(form)}(?![\\p{L}\\p{N}])`, 'gu')
-      for (const m of text.matchAll(re)) out.push({ kind: f.kind, start: m.index, end: m.index + m[0].length, confidence: form === value ? f.confidence : Math.min(f.confidence, 0.6), source: f.source })
+      for (const m of text.matchAll(re)) out.push({ kind, start: m.index, end: m.index + m[0].length, confidence: form === value ? f.confidence : Math.min(f.confidence, 0.6), source: listed ? 'heuristic' : f.source })
     }
   }
   return out
@@ -173,7 +204,7 @@ function scan(text, opts = {}) {
     ...heuristics(text),
     ...(opts.model || []).map((f) => ({ ...f, source: 'model' })),
   ]
-  raw = raw.concat(spread(text, raw))
+  raw = raw.concat(spread(text, raw, keep))
   if (!opts.all) raw = raw.filter((f) => f.source === 'term' || f.source === 'firm' || (f.confidence >= THRESHOLD && !keep.has(norm(text.slice(f.start, f.end)))))
   return resolve(raw).map((f, i) => {
     const value = text.slice(f.start, f.end)
