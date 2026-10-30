@@ -107,7 +107,7 @@ test('the agent cannot write the firm configuration', async () => {
   assert.match(ok.output, /^written:/)
 })
 
-test('git in run_bash never runs programs from the workspace repository config', () => {
+test('git in run_bash never runs programs from the workspace repository config', { skip: process.platform === 'win32' && 'run_bash is not available on Windows' }, () => {
   const { args } = ws.checkCommand('git status')
   for (const o of ['core.fsmonitor=false', 'core.hooksPath=/dev/null', 'core.pager=cat']) assert.ok(args.includes(o), o)
   assert.ok(args.indexOf('core.fsmonitor=false') < args.indexOf('status'), '-c before the subcommand')
