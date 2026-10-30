@@ -156,9 +156,10 @@ jobs:
       - name: Size
         run: ls -la dist/*.AppImage && du -sh dist/linux-unpacked/resources/*
 
-  # The install scripts against the latest published release, on real
-  # Linux, macOS and Windows runners (Windows: PowerShell 5.1 and 7, the way
-  # users run it: the script text piped into Invoke-Expression).
+  # The install scripts against the latest published release (CLI) and a
+  # fake local release (desktop app), on real Linux, macOS and Windows
+  # runners (Windows: PowerShell 5.1 and 7, the way users run it: the script
+  # text piped into Invoke-Expression).
   installers:
     name: install script (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -192,6 +193,17 @@ jobs:
           grep -q "sha256 matches" "$RUNNER_TEMP/install.log"
           OPENLEX_DATA_DIR="$RUNNER_TEMP/data" "$RUNNER_TEMP/olbin/openlex" help > "$RUNNER_TEMP/help.txt"
           head -3 "$RUNNER_TEMP/help.txt"
+      # The desktop app part (--app / -App) against a fake release served
+      # from the runner: a tiny dmg (macOS), a stand-in AppImage (Linux), a
+      # stand-in setup.exe (Windows), including a checksum mismatch that
+      # must stop the install.
+      - name: install.sh --app (fake release)
+        if: runner.os != 'Windows'
+        run: bash scripts/test-install-app.sh
+      - name: install.ps1 -App (fake release; Windows PowerShell 5.1 and PowerShell 7)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts\test-install-app.ps1
       - name: install.ps1 (Windows PowerShell 5.1)
         if: runner.os == 'Windows'
         shell: powershell
