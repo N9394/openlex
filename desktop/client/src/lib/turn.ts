@@ -317,6 +317,14 @@ export const permission = {
   riskLine(ev: any) {
     return `${riskWords()[ev?.risk] || tr('risk.other', 'It would change something.')}${ev?.firmRule ? ` ${tr('firmAsks', 'Your firm asks for confirmation here.')}` : ''} ${tr('untilYouChoose', 'Nothing happens until you choose.')}`
   },
+  /** Prompt injection: the request came up while reading outside text (shown above the risk line). */
+  caution(ev: any): string | null {
+    return ev?.caution ? tr('injection.caution', ev.caution) : null
+  },
+  /** Prompt injection: what would be sent looks like client data (names, placeholders, copied passages). */
+  warning(ev: any): string | null {
+    return ev?.warning ? tr('injection.warning', ev.warning) : null
+  },
   /** The line in the conversation after an answer (same words as the terminal app). */
   answered(ev: any, decision: string, saved?: string) {
     if (decision === 'deny') return tr('notAllowedWhat', 'Not allowed: {{what}}', { what: ev.summary })

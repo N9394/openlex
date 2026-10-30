@@ -22,7 +22,8 @@ import {
   Sparkles,
   Download,
 } from 'lucide-react'
-import ReactMarkdown from 'react-markdown'
+// Answers render through the safe Markdown component (no images load, links need a click).
+import ReactMarkdown from '../components/Markdown'
 import { api, apiBase } from '../lib/api'
 
 interface VaultItem {

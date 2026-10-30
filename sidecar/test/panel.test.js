@@ -38,7 +38,7 @@ function replyFor(body) {
   if (/You moderate a panel/.test(sys)) {
     return JSON.stringify({
       agreement: [{ point: 'Damage occurred.', cites: ['S1'] }],
-      disagreement: [{ point: 'Fault', positions: [{ agent: 'claimant-counsel', view: 'negligent' }, { agent: 'Defendant\'s counsel', view: 'not negligent' }], cites: ['S2', 'S99'] }],
+      disagreement: [{ point: 'Fault', positions: [{ agent: 'claimant-counsel', view: 'negligent' }, { agent: 'Defendant\'s side', view: 'not negligent' }], cites: ['S2', 'S99'] }],
       stronger: { agent: 'claimant-counsel', why: 'The claimant cites the statute.', cites: ['S1', 'S42'] },
       open: [{ question: 'Was the damage foreseeable?', why: 'Not argued.' }],
       quotes: [{ text: 'den Ersatz des Schadens zu fordern', source: 'S1' }, { text: 'the defendant admitted everything in writing', source: 'S1' }],
@@ -46,8 +46,8 @@ function replyFor(body) {
   }
   const who = /You are ([^.]+)\. Your position/.exec(user)?.[1] || /as ([^:.)]+)[:.)]/.exec(user)?.[1] || ''
   const round = +(/round (\d+) of/.exec(user)?.[1] || 1)
-  if (/Claimant/.test(who)) return `Round ${round}: the claimant is owed damages under § 1295 ABGB — „den Ersatz des Schadens zu fordern“.${round > 1 && /Defendant's counsel/.test(user) ? ' The defence misreads the statute.' : ''}`
-  if (/Defendant/.test(who)) return `Round ${round}: no fault, so no claim (§ 1296 ABGB).${round > 1 && /Claimant's counsel/.test(user) ? ' The claimant ignores the burden of proof.' : ''}`
+  if (/Claimant/.test(who)) return `Round ${round}: the claimant is owed damages under § 1295 ABGB — „den Ersatz des Schadens zu fordern“.${round > 1 && /Defendant's side/.test(user) ? ' The defence misreads the statute.' : ''}`
+  if (/Defendant/.test(who)) return `Round ${round}: no fault, so no claim (§ 1296 ABGB).${round > 1 && /Claimant's side/.test(user) ? ' The claimant ignores the burden of proof.' : ''}`
   if (/Devil/.test(who)) return 'Both sides overlook the limitation period.'
   if (/AT law/.test(who)) return 'Austrian law: § 879 ABGB applies.'
   if (/EU law/.test(who)) return 'EU law: Art 6 DSGVO applies.'
@@ -182,7 +182,7 @@ test('debate: N rounds, each agent sees the others\' last round; the moderator k
   assert.deepStrictEqual(s.agreement[0].cites, ['S1'])
   assert.deepStrictEqual(s.disagreement[0].cites, ['S2'], 'an invented source is dropped')
   assert.deepStrictEqual(s.disagreement[0].positions.map((p) => p.lane), ['claimant-counsel', 'defendant-counsel'], 'agents by id or by name')
-  assert.strictEqual(s.stronger.title, 'Claimant\'s counsel')
+  assert.strictEqual(s.stronger.title, 'Claimant\'s side')
   assert.deepStrictEqual(s.stronger.cites, ['S1'])
   assert.deepStrictEqual(s.quotes.map((q) => q.text), ['den Ersatz des Schadens zu fordern'], 'a quote not found word for word is removed')
   assert.strictEqual(s.removed, 3)
@@ -192,9 +192,9 @@ test('debate: N rounds, each agent sees the others\' last round; the moderator k
   // Stored, exported, saved with the matter and found by the app's search.
   assert.strictEqual(panel.get(r.id).summary.stronger.lane, 'claimant-counsel')
   const md = panel.toMarkdown(r)
-  assert.match(md, /The stronger position[\s\S]*Claimant's counsel/)
+  assert.match(md, /The stronger position[\s\S]*Claimant's side/)
   assert.match(md, /Where they disagree[\s\S]*\[S2\]/)
-  assert.match(md, /Round 1 — Claimant's counsel/)
+  assert.match(md, /Round 1 — Claimant's side/)
   for (const fmt of ['docx', 'pdf', 'md']) assert.ok(panel.exportPanel(r.id, fmt).bytes > 100, fmt)
   const saved = require('../src/saved').add({ kind: 'panel', title: r.question, content: md, source: { kind: 'panel', id: r.id } })
   assert.ok(require('../src/saved').exportItem(saved.id, 'pdf').name.endsWith('.pdf'))

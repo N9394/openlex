@@ -937,7 +937,14 @@
       .replace(/__([^_]+)__/g, '<strong>$1</strong>')
       .replace(/(^|[\s(])\*([^*\s][^*]*)\*/g, '$1<em>$2</em>')
       .replace(/(^|[\s(])_([^_\s][^_]*)_/g, '$1<em>$2</em>')
-      .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+      // An image is never loaded (prompt injection: its address could carry
+      // document text out without a click). It shows as "[image: host]".
+      .replace(/!\[([^\]]*)\]\(([^)\s]*)\)/g, (_m, alt, url) => {
+        const host = (String(url).match(/^https?:\/\/([^/?#]+)/i) || [])[1] || 'not loaded'
+        return '[image: ' + host + ']' + (alt ? ' ' + alt : '')
+      })
+      // Links open in the browser only on a click; the full address shows on hover.
+      .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" title="$2" target="_blank" rel="noopener noreferrer nofollow" referrerpolicy="no-referrer">$1</a>')
   }
   /** A table row's cells: outer pipes dropped, "\|" kept as a literal pipe. */
   function splitRow(line) {

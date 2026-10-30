@@ -1069,7 +1069,7 @@
     "justNow": "gerade eben",
     "minAgo": "vor {{n}} Min.",
     "todayAt": "heute {{time}}",
-    "associate": "Associate",
+    "associate": "Assistenz",
     "noEngine": "Der Chat braucht die OpenLex-Engine, die mit der Desktop-App läuft.",
     "stillWriting": "Die Antwort wird noch geschrieben. Warten Sie darauf (oder klicken Sie auf „Anhalten“) und fragen Sie dann erneut. Befehle wie /model funktionieren währenddessen.",
     "aboutFile": "Bitte sehen Sie sich die angehängte Datei an.",
@@ -1295,7 +1295,11 @@
     "fromCollection": "der Rechtssammlung auf diesem Computer",
     "checkLaw": "Prüfen Sie die Normen, bevor Sie sich auf die Antwort verlassen.",
     "and": "und",
-    "lawFrom": "Die Normen stammen aus {{list}}. Prüfen Sie sie, bevor Sie sich auf die Antwort verlassen."
+    "lawFrom": "Die Normen stammen aus {{list}}. Prüfen Sie sie, bevor Sie sich auf die Antwort verlassen.",
+    "injection": {
+      "caution": "Diese Anfrage kam beim Lesen eines Dokuments, einer Seite oder einer Quelle auf. Bitte genau prüfen: Text darin könnte sie verlangt haben.",
+      "warning": "Was gesendet würde, enthält möglicherweise Mandantendaten (Namen, Platzhalter, kopierte Passagen oder kodierten Text). So versuchen versteckte Anweisungen, Daten hinauszuschaffen. Nur erlauben, wenn Sie genau das verlangt haben."
+    }
   },
   "analysis": {
     "choose": "Wählen Sie das zu analysierende Dokument (Word, PDF, Excel, E-Mail oder Text) – oder ziehen Sie es hierher.",
@@ -1881,12 +1885,12 @@
     "noConnectors": "Keine Anbindungen. MCP-Server fügen Sie in Word unter Einstellungen → Erweitert → Anbindungen hinzu, oder in ~/.lexvault/mcp-servers.json."
   },
   "agents": {
-    "associate": "Juristischer Mitarbeiter",
+    "associate": "Assistenz",
     "researcher": "Recherche",
     "reviewer": "Prüfer",
     "drafter": "Entwurfsverfasser",
-    "claimant-counsel": "Klägervertretung",
-    "defendant-counsel": "Beklagtenvertretung",
+    "claimant-counsel": "Klägerseite",
+    "defendant-counsel": "Beklagtenseite",
     "devils-advocate": "Advocatus Diaboli",
     "compliance-checker": "Compliance-Prüfung"
   },
@@ -1968,5 +1972,10 @@
     "keepAsIs": "Unverändert lassen (eine Angabe pro Zeile)",
     "listsSaved": "Für diese Akte gespeichert.",
     "yourQuestion": "Ihre Frage"
+  },
+  "markdown": {
+    "image": "Bild",
+    "imageNoHost": "nicht geladen",
+    "confirmOpen": "Diese Adresse hat die KI geschrieben. Im Browser öffnen?\n\n{{url}}\n\nBitte zuerst prüfen: Eine Adresse kann Text aus Ihren Dokumenten an die Website übertragen."
   }
 }

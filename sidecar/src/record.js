@@ -134,7 +134,9 @@ function absorb(acc, e) {
   }
   if (e.provider === 'permissions') {
     if (e.by === 'default' && e.decision === 'allowed') { acc.routine++; return }
-    acc.permissions.push({ what: actionOf(e.call), decision: e.decision === 'blocked' ? 'denied' : 'allowed', by: decidedBy(e.by), asked: ['lawyer', 'timeout', 'disconnect'].includes(e.by) })
+    // Prompt injection guard (untrusted.js): the kind of finding only, never content.
+    const guard = Array.isArray(e.exfil) && e.exfil.length ? 'exfil' : e.afterReading ? 'reading' : null
+    acc.permissions.push({ what: actionOf(e.call), decision: e.decision === 'blocked' ? 'denied' : 'allowed', by: decidedBy(e.by), asked: ['lawyer', 'timeout', 'disconnect'].includes(e.by), ...(guard ? { guard } : {}) })
     return
   }
   if (e.provider === 'hook') {
@@ -179,6 +181,11 @@ function absorb(acc, e) {
 
 const emptyAcc = () => ({ ai: [], lookups: [], permissions: [], blocked: [], checks: [], routine: 0 })
 
+const GUARD_NOTES = {
+  exfil: ' (what would have been sent looked like client data)',
+  reading: ' (it came up while reading a document, page or source)',
+}
+
 /** Sentences for the detail view, the same in every front end and export. */
 function detailLines(x) {
   const lines = []
@@ -206,7 +213,7 @@ function detailLines(x) {
   const online = x.lookups.filter((l) => !l.local)
   if (online.length) lines.push(`Looked up online: ${online.map((l) => `${l.name}${l.count > 1 ? ` (${l.count}×)` : ''}`).join(', ')} — only search words or a web address were sent`)
   for (const l of x.lookups.filter((y) => y.local)) lines.push(clip(l.name, 80))
-  for (const p of x.permissions) lines.push(`Permission to ${p.what}: ${p.decision} — ${p.decision === 'allowed' || p.decision === 'denied' ? `decided by ${p.by}` : p.by}`)
+  for (const p of x.permissions) lines.push(`Permission to ${p.what}: ${p.decision} — ${p.decision === 'allowed' || p.decision === 'denied' ? `decided by ${p.by}` : p.by}${GUARD_NOTES[p.guard] || ''}`)
   if (x.routine) lines.push(`${plural(x.routine, 'routine step')} allowed by the standard settings (reading, searching)`)
   for (const b of x.blocked) lines.push(`Not sent to ${b.what}: ${b.why}`)
   if (x.result) lines.push(`Result: ${x.result}`)

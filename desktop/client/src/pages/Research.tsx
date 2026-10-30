@@ -146,7 +146,7 @@ export default function Research() {
   const loadGen = useRef(0)
 
   const agentName = (matter ? matter.agent : quickAgent) || 'associate'
-  const agent = agents.find((a) => a.name === agentName) || { name: 'associate', title: t('chat.associate', 'Associate') }
+  const agent = agents.find((a) => a.name === agentName) || { name: 'associate', title: t('chat.associate', 'Assistant') }
 
   // ── setup: matter, roles, which AI ──
   const refreshSetup = useCallback(async () => {
@@ -1031,6 +1031,8 @@ function PermissionDialog({ req, onAnswer }: { req: any; onAnswer: (decision: st
         {permission.details(req).map((d) => (
           <div key={d.label} className="text-xs text-antique"><span className="text-parchment/80">{d.label}:</span> <span className="font-mono break-all">{d.value}</span></div>
         ))}
+        {permission.warning(req) && <p className="text-sm text-red-300 border-l-2 border-red-400 pl-2" role="alert">{permission.warning(req)}</p>}
+        {permission.caution(req) && <p className="text-sm text-amber-200 border-l-2 border-amber-400 pl-2">{permission.caution(req)}</p>}
         <p id="perm-risk" className="text-xs text-antique">{permission.riskLine(req)}</p>
         <div className="flex flex-wrap gap-2 pt-1">
           {buttons.map((b) => (
