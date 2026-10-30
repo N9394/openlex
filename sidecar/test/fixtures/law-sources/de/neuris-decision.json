@@ -1,0 +1,59 @@
+{
+ "@type": "Rechtsprechung",
+ "@context": "https://testphase.rechtsinformationen.bund.de/v1/context.jsonld",
+ "dokumentNummer": "KORE303362011",
+ "tatbestand": "Die in Frankreich wohnhaften Kläger erwarben mit Kaufvertrag vom 23. Februar 2008 bei der in P. ansässigen Beklagten einen neuen Camping-Faltanhänger zum Preis von 7.370 €. In der Auftragsbestätigung vom 25. Februar 2008 ist unter der Rubrik \"Lieferung\" aufgeführt: \"ab P., Selbstabholer\". Dennoch lieferte die Beklagte den Anhänger am 30. April 2008 an den Wohnort der Kläger. Die Kläger, die den Anhänger in einem Urlaub nutzten, rügten in der Folgezeit verschiedene Mängel. Mit Schreiben ihres Prozessbevollmächtigten vom 4. Juni 2008 forderten sie die Beklagte unter Fristsetzung zum 18. Juni 2006 auf, den Faltanhänger abzuholen und die Mängel zu beseitigen. Ein daraufhin vereinbarter Abholterm …",
+ "entscheidungsgruende": "Die Revision hat keinen Erfolg. A. Das Berufungsgericht (OLG Koblenz, DAR 2011, 84 f.) hat zur Begründung seiner Entscheidung im Wesentlichen ausgeführt: Die Kläger seien nicht wirksam vom Kaufvertrag zurückgetreten. Dabei könne dahinstehen, ob der Anhänger Sachmängel aufgewiesen habe, die die Kläger zum Rücktritt vom Kaufvertrag berechtigt hätten. Jedenfalls scheitere der Rücktritt daran, dass die Kläger der Beklagten den Anhänger nicht an deren Firmensitz zur Nachbesserung zur Verfügung gestellt und damit eine ihnen im Rahmen der Nacherfüllung obliegende Mitwirkungshandlung unterlassen hätten. Bei dem Nacherfüllungsanspruch handele es sich um den modifizierten Erfüllungsanspruch aus dem Ka …",
+ "leitsatz": "1. Der Erfüllungsort der Nacherfüllung hat im Kaufrecht des Bürgerlichen Gesetzbuches keine eigenständige Regelung erfahren. Für seine Bestimmung gilt daher die allgemeine Vorschrift des § 269 Abs. 1 BGB 21 29. 2. Danach sind in erster Linie die von den Parteien getroffenen Vereinbarungen entscheidend. Fehlen vertragliche Abreden über den Erfüllungsort, ist auf die jeweiligen Umstände, insbesondere die Natur des Schuldverhältnisses, abzustellen. Lassen sich auch hieraus keine abschließenden Erkenntnisse gewinnen, ist der Erfüllungsort letztlich an dem Ort anzusiedeln, an welchem der Verkäufer zum Zeitpunkt der Entstehung des Schuldverhältnisses seinen Wohnsitz oder seine gewerbliche Niederla …",
+ "kurztitel": "BGH, Urteil vom 13. April 2011 - VIII ZR 220/10",
+ "titelzeile": "(Kaufvertrag: Erfüllungsort der Nacherfüllung)",
+ "tenor": "Die Revision der Kläger gegen das Urteil des 8. Zivilsenats des Oberlandesgerichts Koblenz vom 16. Juli 2010 wird zurückgewiesen. Die Kläger haben die Kosten des Revisionsverfahrens zu tragen. Von Rechts wegen",
+ "datum": "2011-04-13",
+ "datumsTyp": "Entscheidungsdatum",
+ "aktenzeichen": "VIII ZR 220/10",
+ "aktenzeichenListe": [
+  "VIII ZR 220/10"
+ ],
+ "regionen": [
+  "DEU"
+ ],
+ "vorgehendeEntscheidungen": [
+  "OLG Koblenz, Urteil vom 16. Juli 2010 - 8 U 812/09",
+  "LG Koblenz, Urteil vom 3. Juni 2009 - 8 O 277/08"
+ ],
+ "normenkette": [
+  "BGB § 269 Abs 1",
+  "BGB § 269 Abs 2",
+  "BGB § 439"
+ ],
+ "gericht": "BGH",
+ "dokumenttyp": "Urteil",
+ "spruchkoerper": "8. Zivilsenat",
+ "courtName": "BGH",
+ "@id": "/v1/rechtsprechung/KORE303362011",
+ "inLanguage": "de",
+ "encoding": [
+  {
+   "@type": "MediaObject",
+   "@id": "/v1/rechtsprechung/KORE303362011/html",
+   "contentUrl": "/v1/rechtsprechung/KORE303362011.html",
+   "encodingFormat": "text/html",
+   "inLanguage": "de"
+  },
+  {
+   "@type": "MediaObject",
+   "@id": "/v1/rechtsprechung/KORE303362011/xml",
+   "contentUrl": "/v1/rechtsprechung/KORE303362011.xml",
+   "encodingFormat": "application/xml",
+   "inLanguage": "de"
+  },
+  {
+   "@type": "MediaObject",
+   "@id": "/v1/rechtsprechung/KORE303362011/zip",
+   "contentUrl": "/v1/rechtsprechung/KORE303362011.zip",
+   "encodingFormat": "application/zip",
+   "inLanguage": "de"
+  }
+ ],
+ "vorabdokument": false
+}

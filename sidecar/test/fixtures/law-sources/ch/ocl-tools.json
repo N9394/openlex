@@ -1,0 +1,126 @@
+{
+ "tools": [
+  {
+   "name": "search_decisions",
+   "description": "Use this tool to find COURT DECISIONS (Rechtsprechung): 1,050,000+ Swiss federal and cantonal decisions plus ~2,800 ECtH",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "query": {
+      "type": "string"
+     },
+     "court": {
+      "type": "string"
+     },
+     "canton": {
+      "type": "string"
+     },
+     "language": {
+      "type": "string"
+     },
+     "date_from": {
+      "type": "string"
+     },
+     "date_to": {
+      "type": "string"
+     },
+     "published_from": {
+      "type": "string"
+     },
+     "published_to": {
+      "type": "string"
+     },
+     "chamber": {
+      "type": "string"
+     },
+     "marked_for_publication": {
+      "type": "boolean"
+     },
+     "limit": {
+      "type": "integer"
+     },
+     "offset": {
+      "type": "integer"
+     },
+     "sort": {
+      "type": "string"
+     },
+     "fields": {
+      "type": "string"
+     },
+     "include_pinpoint": {
+      "type": "boolean"
+     }
+    },
+    "required": []
+   }
+  },
+  {
+   "name": "get_decision",
+   "description": "Fetch a single court decision with full text. Look up by decision_id (e.g., bger_6B_1234_2025), docket number (e.g., 6B_",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "decision_id": {
+      "type": "string"
+     },
+     "full_text": {
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "decision_id"
+    ]
+   }
+  },
+  {
+   "name": "get_erwaegung",
+   "description": "Verbatim text of ONE numbered Erwägung — the citable unit in Swiss practice (e.g. 'BGE 136 III 513 E. 2.3'). Use when th",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "decision_id": {
+      "type": "string"
+     },
+     "e_number": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "decision_id",
+     "e_number"
+    ]
+   }
+  },
+  {
+   "name": "search_laws",
+   "description": "Use this tool to find STATUTE ARTICLES by topic — full-text over every locally indexed article, federal (Fedlex mirror) ",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "query": {
+      "type": "string"
+     },
+     "sr_number": {
+      "type": "string"
+     },
+     "canton": {
+      "type": "string"
+     },
+     "jurisdiction": {
+      "type": "string"
+     },
+     "language": {
+      "type": "string"
+     },
+     "limit": {
+      "type": "integer"
+     }
+    },
+    "required": [
+     "query"
+    ]
+   }
+  }
+ ]
+}

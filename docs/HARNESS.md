@@ -108,7 +108,7 @@ Instructions arrive at the turn that needs them, not all up front. Change a bloc
 
 The firm's own databases, DMS, folders and the legal databases it subscribes to, as searchable sources for the agent (`http`, `mcp`, `folder` adapters, no code). See [SOURCES.md](SOURCES.md).
 
-The built-in law sources are switched off or on here too, by id: `"neuris": { "type": "connector", "enabled": false }` (ids: `ris`, `eurlex`, `neuris`, `slovlex`, `esbirka`, `ansvar`). Built-ins are on by default; lock the section to fix the list for everyone.
+The built-in law sources are switched off or on here too, by id: `"neuris": { "type": "connector", "enabled": false }` (ids: see [SOURCES.md](SOURCES.md#for-the-person-who-sets-up-openlex); the Romanian community data `rodata` is off until switched on). Built-ins are on by default; lock the section to fix the list for everyone.
 
 ## `features`
 

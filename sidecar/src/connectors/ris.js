@@ -26,10 +26,12 @@ const connector = {
   licence: 'CC BY 4.0 (open government data, Republic of Austria)',
   licenceUrl: 'https://www.data.gv.at/katalog/dataset/ris-bundesrecht-konsolidiert',
   homepage: 'https://www.ris.bka.gv.at',
+  de: { label: 'RIS Österreich', description: 'Österreichs amtliche Bundesrechtsdatenbank (Rechtsinformationssystem des Bundes), geltende konsolidierte Fassungen' },
   needsKey: false,
+  broad: true,
   hosts: ['data.bka.gv.at', 'ogd.ris.bka.gv.at'],
   /** Extra words for the list: outside the RIS window, answers come from the local copy. */
-  statusNote: () => (require('../web/ris').liveAllowed() ? '' : ' (live look-ups only 20:00–05:00 and at weekends; your local copy now)'),
+  statusNote: (lang) => (require('../web/ris').liveAllowed() ? '' : lang === 'de' ? ' (live nur 20:00–05:00 und am Wochenende; jetzt Ihre lokale Kopie)' : ' (live look-ups only 20:00–05:00 and at weekends; your local copy now)'),
   nightCopy: {
     get: () => require('../web/ris').nightCopyOn(),
     set: (on) => require('../web/ris').setNightCopy(on),

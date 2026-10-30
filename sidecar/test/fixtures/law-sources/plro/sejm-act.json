@@ -1,0 +1,38 @@
+{
+ "address": "WDU19640160093",
+ "announcementDate": "1964-04-23",
+ "changeDate": "2026-10-16T12:33:32",
+ "displayAddress": "Dz.U. 1964 nr 16 poz. 93",
+ "pos": 93,
+ "promulgation": "1964-05-18",
+ "publisher": "DU",
+ "status": "akt posiada tekst jednolity",
+ "textHTML": true,
+ "textPDF": true,
+ "title": "Ustawa z dnia 23 kwietnia 1964 r. - Kodeks cywilny.",
+ "type": "Ustawa",
+ "volume": 16,
+ "year": 1964,
+ "entryIntoForce": "1965-01-01",
+ "inForce": "IN_FORCE",
+ "texts": [
+  {
+   "fileName": "text.html",
+   "type": "H"
+  },
+  {
+   "fileName": "D19640093.pdf",
+   "type": "O"
+  },
+  {
+   "fileName": "D19640093.pdf",
+   "type": "I"
+  },
+  {
+   "fileName": "D19640093Lj.pdf",
+   "type": "U"
+  }
+ ],
+ "validFrom": "1965-01-01",
+ "ELI": "DU/1964/93"
+}

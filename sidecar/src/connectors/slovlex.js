@@ -78,7 +78,9 @@ const connector = {
   licence: 'Official works, free of copyright (§ 5 of Act 185/2015 Z. z.), open data of the Ministry of Justice',
   licenceUrl: 'https://www.slov-lex.sk',
   homepage: 'https://www.slov-lex.sk',
+  de: { label: 'Slov-Lex Slowakei', description: 'Slowakisches Recht aus dem Portal des Justizministeriums, geltende konsolidierte Fassung (Suche nach Nummer oder Name des Gesetzes)' },
   needsKey: false,
+  broad: true,
   hosts: ['static.slov-lex.sk'],
   /** Only a law number or a known name can be looked up. */
   canSearch: (query) => !!parseRef(query),

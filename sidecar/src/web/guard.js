@@ -36,6 +36,15 @@ async function resolve(host) {
   return addrs
 }
 
+/**
+ * Source terms that bind the agent's own browsing too (connectors/index.js
+ * HOST_RULES): sites that forbid automated access (NJT, CyLaw,
+ * lawlibrary.org.za, SAFLII), and RIS outside its night window.
+ */
+function siteRule(host) {
+  try { return require('../connectors').hostRule(host) } catch { return null }
+}
+
 /** Throws unless the URL is public http(s). Resolves DNS to catch names that point inside. */
 async function assertPublicUrl(raw) {
   let u
@@ -43,6 +52,8 @@ async function assertPublicUrl(raw) {
   if (!['http:', 'https:'].includes(u.protocol)) throw new Error(`only http(s) URLs are allowed (got ${u.protocol})`)
   const host = u.hostname.replace(/^\[|\]$/g, '')
   if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || host.endsWith('.internal')) throw new Error(`refusing local address ${host}`)
+  const rule = siteRule(host)
+  if (rule) throw new Error(rule)
   const addrs = net.isIP(host) ? [host] : await resolve(host)
   if (!addrs.length) throw new Error(`cannot resolve ${host}`)
   if (addrs.some(privateIp)) throw new Error(`refusing private network address for ${host}`)
@@ -65,4 +76,4 @@ async function webHook(host, call, url) {
   return r.decision === 'deny' ? `BLOCKED by firm rule: ${r.reason}` : null
 }
 
-module.exports = { assertPublicUrl, checkWeb, webHook, privateIp }
+module.exports = { assertPublicUrl, checkWeb, webHook, privateIp, siteRule }

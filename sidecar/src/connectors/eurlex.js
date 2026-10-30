@@ -26,7 +26,9 @@ const connector = {
   licence: '© European Union, free reuse with attribution (Commission Decision 2011/833/EU)',
   licenceUrl: 'https://eur-lex.europa.eu/content/legal-notice/legal-notice.html',
   homepage: 'https://eur-lex.europa.eu',
+  de: { label: 'EUR-Lex', description: 'EU-Recht vom Amt für Veröffentlichungen der EU: Verordnungen, Richtlinien und Beschlüsse, mit Geltungsstatus und konsolidierten Fassungen' },
   needsKey: false,
+  broad: true,
   hosts: ['publications.europa.eu'],
 
   async search(query, { limit = 8, lang = 'en' } = {}) {
