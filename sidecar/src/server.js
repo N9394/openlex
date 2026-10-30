@@ -164,25 +164,12 @@ if (process.platform === 'win32' && !process.env.LEXVAULT_KEEPALIVE) {
 }
 
 // ── helpers ────────────────────────────────────────────────────────────────
-/**
- * Settings that decide where client data goes (provider, keys, data
- * policy) may only be changed by the add-in itself or a local process —
- * never by an arbitrary web page through the permissive CORS below.
- * Browsers always send Origin on cross-origin POSTs; local tools don't.
- */
-function trustedOrigin(req) {
-  const origin = req.headers.origin
-  if (!origin) return true
-  if (TRUSTED_ORIGINS.has(origin)) return true
-  try {
-    const u = new URL(origin)
-    return ['localhost', '127.0.0.1', '[::1]'].includes(u.hostname) && String(u.port || (u.protocol === 'https:' ? 443 : 80)) === String(config.PORT)
-  } catch { return false }
-}
-
-// Extra origins allowed to call the sidecar (the desktop app's renderer,
-// dev servers): OPENLEX_TRUSTED_ORIGINS="http://localhost:5173,app://openlex"
-const TRUSTED_ORIGINS = new Set(String(process.env.OPENLEX_TRUSTED_ORIGINS || '').split(',').map((x) => x.trim()).filter(Boolean))
+// Which requests are answered at all (request_guard.js): addressed to this
+// machine's loopback on our port (no DNS rebinding), no foreign Origin, no
+// cross-site browser request. Settings that decide where client data goes
+// may therefore only be changed by the panes or a local process.
+const requestGuard = require('./request_guard')
+const TRUSTED_ORIGINS = requestGuard.trustedOrigins()
 
 // One library sync at a time; callers share the in-flight run.
 let librarySyncing = null
@@ -364,9 +351,10 @@ async function handle(req, res) {
   // explicitly trusted origins get CORS headers, and any request carrying a
   // foreign Origin is refused outright — a web page could otherwise drive
   // the agent (and the lawyer's files) with a no-preflight "simple" POST.
-  if (!trustedOrigin(req)) {
-    res.writeHead(403, { 'Content-Type': 'application/json' })
-    return res.end(JSON.stringify({ error: 'forbidden origin' }))
+  const gate = requestGuard.check(req, { port: config.PORT, trusted: TRUSTED_ORIGINS })
+  if (!gate.ok) {
+    res.writeHead(gate.status, { 'Content-Type': 'application/json' })
+    return res.end(JSON.stringify({ error: gate.error }))
   }
   if (req.headers.origin) res.setHeader('Access-Control-Allow-Origin', req.headers.origin)
   res.setHeader('Vary', 'Origin')

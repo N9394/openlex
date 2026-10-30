@@ -21,7 +21,8 @@ To start the engine yourself, run `openlex serve` or `npm start` in `sidecar/`. 
 ## Access rules
 
 - **Same machine only.** The engine binds to 127.0.0.1.
-- **No browser pages.** Any request with a foreign `Origin` header is refused (403). Local processes send no `Origin` and are allowed. Extra trusted origins (for example the desktop app's renderer) are listed in `OPENLEX_TRUSTED_ORIGINS`.
+- **Addressed to this machine.** The `Host` header must be `127.0.0.1`, `localhost` or `[::1]` with the engine's port; anything else gets 421. This stops DNS-rebinding pages, which send their own site name.
+- **No browser pages.** Any request with a foreign `Origin` header is refused (403), and so is a request the browser marks as cross-site (`Sec-Fetch-Site: cross-site` or `same-site`) without a trusted `Origin`. Local processes send neither header and are allowed. Extra trusted origins (for example a desktop dev server) are listed in `OPENLEX_TRUSTED_ORIGINS`.
 - **Hub endpoints** (`/api/hub/*`) also need `Authorization: Bearer <token>`, where the token is the content of `~/.lexvault/run/hub.token` (0600, same OS user). The Word pane is same-origin and doesn't need it.
 - **The data policy applies to every route.** Each model, web and connector call is checked against the matter's policy and written to `~/.lexvault/audit/llm-calls.jsonl`, with metadata only and never content. Each line is chained to the one before it, so changes show (see *AI record*).
 
