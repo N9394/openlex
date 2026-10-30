@@ -32,17 +32,22 @@ function stateText(state) {
   try { return JSON.stringify(state) } catch { return String(state) }
 }
 
+/** Choice criteria as { option: description|null } (a plain list of options is allowed too). */
+function choiceCriteria(q) {
+  return Array.isArray(q.criteria) ? Object.fromEntries(q.criteria.map((o) => [String(o), null])) : (q.criteria || {})
+}
+
 /** The option texts of one (already validated) question, in order. */
 function optionsOf(q, cfg = {}) {
   if (q.type === 'noul') return (cfg.noul_options || NOUL_OPTIONS).slice(0, 2)
-  if (q.type === 'choice') return Object.entries(q.criteria || {}).map(([k, d]) => (d ? `${k}: ${d}` : k))
+  if (q.type === 'choice') return Object.entries(choiceCriteria(q)).map(([k, d]) => (d ? `${k}: ${d}` : k))
   if (q.type === 'score') return (q.criteria || []).map((c) => String(c))
   throw new Error(`unknown question type ${q.type}`)
 }
 
 /** The option keys an answer names (choice keys, score level indices). */
 function optionKeys(q) {
-  if (q.type === 'choice') return Object.keys(q.criteria || {})
+  if (q.type === 'choice') return Object.keys(choiceCriteria(q))
   if (q.type === 'score') return (q.criteria || []).map((_, i) => String(i))
   return NOUL_OPTIONS
 }
