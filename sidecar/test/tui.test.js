@@ -557,7 +557,7 @@ test('redaction check: a numbered list before an online AI; number + Enter switc
   Object.assign(state, { active: 'local', policy: { mode: 'local-only' } })
   state.matters[0].privileged = false
   state.redaction = {
-    id: 'rc_1', basic: true, groups: ['people', 'orgs', 'addresses', 'ids', 'contact', 'other'],
+    id: 'rc_1', basic: true, finder: 'unavailable', runtime: 'not-bundled', groups: ['people', 'orgs', 'addresses', 'ids', 'contact', 'other'],
     entries: [
       { key: 'people:johann huber', kind: 'PERSON', group: 'people', text: 'Johann Huber', label: 'Person', confidence: 0.8, on: true, count: 2 },
       { key: 'people:eva steiner', kind: 'PERSON', group: 'people', text: 'Eva Steiner', label: 'Person', confidence: 0.8, on: true, count: 1 },
@@ -573,6 +573,7 @@ test('redaction check: a numbered list before an online AI; number + Enter switc
   capture('redaction check', f)
   assert.match(flat(f), /It can miss things, especially indirect details/)
   assert.match(flat(f), /\[x\] 1 Johann Huber/)
+  assert.match(flat(f), /Basic detection: the name finder needs the desktop app\./, 'the CLI has no ONNX runtime: said plainly')
   assert.strictEqual(posted('/api/chat').length, before, 'nothing sent before the check')
   // Untick line 2, add "Käufer", send.
   await press(r, '2', 'enter')

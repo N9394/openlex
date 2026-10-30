@@ -3,7 +3,9 @@
 #   - the checksum file matches,
 #   - it unpacks, contains no symlinks (Windows' tar.exe cannot create them),
 #   - every sidecar/bin/*.js of this checkout is inside,
-#   - no native modules (*.node) slipped in,
+#   - no native modules (*.node) slipped in, and no ONNX runtime or
+#     tokenizer (those come with the desktop app only),
+#   - the name finder reports itself as not available ("needs the desktop app"),
 #   - `./openlex help` runs.
 #
 #   scripts/check-cli-tarball.sh [dist/openlex-<version>.tar.gz]
@@ -31,6 +33,13 @@ if find "$ROOT" -type l | grep -q .; then find "$ROOT" -type l >&2; fail "symlin
 echo "ok   no symlinks"
 if find "$ROOT" -name '*.node' | grep -q .; then find "$ROOT" -name '*.node' >&2; fail "native modules in the tarball"; fi
 echo "ok   no native modules"
+for d in onnxruntime-node onnxruntime-common onnxruntime-web @huggingface/tokenizers @huggingface/transformers sharp; do
+  [ ! -e "$ROOT/sidecar/node_modules/$d" ] || fail "sidecar/node_modules/$d in the tarball (the ONNX runtime is for the desktop app only)"
+done
+echo "ok   no ONNX runtime, no tokenizer"
+st=$(cd "$TMP" && LEXVAULT_DATA_DIR="$TMP/data" HOME="$TMP/home" node -e "const s=require('$ROOT/sidecar/src/pii_ner').status(); console.log(JSON.stringify({ available: s.available, reason: s.runtime.reason }))")
+[ "$st" = '{"available":false,"reason":"not-bundled"}' ] || fail "name finder status in the tarball: $st (expected not available, not bundled)"
+echo "ok   name finder: not available here (needs the desktop app)"
 
 missing=0
 for f in sidecar/bin/*.js; do

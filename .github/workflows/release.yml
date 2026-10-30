@@ -413,6 +413,17 @@ jobs:
           codesign --verify --deep --strict --verbose=2 "$app"
           echo "update zip ok: $z ($v, $id)"
           rm -rf "$t"
+      - name: Installer size and the bundled ONNX runtime (step summary)
+        shell: bash
+        run: |
+          f="dist/OpenLex-$VERSION-${{ matrix.file }}"
+          ort=$(find dist -type d -ipath '*resources/engine/node_modules/onnxruntime-node' | head -1)
+          note=$(find dist -type f -ipath '*resources/engine/onnx-runtime.json' | head -1)
+          {
+            echo "### ${{ matrix.name }}"
+            echo "- installer: \`$(basename "$f")\` $(wc -c < "$f" | tr -d ' ') bytes"
+            if [ -n "$ort" ]; then echo "- ONNX runtime: $(du -sk "$ort" | cut -f1) KB unpacked ($(ls "$ort"/bin/napi-v6/*/* | tr '\n' ' '))"; else echo "- ONNX runtime: not bundled ($(cat "$note" 2>/dev/null | tr -d '\n'))"; fi
+          } | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Collect the installer
         run: |
           f="OpenLex-$VERSION-${{ matrix.file }}"

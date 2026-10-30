@@ -105,21 +105,31 @@ const keyOf = (kind, text) => `${detect.GROUPS[kind] === 'people' ? 'people' : k
  *   matterId
  *   items   [{ name, text }] — the question, each document
  *   signal  stops the name finder
- * @returns the check: { id, matterId, basic, items: [{ id, name, chars, text, truncated, findings }], entries }
+ * @returns the check: { id, matterId, basic, finder, items: [{ id, name, chars, text, truncated, detection, findings }], entries }
+ *   detection per text: 'model' when the name finder really went through
+ *   it, else 'basic'. basic: any text without the name finder. finder: why —
+ *   'used' | 'failed' (installed, but it did not run) | 'not-installed' |
+ *   'unavailable' (no ONNX runtime in this build or on this computer).
  */
 async function prepare({ matterId = null, items = [], signal } = {}) {
   prune()
   const ner = require('./pii_ner')
   const { terms, keep, patterns } = require('./redact').termsFor(matterId)
-  const model = ner.status().installed
+  const st = ner.status()
+  const model = st.installed && st.available
+  let failed = false
   const list = []
   for (const [i, it] of (Array.isArray(items) ? items : []).slice(0, 60).entries()) {
     const full = String(it?.text || '')
     if (!full.trim()) continue
     const text = full.length > MAX_TEXT ? full.slice(0, MAX_TEXT) : full
     let found = []
-    try { found = model ? await ner.find(text, { signal }) : [] } catch (err) { console.warn('[redaction] name finder failed:', err.message) }
-    list.push({ id: `d${i + 1}`, name: String(it.name || `Document ${i + 1}`).slice(0, 200), chars: full.length, text, truncated: full.length > text.length, model: found, findings: detect.scan(text, { terms, keep, patterns, model: found, all: true }) })
+    let ran = false
+    if (model) {
+      try { ({ findings: found, ran } = await ner.run(text, { signal })) } catch (err) { console.warn('[redaction] name finder failed:', err.message) }
+      if (!ran) failed = true // what it found before it stopped still counts; the check says "basic"
+    }
+    list.push({ id: `d${i + 1}`, name: String(it.name || `Document ${i + 1}`).slice(0, 200), chars: full.length, text, truncated: full.length > text.length, detection: ran ? 'model' : 'basic', model: found, findings: detect.scan(text, { terms, keep, patterns, model: found, all: true }) })
   }
   // A person or organisation found in one text counts in the others too
   // ("Huber" in the question, "Mag. Johann Huber" in the contract).
@@ -146,9 +156,12 @@ async function prepare({ matterId = null, items = [], signal } = {}) {
     }
   }
   const order = detect.GROUP_ORDER
+  // "With name finder" only when the model really went through every text of this check.
+  const basic = !list.length ? !model : list.some((it) => it.detection !== 'model')
+  const finder = !st.available ? 'unavailable' : !st.installed ? 'not-installed' : failed ? 'failed' : 'used'
   const review = {
     id: `rc_${crypto.randomBytes(8).toString('hex')}`, matterId: matterId || null, at: Date.now(), status: 'open',
-    basic: !model, items: list,
+    basic, finder, runtime: st.available ? null : st.runtime?.reason || 'load-failed', items: list,
     entries: [...entries.values()].sort((a, b) => order.indexOf(a.group) - order.indexOf(b.group) || b.count - a.count || a.text.localeCompare(b.text)),
   }
   reviews.set(review.id, review)
@@ -222,8 +235,8 @@ function cancel(id) {
 function view(r, { lang = 'en' } = {}) {
   const de = /^de/i.test(lang)
   return {
-    id: r.id, matterId: r.matterId, status: r.status, basic: r.basic,
-    items: r.items.map((it) => ({ id: it.id, name: it.name, chars: it.chars, truncated: it.truncated, text: it.text, findings: it.findings.map((f) => ({ key: f.key, kind: f.kind, group: f.group, start: f.start, end: f.end, on: f.on, confidence: f.confidence, source: f.source })) })),
+    id: r.id, matterId: r.matterId, status: r.status, basic: r.basic, detection: r.basic ? 'basic' : 'with-model', finder: r.finder, runtime: r.runtime,
+    items: r.items.map((it) => ({ id: it.id, name: it.name, chars: it.chars, truncated: it.truncated, detection: it.detection, text: it.text, findings: it.findings.map((f) => ({ key: f.key, kind: f.kind, group: f.group, start: f.start, end: f.end, on: f.on, confidence: f.confidence, source: f.source })) })),
     entries: r.entries.map((e) => ({ key: e.key, kind: e.kind, group: e.group, text: e.text, label: e.label?.[de ? 'de' : 'en'] || e.label?.en || e.kind, confidence: e.confidence, sources: e.sources, on: e.on, count: e.count, at: e.at })),
     groups: detect.GROUP_ORDER,
   }
@@ -261,10 +274,10 @@ function assertChecked(matterId) {
   throw e
 }
 
-/** For the AI record of one online call: was it checked, and did the lawyer change anything? */
+/** For the AI record of one online call: was it checked, did the lawyer change anything, and did the name finder run (detection)? */
 function callNote() {
   const ctx = require('./policy').redactionContext()
-  if (ctx?.review?.status === 'confirmed') return { check: ctx.review.changed ? 'checked-changed' : 'checked' }
+  if (ctx?.review?.status === 'confirmed') return { check: ctx.review.changed ? 'checked-changed' : 'checked', detection: ctx.review.basic ? 'basic' : 'with-model' }
   return { check: 'automatic' }
 }
 

@@ -4,6 +4,13 @@ All notable changes to OpenLex are listed here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+### Fixed
+- **The redaction check no longer claims a name finder that did not run.** The optional name finder needs a native ONNX runtime, which the 0.3.x installers and the CLI did not contain: the model could be downloaded but never ran, and the check still said "with name finder". Now the engine tells apart *available* (the runtime loads on this computer) from *installed* (the model files are there); Settings offers the download only where it can run; and each check says "basic detection" unless the model really went through every text of that check — with the reason (did not run for this text / needs the desktop app / cannot run on this computer). The data line and the AI record note "checked by you (basic detection)" or "(with name finder)" (English and German).
+
+### Changed
+- **The desktop app now includes the ONNX runtime** (onnxruntime-node, CPU only) for its own platform, plus a small JavaScript tokenizer (`@huggingface/tokenizers`, which replaces `@huggingface/transformers` and with it `sharp` and a second copy of the runtime). Other platforms' binaries and the Windows GPU (DirectML) files are left out; the packages are checked against the lockfile's SHA-512. The name finder and the in-process BGE-M3 embedder share this one runtime; the embedder now says at once when there is none instead of downloading 569 MB first. Intel Macs: the runtime has had no build for them since 1.24, so there the app says the name finder cannot run on this computer.
+- **The CLI tarball and Homebrew stay lean:** no ONNX runtime. There the redaction check says plainly that the name finder needs the desktop app.
+
 ## [0.3.3] - 2026-10-30
 
 (0.3.2 was built but not published; its changes are in the 0.3.2 section below and ship with this release.)

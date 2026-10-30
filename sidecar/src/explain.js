@@ -273,8 +273,9 @@ function addModel(models, ev) {
   const key = `${ev.local ? 'local' : ev.provider}|${ev.region || ''}|${ev.redacted ? 1 : 0}`
   const out = models.map((m) => ({ ...m }))
   const hit = out.find((m) => m.key === key)
-  if (hit) { hit.calls++; if (ev.checked) hit.checked = true }
-  else out.push({ key, provider: ev.provider, label: ev.label, model: ev.model || null, local: !!ev.local, region: ev.region || null, redacted: !!ev.redacted, ...(ev.checked ? { checked: true } : {}), calls: 1 })
+  // detection: 'basic' as soon as one checked call had no name finder.
+  if (hit) { hit.calls++; if (ev.checked) hit.checked = true; if (ev.detection) hit.detection = hit.detection === 'basic' || ev.detection === 'basic' ? 'basic' : 'with-model' }
+  else out.push({ key, provider: ev.provider, label: ev.label, model: ev.model || null, local: !!ev.local, region: ev.region || null, redacted: !!ev.redacted, ...(ev.checked ? { checked: true } : {}), ...(ev.detection ? { detection: ev.detection } : {}), calls: 1 })
   return out
 }
 
@@ -287,7 +288,7 @@ const times = (n) => (n === 1 ? 'once' : n === 2 ? '2 times' : `${n} times`)
 function dataLine(models = [], online = [], { running = false } = {}) {
   const cloud = models.filter((m) => !m.local)
   const parts = []
-  if (cloud.length) parts.push(`Sent to: ${cloud.map((m) => `${serviceName(m)} — ${m.redacted ? `names and numbers hidden (pseudonymised)${m.checked ? ', checked by you' : ''}` : 'names and numbers not hidden'} · ${times(m.calls)}`).join('; ')}`)
+  if (cloud.length) parts.push(`Sent to: ${cloud.map((m) => `${serviceName(m)} — ${m.redacted ? `names and numbers hidden (pseudonymised)${m.checked ? `, checked by you${m.detection === 'basic' ? ' (basic detection)' : m.detection === 'with-model' ? ' (with name finder)' : ''}` : ''}` : 'names and numbers not hidden'} · ${times(m.calls)}`).join('; ')}`)
   const web = [...new Set(online)]
   if (web.length) parts.push(`${cloud.length ? 'Also looked' : 'Looked'} up online: ${web.join(', ')} (only search words or web addresses)`)
   if (!parts.length) return { text: running ? 'Nothing has left this computer so far' : 'Stayed on this computer', left: false }

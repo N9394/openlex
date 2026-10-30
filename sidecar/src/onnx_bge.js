@@ -14,6 +14,10 @@
  *             (~22 MB, static assets, ship them with the plugin installer;
  *             dev falls back to a direct HF fetch)
  *
+ * Runtime: the engine's one ONNX runtime (onnx_runtime.js — onnxruntime-node
+ * + @huggingface/tokenizers, shared with the name finder). Without it (CLI
+ * tarball, Homebrew) this backend says so at once, before any download.
+ *
  * Encode output matches the App's /api/hybrid shape exactly:
  *   { dense: number[1024], sparse: { indices: number[], values: number[] } }
  */
@@ -24,6 +28,7 @@ const os = require('os')
 const https = require('https')
 const { DATA_DIR } = require('./config')
 const { downloadModel } = require('./downloads')
+const runtime = require('./onnx_runtime')
 
 const MODELS_DIR = path.join(DATA_DIR, 'models')
 const TOK_DIR = path.join(MODELS_DIR, 'bge-m3-tokenizer')
@@ -46,6 +51,8 @@ const TOKENIZER_FILES = [
 const HF_REPO = 'aapot/bge-m3-onnx'
 
 let runtimePromise = null
+// One load at a time; a failed one (no network, no runtime) may be tried again.
+const runtimeReady = () => (runtimePromise ||= ensureRuntime().catch((err) => { runtimePromise = null; throw err }))
 let session = null
 let tokenizer = null
 
@@ -76,6 +83,8 @@ function downloadHfFile(name) {
 
 async function ensureRuntime() {
   if (session && tokenizer) return { session, tokenizer }
+  // No runtime here: say so before downloading 569 MB that could not run.
+  const ort = runtime.ort()
   // 1. Model via the normal download manager (token-gated, resumable,
   //    sha256-verified). No-op when already installed.
   await downloadModel('bge-m3-int8', {})
@@ -83,12 +92,7 @@ async function ensureRuntime() {
   fs.mkdirSync(TOK_DIR, { recursive: true })
   await Promise.all(TOKENIZER_FILES.map((f) => downloadHfFile(f.name)))
 
-  const ort = require('onnxruntime-node')
-  const { AutoTokenizer, env } = await import('@huggingface/transformers')
-  env.cacheDir = TOK_DIR
-  env.allowLocalModels = true
-  env.localModelPath = TOK_DIR + '/'
-  tokenizer = await AutoTokenizer.from_pretrained(TOK_DIR, { local_files_only: true })
+  tokenizer = runtime.tokenizer(TOK_DIR)
 
   const t0 = Date.now()
   session = await ort.InferenceSession.create(MODEL_PATH(), {
@@ -129,10 +133,20 @@ function vectorsFromRun(out, ids, mask, seqLen, rowOffset = 0, batchStride = 0) 
   }
 }
 
+/**
+ * <s> text </s>, cut to MAX_TOKENS like transformers' truncation (the text
+ * is cut, the special tokens stay), as int64 tensors' data.
+ */
+function encodeText(tok, text) {
+  const body = tok.encode(String(text ?? ''), { add_special_tokens: false }).ids.slice(0, MAX_TOKENS - 2)
+  const ids = BigInt64Array.from([0, ...body, 2], (x) => BigInt(x))
+  return { input_ids: { data: ids }, attention_mask: { data: new BigInt64Array(ids.length).fill(1n) } }
+}
+
 async function encodeOne(text) {
-  const { session, tokenizer } = await (runtimePromise ||= ensureRuntime())
-  const enc = await tokenizer(text, { padding: false, truncation: true, max_length: MAX_TOKENS, return_tensors: 'np' })
-  const ort = require('onnxruntime-node')
+  const { session, tokenizer } = await runtimeReady()
+  const enc = encodeText(tokenizer, text)
+  const ort = runtime.ort()
   const ids = enc.input_ids.data
   const mask = enc.attention_mask.data
   const seqLen = ids.length
@@ -154,15 +168,11 @@ async function encodeOne(text) {
  * queries) into one ONNX pass.
  */
 async function embed(queries) {
-  const { session, tokenizer } = await (runtimePromise ||= ensureRuntime())
-  const ort = require('onnxruntime-node')
+  const { session, tokenizer } = await runtimeReady()
+  const ort = runtime.ort()
 
   // Bucket by exact token length.
-  const encs = []
-  for (const q of queries) {
-    const enc = await tokenizer(q, { padding: false, truncation: true, max_length: MAX_TOKENS, return_tensors: 'np' })
-    encs.push(enc)
-  }
+  const encs = queries.map((q) => encodeText(tokenizer, q))
   const buckets = new Map() // len → [{enc, idx}]
   encs.forEach((enc, idx) => {
     const len = enc.input_ids.data.length
@@ -204,7 +214,7 @@ async function embed(queries) {
 }
 
 function ready() {
-  return fs.existsSync(MODEL_PATH()) && fs.existsSync(path.join(TOK_DIR, 'tokenizer.json'))
+  return runtime.available() && fs.existsSync(MODEL_PATH()) && fs.existsSync(path.join(TOK_DIR, 'tokenizer.json'))
 }
 
-module.exports = { embed, encodeOne, ready, MODEL_PATH, TOK_DIR }
+module.exports = { embed, encodeOne, ready, encodeText, MODEL_PATH, TOK_DIR }

@@ -18,8 +18,9 @@
     const key = `${ev.local ? 'local' : ev.provider}|${ev.region || ''}|${ev.redacted ? 1 : 0}`
     const out = (models || []).map((m) => Object.assign({}, m))
     const hit = out.find((m) => m.key === key)
-    if (hit) { hit.calls++; if (ev.checked) hit.checked = true }
-    else out.push({ key, provider: ev.provider, label: ev.label, model: ev.model || null, local: !!ev.local, region: ev.region || null, redacted: !!ev.redacted, ...(ev.checked ? { checked: true } : {}), calls: 1 })
+    // detection: 'basic' as soon as one checked call had no name finder.
+    if (hit) { hit.calls++; if (ev.checked) hit.checked = true; if (ev.detection) hit.detection = hit.detection === 'basic' || ev.detection === 'basic' ? 'basic' : 'with-model' }
+    else out.push({ key, provider: ev.provider, label: ev.label, model: ev.model || null, local: !!ev.local, region: ev.region || null, redacted: !!ev.redacted, ...(ev.checked ? { checked: true } : {}), ...(ev.detection ? { detection: ev.detection } : {}), calls: 1 })
     return out
   }
 
@@ -35,7 +36,7 @@
     const cloud = (models || []).filter((m) => !m.local)
     const web = [...new Set(online || [])]
     const parts = []
-    for (const m of cloud) parts.push(`Sent to ${words.serviceName(m)} — ${m.redacted ? `names and numbers hidden (pseudonymised)${m.checked ? ', checked by you' : ''}` : 'names and numbers not hidden'} · ${words.times(m.calls)}`)
+    for (const m of cloud) parts.push(`Sent to ${words.serviceName(m)} — ${m.redacted ? `names and numbers hidden (pseudonymised)${m.checked ? `, checked by you${m.detection === 'basic' ? ' (basic detection)' : m.detection === 'with-model' ? ' (with name finder)' : ''}` : ''}` : 'names and numbers not hidden'} · ${words.times(m.calls)}`)
     if (web.length) parts.push(`Looked up online: ${web.map(short).join(', ')}`)
     if (!parts.length) {
       return { symbol: '✓', left: false, text: running ? 'Nothing has left this computer so far' : 'Stayed on this computer', title: 'The AI ran on this computer and nothing was looked up online.' }

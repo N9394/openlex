@@ -92,6 +92,11 @@ test('service names never show a model id; the data line counts calls', () => {
   models = x.addModel(models, { provider: 'anthropic', model: 'claude-x', region: 'eu-central-1', redacted: true })
   assert.strictEqual(x.dataLine(models, []).text, 'Sent to: Claude (Anthropic, EU) — names and numbers hidden (pseudonymised) · 2 times')
   assert.deepStrictEqual(x.dataLine([], []), { text: 'Stayed on this computer', left: false })
+  // Checked by the lawyer: the line says whether the name finder ran (basic as soon as one call had none).
+  let checked = x.addModel([], { provider: 'mistral', region: 'eu', redacted: true, checked: true, detection: 'with-model' })
+  assert.match(x.dataLine(checked, []).text, /checked by you \(with name finder\) · once$/)
+  checked = x.addModel(checked, { provider: 'mistral', region: 'eu', redacted: true, checked: true, detection: 'basic' })
+  assert.match(x.dataLine(checked, []).text, /checked by you \(basic detection\) · 2 times$/)
   assert.strictEqual(x.dataLine([{ local: true, calls: 3 }], ['RIS (Austria\'s federal law database)']).left, true)
 })
 

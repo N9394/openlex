@@ -15,7 +15,10 @@
  *                          (scripts/fetch-sidecars.js)
  *
  * Outputs:
- *   resources/engine/      engine src + playbooks + skills + production node_modules
+ *   resources/engine/      engine src + playbooks + skills + production node_modules,
+ *                          plus the ONNX runtime for this target only
+ *                          (scripts/stage-onnx.js: onnxruntime-node + tokenizer,
+ *                          for the redaction check's name finder)
  *   resources/client/      the built UI
  *   resources/bin/         qdrant-<os>-<arch>, llama-server-<os>-<arch> (+ libs)
  *
@@ -129,9 +132,9 @@ async function main() {
   })
 
   // 2. The OpenLex engine: the app's backend (main/engine.js starts it with
-  // Electron's own Node). Same files as the CLI tarball: production
-  // dependencies, no optional native modules (better-sqlite3, onnxruntime,
-  // transformers), no install scripts — the engine runs without them.
+  // Electron's own Node). Same files as the CLI tarball — production
+  // dependencies, no optional native modules, no install scripts — plus the
+  // ONNX runtime for this one platform (next step).
   await step('stage engine', () => {
     copyDir(path.join(SIDECAR, 'src'), path.join(RES_ENGINE, 'src'))
     copyDir(path.join(SIDECAR, 'playbooks'), path.join(RES_ENGINE, 'playbooks'))
@@ -144,6 +147,10 @@ async function main() {
     const native = findFiles(path.join(RES_ENGINE, 'node_modules'), (n) => n.endsWith('.node'))
     if (native.length) throw new Error(`native module in the engine's node_modules (it runs on Electron's Node, every platform):\n  ${native.join('\n  ')}`)
   })
+
+  // 2b. The ONNX runtime (name finder; later the decision model), for this
+  // target only: N-API, so Electron's Node loads it. The CLI tarball has none.
+  await step('stage ONNX runtime', () => require('./stage-onnx').stageOnnx({ engineDir: RES_ENGINE, lockFile: path.join(SIDECAR, 'package-lock.json'), target }))
 
   // A distributor's build: their distribution.json (licence/update server)
   // comes from a private path, never from the repository.
@@ -217,6 +224,11 @@ async function main() {
   await step('smoke-test staged engine', async () => {
     if (on(process.env.SKIP_ENGINE_SMOKE)) { console.log('  (skipped via SKIP_ENGINE_SMOKE=1)'); return }
     await require('./smoke-packaged').smokeEngine({ engineDir: RES_ENGINE })
+    // The ONNX runtime runs a one-node model (only where this machine can run the target's binary).
+    const hostArch = process.arch === 'arm64' ? 'arm64' : 'x64'
+    if (fs.existsSync(path.join(RES_ENGINE, 'onnx-runtime.json'))) console.log('  (no ONNX runtime for this platform)')
+    else if (target.os === process.platform && target.arch === hostArch) await require('./smoke-packaged').smokeOnnx({ engineDir: RES_ENGINE })
+    else console.log(`  (ONNX runtime for ${target.id} not run on ${process.platform}-${hostArch})`)
   })
 
   await step('placeholders', () => {
