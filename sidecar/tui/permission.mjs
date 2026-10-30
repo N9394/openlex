@@ -102,6 +102,8 @@ export function PermissionPrompt({ req, onAnswer }) {
       <${Text} bold color=${color.accent}>${look.accessible ? 'Permission required: ' : ''}${req.title || 'OpenLex wants to use a tool'}<//>
       <${Text} wrap="wrap">OpenLex wants to <${Text} bold>${q.verb}<//>${q.rest ? ` ${q.rest}` : ''}. Allow?<//>
       ${keyDetail(req).map((l, i) => html`<${Text} key=${i} dimColor wrap="truncate-end">  ${l}<//>`)}
+      ${req.warning ? html`<${Text} color=${color.bad} wrap="wrap">! ${req.warning}<//>` : null}
+      ${req.caution ? html`<${Text} color=${color.warn} wrap="wrap">! ${req.caution}<//>` : null}
       <${Text} dimColor wrap="wrap">This ${req.risk || 'changes something'}.${req.firmRule ? ' Your firm asks for confirmation here.' : ''} Nothing happens until you choose.<//>
       <${Box} marginTop=${1}>
         ${sent ? html`<${Spinner} label="Sending your answer…" />` : html`<${Menu} items=${items} numbered onSelect=${(it) => answer(it.value)} />`}

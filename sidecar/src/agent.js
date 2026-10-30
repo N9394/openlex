@@ -88,15 +88,21 @@ function fullTextMaxChars() {
 function docCtx(ctx, phase) {
   const base = ctx.doc.summary()
   const mem = memorySummary(ctx.memory)
-  const full = phase !== 'writing' && (ctx.doc.text || '').length <= fullTextMaxChars()
-    ? `\nFULL DOCUMENT TEXT:\n${ctx.doc.text}${(ctx.doc.text || '').length >= 4000 ? CACHE_MARK : ''}` : ''
+  const text = String(ctx.doc.text || '')
+  const full = phase !== 'writing' && text.length <= fullTextMaxChars() ? `\nFULL DOCUMENT TEXT:\n${ctx.doc.text}` : ''
+  const mark = full && text.length >= 4000 ? CACHE_MARK : ''
+  // The document is data, not instructions (prompt injection, untrusted.js):
+  // its map and text sit in a marked block the model is told to treat as such.
+  const doc = text.trim() ? untrusted.wrap(`${base}${full}`, docLabel(ctx)) : `${base}${full}`
   // Conversation memory (Batch 1): the rolling per-doc history rides in
   // the system prompt as a CONVERSATION block — droppable-FIRST under
   // compaction (truncateSummary discards USER:/ASSISTANT: lines before
   // anything else; it's context, not correctness).
   const conv = ctx.session ? ctx.session.contextBlock() : ''
-  return `${base}${full}${mem ? '\n' + mem : ''}${conv}`
+  return `${doc}${mark}${mem ? '\n' + mem : ''}${conv}`
 }
+const untrusted = require('./untrusted')
+const docLabel = (ctx) => `document${ctx.doc?.name && !/^(d-|panel:|addin:|mail:)/.test(String(ctx.doc.name)) ? ` ${String(ctx.doc.name).split(/[\\/]/).pop()}` : ''}`
 
 /**
  * Cross-action memory injection (plan §6): top facts + suggestion ledger
@@ -166,7 +172,7 @@ function prereadBlock(ctx, userMessage) {
     }
   }
   if (parts.length <= 1) return { block: '', indices: [] }
-  return { block: '\n\nPRE-READ SECTIONS (verbatim — use these, do not re-fetch them):\n' + parts.join('\n\n'), indices: readIndices }
+  return { block: '\n\nPRE-READ SECTIONS (verbatim — use these, do not re-fetch them):\n' + untrusted.wrap(parts.join('\n\n'), docLabel(ctx)), indices: readIndices }
 }
 
 /**
@@ -459,6 +465,15 @@ async function runAction(ctx, userMessage, onEvent, opts = {}) {
   const mcpNames = () => { try { return require('./mcp/client').allTools().map((t) => t.qualified) } catch { return [] } }
   // The lawyer's answer language (Settings → AI): 'auto' | 'de' | 'en'. A `lang` sent with the chat request is ignored.
   const answerLang = (() => { try { return require('./agent-config').load().answerLang } catch { return 'auto' } })()
+  // What this run has read from outside (prompt injection, untrusted.js): the
+  // open document from the start, then every outside tool result. Outbound
+  // and risky tools ask the lawyer once something was read.
+  const turn = new untrusted.Turn({
+    message: userMessage,
+    conversation: (() => { try { return (ctx.session?.load?.() || []).filter((m) => m.role === 'user').map((m) => m.content).join('\n') } catch { return '' } })(),
+    matterId: require('./policy').currentMatter(),
+    document: ctx.doc,
+  })
   const sysCtx = (phase, afterTool = null) => prompts.build({
     phase, message: userMessage, intents, afterTool,
     docFull: phase !== 'writing' && String(ctx.doc?.text || '').length <= fullTextMaxChars(),
@@ -640,7 +655,7 @@ async function runAction(ctx, userMessage, onEvent, opts = {}) {
       const gate = hooks.has('before_tool') ? await hooks.run('before_tool', { tool: toolName, args: call.args || {}, matterId: require('./policy').currentMatter() }) : { decision: 'allow' }
       // Permission gate (permissions.js): deny rules → allow rules →
       // defaults; "ask" waits for the lawyer's answer in the front end.
-      const perm = gate.decision === 'deny' ? null : await require('./permissions').authorize({ tool: toolName, args: call.args || {}, matterId: require('./policy').currentMatter() })
+      const perm = gate.decision === 'deny' ? null : await require('./permissions').authorize({ tool: toolName, args: call.args || {}, matterId: require('./policy').currentMatter(), turn })
       if (gate.decision === 'deny') {
         r = { output: `BLOCKED by firm rule: ${gate.reason}. Do not retry this tool; continue with what you have or explain the limitation.` }
         emit('step', { text: `blocked: ${toolName}`, kind: 'blocked', tool: toolName, detail: stepDetail })
@@ -662,6 +677,7 @@ async function runAction(ctx, userMessage, onEvent, opts = {}) {
         if (hooks.has('after_tool')) hooks.run('after_tool', { tool: toolName, args: call.args || {}, ok: !/^ERROR|BLOCKED/.test(String(r.output || '')), chars: String(r.output || '').length, matterId: require('./policy').currentMatter() }).catch(() => {})
       }
       output = r.output
+      if (perm?.allowed) turn.readTool(toolName, call.args || {}, output)
       // Handle delegate_task: spawn a fresh LLM call with focused context
       if (r.delegate) {
         emit('step', { text: `delegating: ${call.args.task?.slice(0, 60)}…`, kind: 'delegate' })
@@ -722,7 +738,7 @@ async function runAction(ctx, userMessage, onEvent, opts = {}) {
     const isDup = toolHistory.some((h) => h.content.startsWith(`Tool result (${toolName}):`) && h._dedupKey === dedupKey)
     const entry = isDup
       ? { role: 'user', content: `Tool result (${toolName}): [same as previous call — no new findings]`, _dedupKey: dedupKey }
-      : { role: 'user', content: `Tool result (${toolName}):\n${compressed}`, _dedupKey: dedupKey }
+      : { role: 'user', content: `Tool result (${toolName}):\n${untrusted.forModel(toolName, compressed, call.args)}`, _dedupKey: dedupKey }
     toolHistory.push(entry)
     // Eviction: keep last 3 tool results, evict older ones (Pichay-style).
     // The model can re-request evicted results via expand() if needed.
@@ -755,7 +771,7 @@ async function runAction(ctx, userMessage, onEvent, opts = {}) {
         { role: 'system', content: sysCtx('analyzing', toolName) },
         { role: 'user', content: userMessage },
         { role: 'assistant', content: JSON.stringify(call) },
-        { role: 'tool', content: output },
+        { role: 'tool', content: untrusted.forModel(toolName, output, call.args) },
       ], { maxTokens: AGENT.WRITE_MAX_TOKENS, phase: 'analyzing', thinking: true, emit, toolNames: toolNames() })
     } catch (hopErr) {
       console.warn('[agent] hop LLM failed:', hopErr.message)

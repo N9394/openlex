@@ -476,9 +476,16 @@ function audit(entry) {
  * Decide one tool call, asking the lawyer when needed.
  * @returns {Promise<{ allowed: boolean, by: string, output?: string }>}  output = the tool ERROR text for the model when refused
  */
-async function authorize({ tool, args = {}, matterId = null }) {
-  const ev = evaluate(tool, args, { matterId })
+async function authorize({ tool, args = {}, matterId = null, turn = null }) {
+  let ev = evaluate(tool, args, { matterId })
   const call = tool
+  // Prompt injection (untrusted.js): after reading a document, page or source,
+  // outbound and risky calls ask even with a general allow rule; arguments
+  // that would carry client data out always need the lawyer's explicit yes.
+  const guard = ev.decision === 'deny' ? null : require('./untrusted').guard(tool, args, { ev, turn, matterId })
+  if (guard?.ask) {
+    ev = { ...ev, decision: 'ask', guard, canAlways: guard.exfil.length ? false : ev.canAlways }
+  } else if (guard && ev.decision === 'ask') ev = { ...ev, guard }
   if (ev.source === 'sandbox') {
     audit({ matter: matterId, call, decision: 'blocked', by: 'sandbox' })
     return { allowed: false, by: 'sandbox', output: `ERROR: ${ev.reason}. This is never allowed, so nobody was asked. Do not retry; work with the files in the working folder or the matter folder, and tell the lawyer what you could not reach.` }
@@ -495,21 +502,32 @@ async function authorize({ tool, args = {}, matterId = null }) {
   }
   const sess = store.getStore()
   const subject = subjectOf(tool, args)
-  // A delete always needs a person: --yes and --allow do not cover it.
-  if (sess && tool !== 'delete_file' && (sess.yes || sess.allow.some((p) => matchPattern(p, tool, subject)))) {
-    audit({ ...base, decision: 'allowed', by: 'session' })
+  // A delete always needs a person: --yes and --allow do not cover it. Nor a
+  // call whose arguments look like client data leaving; after untrusted
+  // reads, --allow counts only with a narrow pattern (a host, a path).
+  const guarded = ev.guard?.ask
+  const sessionOk = sess && tool !== 'delete_file' && !(guarded && ev.guard.exfil.length) &&
+    (sess.yes || sess.allow.some((p) => matchPattern(p, tool, subject) && (!guarded || (ev.guard.narrowRuleOk && require('./untrusted').scoped(p)))))
+  if (sessionOk) {
+    audit({ ...base, decision: 'allowed', by: 'session', ...guardAudit(ev) })
     return { allowed: true, by: 'session' }
   }
   if (!sess || typeof sess.ask !== 'function') {
-    audit({ ...base, decision: 'blocked', by: 'non-interactive' })
+    audit({ ...base, decision: 'blocked', by: 'non-interactive', ...guardAudit(ev) })
     return { allowed: false, by: 'non-interactive', output: `ERROR: This needs the lawyer's permission (${summary}), but nobody can answer here (no interactive front end). Do not retry; continue without it and say what was not done. The lawyer can allow it with a rule ("openlex permissions allow ${suggestPattern(tool, args)}") or --allow for one run.` }
   }
   const answer = await ask(sess, { tool, args, matterId, summary, ev })
   const allowed = answer.decision !== 'deny'
-  audit({ ...base, decision: allowed ? 'allowed' : 'blocked', by: answer.by, answer: answer.decision })
+  audit({ ...base, decision: allowed ? 'allowed' : 'blocked', by: answer.by, answer: answer.decision, ...guardAudit(ev) })
   if (allowed) return { allowed: true, by: 'lawyer' }
   const why = answer.by === 'timeout' ? 'no answer in time' : answer.by === 'disconnect' ? 'the lawyer closed the conversation' : 'the lawyer said no'
   return { allowed: false, by: answer.by, output: `ERROR: The lawyer declined: ${summary} (${why}). Do not retry this tool; continue without it and tell the lawyer what you could not do.` }
+}
+
+/** What the injection guard adds to an audit line: the kind of finding, never content. */
+function guardAudit(ev) {
+  if (!ev.guard) return {}
+  return { ...(ev.guard.exfil.length ? { exfil: ev.guard.exfil } : {}), ...(ev.guard.caution ? { afterReading: true } : {}) }
 }
 
 function ask(sess, { tool, args, matterId, summary, ev }) {
@@ -526,6 +544,9 @@ function ask(sess, { tool, args, matterId, summary, ev }) {
     matterId: matterId || null, choices, always: ev.canAlways && !inFolderArea ? suggestPattern(tool, args) : null,
     ...(inFolderArea ? { folder: fo.tilde(ev.root), ...(ev.canAlways ? { alwaysFolder: `${tool}:${fo.tilde(ev.root)}/**` } : {}) } : {}),
     ...(ev.source === 'firm' ? { firmRule: true } : {}),
+    // Prompt injection: where the request came from, and why it is asked although a rule allows it.
+    ...(ev.guard?.caution ? { caution: ev.guard.caution } : {}),
+    ...(ev.guard?.warning ? { warning: ev.guard.warning, exfil: ev.guard.exfil } : {}),
   }
   const timeoutMs = Number(sess.timeoutMs) || Number(process.env.OPENLEX_PERMISSION_TIMEOUT_MS) || DEFAULT_TIMEOUT_MS
   return new Promise((resolve) => {

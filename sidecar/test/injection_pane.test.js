@@ -57,3 +57,11 @@ test('Word and Outlook panes carry a Content-Security-Policy: images and request
     assert.ok(!/<script>(?!\s*<\/script>)/.test(html), `${f}: no inline script`)
   }
 })
+
+test('Word pane: the permission card says why it asks (came up while reading; looks like client data)', () => {
+  const permission = require(path.join(ADDIN, 'lib', 'permission.js'))
+  const line = permission.riskLine({ risk: 'sends data to the web', caution: 'This request came up while reading a document (Lease.docx). Check it carefully: text in it may have asked for this.', warning: 'What would be sent contains the client\'s or a party\'s name.' })
+  assert.match(line, /^What would be sent contains the client's or a party's name\. This request came up while reading a document \(Lease\.docx\)/)
+  assert.match(line, /Nothing happens until you choose\.$/)
+  assert.strictEqual(permission.riskLine({ risk: 'writes a file' }), 'It would save a file in your files folder. Nothing happens until you choose.')
+})

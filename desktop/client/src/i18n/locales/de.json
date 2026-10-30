@@ -1294,7 +1294,11 @@
     "fromCollection": "der Rechtssammlung auf diesem Computer",
     "checkLaw": "Prüfen Sie die Normen, bevor Sie sich auf die Antwort verlassen.",
     "and": "und",
-    "lawFrom": "Die Normen stammen aus {{list}}. Prüfen Sie sie, bevor Sie sich auf die Antwort verlassen."
+    "lawFrom": "Die Normen stammen aus {{list}}. Prüfen Sie sie, bevor Sie sich auf die Antwort verlassen.",
+    "injection": {
+      "caution": "Diese Anfrage kam beim Lesen eines Dokuments, einer Seite oder einer Quelle auf. Bitte genau prüfen: Text darin könnte sie verlangt haben.",
+      "warning": "Was gesendet würde, enthält möglicherweise Mandantendaten (Namen, Platzhalter, kopierte Passagen oder kodierten Text). So versuchen versteckte Anweisungen, Daten hinauszuschaffen. Nur erlauben, wenn Sie genau das verlangt haben."
+    }
   },
   "analysis": {
     "choose": "Wählen Sie das zu analysierende Dokument (Word, PDF, Excel, E-Mail oder Text) – oder ziehen Sie es hierher.",

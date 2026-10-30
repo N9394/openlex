@@ -120,6 +120,9 @@ class StdioConnection {
       qualified: `mcp__${clean(this.name)}__${clean(t.name)}`,
       description: String(t.description || '').slice(0, 300),
       inputSchema: t.inputSchema || { type: 'object' },
+      // The server says the tool only reads and stays in its own system
+      // (MCP annotations): it does not count as sending (untrusted.js).
+      readOnly: t.annotations?.readOnlyHint === true && t.annotations?.openWorldHint === false,
     }))
   }
 
