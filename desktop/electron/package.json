@@ -1,7 +1,7 @@
 {
   "name": "lexvault-app",
   "productName": "OpenLex",
-  "version": "0.1.59",
+  "version": "0.3.0",
   "description": "OpenLex — open-source, local-first legal AI. Statute research and document analysis on your machine.",
   "main": "main/main.js",
   "author": "OpenLex contributors",
