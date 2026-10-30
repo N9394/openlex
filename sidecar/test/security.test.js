@@ -124,3 +124,18 @@ test('pack extraction never goes through a shell (a file name cannot run command
     assert.doesNotMatch(src, /spawnSync\('sh'|['"]-c['"],\s*`/, f)
   }
 })
+
+test('a Word file that inflates to gigabytes (zip bomb) is refused instead of exhausting memory', () => {
+  const zlib = require('zlib')
+  const { readZipEntry } = require('../src/docx_text')
+  const name = 'word/document.xml'
+  const data = zlib.deflateRawSync(Buffer.alloc(300 * 1024 * 1024, 0x20), { level: 9 })
+  const nb = Buffer.from(name)
+  const local = Buffer.alloc(30); local.writeUInt32LE(0x04034b50, 0); local.writeUInt16LE(8, 8); local.writeUInt32LE(data.length, 18); local.writeUInt16LE(nb.length, 26)
+  const cd = Buffer.alloc(46); cd.writeUInt32LE(0x02014b50, 0); cd.writeUInt16LE(8, 10); cd.writeUInt32LE(data.length, 20); cd.writeUInt16LE(nb.length, 28); cd.writeUInt32LE(0, 42)
+  const cdOff = 30 + nb.length + data.length
+  const eocd = Buffer.alloc(22); eocd.writeUInt32LE(0x06054b50, 0); eocd.writeUInt16LE(1, 10); eocd.writeUInt32LE(46 + nb.length, 12); eocd.writeUInt32LE(cdOff, 16)
+  const zip = Buffer.concat([local, nb, data, cd, nb, eocd])
+  assert.ok(zip.length < 2 * 1024 * 1024, 'small on disk')
+  assert.throws(() => readZipEntry(zip, name), /Cannot create a Buffer larger|maxOutputLength|larger than/i)
+})
