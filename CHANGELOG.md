@@ -4,6 +4,8 @@ All notable changes to OpenLex are listed here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-30
+
 ### Fixed
 - **Desktop app with a licence (distribution builds) sets up the AI like the community app.** It no longer downloads a fixed model at first start or quits with "model setup failed" when that download fails: the first-start setup page (On this computer · I brought my own key · I need help) handles it. A distribution can recommend its own model (`"localModel"` in `distribution.json`); it is offered on the "On this computer" card and downloads only on a click, with progress. A failed download says so and the app keeps running.
 - **Model files are never deleted at start.** The licensed app used to remove every GGUF that was not its tier's model; now all of them stay (Settings → AI removes one when you ask). "Download again" in Settings → Dependencies replaces the file only once the new one is complete and verified.
