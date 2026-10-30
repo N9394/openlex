@@ -4,10 +4,13 @@ All notable changes to OpenLex are listed here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-10-30
+
+(0.3.1 was built but not published; its changes are included here.)
+
 ### Changed
 - **Neutral role names.** OpenLex prepares material and the lawyer decides; names that sound like legal representation are gone: the default "Associate" is now "Assistant" (DE "Assistenz"), the panel templates "Claimant's counsel"/"Defendant's counsel" are now "Claimant's side"/"Defendant's side" (DE "Klägerseite"/"Beklagtenseite"). The core prompt describes OpenLex as an assistant that prepares material for the lawyer and gives no legal advice. Internal ids (`associate`, `claimant-counsel`, …) stay the same.
 
-## [0.3.1] - 2026-10-30
 
 ### Fixed
 - **Desktop app with a licence (distribution builds) sets up the AI like the community app.** It no longer downloads a fixed model at first start or quits with "model setup failed" when that download fails: the first-start setup page (On this computer · I brought my own key · I need help) handles it. A distribution can recommend its own model (`"localModel"` in `distribution.json`); it is offered on the "On this computer" card and downloads only on a click, with progress. A failed download says so and the app keeps running.
