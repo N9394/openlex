@@ -66,5 +66,5 @@ test('POST /api/config/agent passes answerLang and uiLang through (with depth, a
   const line = src.split('\n').find((l) => /agentCfg\.save\(/.test(l))
   for (const k of ['depth', 'applyMode', 'autopilot', 'answerLang', 'uiLang']) assert.match(line, new RegExp(`${k}: body\\.${k}`), k)
   const agent = fs.readFileSync(path.join(__dirname, '..', 'src', 'agent.js'), 'utf8')
-  assert.match(agent, /answerLang,\n\s*\}\)\.text/, 'agent.js hands answerLang to prompts.build')
+  assert.match(agent, /answerLang,\r?\n\s*\}\)\.text/, 'agent.js hands answerLang to prompts.build')
 })
