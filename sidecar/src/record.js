@@ -129,7 +129,7 @@ function hiddenWords(h = {}) {
 function absorb(acc, e) {
   // The redaction check (redaction_check.js): what was decided, in counts.
   if (e.call === 'redaction-check') {
-    acc.checks.push({ decision: e.decision, hidden: e.hidden || {}, changed: !!e.changed, documents: +e.documents || 0, basic: e.detection === 'basic' })
+    acc.checks.push({ decision: e.decision, hidden: e.hidden || {}, changed: !!e.changed, documents: +e.documents || 0, basic: e.detection === 'basic', detection: e.detection === 'basic' ? 'basic' : e.detection === 'with-model' ? 'with-model' : null })
     return
   }
   if (e.provider === 'permissions') {
@@ -202,7 +202,7 @@ function detailLines(x) {
   for (const c of x.checks || []) {
     lines.push(c.decision === 'cancelled'
       ? `Redaction check: cancelled — nothing was sent`
-      : `Redaction check: ${hiddenWords(c.hidden) || 'nothing'} hidden${c.documents ? ` in ${plural(c.documents, 'text')}` : ''} — ${c.changed ? 'changed by you' : 'as suggested'}${c.basic ? ' (basic detection)' : ''}`)
+      : `Redaction check: ${hiddenWords(c.hidden) || 'nothing'} hidden${c.documents ? ` in ${plural(c.documents, 'text')}` : ''} — ${c.changed ? 'changed by you' : 'as suggested'}${c.detection === 'basic' ? ' (basic detection)' : c.detection === 'with-model' ? ' (with name finder)' : ''}`)
   }
   for (const s of x.ai) {
     lines.push(s.local

@@ -6,18 +6,27 @@
  * mT5-based span model trained for ~20 languages (among them German,
  * English, Czech, Polish, Romanian; Slovak and Hungarian work through
  * their neighbours, less reliably). The int8 ONNX file is ~173 MB.
- * It runs in this process (onnxruntime-node, tokenizer from
- * @huggingface/transformers) — nothing is sent anywhere.
+ * It runs in this process through the engine's ONNX runtime
+ * (onnx_runtime.js: onnxruntime-node + @huggingface/tokenizers) — nothing
+ * is sent anywhere. That runtime comes with the desktop app; the CLI
+ * tarball and Homebrew leave it out, so there the name finder is not
+ * offered ("needs the desktop app").
  *
  * Never bundled: downloaded on request from Hugging Face at a fixed
  * revision, every file checked against its SHA-256 before it is used.
  * Without it the check still works (patterns, the matter's list, titles and
  * legal forms) and says detection is "basic".
  *
- *   status()               { installed, name, license, bytes, … }
- *   install({ onProgress }) download + verify
+ *   status()               { available, installed, runtime, name, license, bytes, … }
+ *                           available: the runtime loads here (tried once, cached)
+ *                           installed: the model files are on disk
+ *   install({ onProgress }) download + verify (refused when not available)
  *   remove()
- *   find(text)              [{ kind: PERSON|ORG|ADDRESS, start, end, confidence }]
+ *   run(text)               { findings, ran } — ran: the model really went
+ *                           through this text (false: not installed, no
+ *                           runtime, stopped); the check reports "basic" then
+ *   find(text)              run(text).findings:
+ *                           [{ kind: PERSON|ORG|ADDRESS, start, end, confidence }]
  *   setRunner(fn)           tests: replace the model with fn(text) → findings
  */
 
@@ -25,6 +34,7 @@ const fs = require('fs')
 const path = require('path')
 const crypto = require('crypto')
 const { DATA_DIR } = require('./config')
+const runtime = require('./onnx_runtime')
 
 const MODEL = {
   id: 'gliner-x-small',
@@ -55,7 +65,7 @@ const dir = () => path.join(DATA_DIR, 'models', MODEL.id)
 const totalBytes = MODEL.files.reduce((n, f) => n + f.bytes, 0)
 
 let runner = null // tests
-let loaded = null // { session, tokenizer, ort }
+let loaded = null // { session, tokenizer, ort, labels }
 let job = null // the running download
 
 function installed() {
@@ -63,8 +73,9 @@ function installed() {
 }
 
 function status() {
+  const rt = runner ? { available: true, reason: null, error: null } : runtime.info()
   return {
-    installed: !!runner || installed(), name: MODEL.name, id: MODEL.id, license: MODEL.license, source: MODEL.source,
+    available: rt.available, installed: !!runner || installed(), runtime: rt, name: MODEL.name, id: MODEL.id, license: MODEL.license, source: MODEL.source,
     bytes: totalBytes, sizeMB: Math.round(totalBytes / 1e6),
     downloading: job ? { received: job.received, total: totalBytes, pct: Math.round((job.received / totalBytes) * 100) } : null,
     error: lastError,
@@ -90,6 +101,12 @@ async function fetchTo(url, dest, f, onChunk) {
 /** Download the model files (once; checked by SHA-256). */
 async function install({ onProgress } = {}) {
   if (job) return job.promise
+  if (!status().available) {
+    const rt = runtime.info()
+    const e = new Error(rt.reason === 'not-bundled' ? 'The name finder needs the desktop app (this build has no ONNX runtime).' : `The name finder cannot run on this computer: ${rt.error}`)
+    e.code = 'ONNX_UNAVAILABLE'
+    throw e
+  }
   lastError = null
   job = { received: 0 }
   job.promise = (async () => {
@@ -113,13 +130,11 @@ function remove() {
 
 async function load() {
   if (loaded) return loaded
-  const ort = require('onnxruntime-node')
-  const { AutoTokenizer, env } = await import('@huggingface/transformers')
-  env.allowRemoteModels = false
-  env.localModelPath = path.dirname(dir())
-  const tokenizer = await AutoTokenizer.from_pretrained(MODEL.id)
-  const session = await ort.InferenceSession.create(path.join(dir(), 'model_quantized.onnx'), { intraOpNumThreads: 2 })
-  loaded = { ort, tokenizer, session }
+  const ort = runtime.ort()
+  const tokenizer = runtime.tokenizer(dir())
+  const session = await ort.InferenceSession.create(path.join(dir(), 'model_quantized.onnx'), { executionProviders: ['cpu'], intraOpNumThreads: 2 })
+  const labels = LABELS.map(([label]) => tokenizer.encode(label, { add_special_tokens: false }).ids)
+  loaded = { ort, tokenizer, session, labels }
   return loaded
 }
 
@@ -127,16 +142,16 @@ const WORD_RE = /[\p{L}\p{N}_]+(?:[-_][\p{L}\p{N}_]+)*|\S/gu
 
 /** One window of words through the model → span findings (character offsets in `text`). */
 async function runWindow(m, text, words) {
-  const { ort, tokenizer, session } = m
+  const { ort, tokenizer, session, labels } = m
   const ids = []
   const wmask = []
-  for (const [label] of LABELS) {
+  for (const toks of labels) {
     ids.push(ENT); wmask.push(0)
-    for (const t of tokenizer.encode(label, { add_special_tokens: false })) { ids.push(t); wmask.push(0) }
+    for (const t of toks) { ids.push(t); wmask.push(0) }
   }
   ids.push(SEP); wmask.push(0)
   words.forEach((w, i) => {
-    const toks = tokenizer.encode(w.w, { add_special_tokens: false })
+    const toks = tokenizer.encode(w.w, { add_special_tokens: false }).ids
     toks.forEach((t, j) => { ids.push(t); wmask.push(j === 0 ? i + 1 : 0) })
   })
   ids.push(EOS); wmask.push(0)
@@ -171,12 +186,17 @@ async function runWindow(m, text, words) {
   return taken.map((c) => ({ kind: c.kind, start: words[c.i].s, end: words[c.j].e, confidence: Math.round(c.p * 100) / 100 }))
 }
 
-/** Names, organisations and addresses the model finds in a text. [] when the model is not installed. */
-async function find(text, { signal } = {}) {
+/**
+ * Names, organisations and addresses the model finds in a text.
+ * @returns {{ findings: object[], ran: boolean }} ran is false when the model
+ *   did not go through the text (not installed, no runtime, stopped); a
+ *   failure to load throws.
+ */
+async function run(text, { signal } = {}) {
   text = String(text || '')
-  if (!text.trim()) return []
-  if (runner) return runner(text)
-  if (!installed()) return []
+  if (runner) return { findings: text.trim() ? await runner(text) : [], ran: true }
+  if (!installed() || !runtime.available()) return { findings: [], ran: false }
+  if (!text.trim()) return { findings: [], ran: true }
   const m = await load()
   const words = []
   for (const x of text.matchAll(WORD_RE)) { words.push({ w: x[0], s: x.index, e: x.index + x[0].length }); if (words.length >= MAX_WORDS) break }
@@ -184,14 +204,17 @@ async function find(text, { signal } = {}) {
   // Overlapping windows so a name on a window edge is still seen whole.
   const step = CHUNK_WORDS - 30
   for (let at = 0; at < words.length; at += step) {
-    if (signal?.aborted) break
+    if (signal?.aborted) return { findings: out, ran: false }
     const win = words.slice(at, at + CHUNK_WORDS)
     for (const f of await runWindow(m, text, win)) if (!out.some((o) => o.start === f.start && o.end === f.end)) out.push(f)
     if (at + CHUNK_WORDS >= words.length) break
   }
-  return out
+  return { findings: out, ran: true }
 }
+
+/** run(text).findings — [] when the model is not installed or cannot run. */
+async function find(text, opts) { return (await run(text, opts)).findings }
 
 function setRunner(fn) { runner = fn || null }
 
-module.exports = { MODEL, status, install, remove, find, setRunner, installed }
+module.exports = { MODEL, status, install, remove, run, find, setRunner, installed }
