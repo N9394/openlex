@@ -654,4 +654,21 @@ async function handle(method, p, params, body = {}) {
   }
 }
 
-module.exports = { list, build, summarize, verify, sealAll, exportRecord, settings, setSettings, applyRetention, handle, toMarkdown, toCsv, SETTINGS_PATH, EXPLAIN, EXPLAIN_TITLE }
+/**
+ * How often each law source answered a lookup in one matter, from the audit
+ * log (one pass over the matter's lines): { <source id>: count }. Counts the
+ * calls that were made and answered (call "law_source", ok: true); the
+ * permission checks before a call and failed calls are not counted.
+ */
+function sourceUses(matterId) {
+  const out = {}
+  if (!matterId) return out
+  for (const e of loadAudit(matterId)) {
+    if (e.call !== 'law_source' || e.ok !== true || !String(e.provider || '').startsWith('source:')) continue
+    const id = String(e.provider).slice(7)
+    out[id] = (out[id] || 0) + 1
+  }
+  return out
+}
+
+module.exports = { sourceUses, list, build, summarize, verify, sealAll, exportRecord, settings, setSettings, applyRetention, handle, toMarkdown, toCsv, SETTINGS_PATH, EXPLAIN, EXPLAIN_TITLE }

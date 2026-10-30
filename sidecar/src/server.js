@@ -1244,7 +1244,7 @@ async function handle(req, res) {
       const body = await readBody(req)
       try {
         const agentCfg = require('./agent-config')
-        const saved = agentCfg.save({ depth: body.depth, applyMode: body.applyMode, autopilot: body.autopilot })
+        const saved = agentCfg.save({ depth: body.depth, applyMode: body.applyMode, autopilot: body.autopilot, answerLang: body.answerLang, uiLang: body.uiLang })
         return sendJson(res, 200, { ok: true, ...saved })
       } catch (err) {
         return sendJson(res, 400, { error: err.message })

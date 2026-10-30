@@ -49,7 +49,10 @@ const PRICES = [
 function priceFor(model) {
   let custom = {}
   try { custom = require('./harness').load().prices || {} } catch { custom = {} }
-  for (const [pattern, p] of Object.entries(custom)) { try { if (new RegExp(pattern, 'i').test(String(model || ''))) return { input: +p.input, output: +p.output, currency: p.currency || 'USD' } } catch { /* bad pattern */ } }
+  for (const [pattern, p] of Object.entries(custom && typeof custom === 'object' ? custom : {})) {
+    if (!p || typeof p !== 'object') continue // e.g. "usdToEur"
+    try { if (new RegExp(pattern, 'i').test(String(model || ''))) return { input: +(p.input ?? p.in), output: +(p.output ?? p.out), currency: p.currency || 'USD' } } catch { /* bad pattern */ }
+  }
   const hit = PRICES.find(([re]) => re.test(String(model || '')))
   return hit ? { input: hit[1], output: hit[2], currency: 'USD' } : null
 }

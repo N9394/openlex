@@ -19,7 +19,12 @@ const DEFAULTS = {
   calendar: { enabled: false, provider: 'auto' }, // calendar integration (Batch W3)
   localMemoryGB: null, // memory for the local AI (null = automatic)
   maxFileMB: null, // file size limit (null = 100 MB)
+  answerLang: 'auto', // language of the AI's answers: 'auto' (the document's / the question's) | 'de' | 'en'
+  uiLang: null, // language of the windows: 'en' | 'de' | null (follow the system)
 }
+
+const ANSWER_LANGS = ['auto', 'de', 'en']
+const UI_LANGS = ['en', 'de']
 
 function load() {
   try {
@@ -34,14 +39,20 @@ function load() {
       localMemoryGB: Number(saved.localMemoryGB) > 0 ? Number(saved.localMemoryGB) : null,
       // The one file size limit (limits.js), in MB; null = 100 MB.
       maxFileMB: Number(saved.maxFileMB) > 0 ? Number(saved.maxFileMB) : null,
+      answerLang: ANSWER_LANGS.includes(saved.answerLang) ? saved.answerLang : 'auto',
+      uiLang: UI_LANGS.includes(saved.uiLang) ? saved.uiLang : null,
     }
   } catch {
     return { ...DEFAULTS }
   }
 }
 
-function save(partial) {
+function save(partial = {}) {
+  // Keys sent as undefined (a front end that only changes one setting) keep their saved value.
+  partial = Object.fromEntries(Object.entries(partial || {}).filter(([, v]) => v !== undefined))
   const next = { ...load(), ...partial }
+  if (partial.answerLang !== undefined && !ANSWER_LANGS.includes(partial.answerLang)) throw new Error(`unknown answerLang: ${partial.answerLang} (${ANSWER_LANGS.join(', ')})`)
+  if (partial.uiLang !== undefined && partial.uiLang !== null && !UI_LANGS.includes(partial.uiLang)) throw new Error(`unknown uiLang: ${partial.uiLang} (${UI_LANGS.join(', ')} or null)`)
   if (partial.depth && !DEPTH_PRESETS[partial.depth]) throw new Error(`unknown depth: ${partial.depth}`)
   if (partial.applyMode && !['tracked', 'permanent'].includes(partial.applyMode)) throw new Error(`unknown applyMode: ${partial.applyMode}`)
   if (partial.autopilot !== undefined) next.autopilot = !!partial.autopilot
@@ -91,4 +102,4 @@ function effectiveAgent() {
   return { CTX_BUDGET_TOKENS: chosen ? Math.min(chosen, profile.ctx || Infinity) : Math.min(ctx, ramCtx, profile.ctx || Infinity), MAX_HOPS: hops, HOP_TIMEOUT_MS: 90000, DEPTH: depth, PROVIDER: 'local' }
 }
 
-module.exports = { load, save, agentBudget, effectiveAgent, CONFIG_PATH, DEFAULTS }
+module.exports = { load, save, agentBudget, effectiveAgent, CONFIG_PATH, DEFAULTS, ANSWER_LANGS, UI_LANGS }

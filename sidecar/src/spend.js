@@ -35,11 +35,39 @@ const month = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1)
 const fileFor = (m) => path.join(DIR, `${m}.json`)
 const round2 = (n) => Math.round(n * 100) / 100
 
+/**
+ * Price entries from openlex.json → "prices" (firm and/or user layer), the
+ * same map the batch estimate reads:
+ *   { "<model regex>": { "input": 3, "output": 15, "currency": "USD", "provider"?: "bedrock" } }
+ * ("in"/"out" are accepted for input/output). Optional "usdToEur": <number>.
+ * These are tried before the user's prices.json and the built-in list.
+ */
+function harnessPrices() {
+  let cfg = {}
+  try { cfg = require('./harness').load().prices || {} } catch { cfg = {} }
+  if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) return { models: [], usdToEur: null }
+  const models = []
+  for (const [match, p] of Object.entries(cfg)) {
+    if (match === 'usdToEur' || !p || typeof p !== 'object' || Array.isArray(p)) continue
+    const inP = Number(p.input ?? p.in)
+    const outP = Number(p.output ?? p.out)
+    if (!Number.isFinite(inP) || !Number.isFinite(outP) || inP < 0 || outP < 0) continue
+    try { new RegExp(match, 'i') } catch { continue }
+    models.push({ match, ...(typeof p.provider === 'string' ? { provider: p.provider } : {}), in: inP, out: outP, currency: String(p.currency || 'USD').toUpperCase(), source: 'openlex.json' })
+  }
+  const rate = typeof cfg.usdToEur === 'number' && cfg.usdToEur > 0 ? cfg.usdToEur : null
+  return { models, usdToEur: rate }
+}
+
 function prices() {
   let user = null
   try { user = JSON.parse(fs.readFileSync(USER_PRICES, 'utf8')) } catch { user = null }
-  const models = [...(Array.isArray(user?.models) ? user.models : []), ...BUILTIN.models]
-  return { ...BUILTIN, ...(user && typeof user.usdToEur === 'number' ? { usdToEur: user.usdToEur } : {}), models, default: user?.default || BUILTIN.default, custom: !!user }
+  const firm = harnessPrices()
+  const models = [...firm.models, ...(Array.isArray(user?.models) ? user.models : []), ...BUILTIN.models]
+  let usdToEur = BUILTIN.usdToEur
+  if (user && typeof user.usdToEur === 'number') usdToEur = user.usdToEur
+  if (firm.usdToEur) usdToEur = firm.usdToEur
+  return { ...BUILTIN, usdToEur, models, default: user?.default || BUILTIN.default, custom: !!user || firm.models.length > 0 || !!firm.usdToEur }
 }
 
 /** The price entry for a model (first match; the default when none). */

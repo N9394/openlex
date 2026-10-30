@@ -21,6 +21,8 @@
  *   spending the monthly limit for online AI in euros: { cap, warnAt } (spend.js)
  *   judge    the second pass that checks answers: { answers: true } (judge.js; on by default)
  *   panel    agents working together: { concurrency: 3, rounds: 2 } (panel.js)
+ *   prices   the firm's own prices per million tokens for the spending meter and
+ *            the batch estimate: { "<model regex>": { input, output, currency } } (spend.js)
  *
  * Files are re-read when they change (mtime), so edits apply without a
  * restart. Invalid JSON never takes the engine down: that layer is
@@ -32,7 +34,7 @@ const path = require('path')
 const { DATA_DIR } = require('./config')
 
 const USER_PATH = path.join(DATA_DIR, 'openlex.json')
-const SECTIONS = ['routes', 'hooks', 'agents', 'features', 'sources', 'models', 'prompts', 'permissions', 'spending', 'judge', 'panel']
+const SECTIONS = ['routes', 'hooks', 'agents', 'features', 'sources', 'models', 'prompts', 'permissions', 'spending', 'judge', 'panel', 'prices']
 
 const DEFAULTS = {
   routes: { roles: {}, rules: [], fallback: [] },
@@ -45,8 +47,9 @@ const DEFAULTS = {
   spending: { cap: null, warnAt: 0.8 },
   judge: { answers: true },
   panel: { concurrency: 3, rounds: 2 },
+  prices: {},
   // shell (run_bash) is off unless a firm turns it on; it also needs an OS sandbox.
-  features: { monitors: true, browser: true, skillSuggestions: true, grid: true, plans: true, lists: true, shell: false },
+  features: { monitors: true, skillSuggestions: true, grid: true, plans: true, shell: false },
 }
 
 function firmPath() {

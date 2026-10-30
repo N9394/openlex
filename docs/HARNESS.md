@@ -115,14 +115,44 @@ The built-in law sources are switched off or on here too, by id: `"neuris": { "t
 Switch whole features on or off for everyone (firm layer) or yourself:
 
 ```json
-{ "features": { "browser": false, "monitors": true, "skillSuggestions": true } }
+{ "features": { "grid": false, "plans": false, "monitors": true, "skillSuggestions": true } }
 ```
+
+| Switch | Default | What it does |
+|---|---|---|
+| `grid` | on | `false` hides the **Review grid** under "More tools" in the desktop app. |
+| `plans` | on | `false` hides **Plans** under "More tools" in the desktop app. |
+| `monitors` | on | `false` stops the scheduled law-update checks' hints in the Word pane. |
+| `skillSuggestions` | on | `false` stops the "Your firm has instructions for this" hint. |
+| `shell` | **off** | The agent's `run_bash` tool (see below). |
+
+Front ends read the switches from `GET /api/features` and hide what is `false`; a missing switch counts as on (except `shell`). Hiding an entry does not lock the engine's API: it tidies the windows, it is not a permission (use [`permissions`](#permissions-what-the-agent-may-do-without-asking) for that).
 
 The Word pane hides the entries of its "What can I do here?" menu that a firm switches off: `review`, `analyse`, `compare`, `comments`, `obligations`, `xref`, `outline`, `overview`, `matterReview`, `chronology`, `translate`, `clauses`, `matters`, `settings` (e.g. `{ "features": { "translate": false } }`). `skillSuggestions: false` also stops the pane's "Your firm has instructions for this" hint, and `monitors: false` its update hints.
 
 `shell` (the agent's `run_bash` tool) is **off by default**. When a firm turns it on, it is still limited to read/organise commands (`ls`, `find`, `grep`, `cat`, `head`, `tail`, `wc`, `sort`, `diff`, `stat`, `tree`, `du`, `mkdir`, `cp`/`mv` without overwriting, read-only `git`). Nothing that runs code, reaches the network or deletes is ever available. Every path must stay inside the workspace (symlinks resolved). Commands get no environment secrets and run inside the OS sandbox (macOS Seatbelt, Linux bubblewrap): writes only in the workspace, no reads in the home folder, no network. Without an OS sandbox it stays off unless `"shellWithoutSandbox": true`.
 
 The agent's file tools never write `openlex.json`, `skills/`, `playbooks/` or `.openlex/`, and every overwrite keeps the previous version in `.openlex/history/` (20 per file).
+
+
+## `prices`: your own prices for the spending meter
+
+The spending meter (and the estimate before a big batch run) prices each online AI call from a dated list of list prices. A firm with its own contract prices, or a model the list does not know, adds them here. Each key is a pattern matched against the model name (a regular expression, case does not matter); the value is the price **per million tokens**:
+
+```json
+{
+  "prices": {
+    "eu\\.anthropic\\.claude-sonnet-5": { "input": 2.0, "output": 10.0, "currency": "USD", "provider": "bedrock" },
+    "mistral-medium": { "input": 1.2, "output": 6.0, "currency": "EUR" },
+    "usdToEur": 0.9
+  }
+}
+```
+
+- `input` / `output` (or `in` / `out`): price per million input / output tokens. `currency`: `USD` (default) or `EUR`. `provider` (optional): only for that service id (`bedrock`, `mistral`, `ionos`, …).
+- `usdToEur` (optional): the rate used to show US-dollar prices in euros.
+- These entries are tried first, before `<data dir>/prices.json` and the built-in list; the first match wins. A pattern that is not a valid regular expression is skipped.
+- They are still estimates: the bill from the service is what counts. Lock the section (`"lock": ["prices"]`) to keep lawyers from changing it.
 
 ## `hooks`: firm rules at each decision point
 

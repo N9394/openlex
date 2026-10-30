@@ -37,6 +37,8 @@ openlex test
 
 ## Option 3: your firm's cloud account
 
+New to this? [Get a secure cloud AI key](cloud-key.md) walks you through Claude on AWS Bedrock in the EU, step by step.
+
 If your firm already has an enterprise agreement with a cloud provider, use that. The data then stays under your firm's contract, in the region you choose.
 
 | Service | `openlex use …` | What you need |
