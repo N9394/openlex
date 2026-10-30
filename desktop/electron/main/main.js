@@ -451,8 +451,10 @@ async function createWindow() {
   mainWindow.webContents.on('did-fail-load', (_e, code, desc, url) => {
     console.error(`[renderer] did-fail-load code=${code} url=${url}: ${desc}`)
   })
-  mainWindow.webContents.on('console-message', (_e, level, message, line, source) => {
-    const tag = level === 3 ? 'ERROR' : level === 2 ? 'WARN' : 'log'
+  mainWindow.webContents.on('console-message', (e, level, message, line, source) => {
+    // Electron 35+ passes one event object (level is a word); older ones positional args.
+    if (e && typeof e.message === 'string') ({ level, message, lineNumber: line, sourceId: source } = e)
+    const tag = level === 3 || level === 'error' ? 'ERROR' : level === 2 || level === 'warning' ? 'WARN' : 'log'
     console.log(`[renderer:${tag}] ${source}:${line}  ${message}`)
   })
   mainWindow.webContents.on('render-process-gone', (_e, details) => {
