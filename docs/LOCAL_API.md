@@ -294,6 +294,15 @@ Any endpoint that speaks the System One API (`POST {url}/v1/systemone`): a local
 | POST | `/api/decide` | `{ state, questions, matterId? }` | `questions: { id: { type: noul\|choice\|score, instructions, criteria } }`. Returns `answers` as the endpoint sent them, plus `summary: { id: { answer, p, confidence } }`. |
 | POST | `/api/decide/test` | | One tiny call, still subject to the policy. |
 
+### Agents, Panel, the judge
+
+- `GET /api/agents[?lang=de]` → `{ agents, templates, groups, depths, where: { locked, firm } }` — profiles with the source groups they use; templates for the form.
+- `POST /api/agents/save` `{ agent: { name?, title, description, instructions, groups | tools, model?, depth }, scope?: 'user'|'firm', rename? }` · `POST /api/agents/delete` `{ name, scope? }` · `POST /api/agents/propose` `{ sessionId, matterId? }` → `{ proposal }` (nothing saved).
+- `POST /api/panel/estimate` `{ mode: parallel|debate|review, agents: [{ name, side?, label? }], rounds?, moderator?, matterId? }` → `{ estimate: { calls, cloudCalls, eur, agents[], needsConfirm, overCap, capReached, notes, text } }`.
+- `POST /api/panel/run` (SSE) — the same body plus `question`, `confirmed: true` (required when `needsConfirm`), `sessionId?`, `attachments?`, `interactive?`. Events: `panel_estimate`, `panel_start`, `panel_note`, `panel_round`, `panel_lane` `{ lane, status: working|speaking|done|failed|stopped, plain }`, `panel_text`, `panel_turn`, `model` (with `lane`), `law`, `panel_summary`, `panel_result`, `text` (Markdown), `done`.
+- `GET /api/panel?id=` · `GET /api/panels[?matterId=]` · `POST /api/panel/export` `{ id, format: docx|pdf|md }`.
+- `GET /api/config/judge` → `{ enabled, locked, origin }` · `POST /api/config/judge` `{ enabled }` (403 when the firm locked it). `/api/chat` streams `judge` `{ ran, ok?, reason?: off|no-sources, notes? }`.
+
 ### Connectors (MCP) and web
 | Method | Path | Body | What |
 |---|---|---|---|

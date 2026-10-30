@@ -5,6 +5,7 @@ import { api } from '../lib/api'
 import { setUiLanguage } from '../i18n'
 import DependenciesTab from '../components/DependenciesTab'
 import LocalMemorySetting from '../components/LocalMemorySetting'
+import JudgeSetting from '../components/JudgeSetting'
 import {
   User,
   Bell,
@@ -982,6 +983,8 @@ export default function Settings() {
                 </select>
                 <p className="text-antique text-xs mt-2">{t('settings.ai.depthHint')}</p>
               </div>
+
+              <JudgeSetting />
 
               {!isElectron && <div className="pt-4 border-t border-tobacco">
                 <label className="flex items-center justify-between cursor-pointer p-4 bg-leather rounded-button hover:bg-tobacco transition-colors">

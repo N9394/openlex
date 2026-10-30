@@ -145,6 +145,7 @@ export function Matter({ matterId = null }) {
   const [sessionId, setSessionIdRaw] = useState(() => sessionIds.get(key) || `tui:${key}`)
   const setSessionId = (v) => { sessionIds.set(key, v); setSessionIdRaw(v) }
   const abort = useRef(null)
+  const pendingTeam = useRef(null) // a panel on online AI waiting for "/team go" (the estimate was shown)
   const pageRef = useRef({ height: 10, total: 0 })
   const { cols, rows } = useSize()
 
@@ -464,6 +465,17 @@ export function Matter({ matterId = null }) {
       return setMode('unprivilege')
     }
     if (name === 'permissions') return setMode('perms')
+    if (name === 'judge') {
+      const on = /^(on|yes|ja|ein|an|1)$/i.test(arg)
+      const off = /^(off|no|nein|aus|0)$/i.test(arg)
+      try {
+        if (!on && !off) { const st = await ctx.api.judge(); return sys(st.enabled ? `Answers are checked with a second pass${st.locked ? ' (set by your firm)' : ''}. /judge off switches it off.` : 'Answers are not double-checked. /judge on switches the second pass on (recommended).', st.enabled ? 'ok' : 'warn') }
+        await ctx.api.setJudge(on)
+        return sys(on ? 'Answers are checked with a second pass from now on.' : 'Second pass off: answers are no longer double-checked. /judge on brings it back.', on ? 'ok' : 'warn')
+      } catch (err) { return sys(err.message, 'warn') }
+    }
+    if (name === 'agent') return agentCommand(arg)
+    if (name === 'team') return teamCommand(arg)
     if (name === 'folder') {
       if (!arg) return setMode('folder')
       if (/^(none|off)$/i.test(arg)) { ctx.useFolder(null); return sys('Not working in a folder any more. OpenLex uses your matters only.') }
@@ -568,6 +580,97 @@ export function Matter({ matterId = null }) {
       for (const it of items.slice(0, 20)) sys(`${it.createdAt.slice(0, 10)} · ${it.kind} · ${it.title}${it.tags.length ? ` (${it.tags.map((t) => `#${t}`).join(' ')})` : ''}`, 'info')
       if (items.length > 20) sys(`… and ${items.length - 20} more in the desktop app (Saved).`, 'info')
     } catch (err) { sys(err.message, 'bad') }
+  }
+
+  // ── your own agents (/agent) ──
+  const agentCommand = async (arg) => {
+    const m = /^(new|neu)\s+([^:]{2,60}):\s*([\s\S]{3,})$/i.exec(arg)
+    if (m) {
+      try {
+        const r = await ctx.api.saveAgent({ title: m[2].trim(), instructions: m[3].trim(), groups: ['law', 'austria', 'eu', 'otherLaw', 'documents', 'firm'] })
+        await ctx.refresh().catch(() => {})
+        return sys(`Made "${r.agent.title}" (/as ${r.agent.name}, or in a panel: /team debate ${r.agent.name} …). Sources, where it runs and how thorough: change them in the desktop app (/agent edit ${r.agent.name}).`)
+      } catch (err) { return sys(err.message, 'bad') }
+    }
+    sys('Agents (use one with /as NAME, or several with /team):', 'info')
+    for (const a of agents) sys(`${a.name} — ${a.title}${a.description ? `: ${a.description}` : ''}`, 'info')
+    return sys('Make your own: /agent new NAME: what it does (in your own words). The desktop app has the full form (/agent new there).', 'info')
+  }
+
+  // ── a Panel of agents (/team): sequential plain text of the same run ──
+  const teamCommand = async (arg) => {
+    const confirmed = /^(go|los|start)$/i.test(arg.trim())
+    let req = confirmed ? pendingTeam.current : null
+    pendingTeam.current = null
+    if (confirmed && !req) return sys('There is no panel waiting to start. Type /team debate claimant-counsel defendant-counsel: your question', 'info')
+    if (!req) {
+      const [setup, ...rest] = arg.split(':')
+      const question = rest.join(':').trim()
+      const words = setup.trim().split(/[\s,]+/).filter(Boolean)
+      const mode = { parallel: 'parallel', together: 'parallel', debate: 'debate', debatte: 'debate', review: 'review' }[String(words[0] || '').toLowerCase()] || null
+      const names = (mode ? words.slice(1) : words).filter((w) => !/^\d$/.test(w) && !/^(vs\.?|gegen|and|und)$/i.test(w)).map((w) => w.toLowerCase())
+      const rounds = +(words.find((w) => /^\d$/.test(w)) || 2)
+      if (!question) {
+        sys('A panel: several agents answer together, argue a question out, or draft and review.', 'info')
+        sys('/team debate claimant-counsel defendant-counsel: Is the landlord liable for the water damage?', 'info')
+        sys('/team parallel researcher compliance-checker: May we send newsletters to these customers?', 'info')
+        return sys('/team review drafter reviewer: Draft a confidentiality clause for a software licence. Templates: claimant-counsel, defendant-counsel, devils-advocate, drafter, researcher, compliance-checker; /agent lists your own.', 'info')
+      }
+      const m = mode || 'debate'
+      req = { mode: m, agents: names.length ? names : m === 'review' ? ['drafter', 'reviewer'] : ['claimant-counsel', 'defendant-counsel'], rounds, question, moderator: m === 'debate' ? 'judge' : null }
+      try {
+        const est = (await ctx.api.panelEstimate({ ...req, matterId: matterId || undefined })).estimate
+        for (const n of est.notes || []) sys(n, 'warn')
+        if (est.capReached) return sys(`${est.text} This month's limit for online AI is reached: use agents on this computer, or raise the limit.`, 'bad')
+        if (est.needsConfirm) {
+          pendingTeam.current = req
+          return sys(`${est.text}${est.overCap ? ' This may go over your monthly limit; the panel would stop there and keep what was said.' : ''} Type /team go to start it; anything else cancels.`, 'warn')
+        }
+        sys(est.text, 'info')
+      } catch (err) { return sys(err.message, 'bad') }
+    }
+    if (streaming) return sys('An answer is still being written. Wait for it (or press Esc), then start the panel.', 'warn')
+    setMsgs((m) => [...m, { role: 'you', text: `[Panel · ${req.mode}: ${req.agents.join(', ')}] ${req.question}`, files: [] }])
+    const ac = new AbortController()
+    abort.current = ac
+    ctx.interrupt.current = () => { ac.abort(); return true }
+    setStreaming(true)
+    const titles = {}
+    const seen = new Set()
+    try {
+      await ctx.api.panel({ ...req, confirmed: true, interactive: true, matterId: matterId || undefined, sessionId, message: `/team ${req.mode} ${req.agents.join(' ')}: ${req.question}`, ...ctx.folderBody() }, (ev) => {
+        if (ev.type === 'panel_start') { for (const x of ev.members) titles[x.lane] = x.title; if (ev.moderator) titles.moderator = ev.moderator.title; sys(`Panel: ${ev.members.filter((x) => !x.skipped).map((x) => `${x.title} (${x.local ? 'this computer' : x.where})`).join(', ')}${ev.moderator ? `; ${ev.moderator.title} sums up` : ''}. Esc stops all.`, 'info') }
+        else if (ev.type === 'panel_note') sys(ev.text, 'warn')
+        else if (ev.type === 'panel_round') sys(`— Round ${ev.round} of ${ev.rounds} —`, 'info')
+        else if (ev.type === 'panel_lane') {
+          const key = `${ev.lane}:${ev.round || 0}:${ev.status}`
+          if (ev.status === 'working' && seen.has(key)) return
+          seen.add(key)
+          if (['working', 'failed', 'stopped'].includes(ev.status) || (ev.status === 'done' && ev.warn)) sys(`${titles[ev.lane] || ev.lane}: ${ev.plain}`, ev.status === 'failed' || ev.warn ? 'warn' : 'info')
+        } else if (ev.type === 'panel_turn') setMsgs((m) => [...m, { id: ++seq, role: 'ai', text: ev.text, sources: [], suggestions: [], as: `${titles[ev.lane] || ev.lane}${req.mode === 'debate' ? ` · round ${ev.round}` : ev.kind && ev.kind !== 'answer' ? ` · ${ev.kind}` : ''}` }])
+        else if (ev.type === 'panel_summary') {
+          const s = ev.summary
+          if (s.fallback) return sys(s.note, 'warn')
+          const lines = []
+          if (s.stronger) lines.push(`Stronger position: ${s.stronger.title || 'neither clearly'} — ${s.stronger.why}${s.stronger.cites?.length ? ` [${s.stronger.cites.join(', ')}]` : ''}`)
+          for (const a of s.agreement) lines.push(`Agree: ${a.point}${a.cites.length ? ` [${a.cites.join(', ')}]` : ' [no source]'}`)
+          for (const d of s.disagreement) lines.push(`Disagree: ${d.point}${d.cites.length ? ` [${d.cites.join(', ')}]` : ' [no source]'}${d.positions.map((p) => ` · ${p.title}: ${p.view}`).join('')}`)
+          for (const o of s.open) lines.push(`Open: ${o.question}`)
+          if (s.removed) lines.push(`(${s.removed} unverifiable citation${s.removed === 1 ? '' : 's'} removed)`)
+          setMsgs((m) => [...m, { id: ++seq, role: 'ai', text: lines.join('\n'), sources: [], suggestions: [], as: titles.moderator || 'Moderator' }])
+        } else if (ev.type === 'panel_result') {
+          if (ev.panel.sources.length) sys(`Sources: ${ev.panel.sources.map((x) => `${x.id} ${x.label}`).join('; ')}`, 'info')
+          if (ev.panel.stopped) sys(ev.panel.stopped === 'cap' ? 'Stopped: the monthly limit for online AI was reached. What was said so far is kept.' : 'Stopped. What was said so far is kept; nothing more is sent.', 'warn')
+          else sys('The panel is in this conversation; in the desktop app it can be exported to Word or PDF.', 'ok')
+        } else if (ev.type === 'permission') { setPerm(ev); setMode('chat') }
+        else if (ev.type === 'error') sys(friendly(ev.message), 'bad')
+      }, ac.signal)
+    } catch (err) { if (!ac.signal.aborted) sys(err.message, 'bad') }
+    if (ac.signal.aborted) sys('Stopped. What was said so far is kept; nothing more is sent.', 'warn')
+    ctx.interrupt.current = null
+    abort.current = null
+    setPerm(null)
+    setStreaming(false)
   }
 
   // ── getting the answer out ──

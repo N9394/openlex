@@ -101,6 +101,8 @@ export interface Activity {
   steps: Step[]; models: ModelUse[]; online: string[]; sources: LawSource[]
   clauses: { index?: number; heading?: string }[]; notes: { entity: string; claim: string; section: unknown }[]
   suggestions: number; stopped: boolean; failed: boolean; waiting: string | null; answerWords: number
+  /** The second pass (judge): did it check this answer, and what did it find? */
+  judge?: { ran: boolean; ok?: boolean; reason?: string; notes?: string[]; unavailable?: boolean } | null
   /** Keys the AI asked the lawyer for (a secure field each; the key never enters the conversation). */
   keys?: KeyRequest[]
 }
@@ -113,7 +115,7 @@ export function startActivity(now = Date.now()): Activity {
   return { startedAt: now, endedAt: null, steps: [{ text: tr('workingOut', 'Working out how to answer'), status: 'now', at: now }], models: [], online: [], sources: [], clauses: [], notes: [], suggestions: 0, stopped: false, failed: false, waiting: null, answerWords: 0 }
 }
 
-const clone = (a: Activity): Activity => ({ ...a, steps: a.steps.map((s) => ({ ...s })), online: [...a.online], sources: [...a.sources], clauses: [...a.clauses], notes: [...a.notes], models: [...a.models], keys: [...(a.keys || [])] })
+const clone = (a: Activity): Activity => ({ ...a, judge: a.judge ? { ...a.judge } : a.judge, steps: a.steps.map((s) => ({ ...s })), online: [...a.online], sources: [...a.sources], clauses: [...a.clauses], notes: [...a.notes], models: [...a.models], keys: [...(a.keys || [])] })
 const current = (a: Activity) => { for (let i = a.steps.length - 1; i >= 0; i--) if (a.steps[i].status === 'now') return a.steps[i]; return null }
 function push(a: Activity, text: string, now: number, extra: Partial<Step> = {}) {
   const cur = current(a)
@@ -184,6 +186,7 @@ export function applyEvent(act: Activity, ev: any, now = Date.now()): Activity {
     case 'error':
       if (ev.recoverable) { push(a, tr('partFailed', 'One part could not be finished; going on with the rest'), now, { failed: true }); return a }
       a.failed = true; push(a, tr('stoppedWhy', 'Stopped: {{why}}', { why: friendly(ev.message) }), now, { failed: true }); finish(a, now); return a
+    case 'judge': a.judge = { ran: !!ev.ran, ok: ev.ok, reason: ev.reason, notes: Array.isArray(ev.notes) ? ev.notes : [], unavailable: !!ev.unavailable }; return a
     case 'done': if (ev.stopped) a.stopped = true; return a
     default: return act
   }
@@ -199,10 +202,19 @@ export function endActivity(act: Activity, now = Date.now(), stopped = false): A
 
 export const mark = (status: Step['status']) => (status === 'done' ? '✓' : status === 'failed' ? '!' : '▸')
 
-/** The one line after an answer: "✓ Done in 12 s · 6 steps". */
+/** Whether the second pass checked the answer, in words ('' when the engine did not say). */
+export function judgeLine(act: Pick<Activity, 'judge'> | null | undefined) {
+  const j = act?.judge
+  if (!j) return ''
+  if (j.ran) return j.unavailable && !(j.notes || []).length ? tr('judgeUnavailable', 'second pass could not run') : j.ok === false ? tr('judgeFound', 'second pass found something — see below') : tr('judgeOk', 'checked by a second pass')
+  return j.reason === 'off' ? tr('judgeOff', 'not double-checked (switched off in Settings)') : tr('judgeNothing', 'not double-checked (no sources to check against)')
+}
+
+/** The one line after an answer: "✓ Done in 12 s · 6 steps · checked by a second pass". */
 export function summaryLine(act: Activity) {
   const took = duration((act.endedAt || act.startedAt) - act.startedAt)
-  return act.stopped ? `⏹ ${tr('stoppedAfter', 'Stopped after {{took}}', { took })}` : act.failed ? `! ${tr('endedEarly', 'Ended early after {{took}}', { took })}` : `✓ ${tr('doneIn', 'Done in {{took}}', { took })} · ${tr('steps', '{{count}} steps', { count: act.steps.length })}`
+  const j = judgeLine(act)
+  return act.stopped ? `⏹ ${tr('stoppedAfter', 'Stopped after {{took}}', { took })}` : act.failed ? `! ${tr('endedEarly', 'Ended early after {{took}}', { took })}` : `✓ ${tr('doneIn', 'Done in {{took}}', { took })} · ${tr('steps', '{{count}} steps', { count: act.steps.length })}${j ? ` · ${j}` : ''}`
 }
 
 /** The Stop explained: what was kept, and that nothing more is sent. */

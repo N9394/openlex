@@ -11,6 +11,7 @@ import BatchCard from './BatchCard'
 import DiligenceCard from './DiligenceCard'
 import DraftCard from './DraftCard'
 import InvestigationCard from './InvestigationCard'
+import PanelCard from './Panel'
 
 export interface ToolRun {
   name: 'investigate' | 'diligence' | 'draft'
@@ -31,6 +32,7 @@ export function ResultCard({ result, matterId }: { result: Result; matterId: str
     case 'investigation': return <InvestigationCard id={result.id} />
     case 'diligence': return <DiligenceCard id={result.id} />
     case 'draft': return <DraftCard id={result.id} />
+    case 'panel': return <PanelCard id={result.id} />
     default: return null
   }
 }

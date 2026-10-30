@@ -8,6 +8,7 @@
  *   conversations  the first question (every window: terminal, Word, app)
  *   saved          saved items of the matters (saved.js)
  *   drafts         drafts (draft.js)
+ *   panels         panels of agents (panel.js), by question and agents
  *   documents      files in the matters' folders and the workspace's matter folders
  *   commands       the chat's "/" commands (commands.js), in the app's language
  *
@@ -57,6 +58,13 @@ function find({ q = '', matterId = null, lang = 'en', limit = 8 } = {}) {
   try {
     add('draft', require('./draft').list().filter((d) => titleHit(ws, d.title))
       .map((d) => ({ id: d.id, title: d.title, detail: [titleOf(d.matterId), `${d.versions} version${d.versions === 1 ? '' : 's'}`].filter(Boolean).join(' · '), matterId: d.matterId, target: { page: '/vault', matterId: d.matterId, draftId: d.id } })))
+  } catch { /* none */ }
+
+  try {
+    // Panels (agents working together): by their question and who took part.
+    add('panel', require('./panel').list({ limit: 200 }).filter((x) => hit(ws, x.question, x.members.join(' ')))
+      .sort((a, b) => (b.matterId === matterId) - (a.matterId === matterId))
+      .map((x) => ({ id: x.id, title: x.question, detail: [`Panel: ${x.members.join(', ')}`, titleOf(x.matterId), String(x.at).slice(0, 10)].filter(Boolean).join(' · ').slice(0, 160), matterId: x.matterId || null, target: { page: '/research', matterId: x.matterId || null, panelId: x.id } })))
   } catch { /* none */ }
 
   // Documents: the matters' folders (library) and the matter folders in the workspace.

@@ -97,4 +97,80 @@ async function judgeSuggestions(ctx, suggestions, finalText) {
   }
 }
 
-module.exports = { judgeSuggestions, JUDGE_PROMPT }
+// ── the second pass on answers (on by default) ─────────────────────────────
+//
+// openlex.json → "judge": { "answers": true }. The lawyer switches it in
+// Settings ("Check answers with a second pass") or with /judge on|off; a
+// firm keeps it on with "lock": ["judge"].
+
+/** { enabled, locked, origin } — on unless switched off. */
+function settings() {
+  try {
+    const h = require('./harness').load()
+    return { enabled: h.judge?.answers !== false, locked: (h.locked || []).includes('judge'), origin: h.origins?.judge || 'default' }
+  } catch { return { enabled: true, locked: false, origin: 'default' } }
+}
+const enabled = () => settings().enabled
+
+/** The lawyer's switch. Refused when the firm locked it. */
+function setEnabled(on) {
+  const harness = require('./harness')
+  if (settings().locked) { const e = new Error('Your firm has fixed this setting: answers are always checked with a second pass.'); e.code = 'LOCKED'; throw e }
+  harness.setUserSection('judge', on ? null : { answers: false })
+  return settings()
+}
+
+const QUOTE_RE = /[“„"«‚]([^“”„"«»‚‘\n]{15,400})[”"»‘“]/g
+const norm = (t) => String(t || '').replace(/[“”„"«»‚‘’']/g, '"').replace(/\s+/g, ' ').trim().toLowerCase()
+
+/** Quoted passages (15+ characters) in a text. */
+function quotesIn(text) {
+  const out = []
+  for (const m of String(text || '').matchAll(QUOTE_RE)) if (/\s/.test(m[1].trim())) out.push(m[1].trim())
+  return out
+}
+
+/** Is `quote` word for word in one of the texts? (whitespace, quote marks and case ignored) */
+function verbatim(quote, texts) {
+  const q = norm(quote).replace(/^"|"$/g, '').replace(/…|\.\.\./g, '')
+  if (!q) return false
+  return texts.some((t) => norm(t).includes(q))
+}
+
+const ANSWER_PROMPT = `You double-check a legal answer for a lawyer before they rely on it. You are a safety net, not a second author.
+You get the QUESTION, the ANSWER and the SOURCES the answer was based on (law texts, document passages, search results).
+Check only: (1) does the answer state what a source says correctly (sections, numbers, deadlines, amounts, who must do what)? (2) does it cite a section or rule that the sources do not contain while presenting it as found there? (3) does it contradict a source?
+Do not judge style, length or legal strategy. Points the sources do not cover are not problems unless the answer claims a source says them.
+Reply with JSON only: {"ok": true|false, "problems": ["one short sentence per problem, naming the section"]}`
+
+/**
+ * Check a prose answer against its evidence ([{ tool, text }]).
+ * Deterministic first (every quoted passage must be found word for word),
+ * then one model call (role "judge").
+ * @returns {Promise<{ ok: boolean, notes: string[], unavailable?: boolean }>}
+ */
+async function checkAnswer({ question = '', answer = '', evidence = [] } = {}, { signal } = {}) {
+  const texts = evidence.map((e) => String(e.text || '')).filter(Boolean)
+  const notes = []
+  for (const q of quotesIn(answer)) {
+    if (!verbatim(q, [...texts, question])) notes.push(`A quoted passage was not found word for word in the sources: “${q.length > 90 ? `${q.slice(0, 89)}…` : q}”`)
+  }
+  let budget = 12000
+  const sources = texts.map((t, i) => { const part = t.slice(0, Math.max(0, Math.min(4000, budget))); budget -= part.length; return part ? `[${i + 1}] ${part}` : '' }).filter(Boolean).join('\n\n')
+  try {
+    const raw = await chat([
+      { role: 'system', content: ANSWER_PROMPT },
+      { role: 'user', content: `QUESTION:\n${String(question).slice(0, 2000)}\n\nANSWER:\n${String(answer).slice(0, 8000)}\n\nSOURCES:\n${sources}` },
+    ], { maxTokens: 600, role: 'judge', signal })
+    const m = String(raw).match(/\{[\s\S]*\}/)
+    const v = JSON.parse(m ? m[0] : raw)
+    const problems = (Array.isArray(v.problems) ? v.problems : []).map((x) => String(x).slice(0, 300)).filter(Boolean)
+    notes.push(...problems)
+    return { ok: v.ok !== false && !notes.length, notes }
+  } catch (err) {
+    console.warn('[judge] answer check failed:', err.message)
+    return { ok: !notes.length, notes, unavailable: true }
+  }
+}
+
+module.exports = { judgeSuggestions, JUDGE_PROMPT, settings, enabled, setEnabled, checkAnswer, quotesIn, verbatim }
