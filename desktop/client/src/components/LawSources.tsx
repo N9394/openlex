@@ -84,10 +84,11 @@ export default function LawSources({ say, matter }: { say: (text: string, kind?:
     const used = new Set(shown.filter((s) => (s.uses || 0) > 0).flatMap((s) => [s.country, ...(s.jurisdictions || [])]))
     const main = used.size ? used : new Set(shown.filter((s) => s.state === 'ready').map((s) => s.country))
     const isGateway = (s: LawSource) => !!s.gateway || s.country === 'INT'
-    const stateOf = (s: LawSource) => (s.state === 'ready' ? 'ready' : s.state === 'off' || !s.enabled ? 'off' : 'key')
+    // Engine states: ready, needs_key, needs_setup, offline (not online for this matter), manual (read in the browser), off.
+    const stateOf = (s: LawSource) => (s.state === 'off' || !s.enabled ? 'off' : s.state === 'ready' ? 'ready' : s.state === 'offline' ? 'offline' : s.state === 'manual' ? 'manual' : 'key')
     const rank = (s: LawSource) => (isGateway(s) ? 0 : s.country === 'EU' ? 1 : 2) - (s.recommended ? 0.5 : 0) - Math.min(0.4, (s.uses || 0) / 1000)
     const byName = (a: LawSource, b: LawSource) => rank(a) - rank(b) || countryName(a.country, lang, several).localeCompare(countryName(b.country, lang, several))
-    return (['ready', 'key', 'off'] as const).map((k) => {
+    return (['ready', 'key', 'offline', 'manual', 'off'] as const).map((k) => {
       const items = shown.filter((s) => stateOf(s) === k).sort(byName)
       const top = items.filter((s) => country || isGateway(s) || s.country === 'EU' || main.has(s.country) || (s.uses || 0) > 0)
       const rest = items.filter((s) => !top.includes(s))
@@ -156,7 +157,7 @@ export default function LawSources({ say, matter }: { say: (text: string, kind?:
   const item = (s: LawSource) => (
                 <li key={s.id} className="rounded px-2 py-1.5 hover:bg-leather/30">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span aria-hidden="true" className={s.state === 'ready' ? 'text-forest' : s.state === 'off' ? 'text-antique' : 'text-amber-400'}>{s.state === 'ready' ? '✓' : s.state === 'off' ? '–' : '!'}</span>
+                    <span aria-hidden="true" className={s.state === 'ready' ? 'text-forest' : s.state === 'needs_key' || s.state === 'needs_setup' ? 'text-amber-400' : 'text-antique'}>{s.state === 'ready' ? '✓' : s.state === 'needs_key' || s.state === 'needs_setup' ? '!' : '–'}</span>
                     <span className="flex-1 min-w-[12rem] text-cream">{words(s)}{s.recommended && s.state !== 'ready' ? <span className="ml-1 text-xs text-accent">{t('law.suggested', '(suggested: free plan, 100 searches a day)')}</span> : null}
                       <span className="block text-[11px] text-antique">{s.gateway ? t('law.gateway', 'Gateway: many countries') : countryName(s.country, lang, several)}{(s.uses || 0) > 0 ? ` · ${t('law.used', 'used {{count}} times in this matter', { count: s.uses || 0 })}` : ''}</span></span>
                     {s.signIn && <button type="button" disabled={busy} className="text-xs text-antique underline hover:text-cream" onClick={() => act(() => engine()!.call('POST', '/api/sources/law/signin', { name: s.id }), t('law.signInOpened', 'The sign-in page is open: type the code shown there, then come back.'))}>{s.hasKey ? t('law.signInAgain', 'Sign in again') : t('law.signIn', 'Sign in (free)')}</button>}
@@ -216,7 +217,7 @@ export default function LawSources({ say, matter }: { say: (text: string, kind?:
         {sections.map((sec) => (
           <section key={sec.key} data-testid={`law-${sec.key}`}>
             <h3 className={`text-xs uppercase tracking-wide mb-1 ${sec.key === 'ready' ? 'text-forest' : sec.key === 'key' ? 'text-amber-400' : 'text-antique'}`}>
-              {sec.key === 'ready' ? t('law.secReady', 'Ready') : sec.key === 'key' ? t('law.secKey', 'Needs your key or a sign-in') : t('law.secOff', 'Off')} <span className="text-antique normal-case">({sec.top.length + sec.rest.length})</span>
+              {sec.key === 'ready' ? t('law.secReady', 'Ready') : sec.key === 'key' ? t('law.secKey', 'Needs your key or a sign-in') : sec.key === 'offline' ? t('law.secOffline', 'Not online for this matter') : sec.key === 'manual' ? t('law.secManual', 'Read in your browser') : t('law.secOff', 'Off')} <span className="text-antique normal-case">({sec.top.length + sec.rest.length})</span>
             </h3>
             <ul className="space-y-1">{sec.top.map(item)}</ul>
             {sec.rest.length > 0 && (

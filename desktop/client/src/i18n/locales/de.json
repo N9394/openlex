@@ -1626,7 +1626,9 @@
     "secOff": "Aus",
     "otherCountries": "Andere Länder ({{n}})",
     "gateway": "Zugang zu vielen Ländern",
-    "used": "in dieser Akte {{count}}-mal genutzt"
+    "used": "in dieser Akte {{count}}-mal genutzt",
+    "secOffline": "Für dieses Mandat nicht online",
+    "secManual": "Im Browser lesen"
   },
   "keyCard": {
     "saved": "Der Schlüssel für {{name}} ist im Schlüsselbund dieses Computers gespeichert. Stellen Sie Ihre Frage erneut, um ihn zu nutzen.",
