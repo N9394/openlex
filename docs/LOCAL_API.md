@@ -101,6 +101,8 @@ and the run waits until someone answers. `risk` is one of `writes a file`, `runs
 
 In a working folder (see *Working folder* below) the event also names the folder, and "always" means this folder: `"choices": ["once", "always_folder", "deny"]`, `"folder": "~/Clients/Alpine"`, `"alwaysFolder": "write_file:~/Clients/Alpine/**"`. Deleting a file (`delete_file`) is offered `["once", "deny"]` only, every time. A file tool aimed outside the working folder and the workspace is refused without a `permission` event; the stream carries a `step` with `kind: "outside"`.
 
+Prompt injection ([SECURITY.md](../SECURITY.md#prompt-injection)): after the run read a document, file, page or source, the event may carry `"caution"` (one sentence: the request came up while reading …; it is then asked even if a general allow rule exists). When the arguments look like client data leaving, it also carries `"warning"` (one sentence) and `"exfil"` (kinds: `matter-name`, `placeholder`, `verbatim`, `encoded`), and `choices` has no "always". Front ends show both sentences above the risk line.
+
 Only a caller that sends `interactive: true` is asked. Everyone else (scripts, `--json`, the MCP server, monitors) gets **deny** for anything that would be asked, unless a rule allows it or the request pre-approves it: `allow: ["write_file:Acme/**"]` (patterns, this run only) or `yes: true` (every ask, this run only). Deny rules always win. No answer within 5 minutes or a closed connection = deny.
 
 ### Working folder
