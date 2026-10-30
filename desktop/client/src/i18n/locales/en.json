@@ -1069,7 +1069,7 @@
     "justNow": "just now",
     "minAgo": "{{n}} min ago",
     "todayAt": "today {{time}}",
-    "associate": "Associate",
+    "associate": "Assistant",
     "noEngine": "The chat needs the OpenLex engine, which runs with the desktop app.",
     "stillWriting": "The answer is still being written. Wait for it (or press Stop), then ask again. Commands like /model work meanwhile.",
     "aboutFile": "Please look at the attached file.",
@@ -1825,12 +1825,12 @@
     "noConnectors": "No connectors. Add MCP servers in Word's Settings → Connectors, or in ~/.lexvault/mcp-servers.json."
   },
   "agents": {
-    "associate": "Associate",
+    "associate": "Assistant",
     "researcher": "Researcher",
     "reviewer": "Reviewer",
     "drafter": "Drafter",
-    "claimant-counsel": "Claimant's counsel",
-    "defendant-counsel": "Defendant's counsel",
+    "claimant-counsel": "Claimant's side",
+    "defendant-counsel": "Defendant's side",
     "devils-advocate": "Devil's advocate",
     "compliance-checker": "Compliance checker"
   },

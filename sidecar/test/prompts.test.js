@@ -73,7 +73,7 @@ test('outside content gets the untrusted-content rule only after an outside tool
 test('stable blocks lead, the document sits before the turn rules', () => {
   const b = prompts.build({ phase: 'planning', message: 'rank the clauses by who they favour', context: 'DOCUMENT MAP: …' })
   const at = (s) => b.text.indexOf(s)
-  assert.ok(at('You are a senior legal associate') === 0)
+  assert.ok(at('You are OpenLex, an assistant') === 0)
   assert.ok(at('DOCUMENT MAP') < at('FOR THIS STEP') && at('FOR THIS STEP') < at('RANKING'))
 })
 

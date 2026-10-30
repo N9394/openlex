@@ -155,7 +155,7 @@ export function Matter({ matterId = null }) {
   const def = ctx.info.policy?.default || {}
   const cloud = ctx.prefs.cloudForMatters || (active && !active.local ? { mode: 'allow-list', providers: [active.id], ...(def.regions ? { regions: def.regions } : {}), ...(def.redact ? { redact: true } : {}) } : null)
   const agentName = (matterId ? matter?.agent : ctx.prefs.quickAgent) || 'associate'
-  const agent = agents.find((a) => a.name === agentName) || { name: 'associate', title: 'Associate' }
+  const agent = agents.find((a) => a.name === agentName) || { name: 'associate', title: 'Assistant' }
 
   const load = async () => {
     if (!matterId) return

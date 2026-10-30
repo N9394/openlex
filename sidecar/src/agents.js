@@ -38,10 +38,10 @@ const MODEL_ROLES = ['plan', 'analyze', 'write', 'draft', 'summarize']
 
 const BUILT_IN = {
   associate: {
-    title: 'Associate',
+    title: 'Assistant',
     description: 'The default: reads the document, searches the law, answers and proposes changes.',
     instructions: '',
-    de: { title: 'Juristischer Mitarbeiter', description: 'Der Standard: liest das Dokument, sucht im Recht, antwortet und schlägt Änderungen vor.' },
+    de: { title: 'Assistenz', description: 'Der Standard: liest das Dokument, sucht im Recht, antwortet und schlägt Änderungen vor.' },
   },
   researcher: {
     title: 'Researcher',
@@ -234,8 +234,8 @@ function groupsOf(tools) {
 const CITE = 'Cite a source for every legal point (the statute and section, the case, or the clause of the document) and quote the decisive words exactly.'
 /** Starting points for the form ("Templates"). A panel can use them by name without saving. */
 const TEMPLATES = {
-  'claimant-counsel': { title: 'Claimant\'s counsel', description: 'Argues for the claimant: the strongest case, with sources.', instructions: `You act for the claimant. Build the strongest legally sound case for the claimant's position: the claims, their legal basis, the evidence that supports them, and answers to the obvious defences. Be an advocate, but never invent facts or law. ${CITE}`, groups: ['law', 'austria', 'eu', 'otherLaw', 'documents', 'firm'], depth: 'balanced', de: { title: 'Klägervertretung', description: 'Argumentiert für die Klägerseite: die stärkste Position, mit Quellen.' } },
-  'defendant-counsel': { title: 'Defendant\'s counsel', description: 'Argues for the defendant: defences, weaknesses of the claim, with sources.', instructions: `You act for the defendant. Find every defence: missing elements of the claim, limitation periods, exclusions, contributory fault, procedural points, and the weaknesses of the claimant's evidence. Be an advocate, but never invent facts or law. ${CITE}`, groups: ['law', 'austria', 'eu', 'otherLaw', 'documents', 'firm'], depth: 'balanced', de: { title: 'Beklagtenvertretung', description: 'Argumentiert für die Beklagtenseite: Einwendungen und Schwächen der Klage, mit Quellen.' } },
+  'claimant-counsel': { title: 'Claimant\'s side', description: 'Argues for the claimant: the strongest case, with sources.', instructions: `You act for the claimant. Build the strongest legally sound case for the claimant's position: the claims, their legal basis, the evidence that supports them, and answers to the obvious defences. Be an advocate, but never invent facts or law. ${CITE}`, groups: ['law', 'austria', 'eu', 'otherLaw', 'documents', 'firm'], depth: 'balanced', de: { title: 'Klägerseite', description: 'Argumentiert für die Klägerseite: die stärkste Position, mit Quellen.' } },
+  'defendant-counsel': { title: 'Defendant\'s side', description: 'Argues for the defendant: defences, weaknesses of the claim, with sources.', instructions: `You act for the defendant. Find every defence: missing elements of the claim, limitation periods, exclusions, contributory fault, procedural points, and the weaknesses of the claimant's evidence. Be an advocate, but never invent facts or law. ${CITE}`, groups: ['law', 'austria', 'eu', 'otherLaw', 'documents', 'firm'], depth: 'balanced', de: { title: 'Beklagtenseite', description: 'Argumentiert für die Beklagtenseite: Einwendungen und Schwächen der Klage, mit Quellen.' } },
   'devils-advocate': { title: 'Devil\'s advocate', description: 'Attacks the position on the table and finds what could go wrong.', instructions: `You are the devil's advocate. Take the position that is currently favoured and attack it: what a court, the other side or a regulator would say against it, which facts are missing, which risks are underrated. Say what would change your mind. ${CITE}`, groups: ['law', 'austria', 'eu', 'otherLaw', 'documents'], depth: 'balanced', de: { title: 'Advocatus Diaboli', description: 'Greift die vorliegende Position an und findet, was schiefgehen könnte.' } },
   drafter: { title: 'Drafter', description: 'Drafts and redrafts clauses, preferring the firm\'s own wording.', instructions: BUILT_IN.drafter.instructions, groups: ['firm', 'law', 'documents'], depth: 'balanced', de: { title: BUILT_IN.drafter.de.title, description: BUILT_IN.drafter.de.description } },
   researcher: { title: 'Researcher', description: BUILT_IN.researcher.description, instructions: BUILT_IN.researcher.instructions, groups: ['law', 'austria', 'eu', 'otherLaw', 'firm', 'web', 'memory'], depth: 'deep', de: { title: BUILT_IN.researcher.de.title, description: BUILT_IN.researcher.de.description } },
@@ -254,7 +254,7 @@ function resolve(name) {
   try { return get(name) } catch (err) { const t = fromTemplate(String(name || '').toLowerCase()); if (t) return t; throw err }
 }
 
-/** "Claimant's counsel" → "claimants-counsel". */
+/** "Claimant's side" → "claimants-side". */
 function slug(title) {
   const s = String(title || '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/ß/g, 'ss').replace(/['’]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32).replace(/-+$/, '')
   return /^[a-z]/.test(s) ? (s.length >= 2 ? s : `${s}-agent`) : `agent-${s || 'new'}`.slice(0, 32)

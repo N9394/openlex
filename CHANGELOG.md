@@ -4,6 +4,9 @@ All notable changes to OpenLex are listed here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+### Changed
+- **Neutral role names.** OpenLex prepares material and the lawyer decides; names that sound like legal representation are gone: the default "Associate" is now "Assistant" (DE "Assistenz"), the panel templates "Claimant's counsel"/"Defendant's counsel" are now "Claimant's side"/"Defendant's side" (DE "Klägerseite"/"Beklagtenseite"). The core prompt describes OpenLex as an assistant that prepares material for the lawyer and gives no legal advice. Internal ids (`associate`, `claimant-counsel`, …) stay the same.
+
 ## [0.3.1] - 2026-10-30
 
 ### Fixed
