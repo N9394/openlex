@@ -1423,7 +1423,10 @@
       "supported": "vereinbar mit dem gefundenen Recht",
       "issue": "mögliches Problem",
       "no_match": "kein passendes Recht gefunden"
-    }
+    },
+    "read": "Formatiert anzeigen",
+    "edit": "Text bearbeiten",
+    "editHint": "Doppelklick zum Bearbeiten"
   },
   "batch": {
     "titleInvestigate": "Untersuchung: Die Dokumente werden einzeln gelesen",

@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate } from 'react-router-dom'
-import ReactMarkdown from 'react-markdown'
+import Markdown from '../components/Markdown'
 import { Archive, Copy, FileUp, MessageSquare, Plus, Search, Star, Trash2, X } from 'lucide-react'
 import { engine } from '../lib/commands'
 import { attachFile, download, refusal } from '../lib/attach'
@@ -200,7 +200,7 @@ function ItemView({ item, onChanged, onDeleted, openChat }: { item: Item; onChan
         </>
       ) : (
         <>
-          <div className="prose-custom max-w-none text-sm max-h-[55vh] overflow-y-auto"><ReactMarkdown>{item.content.length > 60000 ? `${item.content.slice(0, 60000)}\n\n…` : item.content}</ReactMarkdown></div>
+          <div className="prose-custom max-w-none text-sm max-h-[55vh] overflow-y-auto"><Markdown>{item.content.length > 60000 ? `${item.content.slice(0, 60000)}\n\n…` : item.content}</Markdown></div>
           <div className="flex gap-3 text-xs">
             <button type="button" onClick={() => setEditing(true)} className="underline text-antique hover:text-cream">{t('saved.edit', 'Edit')}</button>
             {item.source?.kind === 'session' && <button type="button" onClick={openChat} className="underline text-antique hover:text-cream inline-flex items-center gap-1"><MessageSquare size={11} /> {t('saved.openChat', 'Open the chat')}</button>}

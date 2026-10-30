@@ -1423,7 +1423,10 @@
       "supported": "consistent with the law found",
       "issue": "possible issue",
       "no_match": "no matching law found"
-    }
+    },
+    "read": "Show as formatted text",
+    "edit": "Edit the text",
+    "editHint": "Double-click to edit"
   },
   "batch": {
     "titleInvestigate": "Investigation: reading the documents one by one",

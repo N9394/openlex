@@ -12,7 +12,7 @@
 // continuing it here continues it everywhere.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import ReactMarkdown from 'react-markdown'
+import Markdown from '../components/Markdown'
 import { BookOpen, Check, ChevronDown, ChevronUp, Clock, Copy, FileSearch, FileText, FolderOpen, Lock, MessageSquare, Paperclip, Plus, Send, Sparkles, Square, Trash2, Users, X } from 'lucide-react'
 import { useLocation } from 'react-router-dom'
 import { useWindowWidth, NARROW_CHAT } from '../lib/viewport'
@@ -853,7 +853,7 @@ function Answer({ m, now, live, openSteps, toggleSteps, onCopy, copied, onWord, 
           {(m.analyses || []).map((a) => <AnalysisCard key={a.id} analysis={a} />)}
           {(m.analysisIds || []).map((id) => <AnalysisCard key={id} id={id} />)}
           {(act?.keys || []).map((k) => <SourceKeyCard key={k.source} req={k} />)}
-          {m.content && !(m.analysisIds?.length) && !(m.results?.length) ? <div className="prose-custom max-w-none"><ReactMarkdown>{m.content}</ReactMarkdown></div> : null}
+          {m.content && !(m.analysisIds?.length) && !(m.results?.length) ? <div className="prose-custom max-w-none"><Markdown>{m.content}</Markdown></div> : null}
 
           {/* What OpenLex is doing right now (≤3 recent steps, the current one marked) */}
           {running && act && (
