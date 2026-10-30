@@ -222,6 +222,7 @@ test('analysis follows the document language: German document → German prompts
   assert.deepStrictEqual(a.deadlines.map((d) => d.date), ['2027-12-31'])
   const md = fs.readFileSync(a.files.md, 'utf8')
   assert.match(md, /^# Analyse: mietvertrag\.txt/)
+  assert.match(md, /· Sprache: Deutsch ·/, 'the document language in the report\'s language, not "German"')
   assert.match(md, /## Risiken/)
   assert.match(md, /### Hohes Risiko — Unbeschränkte Haftung/)
   assert.match(md, /\*\*Fundstelle:\*\* § 5 Haftung/)

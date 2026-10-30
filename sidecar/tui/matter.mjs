@@ -41,7 +41,7 @@ import { useAppCtx } from './context.mjs'
 import { matchInvocation, log, friendly, errorParts, describeRule, describeModel, nameOf } from './api.mjs'
 import { cleanPaths, completePath, shortPath } from './paths.mjs'
 import { PermissionPrompt, PermissionRules, answeredLine } from './permission.mjs'
-import { clock, startActivity, applyEvent, activityLines, doneLines, basedOnLines, basedOn, checkLine, basisText, stopSentence } from './explain.mjs'
+import { clock, startActivity, applyEvent, activityLines, doneLines, basedOnLines, basedOn, sourcesNote, checkLine, basisText, stopSentence } from './explain.mjs'
 import { pastedFiles, chipLabel, attachSentence, readAttachment, joinTexts } from './attach.mjs'
 import { FolderPicker } from './folder.mjs'
 import { LawSources } from './sources.mjs'
@@ -931,10 +931,10 @@ export function Matter({ matterId = null }) {
           <${Text} bold wrap="truncate-end">${source.label}<//>
           <${Box} marginTop=${1}><${Text} wrap="wrap">${source.text}<//><//>
         <//>`
-      : html`<${Field} label="What the last answer is based on" help="Law sections come from the law collection on this computer. Check them before relying on the answer.">
+      : html`<${Field} label="What the last answer is based on" help=${sourcesNote(items)}>
           <${Menu} items=${items.map((it, i) => ({ value: i, label: `[${i + 1}] ${it.label}`, hint: it.detail || (it.kind === 'doc' ? 'a passage of your document that OpenLex read' : '') }))} describe onSelect=${async (it) => {
             const item = items[it.value]
-            if (item.kind !== 'law' || !item.chunk_id) return setSource({ label: item.label, text: item.detail || 'OpenLex read this part of your document for the answer.' })
+            if (item.kind !== 'law' || !item.chunk_id) return setSource({ label: item.label, text: `${item.detail || 'OpenLex read this part of your document for the answer.'}${item.url ? `\n\n${item.url}` : ''}` })
             setSource({ label: item.label, text: 'Opening…' })
             try {
               const r = await ctx.api.lawSection(item.chunk_id)

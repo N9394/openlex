@@ -1639,3 +1639,13 @@ test('a matter conversation from another window, as chat messages', async () => 
   const lines = mt.transcript(msgs, 60).map((l) => l.segs.map((g) => g.t).join(''))
   assert.ok(lines.some((l) => /Based on:/.test(l)) && lines.some((l) => /ABGB § 879/.test(l)), lines.join('\n'))
 })
+
+test('"Based on": the footer names where the law came from — the collection on this computer only when it did', () => {
+  const law = (x) => ({ kind: 'law', label: 'x', detail: '', ...x })
+  assert.strictEqual(explain.sourcesNote([law({ chunk_id: 'c1', origin: 'local' })]), 'Law sections come from the law collection on this computer. Check them before relying on the answer.')
+  assert.strictEqual(explain.sourcesNote([law({ origin: 'online', from: 'RIS Austria' })]), 'Law sections come from RIS Austria (online). Check them before relying on the answer.')
+  assert.strictEqual(explain.sourcesNote([law({ origin: 'copy', from: 'RIS Austria' }), law({ origin: 'online', from: 'EUR-Lex' }), law({ chunk_id: 'c2' })]), 'Law sections come from EUR-Lex (online), your offline copy of RIS Austria and the law collection on this computer. Check them before relying on the answer.')
+  assert.strictEqual(explain.sourcesNote([{ kind: 'doc', label: 'Your document: § 4' }]), 'Check the sources before relying on the answer.', 'no law: no claim about where it came from')
+  const items = explain.basedOn({ sources: [{ source_name: 'ABGB', section: '§ 922', origin: 'online', from: 'RIS Austria', url: 'https://www.ris.bka.gv.at/x' }], clauses: [], notes: [] })
+  assert.deepStrictEqual([items[0].origin, items[0].from, items[0].url], ['online', 'RIS Austria', 'https://www.ris.bka.gv.at/x'])
+})

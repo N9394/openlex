@@ -436,10 +436,28 @@ export function checkLine(s = {}) {
 export function basedOn(act) {
   if (!act) return []
   const out = []
-  for (const s of act.sources || []) out.push({ kind: 'law', label: clip([s.source_name, s.section].filter(Boolean).join(' ') || 'a law section', 50), detail: s.snippet || '', chunk_id: s.chunk_id || null })
+  for (const s of act.sources || []) out.push({ kind: 'law', label: clip([s.source_name, s.section].filter(Boolean).join(' ') || 'a law section', 50), detail: s.snippet || '', chunk_id: s.chunk_id || null, ...(s.origin ? { origin: s.origin } : {}), ...(s.from ? { from: s.from } : {}), ...(s.url ? { url: s.url } : {}) })
   for (const c of act.clauses || []) out.push({ kind: 'doc', label: `Your document: ${clauseName(c)}`, detail: '' })
   for (const n of act.notes || []) out.push({ kind: 'note', label: `Noted${n.section !== '' && n.section !== undefined ? ` (clause ${n.section})` : ''}: ${clip([n.entity, n.claim].filter(Boolean).join(' — '), 60)}`, detail: n.claim || '' })
   return out
+}
+
+/**
+ * The line under "Based on": where the law sections actually came from —
+ * "the law collection on this computer" only when they did (same words as
+ * the App, desktop/client/src/lib/turn.ts sourcesNote).
+ */
+export function sourcesNote(items) {
+  const law = (items || []).filter((x) => x && x.kind === 'law')
+  if (!law.length) return 'Check the sources before relying on the answer.'
+  const parts = []
+  const add = (p) => { if (!parts.includes(p)) parts.push(p) }
+  for (const x of law) if (x.origin === 'online') add(x.from ? `${x.from} (online)` : 'an official law database (online)')
+  for (const x of law) if (x.origin === 'copy') add(x.from ? `your offline copy of ${x.from}` : 'an offline copy on this computer')
+  if (law.some((x) => x.origin === 'local' || (!x.origin && x.chunk_id))) add('the law collection on this computer')
+  if (!parts.length) return 'Check the law sections before relying on the answer.'
+  const list = parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`
+  return `Law sections come from ${list}. Check them before relying on the answer.`
 }
 
 /** The "Based on:" block as screen lines. */

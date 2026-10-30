@@ -12,11 +12,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Lock, Sparkles, Trash2 } from 'lucide-react'
-import { engine } from '../lib/commands'
+import { agentDescription, agentTitle, engine } from '../lib/commands'
 import { friendly } from '../lib/turn'
 
 export interface AgentProfile { name: string; title: string; description?: string; instructions?: string; tools?: string[]; groups?: string[]; depth?: string | null; model?: string; source?: string; error?: string }
-interface Template { name: string; title: string; description: string; instructions: string; groups: string[]; depth: string }
+interface Template { name: string; title: string; description: string; instructions: string; groups: string[]; depth: string; de?: { title?: string; description?: string } }
 interface Group { id: string; label: string }
 interface AgentsInfo { agents: AgentProfile[]; templates: Template[]; groups: Group[]; where: { locked: boolean; firm: boolean } }
 interface Provider { id: string; local: boolean; needsKey: boolean; hasKey: boolean | null; model: string | null; blocked?: unknown; display?: { en: string; de: string }; label: string }
@@ -69,7 +69,7 @@ export default function AgentEditor({ edit, proposal, sessionId, matterId, onDon
   if (edit && !editing) return <p className="text-amber-400 text-sm">{t('agentEditor.noSuch', 'There is no agent called “{{name}}”. Type /as to see them.', { name: edit })}</p>
 
   const set = (patch: Partial<AgentForm>) => setForm((f) => ({ ...f, ...patch }))
-  const fromTemplate = (tp: Template) => { setForm({ title: tp.title, description: tp.description, instructions: tp.instructions, groups: tp.groups, model: form.model, depth: tp.depth }); setNote(t('agentEditor.fromTemplate', 'Started from the template “{{name}}”. Change anything, then save.', { name: tp.title })) }
+  const fromTemplate = (tp: Template) => { setForm({ title: agentTitle(tp), description: agentDescription(tp), instructions: tp.instructions, groups: tp.groups, model: form.model, depth: tp.depth }); setNote(t('agentEditor.fromTemplate', 'Started from the template “{{name}}”. Change anything, then save.', { name: agentTitle(tp) })) }
   const locked = info.where.locked
   const builtIn = editing?.source === 'built-in'
 
@@ -102,7 +102,7 @@ export default function AgentEditor({ edit, proposal, sessionId, matterId, onDon
         <div>
           <div className="text-xs text-antique mb-1">{t('agentEditor.start', 'Start from a template (or fill in the form):')}</div>
           <div className="flex flex-wrap gap-1.5">
-            {info.templates.map((tp) => <button key={tp.name} type="button" onClick={() => fromTemplate(tp)} className="btn-secondary !px-2.5 !py-1 text-xs" title={tp.description}>{tp.title}</button>)}
+            {info.templates.map((tp) => <button key={tp.name} type="button" onClick={() => fromTemplate(tp)} className="btn-secondary !px-2.5 !py-1 text-xs" title={agentDescription(tp)}>{agentTitle(tp)}</button>)}
           </div>
         </div>
       )}

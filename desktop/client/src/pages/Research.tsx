@@ -23,7 +23,7 @@ import i18n from '../i18n'
 import { agentTitle, engine } from '../lib/commands'
 import {
   Activity, Basis, LawSource, ModelUse, WINDOW_WORDS, applyEvent, basedOn, checkLine, basisText, clip, dataLine, duration,
-  endActivity, friendly, judgeLine, mark, permission, startActivity, stopSentence, summaryLine,
+  endActivity, friendly, judgeLine, mark, permission, sourcesNote, startActivity, stopSentence, summaryLine,
 } from '../lib/turn'
 import { Attachment, attachFile, chipDetail, refusal } from '../lib/attach'
 import AnalysisCard from '../components/AnalysisCard'
@@ -970,11 +970,11 @@ function BasedOn({ items }: { items: Basis[] }) {
               <span className="text-accent tabular-nums">[{it.n}]</span>
               <span className="flex-1">{it.label}{it.detail && open !== it.n ? <span className="text-antique"> — {clip(it.detail, 90)}</span> : null}</span>
             </button>
-            {open === it.n && <div className="ml-7 mt-1 mb-2 text-xs text-cream-dark whitespace-pre-wrap">{full[it.n] || it.detail || t('chat.docPassage', 'OpenLex read this part of your document for the answer.')}</div>}
+            {open === it.n && <div className="ml-7 mt-1 mb-2 text-xs text-cream-dark whitespace-pre-wrap">{full[it.n] || it.detail || t('chat.docPassage', 'OpenLex read this part of your document for the answer.')}{it.url ? <a href={it.url} target="_blank" rel="noreferrer" className="block mt-1 text-accent underline break-all">{it.url}</a> : null}</div>}
           </li>
         ))}
       </ul>
-      <div className="text-[11px] text-antique/70 mt-1">{t('chat.checkSources', 'Law sections come from the law collection on this computer. Check them before relying on the answer.')}</div>
+      <div className="text-[11px] text-antique/70 mt-1">{sourcesNote(items)}</div>
     </div>
   )
 }

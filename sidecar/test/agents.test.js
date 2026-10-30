@@ -89,6 +89,28 @@ test('no-"@" invocation for keyboards where @ is hard to type: "as researcher: �
   assert.strictEqual(agents.matchInvocation('@broken hi', listed), null)
 })
 
+test('German names: built-ins and panel templates have them; firm and user agents keep their own', () => {
+  writeUser({ agents: { 'tax-desk': { title: 'Tax desk', instructions: 'Austrian tax law only.' }, reviewer: { title: 'Risk desk' }, drafter: { routes: { write: 'custom' } }, researcher: { title: 'Researcher', instructions: 'Our way of researching.' } } })
+  const de = (n) => agents.titleFor(agents.get(n), 'de')
+  assert.strictEqual(de('associate'), 'Juristischer Mitarbeiter', 'not "Associate" in a German UI')
+  assert.strictEqual(agents.titleFor(agents.get('associate'), 'en'), 'Associate')
+  assert.strictEqual(de('drafter'), 'Entwurfsverfasser', 'changing only the routes keeps the German name')
+  assert.strictEqual(de('researcher'), 'Recherche', 'the same English title keeps the German name')
+  assert.match(agents.descriptionFor(agents.get('researcher'), 'de'), /^Beantwortet Rechtsfragen/, 'new instructions keep the German description')
+  assert.strictEqual(de('reviewer'), 'Risk desk', 'a firm\'s own title wins over the built-in German one')
+  assert.strictEqual(de('tax-desk'), 'Tax desk', 'own agents keep their name')
+  assert.ok(agents.get('associate').de.description.startsWith('Der Standard'))
+  for (const t of agents.templates()) assert.ok(t.de && t.de.title && t.de.title !== t.title, `${t.name} has a German name`)
+  assert.strictEqual(agents.titleFor(agents.fromTemplate('claimant-counsel'), 'de-AT'), 'Klägervertretung')
+  assert.strictEqual(agents.titleFor(agents.fromTemplate('defendant-counsel'), 'de'), 'Beklagtenvertretung')
+  // A firm can give its own agent a German name.
+  writeUser({ agents: { 'tax-desk': { title: 'Tax desk', instructions: 'x', de: { title: 'Steuerrecht' } } } })
+  assert.strictEqual(de('tax-desk'), 'Steuerrecht')
+  // "als Recherche: …" works with the German name too.
+  assert.strictEqual(agents.parseInvocation('als Recherche: ist das Wettbewerbsverbot gültig?').agent.name, 'researcher')
+  writeUser({})
+})
+
 test('profile routes come before role routes; rules and the policy still come first', async () => {
   writeUser({ routes: { roles: { write: 'openai' } }, agents: { drafter: { routes: { write: 'custom' } } } })
   const llm = require('../src/llm')

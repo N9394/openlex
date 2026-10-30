@@ -18,8 +18,8 @@ import { Check, Download, Lock, X } from 'lucide-react'
 import { ModelPicker, PickerProvider } from './ModelPicker'
 import AgentEditor from './AgentEditor'
 import { useWordLink } from '../lib/hub'
-import { ChatCommand, PROVIDER_WORDS, agentTitle, didYouMean, engine, filterCommands, loadCommands, matterFolderName, menuQuery, parseCommand } from '../lib/commands'
-import { Basis, friendly, patternWords } from '../lib/turn'
+import { ChatCommand, PROVIDER_WORDS, agentDescription, agentTitle, didYouMean, engine, filterCommands, loadCommands, matterFolderName, menuQuery, parseCommand } from '../lib/commands'
+import { Basis, friendly, patternWords, sourcesNote } from '../lib/turn'
 import LawSources from './LawSources'
 import DataRule from './DataRule'
 import { MatterList, useMatters } from './MatterPicker'
@@ -554,7 +554,7 @@ function AgentChoice({ quickAgent, setQuickAgent, onDone, onRun }: { quickAgent?
         <button key={a.name} type="button" onClick={async () => { try { onDone(await chooseAgent(a, setQuickAgent)) } catch (err) { setError(friendly(err)) } }} className="w-full flex items-start gap-3 rounded px-2 py-2 text-left hover:bg-leather/40 focus:bg-leather/40 outline-none">
           <span className="flex-1">
             <span className="text-cream">{agentTitle(a, t)}</span>
-            {a.description && <span className="block text-xs text-antique">{a.description}</span>}
+            {agentDescription(a) && <span className="block text-xs text-antique">{agentDescription(a)}</span>}
           </span>
           {a.name === current && <Check size={16} className="text-forest mt-0.5" />}
         </button>
@@ -658,7 +658,7 @@ function SourcesList({ items }: { items: Basis[] }) {
           </li>
         ))}
       </ul>
-      <p className="mt-3 text-xs text-antique">{t('commands.sourcesNote', 'Law sections come from the law collection on this computer. Check them before relying on the answer.')}</p>
+      <p className="mt-3 text-xs text-antique">{sourcesNote(items)}</p>
     </div>
   )
 }

@@ -1285,7 +1285,16 @@
     "judgeFound": "second pass found something — see below",
     "judgeOk": "checked by a second pass",
     "judgeOff": "not double-checked (switched off in Settings)",
-    "judgeNothing": "not double-checked (no sources to check against)"
+    "judgeNothing": "not double-checked (no sources to check against)",
+    "checkPlain": "Check the sources before relying on the answer.",
+    "fromOnline": "{{name}} (online)",
+    "fromOnlineAny": "an official law database (online)",
+    "fromCopy": "your offline copy of {{name}}",
+    "fromCopyAny": "an offline copy on this computer",
+    "fromCollection": "the law collection on this computer",
+    "checkLaw": "Check the law sections before relying on the answer.",
+    "and": "and",
+    "lawFrom": "Law sections come from {{list}}. Check them before relying on the answer."
   },
   "analysis": {
     "choose": "Choose the document to analyse (Word, PDF, Excel, e-mail or text) — or drop it here.",

@@ -48,4 +48,23 @@ export function setUiLanguage(language: SupportedLanguage) {
   }
 }
 
+// The engine names detected languages in English ("German"); these map them back to a code.
+const EN_LANGUAGE_CODES: Record<string, string> = {
+  english: 'en', german: 'de', french: 'fr', italian: 'it', spanish: 'es', dutch: 'nl', polish: 'pl', czech: 'cs',
+  slovak: 'sk', romanian: 'ro', hungarian: 'hu', croatian: 'hr', slovenian: 'sl', greek: 'el', portuguese: 'pt',
+}
+
+/** A language (a detected document language, say) named in the App's language: "de" → "Deutsch" / "German". */
+export function languageName(code?: string | null, fallback?: string | null): string {
+  const ui = i18n.resolvedLanguage || i18n.language || 'en'
+  const c = String(code || '').trim().toLowerCase() || EN_LANGUAGE_CODES[String(fallback || '').trim().toLowerCase()] || ''
+  if (c) {
+    try {
+      const n = new Intl.DisplayNames([ui], { type: 'language' }).of(c)
+      if (n && n.toLowerCase() !== c) return n.charAt(0).toLocaleUpperCase(ui) + n.slice(1)
+    } catch { /* an unknown code: fall back */ }
+  }
+  return String(fallback || code || '')
+}
+
 export default i18n

@@ -95,7 +95,8 @@ export function dataLine(models: ModelUse[] = [], online: string[] = [], running
 // ── one question: the live list of steps ───────────────────────────────
 
 export interface Step { text: string; status: 'now' | 'done' | 'failed'; at: number; end?: number; failed?: boolean; phase?: string; what?: string }
-export interface LawSource { chunk_id?: string | null; source_name?: string; section?: string; snippet?: string }
+/** origin: 'local' = the law collection on this computer, 'online' = looked up live (RIS, EUR-Lex …), 'copy' = a source's copy kept on this computer; from = that source's name. */
+export interface LawSource { chunk_id?: string | null; source_name?: string; section?: string; snippet?: string; origin?: 'local' | 'online' | 'copy'; from?: string; fromDe?: string; url?: string | null }
 export interface Activity {
   startedAt: number; endedAt: number | null
   steps: Step[]; models: ModelUse[]; online: string[]; sources: LawSource[]
@@ -162,7 +163,7 @@ export function applyEvent(act: Activity, ev: any, now = Date.now()): Activity {
     case 'model': a.models = addModel(a.models, ev); return a
     case 'suggestion': a.suggestions++; return a
     case 'skill': push(a, tr('following', 'Following your firm\'s instructions “{{name}}”', { name: clip(ev.title || ev.name, 40) }), now); return a
-    case 'agent': push(a, tr('workingAs', 'Working as “{{name}}”', { name: clip(ev.title || ev.name, 40) }), now); return a
+    case 'agent': push(a, tr('workingAs', 'Working as “{{name}}”', { name: clip((/^de/i.test(i18n.resolvedLanguage || i18n.language || '') && ev.titleDe) || ev.title || ev.name, 40) }), now); return a
     case 'compact': push(a, tr('tidying', 'Tidying up its notes so far (your document is kept)'), now); return a
     case 'permission': {
       a.waiting = ev.summary || 'a step'
@@ -229,19 +230,39 @@ export function stopSentence(act: Activity) {
 
 // ── what an answer is based on; was a proposed change checked ──────────
 
-export interface Basis { n: number; kind: 'law' | 'doc' | 'note'; label: string; detail: string; chunk_id?: string | null }
+export interface Basis { n: number; kind: 'law' | 'doc' | 'note'; label: string; detail: string; chunk_id?: string | null; origin?: LawSource['origin']; from?: string; fromDe?: string; url?: string | null }
 
 /** Every law section and document passage the answer used, numbered. */
 export function basedOn(act: Pick<Activity, 'sources' | 'clauses' | 'notes'> | null | undefined, max = 12): Basis[] {
   if (!act) return []
   const out: Omit<Basis, 'n'>[] = []
-  for (const s of act.sources || []) out.push({ kind: 'law', label: clip([s.source_name, s.section].filter(Boolean).join(' ') || tr('aLawSection', 'a law section'), 50), detail: s.snippet || '', chunk_id: s.chunk_id || null })
+  for (const s of act.sources || []) out.push({ kind: 'law', label: clip([s.source_name, s.section].filter(Boolean).join(' ') || tr('aLawSection', 'a law section'), 50), detail: s.snippet || '', chunk_id: s.chunk_id || null, ...(s.origin ? { origin: s.origin } : {}), ...(s.from ? { from: s.from } : {}), ...(s.fromDe ? { fromDe: s.fromDe } : {}), ...(s.url ? { url: s.url } : {}) })
   for (const c of act.clauses || []) out.push({ kind: 'doc', label: tr('yourDoc', 'Your document: {{part}}', { part: clauseName(c) }), detail: c.heading || '' })
   for (const n of act.notes || []) {
     const hasSec = n.section !== '' && n.section != null
     out.push({ kind: 'note', label: clip(`${hasSec ? tr('notedPart', 'Noted (part {{n}})', { n: n.section }) : tr('noted', 'Noted')}: ${[n.entity, n.claim].filter(Boolean).join(' — ')}`, 70), detail: n.claim || '' })
   }
   return out.slice(0, max).map((x, i) => ({ n: i + 1, ...x }))
+}
+
+/**
+ * The line under "Based on": where the law sections actually came from —
+ * "the law collection on this computer" only when they did. Items without
+ * an origin but with a chunk_id are from the collection (older engines).
+ */
+export function sourcesNote(items: { kind?: string; origin?: string; from?: string; fromDe?: string; chunk_id?: string | null }[] | null | undefined) {
+  const law = (items || []).filter((x) => x && x.kind === 'law')
+  const de = /^de/i.test(i18n.resolvedLanguage || i18n.language || '')
+  const name = (x: { from?: string; fromDe?: string }) => (de && x.fromDe) || x.from
+  if (!law.length) return tr('checkPlain', 'Check the sources before relying on the answer.')
+  const parts: string[] = []
+  const add = (p: string) => { if (!parts.includes(p)) parts.push(p) }
+  for (const x of law) if (x.origin === 'online') add(name(x) ? tr('fromOnline', '{{name}} (online)', { name: name(x) }) : tr('fromOnlineAny', 'an official law database (online)'))
+  for (const x of law) if (x.origin === 'copy') add(name(x) ? tr('fromCopy', 'your offline copy of {{name}}', { name: name(x) }) : tr('fromCopyAny', 'an offline copy on this computer'))
+  if (law.some((x) => x.origin === 'local' || (!x.origin && x.chunk_id))) add(tr('fromCollection', 'the law collection on this computer'))
+  if (!parts.length) return tr('checkLaw', 'Check the law sections before relying on the answer.')
+  const list = parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(', ')} ${tr('and', 'and')} ${parts[parts.length - 1]}`
+  return tr('lawFrom', 'Law sections come from {{list}}. Check them before relying on the answer.', { list })
 }
 
 const basisText = (b: any) => (!b ? '' : typeof b === 'string' ? clip(b, 60) : clip([b.source || b.source_name, b.section].filter(Boolean).join(' '), 60))

@@ -367,6 +367,7 @@ async function dispatch({ doc, memory, search, embeddings, packStore }, rawName,
         return {
           output: `EU act ${r.celex}${r.article ? `, Article ${r.article}` : ''} (${r.lang}, ${r.url}):\n\n${r.text.slice(0, max)}${r.text.length > max ? '\n…[truncated — ask for a specific article]' : ''}`,
           webSources: [{ title: `${r.celex}${r.article ? ` Art. ${r.article}` : ''}`, url: r.url, inForce: true }],
+          lawSources: [{ chunk_id: null, source_name: `CELEX ${r.celex}`, section: r.article ? `Art. ${r.article}` : '', snippet: String(r.text || '').replace(/\s+/g, ' ').slice(0, 140), url: r.url || null, origin: 'online', from: 'EUR-Lex' }],
         }
       } catch (err) {
         return { output: `EUR-Lex ERROR: ${err.message}` }
@@ -429,6 +430,9 @@ async function dispatch({ doc, memory, search, embeddings, packStore }, rawName,
         return {
           output: `${r.sourceLabel}: ${r.title}${r.version ? ` (version ${r.version})` : ''}\nCite as: ${r.citation}\nSource: ${r.url || '—'} (retrieved ${String(r.retrieved).slice(0, 10)}; ${r.licence})\n${r.note ? `Note: ${r.note}\n` : ''}${ls.NOTICE}\n\n${String(r.text || '').slice(0, max)}${String(r.text || '').length > max ? '\n…[truncated — ask for one section or article]' : ''}`,
           webSources: [{ title: r.citation, url: r.url, inForce: true, source: r.source, licence: r.licence, retrieved: r.retrieved }],
+          // What the answer is based on: the text read, and where it came from
+          // (online, or the copy of that source kept on this computer).
+          lawSources: [{ chunk_id: null, source_name: r.citation || r.title || r.sourceLabel, section: args.article ? String(args.article) : '', snippet: String(r.text || '').replace(/\s+/g, ' ').slice(0, 140), url: r.url || null, origin: r.local ? 'copy' : 'online', from: r.sourceLabel || r.source, ...(r.sourceLabelDe ? { fromDe: r.sourceLabelDe } : {}) }],
         }
       } catch (err) {
         return { output: `LAW SOURCE ERROR: ${err.plain || err.message}` }
@@ -501,6 +505,7 @@ async function dispatch({ doc, memory, search, embeddings, packStore }, rawName,
         source_name: p.source_name || '',
         section: p.section || '',
         snippet: String(p.content || '').replace(/\s+/g, ' ').slice(0, 140),
+        origin: 'local', // the law collection on this computer
       }))
       return {
         output: `SEARCH RESULTS (${entries.length} unique, top ${Math.min(8, seen.size)}):\n` + digests.join('\n'),
@@ -516,6 +521,7 @@ async function dispatch({ doc, memory, search, embeddings, packStore }, rawName,
         source_name: chunk.source_name || '',
         section: chunk.section || '',
         snippet: String(chunk.content || '').replace(/\s+/g, ' ').slice(0, 140),
+        origin: 'local',
       }]
       return {
         output: `FULL TEXT [${args.chunk_id}] ${chunk.source_name || ''} ${chunk.section || ''}:\n${String(chunk.content || '').slice(0, 2000)}`,
