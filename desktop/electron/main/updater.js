@@ -415,8 +415,8 @@ class Updater {
       'sleep 2',
       `cd "${tmpDir}"`,
       `/usr/bin/ditto -xk "${zipPath}" .`,
-      'NEW_APP=$(find . -maxdepth 3 -name "LexVault.app" -type d | head -1)',
-      'if [ -z "$NEW_APP" ]; then echo "[updater] no LexVault.app in zip"; exit 1; fi',
+      'NEW_APP=$(find . -maxdepth 3 -name "*.app" -type d | head -1)',
+      'if [ -z "$NEW_APP" ]; then echo "[updater] no .app in zip"; exit 1; fi',
       'echo "[updater] copying $NEW_APP over ' + appBundle + '"',
       `/usr/bin/ditto "$NEW_APP" "${appBundle}"`,
       `/usr/bin/xattr -dr com.apple.quarantine "${appBundle}" 2>/dev/null || true`,
@@ -451,7 +451,7 @@ class Updater {
     // electron-builder NSIS hardcodes this path when perMachine is false.
     const installedExe = path.join(
       process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'),
-      'Programs', 'LexVault', 'LexVault.exe'
+      'Programs', app.getName(), `${app.getName()}.exe`
     )
 
     const pid = process.pid

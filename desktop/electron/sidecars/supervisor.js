@@ -7,10 +7,10 @@
  *   1. Qdrant   — vector DB. Single-binary release. Listens on 127.0.0.1:6333.
  *      Data dir = userData/qdrant.
  *
- *   2. Embeddings — BGE-M3 dense + sparse. Currently the simplest portable
- *      shape is the existing Python embeddings_service.py packaged with a
- *      Python runtime. Stubbed here as an HTTP service on 127.0.0.1:11435.
- *      Long-term we want an ONNX-only runtime so we can drop the Python dep.
+ *   2. Embeddings — OPTIONAL BGE-M3 service on 127.0.0.1:11435, only when
+ *      a distribution ships resources/bin/embeddings/server.js. Community
+ *      builds skip it; the engine then embeds on its own (in-process ONNX
+ *      when installed, else llama.cpp's embedding endpoint).
  *
  *   3. LLM      — llama.cpp server. Picks a GGUF model from resources/models
  *      based on hardware tier. Listens on 127.0.0.1:11434 (Ollama-compatible
@@ -78,10 +78,17 @@ class Supervisor {
     await this._wait(`http://127.0.0.1:${PORTS.qdrant}/healthz`, 30_000)
     emit({ stage: 'qdrant', state: 'ready' })
 
+    // The separate embeddings service is optional: community builds do not
+    // ship it. Without it the engine embeds on its own (sidecar/src/
+    // embeddings.js: in-process ONNX BGE-M3 when installed, else the local
+    // llama.cpp embedding endpoint).
     emit({ stage: 'embeddings', state: 'starting' })
-    await this._startEmbeddings()
-    await this._wait(`http://127.0.0.1:${PORTS.embeddings}/`, 60_000)
-    emit({ stage: 'embeddings', state: 'ready' })
+    if ((await this._startEmbeddings()) === false) {
+      emit({ stage: 'embeddings', state: 'absent' })
+    } else {
+      await this._wait(`http://127.0.0.1:${PORTS.embeddings}/`, 60_000)
+      emit({ stage: 'embeddings', state: 'ready' })
+    }
 
     emit({ stage: 'llm', state: 'starting' })
     await this._startLLM()
@@ -272,7 +279,8 @@ log_level: WARN
     // ELECTRON_RUN_AS_NODE) so we don't depend on the user having Node.
     const script = path.join(this.paths.bin, 'embeddings', 'server.js')
     if (!fs.existsSync(script)) {
-      throw new Error(`Embeddings sidecar missing at ${script}. App bundle is incomplete.`)
+      console.log(`[embeddings] no embeddings service in this build (${script}); the engine embeds on its own`)
+      return false
     }
     // Read the user's bearer token from disk (same one main.js wrote during
     // first-run activation). Embeddings sidecar uses it to fetch the int8
