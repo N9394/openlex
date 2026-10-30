@@ -189,7 +189,7 @@ class Supervisor {
     const configFile = this._writeQdrantConfig()
     const child = spawn(binary, ['--config-path', configFile], {
       cwd: this.paths.qdrantData,
-      env: { ...process.env, QDRANT__STORAGE__STORAGE_PATH: this.paths.qdrantData },
+      env: { ...process.env, QDRANT__STORAGE__STORAGE_PATH: this.paths.qdrantData, QDRANT__TELEMETRY_DISABLED: 'true' },
       stdio: ['ignore', 'pipe', 'pipe'],
     })
     // Capture stderr + stdout into a ring buffer so getQdrantErrTail() can
@@ -270,6 +270,7 @@ storage:
     max_optimization_threads: 2
     max_search_threads: 0
 log_level: WARN
+telemetry_disabled: true
 `
     fs.writeFileSync(file, yaml)
     return file

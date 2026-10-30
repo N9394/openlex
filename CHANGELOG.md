@@ -4,6 +4,9 @@ All notable changes to OpenLex are listed here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+### Fixed
+- **The bundled search database (Qdrant) no longer sends usage statistics.** Qdrant reports anonymous telemetry by default; OpenLex now starts it with telemetry disabled (config and environment), in the engine and the desktop app.
+
 ### Added
 - **Redaction check (Schwärzen mit Prüfung).** Before a question or a document goes to an online AI service, the lawyer sees what OpenLex hides — names, organisations, addresses, ID and register numbers, IBANs, contact details, dates of birth — marked in the text and grouped; each can be unticked, any selected text can be added ("also hide this", for the whole matter), and a preview shows what the AI will see. Choices are remembered per matter. On by default for every online call with a question or a document; the firm can lock it and add firm-wide names and patterns (`openlex.json` → `redaction`). Only-this-computer setups skip it. Chat, analysis, Word review, panels and batch runs (one check for all documents) wait for it; the Word pane shows a compact list, the terminal app a numbered list. Detection runs on this computer: per-country patterns with check digits (AT, DE, CH, CZ, SK, PL, RO, HU, US), the matter's and the firm's lists, titles and legal forms, and an optional name finder (GLiNER-X small, Apache-2.0, ~190 MB, downloaded only on request and checked by SHA-256). Placeholders are stable per matter; answers and exports show the real names. The AI record notes each check and each online call in counts only. A help, not a guarantee: see [docs/guides/redaction-check.md](docs/guides/redaction-check.md).
 
