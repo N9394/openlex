@@ -113,12 +113,12 @@ test('never switches model after text was streamed', async () => {
 
 test('firm layer: defaults, merge with the user, and locks', () => {
   const ws = require('../src/workspace')
-  ws.writeFile('openlex.json', JSON.stringify({ routes: { roles: { judge: 'custom' } }, features: { browser: false } }))
+  ws.writeFile('openlex.json', JSON.stringify({ routes: { roles: { judge: 'custom' } }, features: { grid: false } }))
   writeUser({ routes: { roles: { write: 'openai' } } })
   let cfg = harness.load()
   assert.deepStrictEqual(cfg.routes.roles, { judge: 'custom', write: 'openai' })
   assert.strictEqual(cfg.origins.routes, 'firm+user')
-  assert.strictEqual(harness.feature('browser'), false)
+  assert.strictEqual(harness.feature('grid'), false)
   assert.strictEqual(harness.feature('monitors'), true)
   ws.writeFile('openlex.json', JSON.stringify({ lock: ['routes'], routes: { roles: { judge: 'custom' } } }))
   cfg = harness.load()

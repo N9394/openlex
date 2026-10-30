@@ -73,7 +73,8 @@ test('no page of the app calls the old server: its pages are not routed, the sid
   }
   const layout = src('components/Layout.tsx')
   for (const p of ["'/upload'", "'/investigate'", "'/workshop'", "'/ma'"]) assert.ok(!layout.includes(p), `sidebar has no ${p}`)
-  // Settings: in the app, no account or document calls before the old server is asked.
-  const settings = src('pages/Settings.tsx')
-  assert.match(settings, /if \(isElectron\) return fetchLocal\(\)/)
+  // Settings (seven rows on the engine) and the new pages never call the old server.
+  for (const f of ['pages/Settings.tsx', 'pages/More.tsx', 'pages/Matters.tsx', 'pages/Help.tsx', 'pages/Setup.tsx']) {
+    assert.ok(!/from '\.\.\/lib\/api'/.test(src(f)), `${f} does not use the old server's client`)
+  }
 })

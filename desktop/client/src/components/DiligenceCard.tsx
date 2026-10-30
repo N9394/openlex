@@ -41,13 +41,13 @@ export default function DiligenceCard({ id }: { id: string }) {
 
   return (
     <div className="rounded-card border border-accent/40 bg-deep-brown/60 p-4 space-y-3 text-sm" data-testid="diligence-card">
-      <div className="flex items-start justify-between gap-3">
-        <div>
+      <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+        <div className="min-w-[14rem] flex-1">
           <div className="text-xs uppercase tracking-wide text-accent">{t('diligence.title', 'Due diligence')}</div>
           <div className="font-serif text-lg text-parchment">{t('diligence.headline', '{{flags}} red flags in {{docs}} documents', { flags: x.stats.flags, docs: x.stats.documents })}</div>
           <div className="text-xs text-antique">{t('diligence.for', 'For the {{side}}', { side: String(t(`diligence.side.${x.perspective}`, String(x.perspective))) })} · {String(t(`diligence.deal.${x.dealType}`, String(x.dealType).replace('_', ' ')))}{readiness ? ` · ${readiness}` : ''}</div>
         </div>
-        <div className="flex gap-1.5 shrink-0 text-xs">
+        <div className="flex flex-wrap gap-1.5 text-xs">
           {TIERS.map((k) => <span key={k} className={`rounded-button border px-2 py-0.5 ${TIER_CLASS[k]}`} title={tierWord(k)}>{x.byTier[k]} {tierWord(k)}</span>)}
         </div>
       </div>

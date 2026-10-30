@@ -6,8 +6,9 @@
 // drafts (/draft) are listed too and open here.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import i18n from '../i18n'
 import { useLocation, useNavigate } from 'react-router-dom'
-import ReactMarkdown from 'react-markdown'
+import Markdown from '../components/Markdown'
 import { Archive, Copy, FileUp, MessageSquare, Plus, Search, Star, Trash2, X } from 'lucide-react'
 import { engine } from '../lib/commands'
 import { attachFile, download, refusal } from '../lib/attach'
@@ -188,7 +189,7 @@ function ItemView({ item, onChanged, onDeleted, openChat }: { item: Item; onChan
           <button type="button" onClick={remove} title={t('saved.delete', 'Delete')} className="hover:text-red-400"><Trash2 size={16} /></button>
         </div>
       </div>
-      <div className="text-xs text-antique">{t(`saved.kind.${item.kind}`, item.kind)} · {new Date(item.createdAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}{item.tags.length && !editing ? ` · ${item.tags.map((g) => `#${g}`).join(' ')}` : ''}</div>
+      <div className="text-xs text-antique">{t(`saved.kind.${item.kind}`, item.kind)} · {new Date(item.createdAt).toLocaleString(i18n.language || undefined, { dateStyle: 'short', timeStyle: 'short' })}{item.tags.length && !editing ? ` · ${item.tags.map((g) => `#${g}`).join(' ')}` : ''}</div>
       {editing ? (
         <>
           <textarea value={content} onChange={(e) => setContent(e.target.value)} rows={14} className="input w-full text-sm" />
@@ -200,7 +201,7 @@ function ItemView({ item, onChanged, onDeleted, openChat }: { item: Item; onChan
         </>
       ) : (
         <>
-          <div className="prose-custom max-w-none text-sm max-h-[55vh] overflow-y-auto"><ReactMarkdown>{item.content.length > 60000 ? `${item.content.slice(0, 60000)}\n\n…` : item.content}</ReactMarkdown></div>
+          <div className="prose-custom max-w-none text-sm max-h-[55vh] overflow-y-auto"><Markdown>{item.content.length > 60000 ? `${item.content.slice(0, 60000)}\n\n…` : item.content}</Markdown></div>
           <div className="flex gap-3 text-xs">
             <button type="button" onClick={() => setEditing(true)} className="underline text-antique hover:text-cream">{t('saved.edit', 'Edit')}</button>
             {item.source?.kind === 'session' && <button type="button" onClick={openChat} className="underline text-antique hover:text-cream inline-flex items-center gap-1"><MessageSquare size={11} /> {t('saved.openChat', 'Open the chat')}</button>}

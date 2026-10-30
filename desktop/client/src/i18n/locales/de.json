@@ -113,7 +113,11 @@
     "grid": "Prüfraster",
     "plans": "Pläne",
     "desk": "Aktenschreibtisch",
-    "record": "KI-Protokoll"
+    "record": "KI-Protokoll",
+    "chat": "Chat & Recherche",
+    "matters": "Akten",
+    "more": "Weitere Werkzeuge",
+    "help": "Hilfe"
   },
   "dashboard": {
     "welcome": "Woran möchten Sie heute arbeiten?",
@@ -662,7 +666,8 @@
       "ragOnlyHint": "Sucht für jede Anfrage in der Rechtsdatenbank. Wenn aus, entscheidet die KI selbst, ob gesucht wird.",
       "saveSettings": "Einstellungen speichern",
       "judge": "Antworten in einem zweiten Durchgang prüfen (empfohlen)",
-      "judgeLocked": "von Ihrer Kanzlei festgelegt"
+      "judgeLocked": "von Ihrer Kanzlei festgelegt",
+      "guided": "KI Schritt für Schritt einrichten (auf diesem Computer, eigener Schlüssel oder mit Hilfe)"
     },
     "account": {
       "title": "Konto",
@@ -680,7 +685,11 @@
     "theme": {
       "title": "Erscheinungsbild",
       "light": "Hell",
-      "dark": "Dunkel"
+      "dark": "Dunkel",
+      "system": "Wie dieser Computer",
+      "lightWord": "Hell",
+      "darkWord": "Dunkel",
+      "colours": "Farben"
     },
     "organization": {
       "title": "Organisation",
@@ -705,7 +714,52 @@
       "activationToken": "Aktivierungstoken",
       "activationTokenDesc": "Auf diesem Gerät gespeichert. Fügen Sie es nach einer Neuinstallation in den Erstanmeldebildschirm ein, um die App auf einem neuen Gerät zu reaktivieren."
     },
-    "nameSavedHere": "Auf diesem Computer gespeichert."
+    "nameSavedHere": "Auf diesem Computer gespeichert.",
+    "items": {
+      "ai": "KI",
+      "law": "Rechtsquellen",
+      "permissions": "Erlaubnisse",
+      "language": "Sprache",
+      "appearance": "Darstellung",
+      "licence": "Lizenz und Updates"
+    },
+    "sum": {
+      "services": "{{n}} Dienste erlaubt",
+      "names": "Namen verborgen",
+      "law": "{{n}} von {{total}} an",
+      "perms": "{{n}} Dinge ohne Nachfrage erlaubt",
+      "permsNone": "OpenLex fragt jedes Mal",
+      "aiNone": "Noch nicht eingerichtet"
+    },
+    "lang": {
+      "same": "wie meine Frage",
+      "answersShort": "Antworten: {{x}}",
+      "ui": "OpenLex auf",
+      "answers": "Antworten auf",
+      "saved": "Gespeichert. Word und die Terminal-App übernehmen das.",
+      "hint": "Zitate aus Dokumenten und Gesetzen bleiben in ihrer Sprache."
+    },
+    "size": {
+      "title": "Schriftgröße",
+      "s": "kleine Schrift",
+      "m": "normale Schrift",
+      "l": "große Schrift"
+    },
+    "advanced": "Erweitert",
+    "licence": {
+      "activated": "Aktiviert: OpenLex startet neu…",
+      "failed": "Die Aktivierung hat nicht funktioniert.",
+      "checking": "Suche nach Updates…",
+      "checked": "Geprüft. Eine neue Version erscheint oben im Fenster, sobald sie bereit ist.",
+      "community": "Community-Edition",
+      "licensed": "Lizenziert: {{tier}}",
+      "communityText": "OpenLex funktioniert vollständig ohne Konto. Eine Lizenz brauchen Sie nur für Downloads und Updates Ihres Anbieters.",
+      "activate": "Lizenz aktivieren (optional)",
+      "activateButton": "Aktivieren",
+      "version": "Version {{v}}",
+      "check": "Nach Updates suchen",
+      "diagnostics": "Diagnose…"
+    }
   },
   "auth": {
     "loginTitle": "Willkommen zurück",
@@ -810,7 +864,7 @@
     "didYouMean": "Es gibt keinen Befehl /{{name}}. Meinten Sie /{{guess}}? Mit Enter verwenden.",
     "title": "Befehle",
     "menuKeys": "↑ ↓ wählen · Enter ausführen · Tab Details ergänzen · Esc schließen",
-    "hint": "/ für Befehle · {{key}} · /help",
+    "hint": "/ für Befehle · {{key}} Suche · /help",
     "helpTitle": "Befehle",
     "modelTitle": "Wo die KI läuft",
     "matterTitle": "Akte wählen",
@@ -1007,7 +1061,9 @@
       "gateway": "Viele Modelle mit einem Schlüssel; strenge Einstellungen sind immer aktiv.",
       "direct": "US-Unternehmen; Daten können die EU verlassen.",
       "other": "Ein Server, den Ihre Kanzlei betreibt."
-    }
+    },
+    "inUseNow": "In Verwendung: {{name}}",
+    "changeBelow": "unten eine andere wählen"
   },
   "chat": {
     "justNow": "gerade eben",
@@ -1048,8 +1104,8 @@
     "example2": "Ist ein zweijähriges Wettbewerbsverbot nach österreichischem Recht durchsetzbar?",
     "askedIn": "gefragt in {{where}}",
     "attachSentence": "Wird mit Ihrer Frage gesendet, gemäß Ihrer Regel für Mandantendaten.",
-    "placeholderRunning": "Befehle funktionieren, während die Antwort geschrieben wird: /model, /data …",
-    "placeholder": "Geben Sie Ihre Frage ein (oder / für Befehle) und drücken Sie die Eingabetaste",
+    "placeholderRunning": "Befehle gehen auch jetzt: /model, /data …",
+    "placeholder": "Frage eingeben — / für Befehle",
     "stopHint": "Anhalten (Esc): Die bisherige Antwort bleibt erhalten",
     "send": "Senden",
     "as": "als {{who}}",
@@ -1080,7 +1136,10 @@
     "attachAsk": "Stellen Sie eine Frage dazu oder starten Sie die vollständige Analyse.",
     "convDocs": "Fragen beziehen sich auf",
     "analysisReady": "Die Dokumentanalyse ist fertig – zum Ansehen klicken.",
-    "judgeNote": "Zweiter Durchgang"
+    "judgeNote": "Zweiter Durchgang",
+    "questionLabel": "Ihre Frage",
+    "privilegedShort": "vertraulich",
+    "nDocs": "{{n}} Dokumente"
   },
   "turn": {
     "once": "einmal",
@@ -1421,7 +1480,10 @@
       "supported": "vereinbar mit dem gefundenen Recht",
       "issue": "mögliches Problem",
       "no_match": "kein passendes Recht gefunden"
-    }
+    },
+    "read": "Formatiert anzeigen",
+    "edit": "Text bearbeiten",
+    "editHint": "Doppelklick zum Bearbeiten"
   },
   "batch": {
     "titleInvestigate": "Untersuchung: Die Dokumente werden einzeln gelesen",
@@ -1521,7 +1583,10 @@
     "title": "Suche",
     "placeholder": "Akten, Gespräche, Gespeichertes, Dokumente, Befehle durchsuchen",
     "nothing": "Nichts gefunden für „{{q}}“.",
-    "keys": "↑↓ wählen · ↵ öffnen · Esc schließen"
+    "keys": "↑↓ wählen · ↵ öffnen · Esc schließen",
+    "matters": "Akten",
+    "moreHint": "Prüfraster, Pläne, Aktenschreibtisch, Hub",
+    "helpHint": "Befehle, Anleitungen, Diagnose"
   },
   "law": {
     "several": "Mehrere Länder",
@@ -1555,7 +1620,15 @@
     "remove": "Entfernen",
     "removed": "Von diesem Computer entfernt.",
     "keepCountry": "Ein Land auf diesem Computer speichern…",
-    "keepLocal": "Auf diesem Computer speichern…"
+    "keepLocal": "Auf diesem Computer speichern…",
+    "secReady": "Bereit",
+    "secKey": "Braucht Ihren Schlüssel oder eine Anmeldung",
+    "secOff": "Aus",
+    "otherCountries": "Andere Länder ({{n}})",
+    "gateway": "Zugang zu vielen Ländern",
+    "used": "in dieser Akte {{count}}-mal genutzt",
+    "secOffline": "Für dieses Mandat nicht online",
+    "secManual": "Im Browser lesen"
   },
   "keyCard": {
     "saved": "Der Schlüssel für {{name}} ist im Schlüsselbund dieses Computers gespeichert. Stellen Sie Ihre Frage erneut, um ihn zu nutzen.",
@@ -1677,5 +1750,159 @@
     "editTitle": "Agent ändern",
     "newTitle": "Ihr eigener Agent",
     "makeOwn": "+ Eigenen Agenten anlegen (/agent new) — /agent edit NAME ändert einen"
+  },
+  "data": {
+    "title": "Wohin Mandantendaten dürfen",
+    "web": "Online nachschlagen (RIS, EUR-Lex, öffentliche Seiten)",
+    "connector": "Anbindung: {{name}}",
+    "nowLocal": "Mandantendaten bleiben jetzt auf diesem Computer.",
+    "saved": "Gespeichert: Mandantendaten dürfen nur dorthin, wo ein Häkchen ist.",
+    "locked": "Von Ihrer Kanzlei festgelegt.",
+    "local": "Nur dieser Computer",
+    "localHint": "Nichts über Ihre Mandanten verlässt diesen Computer. Online-KI und Online-Suche erhalten nichts.",
+    "allow": "Auch diese Dienste:",
+    "redact": "Zusätzlich Namen verbergen",
+    "redactHint": "Mandanten- und gelistete Namen, E-Mail-Adressen, IBANs und Telefonnummern werden ersetzt, bevor etwas online geht.",
+    "euOnly": "Nur Rechenzentren in der EU",
+    "euOnlyHint": "AWS Bedrock in Frankfurt, Mistral, Azure oder Google in einer EU-Region.",
+    "privileged": "Vertrauliche Akten bleiben immer auf diesem Computer, egal was hier angehakt ist."
+  },
+  "matters": {
+    "label": "Akte",
+    "title": "Akten",
+    "search": "Nach Name, Nummer oder Mandant suchen",
+    "none": "Noch keine Akten. Legen Sie eine mit „Neue Akte“ an.",
+    "nothing": "Keine Akte passt zu „{{q}}“.",
+    "privileged": "vertraulich",
+    "current": "aktuell",
+    "noMatter": "Ohne Akte arbeiten (schnelle Fragen)",
+    "noneChosen": "Keine Akte (schnelle Fragen)",
+    "titleNeeded": "Geben Sie der Akte einen Namen.",
+    "name": "Name der Akte",
+    "client": "Mandant (optional)",
+    "number": "Aktenzeichen (optional)",
+    "hide": "Namen, die vor Online-KI verborgen werden (optional, mit Komma getrennt)",
+    "privilegedLabel": "Vertraulich: alles bleibt auf diesem Computer",
+    "create": "Akte anlegen",
+    "new": "Neue Akte",
+    "newShort": "Neu",
+    "choose": "Akte wählen",
+    "localOnly": "bleibt auf diesem Computer",
+    "followsRule": "folgt Ihrer Mandantendaten-Regel",
+    "appOnly": "Akten werden von der Desktop-App verwaltet."
+  },
+  "more": {
+    "inChat": "Im Chat",
+    "pages": "Eigene Seiten",
+    "analyse": "Ein Dokument analysieren",
+    "analyseText": "Zusammenfassung, Eckdaten, Fristen, Pflichten und Risiken eines Vertrags, mit Zitaten.",
+    "investigate": "Mehrere Dokumente untersuchen",
+    "investigateText": "Eine Frage über viele Dokumente: was sie sagen, wo sie sich widersprechen.",
+    "draft": "Einen Entwurf schreiben",
+    "draftText": "Ein erster Entwurf nach Ihren Vorgaben oder Mustern, am Gesetz geprüft.",
+    "diligence": "Due Diligence eines Datenraums",
+    "diligenceText": "Red Flags je Dokument und ein Überblick für die Transaktion.",
+    "gridText": "Eine Tabelle: eine Zeile je Dokument, eine Spalte je Frage.",
+    "plansText": "Größere Aufgaben, Schritt für Schritt, mit Ihrer Freigabe.",
+    "deskText": "Checklisten, Listen und Beobachtung amtlicher Quellen für diese Akte.",
+    "hub": "Hub (für IT und Fortgeschrittene)",
+    "hubText": "Kanzleibibliothek, Abläufe über eine ganze Akte, Kanzleiklauseln, Anbindungen."
+  },
+  "help": {
+    "guides": "Anleitungen",
+    "guidesText": "Schritt für Schritt, in einfachen Worten.",
+    "call": "Einrichtungstermin buchen",
+    "callText": "Wir richten es mit Ihnen ein.",
+    "wrong": "Etwas stimmt nicht",
+    "wrongText": "Diagnose und was Sie dem Support schicken.",
+    "commands": "Befehle im Chat",
+    "commandsIntro": "Tippen Sie / ins Fragefeld oder drücken Sie {{key}}, um alles zu durchsuchen. Klicken Sie auf einen Befehl, um ihn auszuführen.",
+    "noCommands": "Die Befehle erscheinen, sobald die OpenLex-Engine läuft.",
+    "diagnostics": "Diagnose",
+    "diagIntro": "Der technische Zustand der OpenLex-Teile auf diesem Computer. Der Support fragt eventuell danach.",
+    "troubleshooting": "Anleitung zur Fehlersuche",
+    "diagAppOnly": "Die Diagnose ist Teil der Desktop-App."
+  },
+  "diag": {
+    "title": "Komponenten",
+    "live": "Live-Zustand aller Teile, die die App braucht. Aktualisiert alle 2,5 s.",
+    "hardware": "Hardware-Stufe",
+    "services": "Lokale Dienste",
+    "packs": "Gesetzespakete",
+    "noSubs": "Keine aktiven Abonnements.",
+    "sync": "Gesetzespakete werden bei jedem Start abgeglichen; Neues kommt als kleines Update und ist in Sekunden eingelesen.",
+    "refetch": "Neu laden",
+    "notDownloaded": "Nicht heruntergeladen",
+    "testInference": "KI testen",
+    "testRetrieval": "Suche testen",
+    "testing": "Wird getestet…"
+  },
+  "hub": {
+    "appOnly": "Der OpenLex-Hub ist Teil der Desktop-App.",
+    "title": "Hub",
+    "intro": "Für IT und Fortgeschrittene. Die alltäglichen Einstellungen finden Sie unter Einstellungen.",
+    "engine": "Eine lokale Engine für die App und Word.",
+    "wordOn": "Word verbunden",
+    "wordOff": "Word ist nicht geöffnet.",
+    "moved": "Welche KI und wohin Mandantendaten dürfen, finden Sie jetzt unter Einstellungen.",
+    "library": "Kanzleibibliothek",
+    "files": "Dateien",
+    "passages": "Passagen lokal erschlossen (.docx, .pdf, .txt, .md)",
+    "firmWide": "kanzleiweit",
+    "remove": "entfernen",
+    "folder": "Ordnerpfad, z. B. ~/Dokumente/Muster",
+    "addFirm": "Kanzleiweit hinzufügen",
+    "addMatter": "Zur aktuellen Akte hinzufügen",
+    "whole": "Ganze Akte",
+    "wholeText": "Läuft über die Bibliotheksordner der aktuellen Akte. Jedes Ergebnis muss seine Quelle wörtlich zitieren.",
+    "review": "Dokumente prüfen",
+    "chrono": "Chronologie erstellen",
+    "translateCompare": "Dokumente übersetzen oder vergleichen",
+    "noDocs": "— keine Dokumente in den Ordnern dieser Akte —",
+    "glossary": "Glossar (optional)",
+    "translate": "Übersetzen",
+    "compare": "Fassungen vergleichen",
+    "clauses": "Kanzleiklauseln",
+    "clausesText": "Die eigenen Formulierungen Ihrer Kanzlei aus den Mustern der Bibliothek, die meistgenutzten zuerst. Eine davon an die Cursorposition in Word senden.",
+    "clauseType": "Klauselart…",
+    "words": "Wörter…",
+    "insert": "In Word einfügen",
+    "connectors": "Anbindungen",
+    "noConnectors": "Keine Anbindungen. MCP-Server fügen Sie in Word unter Einstellungen → Erweitert → Anbindungen hinzu, oder in ~/.lexvault/mcp-servers.json."
+  },
+  "agents": {
+    "associate": "Associate",
+    "researcher": "Recherche",
+    "reviewer": "Prüfer",
+    "drafter": "Entwurfsverfasser",
+    "claimant-counsel": "Klägervertretung",
+    "defendant-counsel": "Beklagtenvertretung",
+    "devils-advocate": "Advocatus Diaboli",
+    "compliance-checker": "Compliance-Prüfung"
+  },
+  "setup": {
+    "title": "KI einrichten",
+    "intro": "OpenLex braucht eine KI, um zu antworten. Wählen Sie einen Weg; ändern können Sie ihn später unter Einstellungen → KI.",
+    "start": "Erste Frage stellen",
+    "local": "Auf diesem Computer",
+    "localText": "Am vertraulichsten und kostenlos: nichts verlässt diesen Computer. Langsamer, braucht einen neueren Computer.",
+    "key": "Ich habe einen eigenen Schlüssel",
+    "keyText": "Schnell und stark: AWS Bedrock in der EU, Mistral, IONOS und andere. Sie zahlen den Dienst direkt.",
+    "help": "Ich brauche Hilfe für einen sicheren Cloud-Schlüssel",
+    "helpText": "Eine Schritt-für-Schritt-Anleitung, oder wir richten es mit Ihnen ein.",
+    "helpIntro": "Für Mandatsarbeit empfohlen: Claude im eigenen AWS-Konto Ihrer Kanzlei in Frankfurt, ohne Speicherung. Die Anleitung dauert etwa 20 Minuten.",
+    "guide": "Schritt-für-Schritt-Anleitung lesen",
+    "call": "Für mich einrichten (Termin buchen)",
+    "helpLocal": "Bis dahin können Sie die KI auf diesem Computer nutzen.",
+    "notNow": "Jetzt nicht",
+    "checking": "Dieser Computer wird geprüft…",
+    "noDetect": "OpenLex konnte diesen Computer nicht prüfen. Versuchen Sie es gleich noch einmal.",
+    "useRec": "{{name}} verwenden",
+    "downloadRec": "{{name}} herunterladen und verwenden",
+    "needOllama": "Für eine KI auf diesem Computer nutzt OpenLex das kostenlose Programm Ollama. Das geht in drei Schritten:",
+    "keyDone": "{{name}} ist eingerichtet und getestet. Mandantendaten folgen weiter Ihrer Regel (Einstellungen → Wohin Mandantendaten dürfen).",
+    "recommended": "empfohlen",
+    "keyIntro": "Wählen Sie den Dienst Ihres Schlüssels, fügen Sie den Schlüssel ein und klicken Sie auf „Verwenden“. OpenLex testet ihn zuerst (ohne Ihre Dokumente zu senden). Der Schlüssel bleibt im Schlüsselbund dieses Computers.",
+    "more": "Weitere Dienste ({{n}})"
   }
 }

@@ -173,7 +173,7 @@ budget.
 | `POST /api/document/section` | one section (raw + compressed) |
 | `POST /api/document/analyze` | contract review clause by clause (side, checklist, focus) → SSE steps + suggestions |
 | `POST /api/review/export` | save a finished review as Word or PDF in the matter folder |
-| `GET /api/features` | the firm's feature switches (openlex.json) |
+| `GET /api/features` | the firm's feature switches (openlex.json): `grid` / `plans` hide the Review grid / Plans in the desktop app, plus the Word pane's menu entries |
 | `POST /api/chat` | agent loop → SSE (step/suggestion/text/done/error) |
 | `POST /api/packs/ingest` | ingest a .lvpack → SSE progress |
 | `GET /api/license/status` | subscription state (from watchdog) |

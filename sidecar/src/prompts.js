@@ -164,10 +164,21 @@ function folderNote() {
   return `WORKING FOLDER\nThe lawyer is working in the folder ${fo.tilde(cur.root)}. read_file, list_directory and search_local_files work there; relative paths start in it. Saving, adding to, renaming or deleting a file there asks the lawyer first. Files outside this folder and the matter folders cannot be reached: do not try.`
 }
 
+// The lawyer's answer language (agent-config.js → answerLang). 'auto' keeps the
+// core rule (the document's language, else the question's).
+const AUTO_LANG_RULE = "- Respond in the document's language (no document: the language of the question)."
+const LANG_NAMES = { de: 'German', en: 'English' }
+function langRule(answerLang) {
+  const name = LANG_NAMES[answerLang]
+  if (!name) return null
+  return `- Always answer in ${name}, whatever the language of the document or the question. Quote documents and statutes verbatim in their original language (translate a quote only when asked).`
+}
+
 /**
  * The system prompt for one call.
  * @param {object} t  { phase, message, intents?, afterTool?, docFull?, all? (profile prompts:"all"),
- *                      model? (model-notes text), profile? (agent/skill block), toolIndex? (text), context? (doc + memory) }
+ *                      model? (model-notes text), profile? (agent/skill block), toolIndex? (text), context? (doc + memory),
+ *                      answerLang? ('auto' | 'de' | 'en'; default 'auto') }
  * @returns {{ text: string, ids: string[], tokens: number }}
  */
 function build(t) {
@@ -178,8 +189,11 @@ function build(t) {
   const stable = chosen.filter((b) => !b.when)
   const turnRules = chosen.filter((b) => b.when && /^- /.test(b.text))
   const turnText = chosen.filter((b) => b.when && !/^- /.test(b.text))
+  let stableText = stable.map((b) => b.text).join('\n')
+  const forced = langRule(t.answerLang)
+  if (forced) stableText = stableText.includes(AUTO_LANG_RULE) ? stableText.replace(AUTO_LANG_RULE, forced) : `${stableText}\n${forced}`
   const parts = [
-    stable.map((b) => b.text).join('\n'),
+    stableText,
     t.model ? `MODEL NOTES\n${t.model}` : '',
     t.profile || '',
     t.toolIndex || '',
@@ -205,4 +219,4 @@ function explain(message, { phases = ['planning', 'analyzing', 'writing'], after
   }
 }
 
-module.exports = { build, blocks, stageTools, toolIndex, intentsOf, explain, validate, INTENTS, BLOCKS, TOOL_GROUPS }
+module.exports = { build, langRule, blocks, stageTools, toolIndex, intentsOf, explain, validate, INTENTS, BLOCKS, TOOL_GROUPS }

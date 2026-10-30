@@ -113,7 +113,11 @@
     "grid": "Review grid",
     "plans": "Plans",
     "desk": "Matter desk",
-    "record": "AI record"
+    "record": "AI record",
+    "chat": "Chat & research",
+    "matters": "Matters",
+    "more": "More tools",
+    "help": "Help"
   },
   "dashboard": {
     "welcome": "What would you like to work on today?",
@@ -662,7 +666,8 @@
       "ragOnlyHint": "Always search the legal database for every question. When off, the AI decides whether a search is needed.",
       "saveSettings": "Save settings",
       "judge": "Check answers with a second pass (recommended)",
-      "judgeLocked": "set by your firm"
+      "judgeLocked": "set by your firm",
+      "guided": "Set up the AI step by step (on this computer, your own key, or with help)"
     },
     "account": {
       "title": "Account",
@@ -680,7 +685,11 @@
     "theme": {
       "title": "Appearance",
       "light": "Light",
-      "dark": "Dark"
+      "dark": "Dark",
+      "system": "Same as this computer",
+      "lightWord": "Light",
+      "darkWord": "Dark",
+      "colours": "Colours"
     },
     "organization": {
       "title": "Organization",
@@ -705,7 +714,52 @@
       "activationToken": "Activation token",
       "activationTokenDesc": "Stored on this machine. Use it to re-activate after a fresh install — paste it into OpenLex's first-run screen on a new device."
     },
-    "nameSavedHere": "Saved on this computer."
+    "nameSavedHere": "Saved on this computer.",
+    "items": {
+      "ai": "AI",
+      "law": "Law sources",
+      "permissions": "Permissions",
+      "language": "Language",
+      "appearance": "Appearance",
+      "licence": "Licence and updates"
+    },
+    "sum": {
+      "services": "{{n}} services allowed",
+      "names": "names hidden",
+      "law": "{{n}} of {{total}} on",
+      "perms": "{{n}} things allowed without asking",
+      "permsNone": "OpenLex asks every time",
+      "aiNone": "Not set up yet"
+    },
+    "lang": {
+      "same": "same as my question",
+      "answersShort": "answers: {{x}}",
+      "ui": "OpenLex in",
+      "answers": "Answers in",
+      "saved": "Saved. Word and the terminal app follow.",
+      "hint": "Quotes from documents and the law stay in their own language."
+    },
+    "size": {
+      "title": "Text size",
+      "s": "small text",
+      "m": "normal text",
+      "l": "large text"
+    },
+    "advanced": "Advanced",
+    "licence": {
+      "activated": "Activated: OpenLex restarts…",
+      "failed": "Activation did not work.",
+      "checking": "Checking for updates…",
+      "checked": "Checked. A new version shows at the top of the window when it is ready.",
+      "community": "Community edition",
+      "licensed": "Licensed: {{tier}}",
+      "communityText": "OpenLex works fully without an account. A licence is only needed for your distributor's downloads and updates.",
+      "activate": "Activate a licence (optional)",
+      "activateButton": "Activate",
+      "version": "Version {{v}}",
+      "check": "Check for updates",
+      "diagnostics": "Diagnostics…"
+    }
   },
   "auth": {
     "loginTitle": "Welcome back",
@@ -810,7 +864,7 @@
     "didYouMean": "There is no command /{{name}}. Did you mean /{{guess}}? Press Enter to use it.",
     "title": "Commands",
     "menuKeys": "↑ ↓ choose · Enter run · Tab add details · Esc close",
-    "hint": "Type / for commands · {{key}} · /help",
+    "hint": "/ for commands · {{key}} search · /help",
     "helpTitle": "Commands",
     "modelTitle": "Where the AI runs",
     "matterTitle": "Choose a matter",
@@ -1007,7 +1061,9 @@
       "gateway": "Many models with one key; strict settings are always on.",
       "direct": "US companies; data may leave the EU.",
       "other": "A server your firm runs."
-    }
+    },
+    "inUseNow": "In use: {{name}}",
+    "changeBelow": "choose another below"
   },
   "chat": {
     "justNow": "just now",
@@ -1048,8 +1104,8 @@
     "example2": "Is a two-year non-compete enforceable under Austrian law?",
     "askedIn": "asked in {{where}}",
     "attachSentence": "Sent with your question, under your client-data rule.",
-    "placeholderRunning": "Commands work while the answer is written: /model, /data …",
-    "placeholder": "Type your question (or / for commands) and press Enter",
+    "placeholderRunning": "Commands work meanwhile: /model, /data …",
+    "placeholder": "Ask a question — / for commands",
     "stopHint": "Stop (Esc): the answer so far is kept",
     "send": "Send",
     "as": "as {{who}}",
@@ -1080,7 +1136,10 @@
     "attachAsk": "Ask about it, or run the full analysis.",
     "convDocs": "Questions are about",
     "analysisReady": "The document analysis is ready — click to view.",
-    "judgeNote": "Second pass"
+    "judgeNote": "Second pass",
+    "questionLabel": "Your question",
+    "privilegedShort": "privileged",
+    "nDocs": "{{n}} documents"
   },
   "turn": {
     "once": "once",
@@ -1421,7 +1480,10 @@
       "supported": "consistent with the law found",
       "issue": "possible issue",
       "no_match": "no matching law found"
-    }
+    },
+    "read": "Show as formatted text",
+    "edit": "Edit the text",
+    "editHint": "Double-click to edit"
   },
   "batch": {
     "titleInvestigate": "Investigation: reading the documents one by one",
@@ -1521,7 +1583,10 @@
     "title": "Search",
     "placeholder": "Search matters, conversations, saved items, documents, commands",
     "nothing": "Nothing found for “{{q}}”.",
-    "keys": "↑↓ choose · ↵ open · esc close"
+    "keys": "↑↓ choose · ↵ open · esc close",
+    "matters": "Matters",
+    "moreHint": "review grid, plans, matter desk, hub",
+    "helpHint": "commands, guides, diagnostics"
   },
   "panel": {
     "debateN": "Debate, {{n}} rounds",
@@ -1630,5 +1695,169 @@
     "editTitle": "Change the agent",
     "newTitle": "Your own agent",
     "makeOwn": "+ Make your own agent (/agent new) — /agent edit NAME changes one"
+  },
+  "data": {
+    "title": "Where client data may go",
+    "web": "Looking things up online (RIS, EUR-Lex, public pages)",
+    "connector": "Connector: {{name}}",
+    "nowLocal": "Client data now stays on this computer.",
+    "saved": "Saved: client data may go only where you ticked.",
+    "locked": "Set by your firm.",
+    "local": "Only this computer",
+    "localHint": "Nothing about your clients leaves this computer. Online AI and online look-ups get nothing.",
+    "allow": "Also these services:",
+    "redact": "Also hide names",
+    "redactHint": "Client and listed names, e-mail addresses, IBANs and phone numbers are replaced before anything goes online.",
+    "euOnly": "Only data centres in the EU",
+    "euOnlyHint": "AWS Bedrock in Frankfurt, Mistral, Azure or Google in an EU region.",
+    "privileged": "Privileged matters always stay on this computer, whatever is ticked here."
+  },
+  "matters": {
+    "label": "Matter",
+    "title": "Matters",
+    "search": "Search by name, number or client",
+    "none": "No matters yet. Start one with “New matter”.",
+    "nothing": "No matter matches “{{q}}”.",
+    "privileged": "privileged",
+    "current": "current",
+    "noMatter": "Work without a matter (quick questions)",
+    "noneChosen": "No matter (quick questions)",
+    "titleNeeded": "Give the matter a name.",
+    "name": "Name of the matter",
+    "client": "Client (optional)",
+    "number": "Matter number (optional)",
+    "hide": "Names to hide from online AI (optional, comma-separated)",
+    "privilegedLabel": "Privileged: everything stays on this computer",
+    "create": "Create the matter",
+    "new": "New matter",
+    "newShort": "New",
+    "choose": "Choose a matter",
+    "localOnly": "stays on this computer",
+    "followsRule": "follows your client-data rule",
+    "appOnly": "Matters are kept by the desktop app."
+  },
+  "more": {
+    "inChat": "In the chat",
+    "pages": "Pages of their own",
+    "analyse": "Analyse a document",
+    "analyseText": "Summary, key terms, dates, duties and risks of one contract, with quotes.",
+    "investigate": "Investigate several documents",
+    "investigateText": "One question across many documents: what they say, where they conflict.",
+    "draft": "Write a draft",
+    "draftText": "A first draft from your instructions or precedents, checked against the law.",
+    "diligence": "Due diligence of a data room",
+    "diligenceText": "Red flags per document and an overview for the deal.",
+    "gridText": "A table: one row per document, one column per question.",
+    "plansText": "Longer pieces of work, step by step, with your approval.",
+    "deskText": "Checklists, trackers and watches on official sources for this matter.",
+    "hub": "Hub (for IT and power users)",
+    "hubText": "Firm library, workflows over a whole matter, firm clauses, connectors."
+  },
+  "help": {
+    "guides": "Guides",
+    "guidesText": "Step by step, in plain words.",
+    "call": "Book a setup call",
+    "callText": "We set it up with you.",
+    "wrong": "Something is wrong",
+    "wrongText": "Diagnostics and what to send to support.",
+    "commands": "Commands in the chat",
+    "commandsIntro": "Type / in the question field, or press {{key}} to search everything. Click a command to run it.",
+    "noCommands": "The commands appear when the OpenLex engine runs.",
+    "diagnostics": "Diagnostics",
+    "diagIntro": "The technical state of this computer's OpenLex parts. Support may ask you for it.",
+    "troubleshooting": "Troubleshooting guide",
+    "diagAppOnly": "Diagnostics are part of the desktop app."
+  },
+  "diag": {
+    "title": "Dependencies",
+    "live": "Live health of every component the App relies on. Updates every 2.5 s.",
+    "hardware": "Hardware tier",
+    "services": "Local services",
+    "packs": "Statute packs",
+    "noSubs": "No active subscriptions.",
+    "sync": "Statute packs sync automatically on every launch. New chunks for an entitled jurisdiction ship as a delta and ingest in seconds.",
+    "refetch": "Refetch",
+    "notDownloaded": "Not downloaded",
+    "testInference": "Test inference",
+    "testRetrieval": "Test retrieval",
+    "testing": "Testing…"
+  },
+  "hub": {
+    "appOnly": "The OpenLex hub is available in the desktop app.",
+    "title": "Hub",
+    "intro": "For IT and power users. Everyday settings are under Settings.",
+    "engine": "One local engine for the app and Word.",
+    "wordOn": "Word connected",
+    "wordOff": "Word not open.",
+    "moved": "Which AI and where client data may go are now under Settings.",
+    "library": "Firm library",
+    "files": "files",
+    "passages": "passages indexed locally (.docx, .pdf, .txt, .md)",
+    "firmWide": "firm-wide",
+    "remove": "remove",
+    "folder": "Folder path, e.g. ~/Documents/Precedents",
+    "addFirm": "Add firm-wide",
+    "addMatter": "Add to current matter",
+    "whole": "Whole matter",
+    "wholeText": "Runs over the active matter's library folders. Every finding must quote its source verbatim.",
+    "review": "Review documents",
+    "chrono": "Build chronology",
+    "translateCompare": "Translate or compare documents",
+    "noDocs": "— no documents in this matter's folders —",
+    "glossary": "glossary (optional)",
+    "translate": "Translate",
+    "compare": "Compare versions",
+    "clauses": "Firm clauses",
+    "clausesText": "Your firm's own wording from the precedents in the firm library — most used first. Send one to the cursor in Word.",
+    "clauseType": "Clause type…",
+    "words": "words…",
+    "insert": "Insert in Word",
+    "connectors": "Connectors",
+    "noConnectors": "No connectors. Add MCP servers in Word's Settings → Connectors, or in ~/.lexvault/mcp-servers.json."
+  },
+  "agents": {
+    "associate": "Associate",
+    "researcher": "Researcher",
+    "reviewer": "Reviewer",
+    "drafter": "Drafter",
+    "claimant-counsel": "Claimant's counsel",
+    "defendant-counsel": "Defendant's counsel",
+    "devils-advocate": "Devil's advocate",
+    "compliance-checker": "Compliance checker"
+  },
+  "setup": {
+    "title": "Set up the AI",
+    "intro": "OpenLex needs an AI to answer. Choose one way; you can change it later in Settings → AI.",
+    "start": "Ask your first question",
+    "local": "On this computer",
+    "localText": "Most private and free: nothing leaves this computer. Slower, needs a recent computer.",
+    "key": "I brought my own key",
+    "keyText": "Fast and strong: AWS Bedrock in the EU, Mistral, IONOS and others. You pay the service directly.",
+    "help": "I need help getting a secure cloud key",
+    "helpText": "A step-by-step guide, or we set it up with you.",
+    "helpIntro": "The recommended way for client work is Claude in your firm's own AWS account in Frankfurt, with nothing stored. The guide takes about 20 minutes.",
+    "guide": "Read the step-by-step guide",
+    "call": "Set it up for me (book a call)",
+    "helpLocal": "Meanwhile you can use the AI on this computer.",
+    "notNow": "Not now",
+    "checking": "Looking at this computer…",
+    "noDetect": "OpenLex could not look at this computer. Try again in a moment.",
+    "useRec": "Use {{name}}",
+    "downloadRec": "Download and use {{name}}",
+    "needOllama": "To run an AI on this computer, OpenLex uses the free program Ollama. It takes three steps:",
+    "keyDone": "{{name}} is set up and tested. Client data still follows your rule (Settings → Where client data may go).",
+    "recommended": "recommended",
+    "keyIntro": "Choose the service your key is from, paste the key and press \"Use\". OpenLex tests it first (without sending any of your documents). The key stays in this computer's keychain.",
+    "more": "More services ({{n}})"
+  },
+  "law": {
+    "secReady": "Ready",
+    "secKey": "Needs your key or a sign-in",
+    "secOff": "Off",
+    "otherCountries": "Other countries ({{n}})",
+    "gateway": "Gateway: many countries",
+    "used": "used {{count}} times in this matter",
+    "secOffline": "Not online for this matter",
+    "secManual": "Read in your browser"
   }
 }

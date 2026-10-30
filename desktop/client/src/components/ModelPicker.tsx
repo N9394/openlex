@@ -59,7 +59,7 @@ interface Spend {
   estimates: { note: string; usdToEur: number; asOf: string }
 }
 interface LocalModel { id: string; runtime: 'ollama' | 'gguf'; name: string; title: string; sizeGb: number | null; goodFor: Two; active: boolean }
-interface Detect {
+export interface Detect {
   ollama: { installed: boolean; running: boolean; version: string | null; models: { name: string }[] }
   llamacpp: { installed: boolean; running: boolean; command: string }
   ramGb: number
@@ -138,14 +138,14 @@ export function ModelLabel({ onOpen }: { onOpen: () => void }) {
         <span>{display[lang] || display.en}</span>
         <ChevronDown size={12} />
       </button>
-      <button type="button" onClick={() => setSpendOpen(true)} className={`underline-offset-2 hover:underline ${level === 'stop' ? 'text-red-400' : level === 'warn' ? 'text-amber-400' : 'text-antique'}`}>
+      <button type="button" onClick={() => setSpendOpen(true)} className={`py-1 underline-offset-2 hover:underline ${level === 'stop' ? 'text-red-400' : level === 'warn' ? 'text-amber-400' : 'text-antique'}`}>
         {local
           ? t('modelPicker.free', 'free (on this computer)')
           : spend?.cap
             ? t('modelPicker.spendOfCap', '{{spent}} of {{cap}} this month', { spent: euro(spend.total, lang), cap: euro(spend.cap, lang) })
             : t('modelPicker.spendNoCap', '{{spent}} this month', { spent: euro(spend?.total || 0, lang) })}
       </button>
-      {!local && <button type="button" onClick={() => setAbout(true)} className="text-antique underline hover:text-cream">{t('modelPicker.aboutData', 'About data')}</button>}
+      {!local && <button type="button" onClick={() => setAbout(true)} className="py-1 text-antique underline hover:text-cream">{t('modelPicker.aboutData', 'About data')}</button>}
       {showWarn && (
         <span role="status" className={level === 'stop' ? 'text-red-400' : 'text-amber-400'}>
           {level === 'stop'
@@ -394,8 +394,16 @@ export function ModelPicker({ onDone, pick }: { onDone: (text: string) => void; 
   if (notice) {
     return <CloudNotice provider={notice.id} onAccept={() => { const p = notice; setNotice(null); activate({ ...p, noticeSeen: true }) }} onCancel={() => setNotice(null)} />
   }
+  const inUse = list.find((p) => p.id === active)
   return (
     <div className="space-y-4">
+      {inUse && (
+        <div className="flex items-center gap-2 rounded-button border border-forest/40 bg-forest/5 px-3 py-2" data-testid="model-in-use">
+          <Check size={16} className="text-forest shrink-0" />
+          <span className="flex-1 min-w-0 text-cream">{t('modelPicker.inUseNow', 'In use: {{name}}', { name: inUse.display ? (inUse.display[lang] || inUse.display.en) : nameOf(inUse) })}</span>
+          <span className="text-xs text-antique">{t('modelPicker.changeBelow', 'choose another below')}</span>
+        </div>
+      )}
       {groups.map((g) => {
         const items = list.filter((p) => p.group === g)
         if (!items.length) return null
@@ -450,7 +458,7 @@ export function ModelPicker({ onDone, pick }: { onDone: (text: string) => void; 
 
 // ── key and settings for one service ───────────────────────────────────────
 
-function ProviderSetup({ p, onChanged, onUse }: { p: PickerProvider; onChanged: () => Promise<unknown>; onUse: () => void }) {
+export function ProviderSetup({ p, onChanged, onUse }: { p: PickerProvider; onChanged: () => Promise<unknown>; onUse: () => void }) {
   const { t } = useTranslation()
   const lang = useLang()
   const [key, setKey] = useState('')

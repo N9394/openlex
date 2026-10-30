@@ -1,7 +1,7 @@
 // "/" commands in the App's chat — the same commands as the terminal app
 // and the Word pane (the engine's one list: GET /api/commands). Typing "/"
 // opens one small menu above the question field (↑ ↓ choose, Enter run,
-// Tab fill in, Esc close; Ctrl+K / ⌘K opens it too). Commands run through
+// Tab fill in, Esc close; Ctrl+K / ⌘K opens the search, which lists them too). Commands run through
 // the engine; the few that need a choice open a small dialog (which AI,
 // which matter, the AI record). A quiet hint line under the field says how
 // to find them. /as, /privileged, /permissions, /sources and /law work like
@@ -14,13 +14,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import i18n from '../i18n'
-import { Check, Download, Folder, Lock, X } from 'lucide-react'
+import { Check, Download, Lock, X } from 'lucide-react'
 import { ModelPicker, PickerProvider } from './ModelPicker'
 import AgentEditor from './AgentEditor'
 import { useWordLink } from '../lib/hub'
-import { ChatCommand, PROVIDER_WORDS, didYouMean, engine, filterCommands, loadCommands, matterFolderName, menuQuery, parseCommand } from '../lib/commands'
+import { ChatCommand, PROVIDER_WORDS, agentTitle, didYouMean, engine, filterCommands, loadCommands, matterFolderName, menuQuery, parseCommand } from '../lib/commands'
 import { Basis, friendly, patternWords } from '../lib/turn'
 import LawSources from './LawSources'
+import DataRule from './DataRule'
+import { MatterList, useMatters } from './MatterPicker'
 
 interface Matter { id: string; title: string; number?: string; client?: string; privileged?: boolean; agent?: string | null }
 interface Agent { name: string; title: string; description?: string }
@@ -37,6 +39,7 @@ type Dialog =
   | { kind: 'permissions' }
   | { kind: 'sources'; items: Basis[] }
   | { kind: 'law' }
+  | { kind: 'data' }
   | { kind: 'agent'; edit: string | null; proposal: boolean }
 
 const mattersBridge = () => (typeof window !== 'undefined' && (window as any).lexvault?.matters) || null
@@ -167,7 +170,7 @@ export function useChatCommands(opts: {
           return say(t('commands.nowUsing', 'Now using {{name}}. This applies from your next question.', { name: p.local ? t('commands.thisComputer', 'the AI on this computer') : p.label }))
         } catch (err) { return say((err as Error).message, 'bad') }
       }
-      case 'data': return navigate('/hub')
+      case 'data': return setDialog({ kind: 'data' })
       case 'matter': {
         if (!arg) return setDialog({ kind: 'matter' })
         const b = mattersBridge()
@@ -275,18 +278,7 @@ export function useChatCommands(opts: {
     focusInput()
   }, [commands.length, focusInput, input, setInput])
 
-  // Ctrl+K / ⌘K on the chat page opens this menu (elsewhere: the App's search palette).
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey) || e.altKey || e.key.toLowerCase() !== 'k' || !commands.length) return
-      e.preventDefault()
-      e.stopPropagation()
-      if (menuOpen) { setDismissed(input); return }
-      openMenu()
-    }
-    window.addEventListener('keydown', onKey, true)
-    return () => window.removeEventListener('keydown', onKey, true)
-  }, [commands.length, input, menuOpen, openMenu])
+  // Ctrl+K / ⌘K is the App's one search palette everywhere (it lists the commands too); "/" opens this menu.
 
   /** On the question field: arrows, Enter, Tab and Esc while the menu is open. */
   const onKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -390,6 +382,7 @@ function CommandDialog({ dialog, commands, onClose, onRun, onSaveOnce, say, quic
     permissions: t('commands.permsTitle', 'What OpenLex may do without asking'),
     sources: t('commands.sourcesTitle', 'What the last answer is based on'),
     law: t('commands.lawTitle', 'Where OpenLex looks up the law'),
+    data: t('data.title', 'Where client data may go'),
     agent: dialog.kind === 'agent' && dialog.edit ? t('agentEditor.editTitle', 'Change the agent') : t('agentEditor.newTitle', 'Your own agent'),
   }
   return (
@@ -418,6 +411,7 @@ function CommandDialog({ dialog, commands, onClose, onRun, onSaveOnce, say, quic
           {dialog.kind === 'permissions' && <PermissionRules say={say} />}
           {dialog.kind === 'sources' && <SourcesList items={dialog.items} />}
           {dialog.kind === 'law' && <LawSources say={say} matter={activeMatter} />}
+          {dialog.kind === 'data' && <DataRule say={say} />}
           {dialog.kind === 'agent' && <AgentEditor edit={dialog.edit} proposal={dialog.proposal} sessionId={sessionId} matterId={matterId} onCancel={onClose} onDone={(text) => { say(text); window.dispatchEvent(new CustomEvent('openlex:setup-changed')); onClose() }} />}
           {dialog.kind === 'save' && (
             <div className="space-y-4">
@@ -454,32 +448,15 @@ function HelpList({ commands, onRun }: { commands: ChatCommand[]; onRun: (name: 
   )
 }
 
-/** /matter: choose the matter the App works on (shared with Word). */
+/** /matter: choose the matter the App works on (shared with Word): the same searchable list as the sidebar. */
 function MatterChoice({ onDone }: { onDone: (text: string) => void }) {
   const { t } = useTranslation()
-  const [list, setList] = useState<Matter[] | null>(null)
-  const [active, setActive] = useState('')
-  useEffect(() => {
-    mattersBridge()?.list().then((r: { matters: Matter[]; active: string | null }) => { setList(r.matters || []); setActive(r.active || '') }).catch(() => setList([]))
-  }, [])
-  const choose = async (m: Matter | null) => {
-    await mattersBridge()!.setActive(m ? m.id : null)
-    window.dispatchEvent(new CustomEvent('openlex:matter-changed'))
-    onDone(m ? t('commands.nowMatter', 'Now working on {{title}}.', { title: m.title }) : t('commands.noMatterNow', 'Not working on a matter.'))
-  }
-  if (!list) return <p className="text-antique">{t('common.loading', 'Loading…')}</p>
+  const { matters, active, choose } = useMatters()
   return (
-    <div className="space-y-1">
-      {!list.length && <p className="text-antique">{t('commands.noMatters', 'No matters yet. Start one in the sidebar.')}</p>}
-      {list.map((m) => (
-        <button key={m.id} type="button" onClick={() => choose(m)} className="w-full flex items-center gap-3 rounded px-2 py-2 text-left hover:bg-leather/40 focus:bg-leather/40 outline-none">
-          <Folder size={15} className="text-antique shrink-0" />
-          <span className="flex-1 text-cream">{m.number ? `${m.number} · ` : ''}{m.title}{m.client ? <span className="text-antique"> — {m.client}</span> : null}</span>
-          {m.id === active && <Check size={16} className="text-forest" />}
-        </button>
-      ))}
-      {active && <button type="button" onClick={() => choose(null)} className="mt-2 text-xs text-antique underline">{t('commands.noMatterChoice', 'Work without a matter')}</button>}
-    </div>
+    <MatterList matters={matters} active={active} onChoose={async (m) => {
+      await choose(m ? m.id : null)
+      onDone(m ? t('commands.nowMatter', 'Now working on {{title}}.', { title: m.title }) : t('commands.noMatterNow', 'Not working on a matter.'))
+    }} />
   )
 }
 
@@ -514,7 +491,7 @@ export function RecordList({ all, recent, say }: { all: boolean; recent: boolean
           <li key={i}>
             <button type="button" onClick={() => setOpen(open === i ? null : i)} aria-expanded={open === i} className="w-full flex items-baseline gap-2 rounded px-2 py-1.5 text-left hover:bg-leather/40 focus:bg-leather/40 outline-none">
               <span className={x.outcome === 'failed' ? 'text-red-400' : x.left ? 'text-amber-400' : 'text-forest'}>{x.outcome === 'failed' ? '✗' : x.left ? '!' : '✓'}</span>
-              <span className="text-antique tabular-nums shrink-0">{new Date(x.at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</span>
+              <span className="text-antique tabular-nums shrink-0">{new Date(x.at).toLocaleString(i18n.language || undefined, { dateStyle: 'short', timeStyle: 'short' })}</span>
               <span className="text-cream truncate">{x.title}{x.window ? <span className="text-antique"> ({x.window})</span> : null}</span>
             </button>
             {open === i && <div className="ml-8 mb-2 space-y-0.5 text-xs text-parchment">{(x.lines || []).map((l, j) => <div key={j}>{l}</div>)}</div>}
@@ -542,10 +519,10 @@ async function chooseAgent(a: Agent, setQuickAgent?: (name: string) => void): Pr
     if (b?.update) await b.update(m.id, patch)
     else await engine()!.call('POST', '/api/matters/update', { id: m.id, patch })
     window.dispatchEvent(new CustomEvent('openlex:matter-changed'))
-    return String(i18n.t('commands.nowAsMatter', { defaultValue: 'Now working as {{who}} for this matter.', who: a.title }))
+    return String(i18n.t('commands.nowAsMatter', { defaultValue: 'Now working as {{who}} for this matter.', who: agentTitle(a, i18n.t as any) }))
   }
   setQuickAgent?.(a.name)
-  return String(i18n.t('commands.nowAs', { defaultValue: 'Now working as {{who}}.', who: a.title }))
+  return String(i18n.t('commands.nowAs', { defaultValue: 'Now working as {{who}}.', who: agentTitle(a, i18n.t as any) }))
 }
 
 async function setPrivileged(m: Matter, on: boolean) {
@@ -576,7 +553,7 @@ function AgentChoice({ quickAgent, setQuickAgent, onDone, onRun }: { quickAgent?
       {list.map((a) => (
         <button key={a.name} type="button" onClick={async () => { try { onDone(await chooseAgent(a, setQuickAgent)) } catch (err) { setError(friendly(err)) } }} className="w-full flex items-start gap-3 rounded px-2 py-2 text-left hover:bg-leather/40 focus:bg-leather/40 outline-none">
           <span className="flex-1">
-            <span className="text-cream">{a.title}</span>
+            <span className="text-cream">{agentTitle(a, t)}</span>
             {a.description && <span className="block text-xs text-antique">{a.description}</span>}
           </span>
           {a.name === current && <Check size={16} className="text-forest mt-0.5" />}
@@ -588,7 +565,7 @@ function AgentChoice({ quickAgent, setQuickAgent, onDone, onRun }: { quickAgent?
 }
 
 /** /permissions: allowed without asking (everywhere / per matter), never allowed, and the firm's own (shown, not editable). */
-function PermissionRules({ say }: { say: (text: string, kind?: 'ok' | 'warn' | 'bad') => void }) {
+export function PermissionRules({ say }: { say: (text: string, kind?: 'ok' | 'warn' | 'bad') => void }) {
   const { t } = useTranslation()
   const [data, setData] = useState<any>(null)
   const [error, setError] = useState('')

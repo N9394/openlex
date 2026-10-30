@@ -13,7 +13,7 @@
   --c-parchment: 30 25 20;
   --c-cream: 55 45 35;
   --c-cream-dark: 85 74 62;
-  --c-antique: 130 119 107;
+  --c-antique: 112 102 91;
   --c-accent: 132 108 58;
   --c-accent-hover: 148 122 68;
   --c-accent-subtle: 116 94 44;
@@ -22,6 +22,12 @@
   --c-forest: 38 120 88;
   --c-navy: 48 64 112;
   --c-amber: 158 120 52;
+  /* Warning / error text on light backgrounds: darker shades (≥ 4.5:1). */
+  --c-amber-300: 180 83 9;
+  --c-amber-400: 180 83 9;
+  --c-amber-500: 217 119 6;
+  --c-red-300: 185 28 28;
+  --c-red-400: 185 28 28;
   --scrollbar-track: #eeeae4;
   --scrollbar-thumb: #d2ccc4;
   --scrollbar-thumb-hover: #bab4ab;
@@ -48,6 +54,11 @@
   --c-forest: 58 90 74;
   --c-navy: 58 74 90;
   --c-amber: 138 106 58;
+  --c-amber-300: 252 211 77;
+  --c-amber-400: 251 191 36;
+  --c-amber-500: 245 158 11;
+  --c-red-300: 252 165 165;
+  --c-red-400: 248 113 113;
   /* Scrollbar colors */
   --scrollbar-track: #1a1512;
   --scrollbar-thumb: #3d3027;
@@ -279,6 +290,7 @@ input[type="checkbox"]:checked {
 /* Prose styles for markdown content */
 .prose-custom {
   @apply text-cream-dark text-sm leading-relaxed;
+  overflow-wrap: anywhere;
 }
 
 .prose-custom p {
@@ -354,7 +366,17 @@ input[type="checkbox"]:checked {
 }
 
 .prose-custom table {
-  @apply w-full my-3 text-sm;
+  @apply w-full my-3 text-sm border-collapse;
+  overflow-wrap: normal;
+}
+
+/* A wide table scrolls sideways inside the answer, never the page. */
+.prose-custom .table-wrap {
+  @apply my-3 overflow-x-auto max-w-full;
+}
+
+.prose-custom .table-wrap table {
+  @apply my-0;
 }
 
 .prose-custom th {

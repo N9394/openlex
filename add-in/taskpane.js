@@ -222,8 +222,10 @@
     const dockOn = name === 'chat'
     $('.dock').classList.toggle('dock-min', !dockOn)
     const target = focusSel ? $(focusSel) : name === 'chat' ? $('#input') : $(`#view-${name} .view-head h2`)
+    // A target inside a closed section (Settings → Advanced): open it first.
+    for (let d = target && target.closest('details'); d; d = d.parentElement && d.parentElement.closest('details')) d.open = true
     if (target) {
-      if (target.tagName === 'H2' || target.tagName === 'H3') target.setAttribute('tabindex', '-1')
+      if (/^(H2|H3|DIV)$/.test(target.tagName)) target.setAttribute('tabindex', '-1')
       target.focus()
       if (target.scrollIntoView) target.scrollIntoView({ block: 'start' })
     }
@@ -259,7 +261,7 @@
     compareDocs: () => { showView('matter', '#wfDocB'); const d = $('#wfMore'); if (d) { d.open = true; refreshWorkflowDocs() } },
     clauses: () => showView('matter', '#clQuery'),
     newMatter: () => { const box = $('#matterNew'); box.hidden = false; $('#matterTitle').focus() },
-    settingsAI: () => showView('settings', '#set-ai'),
+    settingsAI: () => { const d = $('#providerDetails'); if (!d.hidden) d.open = true; showView('settings', '#set-ai') },
     settingsData: () => showView('settings', '#set-data'),
     settingsLibrary: () => showView('settings', '#set-library'),
     settings: () => showView('settings'),
@@ -342,8 +344,8 @@
   function renderHint() {
     const box = $('#hint')
     const h = hintSlot.current
-    box.hidden = !h
-    if (!h) return
+    box.hidden = !h || permissionOpen()
+    if (box.hidden) return
     box.querySelector('.hint-text').textContent = h.text
     const acts = box.querySelector('.hint-acts')
     acts.innerHTML = ''
@@ -831,6 +833,27 @@
       .replace(/(^|[\s(])_([^_\s][^_]*)_/g, '$1<em>$2</em>')
       .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
   }
+  /** A table row's cells: outer pipes dropped, "\|" kept as a literal pipe. */
+  function splitRow(line) {
+    let s = String(line).trim()
+    if (s.startsWith('|')) s = s.slice(1)
+    if (s.endsWith('|') && !s.endsWith('\\|')) s = s.slice(0, -1)
+    // No regex look-behind: older Word for Mac web views cannot parse it.
+    const cells = []
+    let cur = ''
+    for (let k = 0; k < s.length; k++) {
+      if (s[k] === '\\' && s[k + 1] === '|') { cur += '|'; k++ }
+      else if (s[k] === '|') { cells.push(cur.trim()); cur = '' }
+      else cur += s[k]
+    }
+    cells.push(cur.trim())
+    return cells
+  }
+  function isTableDelim(line) {
+    if (!String(line).includes('|')) return false
+    const cells = splitRow(line)
+    return cells.length > 0 && cells.every((c) => /^:?-+:?$/.test(c))
+  }
   function mdToHtml(src) {
     const lines = String(src || '').replace(/\r\n/g, '\n').split('\n')
     const out = []
@@ -853,6 +876,24 @@
         const lvl = Math.min(h[1].length + 2, 6) // never larger than the pane's own headings
         out.push('<h' + lvl + '>' + inlineMd(escHtml(h[2])) + '</h' + lvl + '>')
         i++; continue
+      }
+      // GFM pipe table: a row with pipes, then a |---|:--:| delimiter row.
+      if (line.includes('|') && i + 1 < lines.length && isTableDelim(lines[i + 1])) {
+        const head = splitRow(line)
+        const aligns = splitRow(lines[i + 1]).map((c) => (/^:-+:$/.test(c) ? 'center' : /^-+:$/.test(c) ? 'right' : /^:-+$/.test(c) ? 'left' : ''))
+        if (head.length === aligns.length) {
+          flushPara(); flushList(); flushQuote()
+          const cell = (tag, txt, k) => '<' + tag + (aligns[k] ? ' style="text-align:' + aligns[k] + '"' : '') + '>' + inlineMd(escHtml(txt || '')) + '</' + tag + '>'
+          let html = '<div class="md-table-wrap" tabindex="0" role="region" aria-label="Table"><table><thead><tr>' + head.map((c, k) => cell('th', c, k)).join('') + '</tr></thead><tbody>'
+          i += 2
+          while (i < lines.length && lines[i].trim() && lines[i].includes('|')) {
+            const cells = splitRow(lines[i])
+            html += '<tr>' + head.map((_, k) => cell('td', cells[k], k)).join('') + '</tr>'
+            i++
+          }
+          out.push(html + '</tbody></table></div>')
+          continue
+        }
       }
       if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) { flushPara(); flushList(); flushQuote(); out.push('<hr>'); i++; continue }
       if (/^\s*>\s?(.*)$/.test(line)) {
@@ -911,10 +952,21 @@
     }
     card.appendChild(row)
     card.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !card.classList.contains('settled')) { e.preventDefault(); e.stopPropagation(); answerPermission(card, evt, 'deny') } })
+    if (currentView !== 'chat') showView('chat')
     appendToChat(card)
+    // The question must never sit below the fold: hide the hint slot while
+    // it is open (more room on a 320 px pane) and scroll the card into view.
+    renderHint()
+    revealCard(card)
     announce('OpenLex is asking: ' + q.textContent, true)
     const def = row.querySelector('[data-choice="once"]') || row.querySelector('button')
-    if (def) def.focus()
+    if (def) def.focus({ preventScroll: true })
+  }
+  function permissionOpen() { return !!document.querySelector('.msg.permission:not(.settled)') }
+  function revealCard(card) {
+    const v = $('#view-chat')
+    if (card.offsetHeight > v.clientHeight) card.scrollIntoView({ block: 'start' })
+    else { scrollChat(true); card.scrollIntoView({ block: 'nearest' }) }
   }
   async function answerPermission(card, evt, choice) {
     if (card.classList.contains('settled')) return
@@ -933,6 +985,7 @@
     const row = card.querySelector('.perm-actions')
     if (row) row.remove()
     card.appendChild(el('div', 'perm-outcome', text))
+    renderHint() // the hint slot comes back once no question is open
     $('#input').focus()
   }
   function closePermissionCard(evt) {
@@ -2346,6 +2399,9 @@
   // ── Link with the desktop app (engine hub) ───────────────────────────────
   function setAppLinked(on) {
     $('#appPill').hidden = !on
+    // While the desktop app is open, the AI is chosen there (one place).
+    $('#setAiApp').hidden = !on
+    $('#providerDetails').hidden = !!on
     refreshStatusLine()
   }
 
@@ -2445,6 +2501,7 @@
       const st = await api('/api/status')
       const label = P.dataline.aiLabel(st)
       badge.textContent = label.text
+      $('#setAiLabel').textContent = label.text.replace(/\s*▾$/, '')
       badge.classList.toggle('cloud', !label.local)
       badge.title = label.local ? 'The AI runs on this computer.' : 'The AI is a service outside this computer, used under your client-data rule.'
       const m = st.model || {}
@@ -2568,6 +2625,7 @@
       l.append(cb, document.createTextNode(' ' + p.label))
       box.appendChild(l)
     }
+    $('#policySummary').textContent = rule.mode === 'allow-list' ? 'This computer and the services you chose' : 'Only this computer'
     $('#policyMsg').textContent = 'Every AI call is logged — which service and when, never the content.'
   }
 
@@ -2606,10 +2664,11 @@
 
   function bindSettings() {
     $('#clearConv').addEventListener('click', clearConversation)
-    $('#aggression').addEventListener('input', (e) => {
-      $('#aggLabel').textContent = ['Only the important things', 'Balanced', 'Everything worth changing'][+e.target.value]
-    })
-    $('#langSel').addEventListener('change', (e) => { lang = e.target.value })
+    // "Add a Word comment" is a choice of this pane: kept across reloads.
+    const pc = $('#postComments')
+    pc.checked = store.get('openlex-post-comments', '1') !== '0'
+    pc.addEventListener('change', () => store.set('openlex-post-comments', pc.checked ? '1' : '0'))
+    bindAnswerLang()
     bindProvider()
     bindPolicy()
     bindLibrary()
@@ -2619,10 +2678,36 @@
     bindApplyMode()
   }
 
+  // One read of the agent settings, shared by the rows that need it.
+  let agentCfgP = null
+  function agentCfg() {
+    if (!agentCfgP) agentCfgP = api('/api/config/agent').catch(() => null)
+    return agentCfgP
+  }
+
+  /* "Answers in": kept in the engine (answerLang), so the desktop app and
+   * this pane answer alike. An older engine without the field: the choice is
+   * still kept in this pane and sent with each question. */
+  async function bindAnswerLang() {
+    const sel = $('#answerLangSel')
+    const msg = (t) => { $('#answerLangMsg').textContent = t }
+    const valid = (v) => (['auto', 'de', 'en'].includes(v) ? v : null)
+    const cfg = await agentCfg()
+    sel.value = valid(cfg && cfg.answerLang) || valid(store.get('openlex-answer-lang', '')) || 'auto'
+    lang = sel.value
+    sel.addEventListener('change', async () => {
+      lang = sel.value
+      store.set('openlex-answer-lang', lang)
+      try {
+        const r = await api('/api/config/agent', { method: 'POST', body: { answerLang: lang } })
+        msg(r && r.answerLang === lang ? '✓ Saved.' : 'Kept for this pane.')
+      } catch { msg('Kept for this pane.') }
+    })
+  }
+
   async function bindDepth() {
     const sel = $('#depthSel')
-    let cfg = null
-    try { cfg = await api('/api/config/agent') } catch { /* engine offline */ }
+    const cfg = await agentCfg()
     const note = (key) => {
       const p = cfg && cfg.presets && cfg.presets[key]
       $('#depthNote').textContent = p ? `About ${p.totalGiB} GB of memory · up to ${p.hops} research steps per question.` : ''
@@ -2657,7 +2742,7 @@
     const box = $('#applyTracked')
     const ap = $('#autopilot')
     try {
-      const cfg = await api('/api/config/agent')
+      const cfg = await agentCfg()
       applyMode = cfg.applyMode === 'permanent' ? 'permanent' : 'tracked'
       autopilot = !!cfg.autopilot
       ap.checked = autopilot
@@ -2818,6 +2903,7 @@
     let st
     try { st = await api('/api/update/status') } catch { box.textContent = 'OpenLex is not running.'; return }
     const cur = st.current || '0.1.0'
+    $('#aboutSummary').textContent = `Version ${cur}` + (st.status === 'available' && st.available ? ` · version ${st.available} is ready` : '')
     const check = (label) => {
       const b = el('button', 'btn btn-ghost btn-small', label)
       b.type = 'button'

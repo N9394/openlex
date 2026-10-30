@@ -8,6 +8,7 @@
 //   Versions every change is kept; any earlier version comes back
 // Export Word, PDF, Markdown; Send to Word; Save with the matter.
 import { useCallback, useEffect, useRef, useState } from 'react'
+import Markdown from './Markdown'
 import { useTranslation } from 'react-i18next'
 import { History, Lightbulb, ListChecks, Scale, Undo2, Wand2 } from 'lucide-react'
 import { engine } from '../lib/commands'
@@ -31,6 +32,7 @@ export default function DraftCard({ id }: { id: string }) {
   const [check, setCheck] = useState<any>(null)
   const [fills, setFills] = useState<Record<string, string>>({})
   const [panel, setPanel] = useState<'fill' | 'versions' | null>(null)
+  const [editing, setEditing] = useState(false) // read as formatted text first; Edit shows the plain text
   const area = useRef<HTMLTextAreaElement>(null)
 
   const show = useCallback((draft: any) => { setD(draft); setText(current(draft).text) }, [])
@@ -96,8 +98,19 @@ export default function DraftCard({ id }: { id: string }) {
         </ul>
       )}
 
-      <textarea ref={area} value={text} onChange={(e) => setText(e.target.value)} onSelect={onSelect} onMouseUp={onSelect} onKeyUp={onSelect}
-        className="input w-full font-serif text-sm leading-relaxed min-h-[260px] max-h-[60vh]" aria-label={t('draft.text', 'The draft')} data-testid="draft-text" />
+      <div className="flex justify-end">
+        <button type="button" onClick={() => setEditing(!editing)} className="text-xs text-antique underline hover:text-cream px-1 py-1" data-testid="draft-edit-toggle">
+          {editing ? t('draft.read', 'Show as formatted text') : t('draft.edit', 'Edit the text')}
+        </button>
+      </div>
+      {editing || dirty ? (
+        <textarea ref={area} value={text} onChange={(e) => setText(e.target.value)} onSelect={onSelect} onMouseUp={onSelect} onKeyUp={onSelect}
+          className="input w-full font-serif text-sm leading-relaxed min-h-[260px] max-h-[60vh]" aria-label={t('draft.text', 'The draft')} data-testid="draft-text" />
+      ) : (
+        <div className="prose-custom max-w-none font-serif rounded-button border border-tobacco bg-deep-brown px-4 py-3 max-h-[60vh] overflow-y-auto" data-testid="draft-text" onDoubleClick={() => setEditing(true)} title={t('draft.editHint', 'Double-click to edit')}>
+          <Markdown>{text}</Markdown>
+        </div>
+      )}
       {dirty && (
         <div className="flex items-center gap-2 text-xs">
           <span className="text-amber-400">{t('draft.unsaved', 'Your edits are not kept yet.')}</span>

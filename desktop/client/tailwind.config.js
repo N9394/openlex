@@ -1,3 +1,10 @@
+import colors from 'tailwindcss/colors'
+
+// Warning (amber) and error (red) text shades follow the theme: the light
+// theme uses darker shades so they stay readable on white and cream
+// (WCAG AA); the dark theme keeps Tailwind's own. See --c-warn-* in index.css.
+const themed = (name, shades) => Object.fromEntries(shades.map((n) => [n, `rgb(var(--c-${name}-${n}) / <alpha-value>)`]))
+
 /** @type {import('tailwindcss').Config} */
 export default {
   content: [
@@ -25,7 +32,11 @@ export default {
         'burgundy': 'rgb(var(--c-burgundy) / <alpha-value>)',
         'forest': 'rgb(var(--c-forest) / <alpha-value>)',
         'navy': 'rgb(var(--c-navy) / <alpha-value>)',
-        'amber': 'rgb(var(--c-amber) / <alpha-value>)',
+        // The old single custom 'amber' replaced Tailwind's whole amber scale
+        // (148 warning classes produced no CSS). Renamed to 'ochre'.
+        'ochre': 'rgb(var(--c-amber) / <alpha-value>)',
+        amber: { ...colors.amber, ...themed('amber', [300, 400, 500]) },
+        red: { ...colors.red, ...themed('red', [300, 400]) },
       },
       fontFamily: {
         serif: ['Crimson Text', 'Georgia', 'serif'],

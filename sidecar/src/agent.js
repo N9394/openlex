@@ -457,6 +457,8 @@ async function runAction(ctx, userMessage, onEvent, opts = {}) {
   const unlocked = new Set() // tools the model loaded with get_tool_schemas this run
   const staging = () => prompts.stageTools({ intents, unlocked, allowed: skillTools, staged: profile.prompts !== 'all' })
   const mcpNames = () => { try { return require('./mcp/client').allTools().map((t) => t.qualified) } catch { return [] } }
+  // The lawyer's answer language (Settings → AI): 'auto' | 'de' | 'en'. A `lang` sent with the chat request is ignored.
+  const answerLang = (() => { try { return require('./agent-config').load().answerLang } catch { return 'auto' } })()
   const sysCtx = (phase, afterTool = null) => prompts.build({
     phase, message: userMessage, intents, afterTool,
     docFull: phase !== 'writing' && String(ctx.doc?.text || '').length <= fullTextMaxChars(),
@@ -465,6 +467,7 @@ async function runAction(ctx, userMessage, onEvent, opts = {}) {
     profile: skillBlock.trim(),
     toolIndex: phase === 'writing' ? '' : prompts.toolIndex({ ...staging(), mcp: profile.prompts === 'all' ? [] : mcpNames() }),
     context: docCtx(ctx, phase) + pre.block,
+    answerLang,
   }).text
   // Hosted models get native definitions for the offered tools only.
   const toolNames = () => staging().offered

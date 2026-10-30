@@ -179,6 +179,10 @@ function wordsFor(x, lang, { state, firmOff, hasKey, keyWords }) {
 /** One line per source, in plain words ("RIS Austria: connected, free"), with the German words as statusDe. */
 async function status({ matterId = null } = {}) {
   const c = cfg()
+  // Per matter: how often each source answered a lookup (the AI record's audit lines); null without a matter.
+  let uses = null
+  if (matterId) { try { uses = require('../record').sourceUses(matterId) } catch { uses = {} } }
+  const usesOf = (id) => (uses ? uses[id] || 0 : null)
   const list = await Promise.all(CONNECTORS.map(async (x) => {
     const enabled = isOn(x.id, c)
     const key = await keyOf(x.id)
@@ -204,7 +208,7 @@ async function status({ matterId = null } = {}) {
       id: x.id, label: x.label, labelDe: x.de?.label || x.label, country: x.country, jurisdictions: x.jurisdictions || [], kind: x.kind, description: x.description, descriptionDe: x.de?.description || null,
       licence: x.licence, licenceUrl: x.licenceUrl, homepage: x.homepage,
       needsKey: !!x.needsKey, optionalKey: !!x.optionalKey, keyHelp: x.keyHelp || null, keyHelpDe: x.de?.keyHelp || null, guide: guideUrl(x), signIn: !!x.signIn, nightCopy: x.nightCopy ? !!x.nightCopy.get() : null, gateway: !!x.gateway, testPhase: !!x.testPhase, community: !!x.community, optIn: !!x.optIn,
-      local,
+      local, uses: usesOf(x.id),
       recommended: !!x.recommended, enabled, hasKey, managedByFirm: c.locked, state, status: `${x.label}: ${words}`, statusDe: `${x.de?.label || x.label}: ${wordsDe}`,
     }
   }))
@@ -213,7 +217,7 @@ async function status({ matterId = null } = {}) {
     list.push({
       id: m.id, label: m.label, labelDe: m.de.label, country: m.country, jurisdictions: [m.country], kind: 'manual', description: m.why, descriptionDe: null,
       licence: null, licenceUrl: null, homepage: m.pages[0].url, pages: m.pages, manual: true,
-      needsKey: false, optionalKey: false, keyHelp: null, guide: `${GUIDE}#no-automated-access`, signIn: false, nightCopy: null, gateway: false, testPhase: false, community: false, optIn: false, local: null,
+      needsKey: false, optionalKey: false, keyHelp: null, guide: `${GUIDE}#no-automated-access`, signIn: false, nightCopy: null, gateway: false, testPhase: false, community: false, optIn: false, local: null, uses: usesOf(m.id),
       enabled: true, hasKey: false, managedByFirm: c.locked, state: 'manual', status: `${m.label}: ${MANUAL_WORDS.en}`, statusDe: `${m.de.label}: ${MANUAL_WORDS.de}`,
     })
   }

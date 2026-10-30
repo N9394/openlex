@@ -12,14 +12,15 @@
 // continuing it here continues it everywhere.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import ReactMarkdown from 'react-markdown'
+import Markdown from '../components/Markdown'
 import { BookOpen, Check, ChevronDown, ChevronUp, Clock, Copy, FileSearch, FileText, FolderOpen, Lock, MessageSquare, Paperclip, Plus, Send, Sparkles, Square, Trash2, Users, X } from 'lucide-react'
 import { useLocation } from 'react-router-dom'
+import { useWindowWidth, NARROW_CHAT } from '../lib/viewport'
 import { useWordLink, hubBridge } from '../lib/hub'
 import { useChatCommands } from '../components/ChatCommands'
 import { ModelLabel } from '../components/ModelPicker'
 import i18n from '../i18n'
-import { engine } from '../lib/commands'
+import { agentTitle, engine } from '../lib/commands'
 import {
   Activity, Basis, LawSource, ModelUse, WINDOW_WORDS, applyEvent, basedOn, checkLine, basisText, clip, dataLine, duration,
   endActivity, friendly, judgeLine, mark, permission, startActivity, stopSentence, summaryLine,
@@ -63,6 +64,9 @@ interface Message {
 const mattersBridge = () => (typeof window !== 'undefined' && (window as any).lexvault?.matters) || null
 let seq = 0
 const nextId = () => `m${Date.now().toString(36)}${++seq}`
+/** The same document attached twice (each attach gets a new id) counts once: name + size. */
+const sameDoc = (a: Attachment, b: Attachment) => a.id === b.id || (a.name === b.name && a.bytes === b.bytes)
+const mergeDocs = (cur: Attachment[], add: Attachment[]) => [...cur.filter((d) => !add.some((f) => sameDoc(f, d))), ...add]
 
 /** A stored turn (GET /api/session) as a message on screen. */
 function storedMessage(m: any): Message {
@@ -82,7 +86,7 @@ function when(iso?: string | null) {
   if (mins < 1) return i18n.t('chat.justNow', 'just now')
   if (mins < 60) return i18n.t('chat.minAgo', '{{n}} min ago', { n: mins })
   if (mins < 24 * 60) return i18n.t('chat.todayAt', 'today {{time}}', { time: d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) })
-  return d.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })
+  return d.toLocaleString(i18n.language || undefined, { dateStyle: 'short', timeStyle: 'short' })
 }
 
 export default function Research() {
@@ -108,12 +112,19 @@ export default function Research() {
   const [attaching, setAttaching] = useState<string[]>([]) // names being read right now
   const [convDocs, setConvDocs] = useState<Attachment[]>([]) // documents this conversation is about (sent with every question)
   const [dragging, setDragging] = useState(false)
+  const [docsOpen, setDocsOpen] = useState(false)
   const analyseAfterAttach = useRef(false)
   const analyseRef = useRef<(arg: string) => void>(() => {}) // the newest runAnalyse (the command hook keeps its first callback)
   const [running, setRunning] = useState<string | null>(null) // stream id while an answer is written
   const [now, setNow] = useState(Date.now())
   const [perm, setPerm] = useState<any>(null) // a permission question waiting for the lawyer
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  // The conversation list: a column from 1280 px, an overlay below (closed at first).
+  const width = useWindowWidth()
+  const narrowChat = width < NARROW_CHAT
+  const [listOpen, setListOpen] = useState(() => (typeof window === 'undefined' ? true : window.innerWidth >= NARROW_CHAT))
+  useEffect(() => { setListOpen(!narrowChat) }, [narrowChat])
+  const sidebarCollapsed = !listOpen
+  const setSidebarCollapsed = (v: boolean) => setListOpen(!v)
   const [copied, setCopied] = useState<string | null>(null)
   const [sentToWord, setSentToWord] = useState<string | null>(null)
   const [openSteps, setOpenSteps] = useState<Record<string, boolean>>({})
@@ -216,6 +227,7 @@ export default function Research() {
     return () => el.removeEventListener('scroll', onScroll)
   }, [])
   useEffect(() => { const el = scrollRef.current; if (el && nearBottom.current) el.scrollTop = el.scrollHeight }, [messages, perm])
+  useEffect(() => { const el = scrollRef.current; if (el && nearBottom.current) el.scrollTop = el.scrollHeight }, [width])
   useEffect(() => {
     if (!running) return
     const t0 = setInterval(() => setNow(Date.now()), 1000)
@@ -288,7 +300,7 @@ export default function Research() {
       ...(arg.replace(/\b(buyer|seller|käufer|verkäufer|share|asset|merger|joint|venture|jv)\b/gi, '').trim() ? { focus: arg.replace(/\b(buyer|seller|käufer|verkäufer|share|asset|merger|joint|venture|jv)\b/gi, '').trim() } : {}),
     } : undefined
     setInput('')
-    if (!only && files.length) { setConvDocs((cur) => [...cur.filter((d) => !files.some((f) => f.id === d.id)), ...files]); setFiles([]) }
+    if (!only && files.length) { setConvDocs((cur) => mergeDocs(cur, files)); setFiles([]) }
     nearBottom.current = true
     setMessages((m) => [...m,
       { id: nextId(), role: 'user', content: message, files: att.map((f) => f.name), client: 'app' },
@@ -301,7 +313,7 @@ export default function Research() {
 
   // ── a Panel of agents: the question goes to all of them (PanelCard runs it) ──
   const askPanel = (spec: PanelSpec, question: string) => {
-    const att = [...convDocs.filter((d) => !files.some((f) => f.id === d.id)), ...files]
+    const att = mergeDocs(convDocs, files)
     setConvDocs(att)
     const sid = sessionId || `app:${matterId || 'quick'}:${Date.now().toString(36)}`
     if (!sessionId) setSessionId(sid)
@@ -342,7 +354,7 @@ export default function Research() {
     if (panelOn && panelSpec) return askPanel(panelSpec, message)
     // The conversation's documents stay with it: follow-up questions are about them too
     // (and an online AI service reads them from its cache).
-    const att = [...convDocs.filter((d) => !files.some((f) => f.id === d.id)), ...files]
+    const att = mergeDocs(convDocs, files)
     setConvDocs(att)
     const sid = sessionId || `app:${matterId || 'quick'}:${Date.now().toString(36)}`
     if (!sessionId) setSessionId(sid)
@@ -354,7 +366,7 @@ export default function Research() {
     nearBottom.current = true
     setMessages((m) => [...m,
       { id: nextId(), role: 'user', content: message, files: files.map((f) => f.name), client: 'app' },
-      { id: aid, role: 'assistant', content: '', act: startActivity(t0), suggestions: [], notes: [], as: agent.name !== 'associate' ? agent.title : '' },
+      { id: aid, role: 'assistant', content: '', act: startActivity(t0), suggestions: [], notes: [], as: agent.name !== 'associate' ? agentTitle(agent, t) : '' },
     ])
     setRunning(streamId)
     setNow(t0)
@@ -451,7 +463,7 @@ export default function Research() {
       try {
         const a = await attachFile(f, { matterId, sessionId: sid })
         done.push(a)
-        setFiles((cur) => [...cur.filter((x) => x.name !== a.name), a])
+        setFiles((cur) => [...cur.filter((x) => !sameDoc(x, a)), a])
       } catch (err) {
         sys(`${f.name}: ${friendly(err)}`, 'bad')
       } finally {
@@ -553,11 +565,12 @@ export default function Research() {
   const otherWindows = useMemo(() => (current?.clients || []).filter((c) => c !== 'app').map((c) => WINDOW_WORDS[c] || c), [current])
 
   return (
-    <div className="h-[calc(100vh-0px)] flex overflow-hidden">
+    <div className="h-full flex overflow-clip relative">
+      {narrowChat && listOpen && <div className="absolute inset-0 z-20 bg-ink/40" onClick={() => setListOpen(false)} aria-hidden="true" />}
       {/* Conversations of this matter, from every window */}
-      <aside className={`${sidebarCollapsed ? 'w-0' : 'w-72'} border-r border-tobacco flex flex-col transition-all duration-200 overflow-hidden bg-deep-brown`}>
+      <aside className={`${sidebarCollapsed ? 'w-0 border-r-0' : 'w-72 border-r'} border-tobacco flex flex-col transition-[width] duration-200 overflow-hidden bg-deep-brown flex-shrink-0 ${narrowChat ? 'absolute inset-y-0 left-0 z-30 shadow-2xl' : ''}`} aria-hidden={sidebarCollapsed} data-testid="conversation-list">
         <div className="h-[72px] px-4 border-b border-tobacco flex items-center">
-          <button onClick={startNew} disabled={!!running} className="w-full btn-primary flex items-center justify-center gap-2 !py-2">
+          <button onClick={() => { startNew(); if (narrowChat) setListOpen(false) }} disabled={!!running} className="w-full btn-primary flex items-center justify-center gap-2 !py-2">
             <Plus size={18} />
             {t('chat.new', 'New conversation')}
           </button>
@@ -577,7 +590,7 @@ export default function Research() {
                   key={c.id}
                   role="button"
                   tabIndex={0}
-                  onClick={() => !running && openConversation(c.id)}
+                  onClick={() => { if (running) return; openConversation(c.id); if (narrowChat) setListOpen(false) }}
                   onKeyDown={(e) => { if (e.key === 'Enter' && !running) openConversation(c.id) }}
                   className={`group px-4 py-3 cursor-pointer transition-colors ${c.id === sessionId ? 'bg-accent/10 border-l-2 border-accent' : 'hover:bg-leather border-l-2 border-transparent'}`}
                 >
@@ -585,7 +598,7 @@ export default function Research() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <MessageSquare size={14} className="text-antique flex-shrink-0" />
-                        <span className="text-cream text-sm font-medium truncate">{c.title}</span>
+                        <span className="text-cream text-sm font-medium truncate" title={c.title}>{c.title}</span>
                       </div>
                       <div className="flex items-center gap-1.5 mt-1 text-xs text-antique">
                         <Clock size={10} />
@@ -596,7 +609,7 @@ export default function Research() {
                     </div>
                     <button
                       onClick={(e) => { e.stopPropagation(); deleteConversation(c) }}
-                      className="opacity-0 group-hover:opacity-100 focus:opacity-100 p-1 text-antique hover:text-red-400 transition-all"
+                      className="opacity-40 group-hover:opacity-100 focus:opacity-100 p-1.5 -m-1 rounded text-antique hover:text-red-400 transition-all"
                       aria-label={t('chat.delete', 'Delete conversation')}
                     >
                       <Trash2 size={14} />
@@ -617,24 +630,24 @@ export default function Research() {
       >
         {dragging && <div className="absolute inset-0 z-10 flex items-center justify-center bg-ink/60 text-parchment text-lg pointer-events-none">{t('chat.dropHere', 'Drop the document: OpenLex reads it on this computer')}</div>}
         {/* Header: the matter, who OpenLex works as, where the AI runs */}
-        <div className="h-[72px] border-b border-tobacco px-6 flex items-center justify-between gap-4">
+        <div className="min-h-[64px] py-2 border-b border-tobacco px-4 lg:px-6 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
           <div className="flex items-center gap-3 min-w-0 flex-1">
-            <button onClick={() => setSidebarCollapsed(!sidebarCollapsed)} className="text-antique hover:text-cream transition-colors flex-shrink-0" aria-label={t('chat.conversations', 'Conversations')}>
+            <button onClick={() => setSidebarCollapsed(!sidebarCollapsed)} className="p-1.5 -m-1.5 text-antique hover:text-cream transition-colors flex-shrink-0" aria-label={t('chat.conversations', 'Conversations')} aria-expanded={!sidebarCollapsed} title={t('chat.conversations', 'Conversations')}>
               <MessageSquare size={20} />
             </button>
             <div className="min-w-0">
-              <h1 className="font-serif text-lg text-parchment truncate flex items-center gap-2">
-                {title}
-                {matter?.privileged && <span className="inline-flex items-center gap-1 text-xs text-forest border border-forest/40 rounded px-1.5 py-0.5"><Lock size={11} /> {t('chat.privileged', 'privileged — stays on this computer')}</span>}
+              <h1 className="font-serif text-lg text-parchment flex items-center gap-2 min-w-0">
+                {matter?.privileged && <span className="inline-flex flex-shrink-0 items-center gap-1 text-xs font-sans text-forest border border-forest/40 rounded px-1.5 py-0.5" title={t('chat.privileged', 'privileged — stays on this computer')}><Lock size={11} /> {narrowChat ? t('chat.privilegedShort', 'privileged') : t('chat.privileged', 'privileged — stays on this computer')}</span>}
+                <span className="truncate" title={matter ? `${matter.number ? `${matter.number} · ` : ''}${matter.title}${matter.client ? ` — ${matter.client}` : ''}` : title}>{title}</span>
               </h1>
               <p className="text-antique text-xs truncate">
-                {current ? `${clip(current.title, 60)}${otherWindows.length ? ` · ${t('chat.alsoIn', 'also asked in {{where}}', { where: otherWindows.join(' and ') })}` : ''}` : t('chat.newConversation', 'New conversation')}
+                {matter?.number ? `${matter.number} · ` : ''}{current ? `${clip(current.title, 60)}${otherWindows.length ? ` · ${t('chat.alsoIn', 'also asked in {{where}}', { where: otherWindows.join(' and ') })}` : ''}` : (messages.find((m) => m.role === 'user')?.content ? clip(messages.find((m) => m.role === 'user')!.content, 60) : t('chat.newConversation', 'New conversation'))}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-3 flex-shrink-0 text-xs">
             <button type="button" onClick={() => commands.run('as')} disabled={panelOn} className={`btn-secondary !px-3 !py-1.5 text-xs inline-flex items-center gap-1 ${panelOn ? 'opacity-50' : ''}`} title={t('chat.asHint', 'Who OpenLex works as (/as)')}>
-              {t('chat.workingAs', 'Working as: {{who}}', { who: agent.title })} <ChevronDown size={12} />
+              {t('chat.workingAs', 'Working as: {{who}}', { who: agentTitle(agent, t) })} <ChevronDown size={12} />
             </button>
             <span className={`inline-flex items-center rounded-button border text-xs ${panelOn ? 'border-accent text-accent bg-accent/10' : 'border-tobacco text-antique'}`} data-testid="panel-toggle">
               <button type="button" onClick={() => (panelOn ? setPanelSetup(true) : panelSpec ? setPanelOn(true) : setPanelSetup(true))} className="px-3 py-1.5 inline-flex items-center gap-1 hover:text-cream" title={t('panel.toggleHint', 'Several agents answer together, debate or review (/team)')}>
@@ -646,7 +659,8 @@ export default function Research() {
         </div>
 
         {/* The conversation */}
-        <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-5 min-h-0" aria-live="polite">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 lg:p-6 min-h-0" aria-live="polite">
+          <div className="max-w-4xl mx-auto w-full space-y-5">
           {!hasEngine && (
             <div className="max-w-xl mx-auto px-4 py-3 bg-amber-500/10 border border-amber-500/30 rounded-card text-sm text-amber-300">
               {t('chat.noEngine', 'The chat needs the OpenLex engine, which runs with the desktop app.')}
@@ -685,8 +699,8 @@ export default function Research() {
             if (m.role === 'user') {
               return (
                 <div key={m.id} className="flex justify-end">
-                  <div className="max-w-3xl bg-accent/20 rounded-card rounded-br-sm px-5 py-3">
-                    <p className="text-parchment whitespace-pre-wrap">{m.content}</p>
+                  <div className="max-w-3xl min-w-0 bg-accent/20 rounded-card rounded-br-sm px-5 py-3">
+                    <p className="text-parchment whitespace-pre-wrap [overflow-wrap:anywhere]">{m.content}</p>
                     {!!m.files?.length && <p className="mt-1 text-xs text-antique">📎 {m.files.join(', ')}</p>}
                     {m.as && !m.stored && <p className="mt-1 text-xs text-antique">{t('panel.askedPanel', 'To the Panel')}: {m.as}</p>}
                     {m.stored && m.client && m.client !== 'app' && <p className="mt-1 text-[11px] text-antique">{t('chat.askedIn', 'asked in {{where}}', { where: WINDOW_WORDS[m.client] || m.client })}{m.at ? ` · ${when(m.at)}` : ''}</p>}
@@ -697,10 +711,12 @@ export default function Research() {
             return <Answer key={m.id} onPermission={setPerm} m={m} now={now} live={!!running && m === messages[messages.length - 1]} openSteps={!!openSteps[m.id]} toggleSteps={() => setOpenSteps((s) => ({ ...s, [m.id]: !s[m.id] }))}
               onCopy={() => copy(m)} copied={copied === m.id} onWord={wordLink.connected && m.content ? () => toWord(m) : null} sentToWord={sentToWord === m.id} onStop={stop} matterId={matterId} />
           })}
+          </div>
         </div>
 
         {/* The question field */}
-        <form onSubmit={(e) => { e.preventDefault(); send(input) }} className="border-t border-tobacco p-4 bg-deep-brown">
+        <form onSubmit={(e) => { e.preventDefault(); send(input) }} className="border-t border-tobacco px-3 py-3 lg:p-4 bg-deep-brown" data-testid="composer">
+          <div className="max-w-4xl mx-auto w-full">
           {(!!files.length || !!attaching.length) && (
             <div className="mb-2 space-y-1" data-testid="attachments">
               <div className="flex flex-wrap gap-2">
@@ -728,9 +744,13 @@ export default function Research() {
           )}
           {!!convDocs.length && !files.length && (
             <div className="mb-2 text-[11px] text-antique flex flex-wrap items-center gap-1" data-testid="conv-docs">
-              {t('chat.convDocs', 'Questions are about')}: {convDocs.map((d) => (
+              {t('chat.convDocs', 'Questions are about')}: {convDocs.length > 2 && !docsOpen ? (
+                <button type="button" onClick={() => setDocsOpen(true)} className="inline-flex items-center gap-1 px-1.5 py-1 rounded border border-tobacco/60 hover:text-cream" aria-expanded={false}>
+                  {t('chat.nDocs', '{{n}} documents', { n: convDocs.length })} <ChevronDown size={11} />
+                </button>
+              ) : convDocs.map((d) => (
                 <span key={d.id} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-tobacco/60">{d.name}
-                  <button type="button" onClick={() => setConvDocs((cur) => cur.filter((x) => x.id !== d.id))} aria-label={t('research.removeFile', 'Remove file')} className="hover:text-cream"><X size={10} /></button>
+                  <button type="button" onClick={() => setConvDocs((cur) => cur.filter((x) => x.id !== d.id))} aria-label={t('research.removeFile', 'Remove file')} className="p-1 -m-0.5 hover:text-cream"><X size={11} /></button>
                 </span>
               ))}
             </div>
@@ -741,17 +761,17 @@ export default function Research() {
           <div className="flex gap-3 items-end">
             <input ref={fileRef} type="file" multiple accept=".docx,.pdf,.xlsx,.eml,.txt,.md,.csv,.json,.xml,.html,.rtf" className="hidden" onChange={(e) => attach(e.target.files)} data-testid="attach-input" />
             <input ref={folderRef} type="file" multiple className="hidden" onChange={(e) => attach(e.target.files ? Array.from(e.target.files).filter((f) => !refusal(f)) : null)} {...({ webkitdirectory: '', directory: '' } as any)} />
-            <button type="button" onClick={() => fileRef.current?.click()} disabled={!!running} className="text-antique hover:text-cream transition-colors px-1 pb-2" title={t('research.attachFile', 'Attach documents (Word, PDF, Excel, e-mail, text) — or drop them here')}>
+            <button type="button" onClick={() => fileRef.current?.click()} disabled={!!running} className="text-antique hover:text-cream transition-colors p-1.5 mb-1.5" aria-label={t('research.attachFile', 'Attach documents (Word, PDF, Excel, e-mail, text) — or drop them here')} title={t('research.attachFile', 'Attach documents (Word, PDF, Excel, e-mail, text) — or drop them here')}>
               <Paperclip size={18} />
             </button>
-            <button type="button" onClick={() => folderRef.current?.click()} disabled={!!running} className="text-antique hover:text-cream transition-colors px-1 pb-2" title={t('research.attachFolder', 'Attach a folder (every document in it)')}>
+            <button type="button" onClick={() => folderRef.current?.click()} disabled={!!running} className="text-antique hover:text-cream transition-colors p-1.5 mb-1.5" aria-label={t('research.attachFolder', 'Attach a folder (every document in it)')} title={t('research.attachFolder', 'Attach a folder (every document in it)')}>
               <FolderOpen size={18} />
             </button>
             <textarea
               ref={inputRef}
               rows={1}
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={(e) => { setInput(e.target.value); const el = e.target; el.style.height = 'auto'; el.style.height = `${Math.min(el.scrollHeight, 160)}px` }}
               onKeyDown={(e) => {
                 commands.onKeyDown(e)
                 if (e.defaultPrevented) return
@@ -759,7 +779,9 @@ export default function Research() {
                 if (e.key === 'Escape' && running) { e.preventDefault(); stop() }
               }}
               placeholder={running ? t('chat.placeholderRunning', 'Commands work while the answer is written: /model, /data …') : t('chat.placeholder', 'Type your question (or / for commands) and press Enter')}
-              className="input flex-1 resize-none min-h-[42px] max-h-40"
+              className="input flex-1 min-w-[12rem] resize-none min-h-[44px] max-h-40 !py-2.5"
+              data-testid="question"
+              aria-label={t('chat.questionLabel', 'Your question')}
             />
             {running ? (
               <button type="button" onClick={stop} className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-button transition-colors inline-flex items-center gap-2" title={t('chat.stopHint', 'Stop (Esc): the answer so far is kept')}>
@@ -772,6 +794,7 @@ export default function Research() {
             )}
           </div>
           {commands.hint}
+          </div>
         </form>
         {commands.overlay}
         {panelSetup && (
@@ -820,11 +843,11 @@ function Answer({ m, now, live, openSteps, toggleSteps, onCopy, copied, onWord, 
           {!running && m.content && (
             <div className="flex items-center gap-2">
               {onWord && (
-                <button onClick={onWord} className="text-antique hover:text-accent transition-colors" title={t('research.sendToWord', 'Send to Word (insert at cursor)')}>
+                <button onClick={onWord} className="p-1.5 -my-1 rounded text-antique hover:text-accent transition-colors" title={t('research.sendToWord', 'Send to Word (insert at cursor)')} aria-label={t('research.sendToWord', 'Send to Word (insert at cursor)')}>
                   {sentToWord ? <Check size={14} className="text-forest" /> : <FileText size={14} />}
                 </button>
               )}
-              <button onClick={onCopy} className="text-antique hover:text-accent transition-colors" title={t('research.copyResponse', 'Copy response')}>
+              <button onClick={onCopy} className="p-1.5 -my-1 rounded text-antique hover:text-accent transition-colors" title={t('research.copyResponse', 'Copy response')} aria-label={t('research.copyResponse', 'Copy response')}>
                 {copied ? <Check size={14} className="text-forest" /> : <Copy size={14} />}
               </button>
             </div>
@@ -839,7 +862,7 @@ function Answer({ m, now, live, openSteps, toggleSteps, onCopy, copied, onWord, 
           {(m.analyses || []).map((a) => <AnalysisCard key={a.id} analysis={a} />)}
           {(m.analysisIds || []).map((id) => <AnalysisCard key={id} id={id} />)}
           {(act?.keys || []).map((k) => <SourceKeyCard key={k.source} req={k} />)}
-          {m.content && !(m.analysisIds?.length) && !(m.results?.length) ? <div className="prose-custom max-w-none"><ReactMarkdown>{m.content}</ReactMarkdown></div> : null}
+          {m.content && !(m.analysisIds?.length) && !(m.results?.length) ? <div className="prose-custom max-w-none"><Markdown>{m.content}</Markdown></div> : null}
 
           {/* What OpenLex is doing right now (≤3 recent steps, the current one marked) */}
           {running && act && (
@@ -874,7 +897,7 @@ function Answer({ m, now, live, openSteps, toggleSteps, onCopy, copied, onWord, 
 
           {!running && act && !m.stored && (
             <div className="text-xs text-antique">
-              <button type="button" onClick={toggleSteps} className="inline-flex items-center gap-1 hover:text-cream" aria-expanded={openSteps}>
+              <button type="button" onClick={toggleSteps} className="inline-flex items-center gap-1 py-1 hover:text-cream" aria-expanded={openSteps}>
                 {summaryLine(act)} {openSteps ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
               </button>
               {openSteps && (

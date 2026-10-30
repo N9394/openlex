@@ -1,31 +1,32 @@
 import { useState, useEffect } from 'react'
-import { Outlet, NavLink, useNavigate } from 'react-router-dom'
+import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { hubBridge } from '../lib/hub'
-import { Network, Table2, Route, ListTodo } from 'lucide-react'
 import MatterPicker from './MatterPicker'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../contexts/AuthContext'
 import CommandPalette from './CommandPalette'
+import { initTheme } from '../lib/theme'
+import { needsSetup, setupSkipped } from '../pages/Setup'
+import { useWindowWidth, useWindowHeight, NARROW_APP } from '../lib/viewport'
 import {
-  LayoutDashboard,
-  FileSearch,
-  Search,
+  MessageSquare,
+  FolderOpen,
+  LayoutGrid,
+  HelpCircle,
   Archive,
   ClipboardList,
   Settings,
   LogOut,
   PanelLeftClose,
   PanelLeft,
-  ScanSearch,
   Users,
-  Wrench,
-  Briefcase,
 } from 'lucide-react'
 
 export default function Layout() {
   const { t } = useTranslation()
   const { logout } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     const saved = localStorage.getItem('sidebar-collapsed')
     return saved === 'true'
@@ -34,18 +35,26 @@ export default function Layout() {
   useEffect(() => {
     localStorage.setItem('sidebar-collapsed', String(sidebarCollapsed))
   }, [sidebarCollapsed])
+  // Narrow window (below 1100 px): icons only; "expand" opens the full
+  // sidebar over the page instead of squeezing the chat.
+  const width = useWindowWidth()
+  const narrow = width < NARROW_APP
+  const [overlayOpen, setOverlayOpen] = useState(false)
+  useEffect(() => { if (!narrow) setOverlayOpen(false) }, [narrow])
+  const collapsed = narrow ? !overlayOpen : sidebarCollapsed
+  const toggleSidebar = () => (narrow ? setOverlayOpen((v) => !v) : setSidebarCollapsed(!sidebarCollapsed))
+  // Short windows (13–14" laptops): tighter rows so every item fits.
+  const short = useWindowHeight() < 820
 
-  // Analyse, Investigate, Draft and Due diligence are chat tools now: these
-  // entries open the chat and run the command (/analyse, /investigate …).
-  const navItems: { to: string; icon: any; label: string; command?: string; badge?: string }[] = [
-    { to: '/dashboard', icon: LayoutDashboard, label: t('nav.home') },
-    { to: '/research', icon: FileSearch, label: t('nav.analyse'), command: 'analyse' },
-    { to: '/research', icon: Search, label: t('nav.research') },
-    { to: '/research', icon: ScanSearch, label: t('nav.investigate'), command: 'investigate' },
-    { to: '/research', icon: Wrench, label: t('nav.draft', 'Draft'), command: 'draft' },
-    { to: '/research', icon: Briefcase, label: t('nav.diligence', 'Due diligence'), command: 'diligence' },
+  // Seven entries (UI audit 2026-10-30): the chat, matters, saved items, the
+  // AI record, More tools (Analyse/Investigate/Draft/Due diligence as chat
+  // launchers, Review grid, Plans, Matter desk, Hub), Settings and Help.
+  const navItems: { to: string; icon: any; label: string; command?: string; also?: string[] }[] = [
+    { to: '/research', icon: MessageSquare, label: t('nav.chat', 'Chat & research') },
+    { to: '/matters', icon: FolderOpen, label: t('nav.matters', 'Matters') },
     { to: '/vault', icon: Archive, label: t('nav.saved', 'Saved') },
-    ...((window as any).lexvault?.engine ? [{ to: '/hub', icon: Network, label: t('nav.hub', 'OpenLex hub') }, { to: '/grid', icon: Table2, label: t('nav.grid', 'Review grid') }, { to: '/plans', icon: Route, label: t('nav.plans', 'Plans') }, { to: '/desk', icon: ListTodo, label: t('nav.desk', 'Matter desk') }] : []),
+    { to: '/audit', icon: ClipboardList, label: t('nav.record', 'AI record') },
+    { to: '/more', icon: LayoutGrid, label: t('nav.more', 'More tools'), also: ['/grid', '/plans', '/desk', '/hub'] },
   ]
 
   // Electron App build: identity is the license file, so logout / signup /
@@ -53,8 +62,8 @@ export default function Layout() {
   const isElectron = typeof window !== 'undefined' && (window as any).lexvault?.isElectron
   const bottomItems = [
     ...(isElectron ? [] : [{ to: '/admin', icon: Users, label: t('nav.team') }]),
-    { to: '/audit', icon: ClipboardList, label: t('nav.record', 'AI record') },
     { to: '/settings', icon: Settings, label: t('nav.settings') },
+    { to: '/help', icon: HelpCircle, label: t('nav.help', 'Help') },
   ]
 
   // Word plugin → App handoff: "continue in the app" opens Research with the
@@ -69,13 +78,17 @@ export default function Layout() {
     })
   }, [navigate])
 
-  // Restore saved theme on app load
+  // First start: no AI set up yet → the setup page (once per start; "Not now" skips it).
   useEffect(() => {
-    const saved = localStorage.getItem('theme')
-    if (saved === 'dark') {
-      document.documentElement.classList.add('dark')
-    }
+    if (setupSkipped() || location.pathname === '/setup') return
+    let alive = true
+    needsSetup().then((need) => { if (alive && need) navigate('/setup') })
+    return () => { alive = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Colours and text size (Settings → Appearance); 'same as this computer' follows the system.
+  useEffect(() => { initTheme() }, [])
 
   const handleLogout = () => {
     logout()
@@ -83,7 +96,7 @@ export default function Layout() {
   }
 
   return (
-    <div className="h-screen bg-obsidian flex flex-col overflow-hidden">
+    <div className="h-screen bg-obsidian flex flex-col overflow-clip">
       {/* Windows-only title-bar drag region. macOS hiddenInset handles this
           natively via the trafficLightPosition we set in main.js.
           Without this 32px strip Electron's titleBarOverlay sits ON TOP of
@@ -96,66 +109,65 @@ export default function Layout() {
           style={{ height: 32, WebkitAppRegion: 'drag' } as React.CSSProperties}
         />
       )}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-clip min-h-0 relative">
       {/* Command Palette */}
       <CommandPalette />
 
       {/* Sidebar */}
+      {narrow && overlayOpen && <div className="absolute inset-0 z-30 bg-ink/50" onClick={() => setOverlayOpen(false)} aria-hidden="true" />}
+      {narrow && <div className="w-16 flex-shrink-0" aria-hidden="true" />}
       <aside
         className={`
-          bg-deep-brown border-r border-tobacco flex flex-col
-          transition-all duration-300 ease-in-out flex-shrink-0
-          ${sidebarCollapsed ? 'w-16' : 'w-64'}
+          bg-deep-brown border-r border-tobacco flex flex-col min-h-0
+          transition-[width] duration-200 ease-in-out flex-shrink-0
+          ${collapsed ? 'w-16' : 'w-64'}
+          ${narrow ? 'absolute inset-y-0 left-0 z-40 shadow-2xl' : ''}
         `}
+        data-testid="app-sidebar"
       >
         {/* Logo */}
-        <div className="p-4 border-b border-tobacco flex items-center justify-between min-h-[72px]">
-          {!sidebarCollapsed && (
+        <div className={`px-4 border-b border-tobacco flex items-center justify-between flex-shrink-0 ${short ? 'min-h-[56px]' : 'min-h-[72px]'}`}>
+          {!collapsed && (
             <h1 className="font-serif text-2xl text-parchment font-bold tracking-wide">
               Open<span className="text-accent">Lex</span>
             </h1>
           )}
           <button
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            onClick={toggleSidebar}
             className={`p-2 rounded-button text-antique hover:text-cream hover:bg-leather transition-all ${
-              sidebarCollapsed ? 'mx-auto' : ''
+              collapsed ? 'mx-auto' : ''
             }`}
-            title={sidebarCollapsed ? t('nav.expandSidebar') : t('nav.collapseSidebar')}
+            title={collapsed ? t('nav.expandSidebar') : t('nav.collapseSidebar')}
           >
-            {sidebarCollapsed ? <PanelLeft size={20} /> : <PanelLeftClose size={20} />}
+            {collapsed ? <PanelLeft size={20} /> : <PanelLeftClose size={20} />}
           </button>
         </div>
 
         {/* Matter (shared with the Word plugin) */}
-        {!sidebarCollapsed && <MatterPicker />}
+        {!collapsed && <div className="flex-shrink-0"><MatterPicker /></div>}
 
         {/* Navigation */}
-        <nav className="flex-1 p-2">
+        <nav className="flex-1 min-h-0 overflow-y-auto p-2">
           <ul className="space-y-1">
             {navItems.map((item) => (
               <li key={`${item.to}:${item.command || ''}`}>
                 <NavLink
                   to={item.to}
                   state={item.command ? { command: item.command } : undefined}
+                  onClick={() => setOverlayOpen(false)}
                   className={({ isActive }) =>
-                    `flex items-center gap-3 px-3 py-3 rounded-button transition-all duration-200 focus:outline-none
-                    ${sidebarCollapsed ? 'justify-center' : ''}
-                    ${isActive && !item.command
+                    `flex items-center gap-3 px-3 ${short ? 'py-2' : 'py-3'} rounded-button transition-all duration-200 focus:outline-none
+                    ${collapsed ? 'justify-center' : ''}
+                    ${(isActive && !item.command) || item.also?.some((p) => location.pathname.startsWith(p))
                       ? 'bg-accent/10 text-accent'
                       : 'text-cream hover:bg-leather hover:text-parchment'
                     }`
                   }
-                  title={sidebarCollapsed ? item.label : undefined}
+                  title={collapsed ? item.label : undefined}
+                  aria-label={collapsed ? item.label : undefined}
                 >
                   <item.icon size={20} className="flex-shrink-0" />
-                  {!sidebarCollapsed && (
-                    <span className="font-medium flex items-center gap-1.5">
-                      {item.label}
-                      {'badge' in item && item.badge && (
-                        <span className="text-[9px] bg-accent/20 text-accent px-1 py-px rounded font-semibold tracking-wider leading-none">{item.badge}</span>
-                      )}
-                    </span>
-                  )}
+                  {!collapsed && <span className="font-medium truncate">{item.label}</span>}
                 </NavLink>
               </li>
             ))}
@@ -163,24 +175,26 @@ export default function Layout() {
         </nav>
 
         {/* Bottom items */}
-        <div className="p-2 border-t border-tobacco">
+        <div className="p-2 border-t border-tobacco flex-shrink-0">
           <ul className="space-y-1">
             {bottomItems.map((item) => (
               <li key={item.to}>
                 <NavLink
                   to={item.to}
+                  onClick={() => setOverlayOpen(false)}
                   className={({ isActive }) =>
                     `flex items-center gap-3 px-3 py-2 rounded-button transition-all duration-200 focus:outline-none
-                    ${sidebarCollapsed ? 'justify-center' : ''}
+                    ${collapsed ? 'justify-center' : ''}
                     ${isActive
                       ? 'bg-accent/10 text-accent'
                       : 'text-antique hover:bg-leather hover:text-cream'
                     }`
                   }
-                  title={sidebarCollapsed ? item.label : undefined}
+                  title={collapsed ? item.label : undefined}
+                  aria-label={collapsed ? item.label : undefined}
                 >
                   <item.icon size={18} className="flex-shrink-0" />
-                  {!sidebarCollapsed && <span className="text-sm">{item.label}</span>}
+                  {!collapsed && <span className="text-sm">{item.label}</span>}
                 </NavLink>
               </li>
             ))}
@@ -191,11 +205,11 @@ export default function Layout() {
                   className={`w-full flex items-center gap-3 px-3 py-2 rounded-button
                             text-antique hover:bg-burgundy/20 hover:text-red-400
                             transition-all duration-200
-                            ${sidebarCollapsed ? 'justify-center' : ''}`}
-                  title={sidebarCollapsed ? t('nav.logout') : undefined}
+                            ${collapsed ? 'justify-center' : ''}`}
+                  title={collapsed ? t('nav.logout') : undefined}
                 >
                   <LogOut size={18} className="flex-shrink-0" />
-                  {!sidebarCollapsed && <span className="text-sm">{t('nav.logout')}</span>}
+                  {!collapsed && <span className="text-sm">{t('nav.logout')}</span>}
                 </button>
               </li>
             )}
@@ -204,7 +218,7 @@ export default function Layout() {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 min-w-0 min-h-0 overflow-auto">
         <Outlet />
       </main>
       </div>

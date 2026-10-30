@@ -17,6 +17,10 @@ import Desk from './pages/Desk'
 import Saved from './pages/Saved'
 import Record from './pages/Record'
 import Moved from './pages/Moved'
+import More from './pages/More'
+import Matters from './pages/Matters'
+import Help from './pages/Help'
+import Setup from './pages/Setup'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -48,12 +52,12 @@ const isElectron = typeof window !== 'undefined' && !!(window as any).lexvault?.
 function App() {
   return (
     <Routes>
-      <Route path="/login" element={isElectron ? <Navigate to="/dashboard" replace /> : <Login />} />
-      <Route path="/signup" element={isElectron ? <Navigate to="/dashboard" replace /> : <Signup />} />
-      <Route path="/forgot-password" element={isElectron ? <Navigate to="/dashboard" replace /> : <ResetPassword />} />
-      <Route path="/reset-password" element={isElectron ? <Navigate to="/dashboard" replace /> : <ResetPassword />} />
-      <Route path="/invite/:invitationId" element={isElectron ? <Navigate to="/dashboard" replace /> : <AcceptInvite />} />
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/login" element={isElectron ? <Navigate to="/research" replace /> : <Login />} />
+      <Route path="/signup" element={isElectron ? <Navigate to="/research" replace /> : <Signup />} />
+      <Route path="/forgot-password" element={isElectron ? <Navigate to="/research" replace /> : <ResetPassword />} />
+      <Route path="/reset-password" element={isElectron ? <Navigate to="/research" replace /> : <ResetPassword />} />
+      <Route path="/invite/:invitationId" element={isElectron ? <Navigate to="/research" replace /> : <AcceptInvite />} />
+      <Route path="/" element={<Navigate to="/research" replace />} />
 
       <Route element={<ProtectedRoute><ErrorBoundary><Layout /></ErrorBoundary></ProtectedRoute>}>
         <Route path="/workshop" element={<Moved command="draft" what="Workshop" />} />
@@ -68,7 +72,11 @@ function App() {
         <Route path="/investigate" element={<Moved command="investigate" what="Investigate" />} />
         <Route path="/audit" element={<Record />} />
         <Route path="/settings" element={<Settings />} />
-        <Route path="/admin" element={isElectron ? <Navigate to="/dashboard" replace /> : <Admin />} />
+        <Route path="/more" element={<More />} />
+        <Route path="/matters" element={<Matters />} />
+        <Route path="/help" element={<Help />} />
+        <Route path="/setup" element={<Setup />} />
+        <Route path="/admin" element={isElectron ? <Navigate to="/research" replace /> : <Admin />} />
         <Route path="/documents/:id" element={<Moved command="analyse" what="Document analysis" />} />
         <Route path="/navigator" element={<Moved command="draft" what="Navigator" />} />
         <Route path="/ma" element={<Moved command="diligence" what="M&A" />} />

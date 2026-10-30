@@ -1,5 +1,8 @@
-// /law: where OpenLex looks up the law (engine connectors), grouped by
-// country, in the App's language. Online by default: every source answers
+// /law: where OpenLex looks up the law (engine connectors), in the App's
+// language. Three sections: Ready, Needs your key (or a sign-in), Off.
+// In each: the gateways first (they cover many countries), then the
+// countries this matter used (or the ones with a ready source), the other
+// countries folded away; "used N times in this matter" from the AI record. Online by default: every source answers
 // per question. Per source: switch on or off, paste a key, sign in with
 // the browser (Ansvar's free plan, suggested first where it covers the
 // country), keep it on this computer (size shown first), remove it. One
@@ -15,6 +18,7 @@ export interface LawSource {
   state: string; enabled: boolean; needsKey: boolean; optionalKey: boolean; hasKey: boolean; keyHelp?: string | null; keyHelpDe?: string | null
   managedByFirm: boolean; licence?: string; country: string; jurisdictions?: string[]; kind?: string; guide?: string; signIn?: boolean
   recommended?: boolean; manual?: boolean; pages?: { label: string; url: string }[]
+  gateway?: boolean; uses?: number | null
   local?: { items: LocalItem[]; parts: { part: string; label: string; labelDe?: string; updated?: string | null; stale?: boolean }[]; jobs: Job[] } | null
 }
 interface LocalItem { part: string; label: string; bytes: number; updated?: string | null; stale?: boolean; licence?: string; history?: boolean }
@@ -74,17 +78,22 @@ export default function LawSources({ say, matter }: { say: (text: string, kind?:
   const name = (s: LawSource) => (de && s.labelDe) || s.label
   const several = t('law.several', 'Several countries')
 
-  // Groups: the suggested gateway first (it covers many countries), then one group per country.
-  const groups = useMemo(() => {
-    const g = new Map<string, LawSource[]>()
-    for (const s of list || []) {
-      if (country && !(s.country === country || (s.jurisdictions || []).includes(country))) continue
-      const k = country || s.country
-      g.set(k, [...(g.get(k) || []), s])
-    }
-    for (const v of g.values()) v.sort((a, b) => Number(!!b.recommended) - Number(!!a.recommended))
-    const order = (k: string) => (k === 'INT' ? '0' : k === 'EU' ? '1' : `2${countryName(k, lang, several)}`)
-    return [...g.entries()].sort((a, b) => order(a[0]).localeCompare(order(b[0])))
+  // Sections by state; inside, gateways first, then this matter's countries, the rest folded.
+  const sections = useMemo(() => {
+    const shown = (list || []).filter((s) => !country || s.country === country || (s.jurisdictions || []).includes(country))
+    const used = new Set(shown.filter((s) => (s.uses || 0) > 0).flatMap((s) => [s.country, ...(s.jurisdictions || [])]))
+    const main = used.size ? used : new Set(shown.filter((s) => s.state === 'ready').map((s) => s.country))
+    const isGateway = (s: LawSource) => !!s.gateway || s.country === 'INT'
+    // Engine states: ready, needs_key, needs_setup, offline (not online for this matter), manual (read in the browser), off.
+    const stateOf = (s: LawSource) => (s.state === 'off' || !s.enabled ? 'off' : s.state === 'ready' ? 'ready' : s.state === 'offline' ? 'offline' : s.state === 'manual' ? 'manual' : 'key')
+    const rank = (s: LawSource) => (isGateway(s) ? 0 : s.country === 'EU' ? 1 : 2) - (s.recommended ? 0.5 : 0) - Math.min(0.4, (s.uses || 0) / 1000)
+    const byName = (a: LawSource, b: LawSource) => rank(a) - rank(b) || countryName(a.country, lang, several).localeCompare(countryName(b.country, lang, several))
+    return (['ready', 'key', 'offline', 'manual', 'off'] as const).map((k) => {
+      const items = shown.filter((s) => stateOf(s) === k).sort(byName)
+      const top = items.filter((s) => country || isGateway(s) || s.country === 'EU' || main.has(s.country) || (s.uses || 0) > 0)
+      const rest = items.filter((s) => !top.includes(s))
+      return { key: k, top, rest }
+    }).filter((x) => x.top.length || x.rest.length)
   }, [list, country, lang, several])
   const countries = useMemo(() => [...new Set((list || []).map((s) => s.country).filter((c) => c !== 'INT'))].sort((a, b) => countryName(a, lang, several).localeCompare(countryName(b, lang, several))), [list, lang, several])
 
@@ -145,35 +154,12 @@ export default function LawSources({ say, matter }: { say: (text: string, kind?:
     setPlan({ src: s, part, plan: r.plan })
   }, t('law.sizeShown', 'Here is what it would download.'))
 
-  return (
-    <div className="space-y-3">
-      {/* The one offline switch */}
-      <div className="rounded border border-leather/50 px-3 py-2 flex items-center gap-2">
-        <span className="flex-1 text-sm text-cream">{offline?.on ? t('law.offlineIsOn', 'Working fully offline: answers come only from this computer.') : t('law.offlineIsOff', 'Online: sources answer per question; nothing to install.')}</span>
-        <button type="button" disabled={busy} className="text-xs text-antique underline hover:text-cream" onClick={() => (offline?.on
-          ? act(() => engine()!.call('POST', '/api/sources/law/offline', { on: false }), t('law.offlineOff', 'OpenLex looks things up online again.'))
-          : act(async () => setOfflinePlan(await engine()!.call('POST', '/api/sources/law/offline', { plan: true, countries: country ? [country] : undefined })), t('law.sizeShown', 'Here is what it would download.')))}>
-          {offline?.on ? t('law.goOnline', 'Go back online') : t('law.workOffline', 'Work fully offline…')}
-        </button>
-      </div>
-
-      {countries.length > 6 && (
-        <select value={country} onChange={(e) => setCountry(e.target.value)} className="input w-full text-sm" aria-label={t('law.country', 'Country')}>
-          <option value="">{t('law.allCountries', 'All countries')}</option>
-          {countries.map((c) => <option key={c} value={c}>{countryName(c, lang, several)}</option>)}
-        </select>
-      )}
-
-      <div className="space-y-3 max-h-[55vh] overflow-y-auto pr-1">
-        {groups.map(([code, items]) => (
-          <section key={code}>
-            <h3 className="text-xs uppercase tracking-wide text-antique mb-1">{countryName(code, lang, several)}</h3>
-            <ul className="space-y-1">
-              {items.map((s) => (
+  const item = (s: LawSource) => (
                 <li key={s.id} className="rounded px-2 py-1.5 hover:bg-leather/30">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span aria-hidden="true" className={s.state === 'ready' ? 'text-forest' : s.state === 'off' ? 'text-antique' : 'text-amber-400'}>{s.state === 'ready' ? '✓' : s.state === 'off' ? '–' : '!'}</span>
-                    <span className="flex-1 text-cream">{words(s)}{s.recommended && s.state !== 'ready' ? <span className="ml-1 text-xs text-accent">{t('law.suggested', '(suggested: free plan, 100 searches a day)')}</span> : null}</span>
+                    <span aria-hidden="true" className={s.state === 'ready' ? 'text-forest' : s.state === 'needs_key' || s.state === 'needs_setup' ? 'text-amber-400' : 'text-antique'}>{s.state === 'ready' ? '✓' : s.state === 'needs_key' || s.state === 'needs_setup' ? '!' : '–'}</span>
+                    <span className="flex-1 min-w-[12rem] text-cream">{words(s)}{s.recommended && s.state !== 'ready' ? <span className="ml-1 text-xs text-accent">{t('law.suggested', '(suggested: free plan, 100 searches a day)')}</span> : null}
+                      <span className="block text-[11px] text-antique">{s.gateway ? t('law.gateway', 'Gateway: many countries') : countryName(s.country, lang, several)}{(s.uses || 0) > 0 ? ` · ${t('law.used', 'used {{count}} times in this matter', { count: s.uses || 0 })}` : ''}</span></span>
                     {s.signIn && <button type="button" disabled={busy} className="text-xs text-antique underline hover:text-cream" onClick={() => act(() => engine()!.call('POST', '/api/sources/law/signin', { name: s.id }), t('law.signInOpened', 'The sign-in page is open: type the code shown there, then come back.'))}>{s.hasKey ? t('law.signInAgain', 'Sign in again') : t('law.signIn', 'Sign in (free)')}</button>}
                     {(s.needsKey || s.optionalKey) && <button type="button" disabled={busy} className="text-xs text-antique underline hover:text-cream" onClick={() => setKeyFor(s)}>{s.hasKey ? t('commands.replaceKey', 'Replace the key') : t('commands.pasteKey', 'Paste your key')}</button>}
                     {s.manual && (s.pages || []).map((p) => <button key={p.url} type="button" className="text-xs text-antique underline hover:text-cream" onClick={() => openLink(p.url)}>{p.label}</button>)}
@@ -206,8 +192,40 @@ export default function LawSources({ say, matter }: { say: (text: string, kind?:
                     </div>
                   )}
                 </li>
-              ))}
-            </ul>
+  )
+
+  return (
+    <div className="space-y-3">
+      {/* The one offline switch */}
+      <div className="rounded border border-leather/50 px-3 py-2 flex items-center gap-2">
+        <span className="flex-1 text-sm text-cream">{offline?.on ? t('law.offlineIsOn', 'Working fully offline: answers come only from this computer.') : t('law.offlineIsOff', 'Online: sources answer per question; nothing to install.')}</span>
+        <button type="button" disabled={busy} className="text-xs text-antique underline hover:text-cream" onClick={() => (offline?.on
+          ? act(() => engine()!.call('POST', '/api/sources/law/offline', { on: false }), t('law.offlineOff', 'OpenLex looks things up online again.'))
+          : act(async () => setOfflinePlan(await engine()!.call('POST', '/api/sources/law/offline', { plan: true, countries: country ? [country] : undefined })), t('law.sizeShown', 'Here is what it would download.')))}>
+          {offline?.on ? t('law.goOnline', 'Go back online') : t('law.workOffline', 'Work fully offline…')}
+        </button>
+      </div>
+
+      {countries.length > 6 && (
+        <select value={country} onChange={(e) => setCountry(e.target.value)} className="input w-full text-sm" aria-label={t('law.country', 'Country')}>
+          <option value="">{t('law.allCountries', 'All countries')}</option>
+          {countries.map((c) => <option key={c} value={c}>{countryName(c, lang, several)}</option>)}
+        </select>
+      )}
+
+      <div className="space-y-4 max-h-[55vh] overflow-y-auto pr-1" data-testid="law-sections">
+        {sections.map((sec) => (
+          <section key={sec.key} data-testid={`law-${sec.key}`}>
+            <h3 className={`text-xs uppercase tracking-wide mb-1 ${sec.key === 'ready' ? 'text-forest' : sec.key === 'key' ? 'text-amber-400' : 'text-antique'}`}>
+              {sec.key === 'ready' ? t('law.secReady', 'Ready') : sec.key === 'key' ? t('law.secKey', 'Needs your key or a sign-in') : sec.key === 'offline' ? t('law.secOffline', 'Not online for this matter') : sec.key === 'manual' ? t('law.secManual', 'Read in your browser') : t('law.secOff', 'Off')} <span className="text-antique normal-case">({sec.top.length + sec.rest.length})</span>
+            </h3>
+            <ul className="space-y-1">{sec.top.map(item)}</ul>
+            {sec.rest.length > 0 && (
+              <details className="mt-1">
+                <summary className="cursor-pointer text-xs text-antique hover:text-cream px-2 py-1">{t('law.otherCountries', 'Other countries ({{n}})', { n: sec.rest.length })}</summary>
+                <ul className="space-y-1 mt-1">{sec.rest.map(item)}</ul>
+              </details>
+            )}
           </section>
         ))}
       </div>

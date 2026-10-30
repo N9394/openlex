@@ -14,7 +14,7 @@
 //   parseTeam("/team debate claimant-counsel defendant-counsel") → a setup.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import ReactMarkdown from 'react-markdown'
+import Markdown from './Markdown'
 import { ChevronDown, ChevronUp, MessageSquare, Plus, Square, Users, X } from 'lucide-react'
 import { engine } from '../lib/commands'
 import { ModelUse, addModel, clip, dataLine, friendly } from '../lib/turn'
@@ -243,7 +243,7 @@ export default function PanelCard({ run, id, onPermission }: { run?: PanelRun; i
         <>
           {round && <div className="text-xs text-antique">{t('panel.roundOf', 'Round {{round}} of {{rounds}}', round)}</div>}
           {notes.map((n, i) => <div key={i} className="text-xs text-amber-400">! {n}</div>)}
-          <div className={`grid gap-2 ${lanes.length >= 3 ? 'md:grid-cols-3' : 'md:grid-cols-2'} grid-cols-1`} data-testid="panel-lanes">
+          <div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(min(100%,15rem),1fr))]" data-testid="panel-lanes">
             {lanes.map((l) => <LaneBox key={l.lane} l={l} />)}
           </div>
         </>
@@ -259,7 +259,7 @@ function LaneBox({ l }: { l: Lane }) {
   const speaking = l.status === 'speaking'
   const data = l.models.length ? dataLine(l.models, l.online, l.status === 'working' || speaking) : null
   return (
-    <div className={`rounded-button border p-2.5 space-y-1 ${speaking ? 'border-accent bg-accent/10' : l.skipped ? 'border-tobacco/40 opacity-70' : 'border-tobacco'}`} data-testid={`lane-${l.lane}`} aria-live="polite">
+    <div className={`min-w-0 [overflow-wrap:anywhere] rounded-button border p-2.5 space-y-1 ${speaking ? 'border-accent bg-accent/10' : l.skipped ? 'border-tobacco/40 opacity-70' : 'border-tobacco'}`} data-testid={`lane-${l.lane}`} aria-live="polite">
       <div className="flex items-center justify-between gap-2">
         <span className="text-cream font-medium truncate">{l.title}</span>
         {speaking && <span className="text-[11px] text-accent inline-flex items-center gap-1"><MessageSquare size={11} /> {t('panel.speaking', 'speaking')}</span>}
@@ -303,7 +303,7 @@ function PanelResult({ r, lanes }: { r: any; lanes: Lane[] }) {
         </div>
       )}
       {s?.fallback && <div className="text-xs text-amber-400">! {s.note}</div>}
-      {r.mode === 'review' && r.final && <div><div className="text-xs uppercase text-accent">{t('panel.final', 'Final draft')}</div><div className="prose-custom max-w-none"><ReactMarkdown>{r.final}</ReactMarkdown></div></div>}
+      {r.mode === 'review' && r.final && <div><div className="text-xs uppercase text-accent">{t('panel.final', 'Final draft')}</div><div className="prose-custom max-w-none"><Markdown>{r.final}</Markdown></div></div>}
       <div className="space-y-1">
         <div className="text-xs font-medium text-parchment">{r.mode === 'parallel' ? t('panel.answers', 'The answers') : t('panel.transcript', 'Who said what')}</div>
         {r.turns.map((x: any, i: number) => (
@@ -312,7 +312,7 @@ function PanelResult({ r, lanes }: { r: any; lanes: Lane[] }) {
               <span>{turnLabel(x)}{x.noSource ? <span className="text-amber-400"> · {t('panel.citedNone', 'cited no source')}</span> : null}</span>
               {open[i] || r.mode === 'parallel' ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
             </button>
-            {(open[i] || r.mode === 'parallel') && <div className="prose-custom max-w-none text-sm mt-1">{x.error ? <span className="text-red-400">✗ {x.error}</span> : <ReactMarkdown>{x.text}</ReactMarkdown>}</div>}
+            {(open[i] || r.mode === 'parallel') && <div className="prose-custom max-w-none text-sm mt-1">{x.error ? <span className="text-red-400">✗ {x.error}</span> : <Markdown>{x.text}</Markdown>}</div>}
           </div>
         ))}
       </div>
@@ -326,7 +326,7 @@ function PanelResult({ r, lanes }: { r: any; lanes: Lane[] }) {
       {lanes.length > 0 && (
         <div className="text-xs text-antique">
           <button type="button" className="underline" onClick={() => setShowLanes(!showLanes)}>{showLanes ? t('panel.hideWhere', 'Hide where each agent ran') : t('panel.showWhere', 'Where each agent ran')}</button>
-          {showLanes && <div className="grid gap-2 md:grid-cols-3 grid-cols-1 mt-1">{lanes.map((l) => <LaneBox key={l.lane} l={l} />)}</div>}
+          {showLanes && <div className="grid gap-2 mt-1 [grid-template-columns:repeat(auto-fit,minmax(min(100%,15rem),1fr))]">{lanes.map((l) => <LaneBox key={l.lane} l={l} />)}</div>}
         </div>
       )}
       <ExportButtons path="/api/panel/export" id={r.id} formats={['docx', 'pdf', 'md']} save={{ kind: 'panel', matterId: r.matterId, source: { kind: 'panel', id: r.id } }} />

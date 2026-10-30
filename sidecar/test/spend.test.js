@@ -113,3 +113,23 @@ test('the firm sets and locks the limit in its openlex.json', () => {
   assert.deepStrictEqual([st.cap, st.warnAt, st.locked], [20, 0.5, true])
   assert.throws(() => spend.setCap(100), /locked/)
 })
+
+test('openlex.json → "prices" (firm layer) comes before prices.json and the built-in list', () => {
+  const harness = require('../src/harness')
+  require('../src/workspace').setBase(FIRM)
+  fs.writeFileSync(path.join(FIRM, 'openlex.json'), JSON.stringify({
+    prices: { 'claude-sonnet-5': { input: 1, output: 4, currency: 'EUR' }, 'firm-model': { in: 0.5, out: 1 }, 'bad(': { input: 1, output: 1 }, usdToEur: 0.9 },
+  }))
+  assert.ok(harness.SECTIONS.includes('prices'))
+  assert.ok(harness.load().prices['firm-model'], 'the section survives load()')
+  const p = spend.priceFor('anthropic', 'claude-sonnet-5-5')
+  assert.deepStrictEqual([p.in, p.out, p.currency, p.known, p.usdToEur], [1, 4, 'EUR', true, 0.9])
+  const f = spend.priceFor('custom', 'firm-model-2')
+  assert.deepStrictEqual([f.in, f.out, f.currency, f.known], [0.5, 1, 'USD', true])
+  assert.strictEqual(spend.priceFor('custom', 'mystery-model').known, false, 'a bad pattern is skipped, the rest still works')
+  assert.strictEqual(spend.status().estimates.custom, true)
+  // the batch estimate reads the same map
+  assert.deepStrictEqual(require('../src/batch').priceFor('firm-model'), { input: 0.5, output: 1, currency: 'USD' })
+  fs.writeFileSync(path.join(FIRM, 'openlex.json'), JSON.stringify({}))
+  assert.strictEqual(spend.priceFor('anthropic', 'claude-sonnet-5-5').in, 2)
+})

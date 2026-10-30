@@ -7,7 +7,7 @@
     <title>OpenLex</title>
   </head>
   <body>
-    <script>try{if(localStorage.getItem('theme')==='dark')document.documentElement.classList.add('dark')}catch(e){}</script>
+    <script>try{var t=localStorage.getItem('theme');if(t==='dark'||(t!=='light'&&window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.classList.add('dark');var z={s:'14px',l:'18px'}[localStorage.getItem('openlex-text-size')];if(z)document.documentElement.style.fontSize=z}catch(e){}</script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
