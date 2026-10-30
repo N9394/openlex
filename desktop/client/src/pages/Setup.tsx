@@ -2,7 +2,10 @@
 // ways to get an AI, without needing one to read this page.
 //   1 On this computer: a model sized to this computer through Ollama
 //     (detected, downloaded with progress, then used); plain steps when
-//     Ollama is not installed. OpenLex installs no programs itself.
+//     Ollama is not installed. OpenLex installs no programs itself. A
+//     distributor's build may also recommend its own model (desktop App,
+//     window.lexvault.localModelSuggestion): offered first, downloaded only
+//     on click, with progress.
 //   2 I brought my own key: the services in the recommended order (AWS
 //     Bedrock in the EU first), paste the key, OpenLex tests it, Bedrock's
 //     zero retention is checked; the cloud notice is shown once.
@@ -137,10 +140,11 @@ function LocalWay({ onDone }: { onDone: (text: string) => void }) {
   }
 
   if (det === undefined) return <div className="card !p-5 text-antique">{t('setup.checking', 'Looking at this computer…')}</div>
-  if (det === null) return <div className="card !p-5 text-red-400">{t('setup.noDetect', 'OpenLex could not look at this computer. Try again in a moment.')}</div>
+  if (det === null) return <div className="card !p-5 space-y-3"><Recommended onDone={onDone} />{<p className="text-red-400">{t('setup.noDetect', 'OpenLex could not look at this computer. Try again in a moment.')}</p>}</div>
   const rec = det.recommended
   return (
     <div className="card !p-5 space-y-3" data-testid="setup-local-panel">
+      <Recommended onDone={onDone} />
       <p className="text-parchment">{t('modelPicker.memory', 'This computer has {{gb}} GB of memory. Suggested: {{name}} ({{size}} GB download).', { gb: det.ramGb, name: rec.title, size: rec.sizeGb })}</p>
       {det.ollama.running ? (
         pull ? (
@@ -168,6 +172,61 @@ function LocalWay({ onDone }: { onDone: (text: string) => void }) {
       )}
       <button type="button" className="text-sm text-antique underline hover:text-cream px-1 py-1" onClick={check}>{t('modelPicker.checkAgain', 'Check again')}</button>
       {msg && <p className={`text-sm ${msg.bad ? 'text-red-400' : 'text-forest'}`}>{msg.text}</p>}
+    </div>
+  )
+}
+
+/** The model a distributor's build recommends (desktop App only): nothing is downloaded until the click. */
+type Suggestion = { filename: string; title: string; sizeBytes: number | null; installed: boolean; download: { pct: number | null } | null }
+
+function Recommended({ onDone }: { onDone: (text: string) => void }) {
+  const { t } = useTranslation()
+  const bridge = typeof window !== 'undefined' ? (window as any).lexvault : null
+  const [sug, setSug] = useState<Suggestion | null>(null)
+  const [pct, setPct] = useState<number | null | undefined>(undefined)
+  const [msg, setMsg] = useState<string | null>(null)
+  useEffect(() => {
+    if (!bridge?.localModelSuggestion) return
+    bridge.localModelSuggestion().then((s: Suggestion | null) => {
+      setSug(s)
+      if (s?.download) setPct(s.download.pct ?? null)
+    }).catch(() => setSug(null))
+    const off = bridge.onModelDownload?.((ev: { pct: number | null }) => setPct(ev.pct ?? null))
+    return () => { if (typeof off === 'function') off() }
+  }, [bridge])
+  if (!sug) return null
+
+  const use = async (file: string) => {
+    const r = await engine()!.call('POST', '/api/local/use', { id: `gguf:${file}` })
+    if (r?.error) throw new Error(r.error)
+    onDone(t('modelPicker.nowLocal', 'Now using {{name}} on this computer. Nothing leaves this computer.', { name: sug.title }))
+  }
+  const download = async () => {
+    setMsg(null); setPct(0)
+    try {
+      const r = await bridge.downloadSuggestedModel()
+      setPct(undefined)
+      if (!r?.ok) return setMsg(t('setup.recFailed', 'The download did not work: {{error}}. You can try again, or choose another way.', { error: r?.error || '?' }))
+      await use(r.file)
+    } catch (err) { setPct(undefined); setMsg(friendly(err)) }
+  }
+  const gb = sug.sizeBytes ? Math.round(sug.sizeBytes / 1e8) / 10 : null
+  return (
+    <div className="rounded border border-accent/40 bg-accent/5 p-3 space-y-2" data-testid="setup-recommended">
+      <p className="text-parchment text-sm">{gb
+        ? t('setup.recText', 'Recommended for this installation: {{name}} ({{size}} GB download).', { name: sug.title, size: gb })
+        : t('setup.recTextNoSize', 'Recommended for this installation: {{name}}.', { name: sug.title })}</p>
+      {pct !== undefined ? (
+        <div className="space-y-1" aria-live="polite">
+          <div className="text-parchment text-sm">{t('modelPicker.downloading', 'Downloading {{name}}…', { name: sug.title })} {pct != null ? `${pct} %` : ''}</div>
+          <div className="h-2 rounded bg-tobacco/40 overflow-hidden"><div className="h-full bg-accent transition-all" style={{ width: `${pct || 0}%` }} /></div>
+        </div>
+      ) : sug.installed ? (
+        <button type="button" className="btn-primary !px-5 !py-2 inline-flex items-center gap-2" onClick={() => use(sug.filename).catch((err) => setMsg(friendly(err)))}><Check size={16} /> {t('setup.useRec', 'Use {{name}}', { name: sug.title })}</button>
+      ) : (
+        <button type="button" className="btn-primary !px-5 !py-2 inline-flex items-center gap-2" onClick={download} data-testid="setup-recommended-download"><Download size={16} /> {t('setup.downloadRec', 'Download and use {{name}}', { name: sug.title })}</button>
+      )}
+      {msg && <p className="text-sm text-red-400" role="status">{msg}</p>}
     </div>
   )
 }

@@ -15,13 +15,26 @@
  *   6. On confirm: spawn installer detached, quit current app, Windows
  *      installer launches new app on completion (perMachine: false NSIS)
  *
+ * macOS: the manifest (latest-mac.yml shape, built by the release workflow,
+ * scripts/update-info.js) lists OpenLex-X.Y.Z-mac-{arm64,x64}.zip. Squirrel.Mac
+ * (Electron's autoUpdater) is NOT used: it only installs an update whose code
+ * signature satisfies the running app's designated requirement, which an
+ * ad-hoc signed app (no Developer ID) can never meet. Instead a small script
+ * (macUpdateScript) waits for the App to quit, unpacks the verified zip next
+ * to the installed OpenLex.app, checks the new bundle (codesign --verify,
+ * same bundle id), swaps the two bundles (rolling back on any failure) and
+ * starts OpenLex again. When the App cannot replace itself (installed where
+ * the user cannot write, run from the dmg or a translocated copy, or macOS
+ * refuses), it says so and shows the downloaded zip instead.
+ *
  * No publisher / signature verification. Trust comes from the bearer-token
  * authenticated channel — we issued the artifact, signed yml is the chain
  * of custody. Once we ship a code-signing cert this whole module gets
  * deleted in favour of electron-updater.
  */
 
-const { app, dialog, BrowserWindow } = require('electron')
+// Electron is loaded lazily, so the helpers below can be tested with node.
+const electron = () => require('electron')
 const fs = require('fs')
 const path = require('path')
 const https = require('https')
@@ -170,49 +183,134 @@ function parseYml(text) {
   return out
 }
 
-// Pick the artifact entry for the current platform+arch from the parsed
-// manifest's files[]. If only one file is listed or no match is found,
-// fall back to the top-level `path` so older yml shapes still work.
-function pickArtifact(manifest) {
-  const platform = process.platform     // 'darwin' | 'win32' | 'linux'
-  const arch = process.arch              // 'arm64' | 'x64'
-  const files = Array.isArray(manifest.files) ? manifest.files : []
-  if (files.length === 0) {
-    return manifest.path ? { url: manifest.path, sha512: manifest.sha512 } : null
+// Pick the artifact for this platform + arch from the parsed manifest:
+// macOS only a .zip (never the dmg: the updater unpacks it), Windows an
+// .exe, Linux an .AppImage — and on macOS/Linux the right architecture
+// ("arm64" in the name, else x64). Names as the release builds them:
+//   OpenLex-0.3.1-mac-arm64.zip / OpenLex-0.3.1-mac-x64.zip /
+//   OpenLex-0.3.1-windows-x64-setup.exe / OpenLex-0.3.1-linux-x64.AppImage
+// Older manifests without files[] use the top-level path, under the same rules.
+// null = nothing suitable (better than installing the wrong file).
+function pickArtifact(manifest, platform = process.platform, arch = process.arch) {
+  const fits = (url) => {
+    const u = String(url || '').toLowerCase().split('?')[0]
+    const isArm = /(^|[^a-z0-9])(arm64|aarch64)([^a-z0-9]|$)/.test(u)
+    if (platform === 'darwin') return u.endsWith('.zip') && (arch === 'arm64' ? isArm : !isArm)
+    if (platform === 'win32') return u.endsWith('.exe')
+    if (platform === 'linux') return u.endsWith('.appimage') && (arch === 'arm64' ? isArm : !isArm)
+    return false
   }
-  // Heuristic match by url substring. electron-builder names artifacts like
-  //   LexVault-0.1.43-arm64-mac.zip / LexVault-0.1.43-mac.zip / -Setup-... .exe / .AppImage
-  const candidates = files.map(f => ({
-    ...f,
-    score: (() => {
-      const u = (f.url || '').toLowerCase()
-      let s = 0
-      if (platform === 'darwin') {
-        if (!u.endsWith('.zip')) return -1
-        const hasArm = u.includes('arm64')
-        if (arch === 'arm64' && hasArm) s += 10
-        if (arch === 'x64' && !hasArm) s += 10
-      } else if (platform === 'win32') {
-        if (!u.endsWith('.exe')) return -1
-        s += 10
-      } else if (platform === 'linux') {
-        if (!u.endsWith('.appimage')) return -1
-        const hasArm = u.includes('arm64')
-        if (arch === 'arm64' && hasArm) s += 10
-        if (arch === 'x64' && !hasArm) s += 10
-      }
-      return s
-    })(),
-  }))
-  const best = candidates.filter(c => c.score >= 0).sort((a, b) => b.score - a.score)[0]
-  if (best) return { url: best.url, sha512: best.sha512 }
-  // Last resort: top-level path. Better than failing — at least something
-  // gets downloaded, and SHA512 verify will catch a real mismatch.
-  return manifest.path ? { url: manifest.path, sha512: manifest.sha512 } : null
+  const files = Array.isArray(manifest.files) ? manifest.files : []
+  const hit = files.find((f) => fits(f.url))
+  if (hit) return { url: hit.url, sha512: hit.sha512 }
+  if (manifest.path && fits(manifest.path)) return { url: manifest.path, sha512: manifest.sha512 }
+  return null
+}
+
+// The file name to keep the artifact under, and the URL to fetch it from.
+// Manifest urls are file names relative to the feed (electron-builder's
+// shape) or absolute https URLs; anything else is refused.
+function artifactLocation(feedBaseUrl, url) {
+  const raw = String(url || '')
+  let name, href
+  if (/^https:\/\//i.test(raw)) {
+    href = raw
+    name = decodeURIComponent(new URL(raw).pathname.split('/').pop() || '')
+  } else {
+    if (raw.includes('/') || raw.includes('\\')) return null
+    name = raw
+    href = `${feedBaseUrl}/${encodeURIComponent(raw)}`
+  }
+  if (!/^[A-Za-z0-9][A-Za-z0-9._ -]{0,200}\.(zip|exe|AppImage|dmg)$/.test(name)) return null
+  return { name, href }
 }
 
 function sha512Base64(buf) {
   return crypto.createHash('sha512').update(buf).digest('base64')
+}
+
+// ── macOS: replace the installed OpenLex.app ────────────────────────────
+
+/** The running .app bundle: …/OpenLex.app/Contents/MacOS/OpenLex → …/OpenLex.app */
+function macAppBundle(execPath = process.execPath) {
+  return path.dirname(path.dirname(path.dirname(execPath)))
+}
+
+/**
+ * Why the App cannot replace itself here, or null when it can. The bundle's
+ * folder must be writable; a copy run from the dmg or translocated by
+ * Gatekeeper (a read-only, randomised path) cannot be updated in place.
+ */
+function macInstallBlocker(appBundle, access = fs.accessSync) {
+  if (!/\.app$/.test(appBundle)) return 'OpenLex is not running from an app bundle.'
+  if (appBundle.includes('/AppTranslocation/')) return 'OpenLex runs from a temporary copy macOS made (move OpenLex to Applications and open it from there).'
+  if (appBundle.startsWith('/Volumes/')) return 'OpenLex runs from the disk image (drag it to Applications first).'
+  try { access(path.dirname(appBundle), fs.constants.W_OK) } catch {
+    return `OpenLex cannot write to ${path.dirname(appBundle)}.`
+  }
+  return null
+}
+
+const shq = (v) => `'${String(v).replace(/'/g, `'\\''`)}'`
+
+/**
+ * The script that installs a downloaded macOS update (bash, run detached
+ * after the App quits):
+ *   1. wait for the App (pid) to exit;
+ *   2. unpack the zip into a staging folder next to the installed bundle
+ *      (same volume, so the swap is two renames);
+ *   3. check the new bundle: an OpenLex.app with the same bundle id whose
+ *      signature verifies (codesign --verify --deep --strict works for
+ *      ad-hoc signatures too: it proves the bundle is intact, not who made
+ *      it — the SHA-512 from the authenticated feed already did that);
+ *   4. move the old bundle aside, move the new one in; on failure put the
+ *      old one back;
+ *   5. record the outcome in resultFile and start OpenLex (the new one, or
+ *      the old one after a failure). relaunch: false is for tests.
+ */
+function macUpdateScript({ zipPath, appBundle, pid, resultFile, workDir, relaunch = true, waitSeconds = 60 }) {
+  const name = path.basename(appBundle)
+  return `#!/bin/bash
+# OpenLex macOS update (written by main/updater.js)
+ZIP=${shq(zipPath)}
+APP=${shq(appBundle)}
+RESULT=${shq(resultFile)}
+WORK=${shq(workDir)}
+PARENT=$(dirname "$APP")
+STAGE=""
+log() { echo "[openlex-update] $*"; }
+record() { mkdir -p "$(dirname "$RESULT")"; printf '{"ok":%s,"reason":"%s","at":"%s"}\\n' "$1" "$2" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$RESULT"; }
+relaunch() { ${relaunch ? '[ -d "$APP" ] && /usr/bin/open "$APP"' : 'true'}; }
+finish() { [ -n "$STAGE" ] && [ -d "$APP" ] && rm -rf "$STAGE"; rm -rf "$WORK"; }
+fail() { log "failed: $1"; record false "$1"; finish; relaunch; exit 1; }
+
+i=0
+while kill -0 ${Number(pid) | 0} 2>/dev/null; do
+  i=$((i+1)); [ $i -gt ${waitSeconds * 2} ] && fail "OpenLex did not quit"
+  sleep 0.5
+done
+
+STAGE=$(mktemp -d "$PARENT/.openlex-update.XXXXXX") || fail "cannot write next to the installed app"
+/usr/bin/ditto -x -k "$ZIP" "$STAGE/new" || fail "the update could not be unpacked"
+NEW=$(find "$STAGE/new" -maxdepth 2 -name '*.app' -type d | head -1)
+[ -n "$NEW" ] || fail "the update contains no app"
+OLD_ID=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Contents/Info.plist" 2>/dev/null)
+NEW_ID=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$NEW/Contents/Info.plist" 2>/dev/null)
+[ -n "$NEW_ID" ] && [ "$NEW_ID" = "$OLD_ID" ] || fail "the update is a different app ($NEW_ID)"
+/usr/bin/codesign --verify --deep --strict "$NEW" || fail "the update's signature does not verify"
+/usr/bin/xattr -dr com.apple.quarantine "$NEW" 2>/dev/null || true
+
+mv "$APP" "$STAGE/old.app" || fail "macOS did not allow replacing ${name}"
+if ! mv "$NEW" "$APP"; then
+  mv "$STAGE/old.app" "$APP"
+  fail "macOS did not allow replacing ${name}"
+fi
+log "installed"
+record true ""
+finish
+relaunch
+exit 0
+`
 }
 
 class Updater {
@@ -230,7 +328,10 @@ class Updater {
   }
 
   start() {
-    setTimeout(() => this.check().catch(e => console.warn('[updater]', e.message)), FIRST_CHECK_DELAY_MS)
+    setTimeout(() => {
+      this.lastInstallResult()
+      this.check().catch(e => console.warn('[updater]', e.message))
+    }, FIRST_CHECK_DELAY_MS)
     this.timer = setInterval(() => this.check().catch(e => console.warn('[updater]', e.message)), POLL_INTERVAL_MS)
     this.timer.unref?.()
   }
@@ -255,7 +356,7 @@ class Updater {
       const ymlBuf = await fetchBuffer(`${this.feedBaseUrl}/${platform}`, headers)
       const manifest = parseYml(ymlBuf.toString('utf8'))
       const remoteVersion = manifest.version
-      const localVersion = app.getVersion()
+      const localVersion = electron().app.getVersion()
       console.log(`[updater] local=${localVersion} remote=${remoteVersion} platform=${platform}`)
       if (!remoteVersion) throw new Error('manifest missing version field')
       if (compareVersion(remoteVersion, localVersion) <= 0) {
@@ -267,10 +368,15 @@ class Updater {
 
       const picked = pickArtifact(manifest)
       if (!picked || !picked.url) throw new Error('manifest has no artifact matching this platform/arch')
-      const artifactName = picked.url
+      const loc = artifactLocation(this.feedBaseUrl, picked.url)
+      if (!loc) throw new Error(`manifest artifact name not accepted: ${String(picked.url).slice(0, 80)}`)
+      const artifactName = loc.name
       const expectedSha = picked.sha512
+      // Nothing is installed without the checksum from the authenticated feed.
+      if (!expectedSha) throw new Error(`manifest has no sha512 for ${artifactName}`)
       console.log(`[updater] downloading ${artifactName} (${expectedSha?.slice(0, 12)}...)`)
 
+      const { app, dialog, BrowserWindow } = electron()
       const updatesDir = path.join(app.getPath('userData'), 'updates')
       fs.mkdirSync(updatesDir, { recursive: true })
       const artifactPath = path.join(updatesDir, artifactName)
@@ -288,7 +394,7 @@ class Updater {
       } catch {}
 
       let lastEmitPct = -1
-      await downloadResumable(`${this.feedBaseUrl}/${artifactName}`, headers, artifactPath, (got, total) => {
+      await downloadResumable(loc.href, headers, artifactPath, (got, total) => {
         const pct = Math.floor((got / total) * 100)
         // Throttle to whole percentage steps to avoid flooding IPC.
         if (pct !== lastEmitPct) {
@@ -322,8 +428,7 @@ class Updater {
       })
       if (result.response !== 0) return { state: 'pending', artifactPath }
 
-      this.installPending()
-      return { state: 'installing' }
+      return this.installPending() ? { state: 'installing' } : { state: 'pending', artifactPath }
     } catch (err) {
       this.lastError = err.message
       console.warn('[updater] error:', err.message)
@@ -337,15 +442,42 @@ class Updater {
 
   // Called by the renderer's "Restart now" button on the in-app banner. Same
   // entry point as the dialog button — renderer doesn't need to know the
-  // artifact path.
+  // artifact path. False when nothing is pending or the update has to be
+  // installed by hand (macOS, see macInstallBlocker).
   installPending() {
     if (!this.pendingArtifactPath) return false
+    if (process.platform === 'darwin') {
+      const blocker = macInstallBlocker(macAppBundle())
+      if (blocker) {
+        this.emit({ kind: 'error', error: `${blocker} The update is downloaded: install it by hand (the folder opens now).` })
+        try { electron().shell.showItemInFolder(this.pendingArtifactPath) } catch {}
+        return false
+      }
+    }
     this.emit({ kind: 'installing', remoteVersion: this.pendingVersion })
     this.spawnInstallerAndQuit(this.pendingArtifactPath)
     return true
   }
 
+  /**
+   * After a restart: did the last macOS update fail? The script records
+   * its outcome in userData/updates/last-update.json; a failure is reported
+   * once (event + return value) and the file removed.
+   */
+  lastInstallResult() {
+    try {
+      const file = path.join(electron().app.getPath('userData'), 'updates', 'last-update.json')
+      const r = JSON.parse(fs.readFileSync(file, 'utf8'))
+      fs.rmSync(file, { force: true })
+      if (r && r.ok === false) {
+        this.emit({ kind: 'error', error: `The update could not be installed automatically (${r.reason || 'unknown reason'}). OpenLex is still on the previous version; install the new one by hand.` })
+      }
+      return r
+    } catch { return null }
+  }
+
   spawnInstallerAndQuit(artifactPath) {
+    const { app } = electron()
     if (process.platform === 'win32') {
       // electron-builder NSIS in oneClick mode (our default) already does
       // everything we need: it shows its own minimal progress UI, installs
@@ -372,9 +504,8 @@ class Updater {
       return
     }
     if (process.platform === 'darwin') {
-      // Mac: spawn a tiny launcher script that waits for us to exit, unzips
-      // the new build over the running .app via ditto (preserves metadata,
-      // extended attributes), and re-launches the new bundle. We just exit.
+      // Mac: a script waits for us to exit, swaps in the new OpenLex.app
+      // from the verified zip and starts it (macUpdateScript). We just exit.
       this._spawnMacUpdater(artifactPath)
       setTimeout(() => app.quit(), 500)
       return
@@ -388,43 +519,26 @@ class Updater {
       return
     }
     // Unknown platform — leave the file in updates/ and tell user to open it
-    const { shell } = require('electron')
-    shell.showItemInFolder(artifactPath)
+    electron().shell.showItemInFolder(artifactPath)
     setTimeout(() => app.quit(), 500)
   }
 
-  // Mac update strategy:
-  //   1. Write a shell script that:
-  //        - waits 2s for the running LexVault to exit
-  //        - unzips the downloaded archive into a temp dir
-  //        - `ditto` copies the new LexVault.app over the old one
-  //        - removes quarantine xattrs (we just verified SHA512 ourselves)
-  //        - relaunches the new LexVault.app
-  //   2. Spawn that script detached, then quit.
   _spawnMacUpdater(zipPath) {
     const os = require('os')
-    const appBundle = path.dirname(path.dirname(path.dirname(process.execPath)))
-    // process.execPath under a packaged .app is /Path/To/LexVault.app/Contents/MacOS/LexVault
-    // so .../MacOS/LexVault → ../Contents → ../LexVault.app
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lexvault-update-'))
+    const { app } = electron()
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openlex-update-'))
     const script = path.join(tmpDir, 'apply-update.sh')
-    fs.writeFileSync(script, [
-      '#!/bin/bash',
-      'set -e',
-      'echo "[updater] waiting for LexVault to exit"',
-      'sleep 2',
-      `cd "${tmpDir}"`,
-      `/usr/bin/ditto -xk "${zipPath}" .`,
-      'NEW_APP=$(find . -maxdepth 3 -name "*.app" -type d | head -1)',
-      'if [ -z "$NEW_APP" ]; then echo "[updater] no .app in zip"; exit 1; fi',
-      'echo "[updater] copying $NEW_APP over ' + appBundle + '"',
-      `/usr/bin/ditto "$NEW_APP" "${appBundle}"`,
-      `/usr/bin/xattr -dr com.apple.quarantine "${appBundle}" 2>/dev/null || true`,
-      'echo "[updater] relaunching"',
-      `/usr/bin/open "${appBundle}"`,
-      'rm -rf "$0"/..',
-    ].join('\n'), { mode: 0o755 })
-    const child = spawn('/bin/bash', [script], { detached: true, stdio: 'ignore' })
+    fs.writeFileSync(script, macUpdateScript({
+      zipPath,
+      appBundle: macAppBundle(),
+      pid: process.pid,
+      resultFile: path.join(app.getPath('userData'), 'updates', 'last-update.json'),
+      workDir: tmpDir,
+    }), { mode: 0o755 })
+    const child = spawn('/bin/bash', [script], {
+      detached: true,
+      stdio: ['ignore', fs.openSync(path.join(tmpDir, 'apply-update.log'), 'a'), fs.openSync(path.join(tmpDir, 'apply-update.log'), 'a')],
+    })
     child.unref()
   }
 
@@ -451,7 +565,7 @@ class Updater {
     // electron-builder NSIS hardcodes this path when perMachine is false.
     const installedExe = path.join(
       process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'),
-      'Programs', app.getName(), `${app.getName()}.exe`
+      'Programs', electron().app.getName(), `${electron().app.getName()}.exe`
     )
 
     const pid = process.pid
@@ -504,7 +618,7 @@ class Updater {
       `cp -f "${newAppImage}" "${runningAppImage}"`,
       `chmod +x "${runningAppImage}"`,
       `nohup "${runningAppImage}" >/dev/null 2>&1 &`,
-      'rm -rf "$0"/..',
+      `rm -rf "${tmpDir}"`,
     ].join('\n'), { mode: 0o755 })
     const child = spawn('/bin/bash', [script], { detached: true, stdio: 'ignore' })
     child.unref()
@@ -512,3 +626,10 @@ class Updater {
 }
 
 module.exports = Updater
+module.exports.parseYml = parseYml
+module.exports.pickArtifact = pickArtifact
+module.exports.artifactLocation = artifactLocation
+module.exports.platformKey = platformKey
+module.exports.macAppBundle = macAppBundle
+module.exports.macInstallBlocker = macInstallBlocker
+module.exports.macUpdateScript = macUpdateScript

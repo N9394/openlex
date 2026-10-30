@@ -14,9 +14,14 @@
 #                                        (and install.ps1) always serve the latest ones
 #   OpenLex-X.Y.Z-mac-arm64.dmg          desktop app, Apple Silicon
 #   OpenLex-X.Y.Z-mac-x64.dmg            desktop app, Intel Mac
+#   OpenLex-X.Y.Z-mac-arm64.zip, -mac-x64.zip   the same apps as zip: what
+#                                        in-app updates on macOS install
 #   OpenLex-X.Y.Z-windows-x64-setup.exe  desktop app, Windows (NSIS)
 #   OpenLex-X.Y.Z-linux-x64.AppImage     desktop app, Linux
 #   <installer>.sha256, <installer>.cdx.json   checksum and SBOM (syft) per installer
+#   latest-mac.yml, latest.yml, latest-linux.yml   update metadata (version,
+#                                        file names, SHA-512, sizes) in the shape
+#                                        main/updater.js reads from an update feed
 #   SHA256SUMS                           checksums of all of the above
 #   <file>.bundle                        Sigstore (cosign, keyless) signature bundle for each file
 # plus GitHub build provenance attestations for every file and an SBOM
@@ -107,7 +112,7 @@ jobs:
 
   sign:
     name: sign and attest
-    needs: [build, desktop]
+    needs: [build, desktop, update-metadata]
     if: github.ref_type == 'tag'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -132,7 +137,7 @@ jobs:
         run: |
           sha256sum -c SHA256SUMS && sha256sum -c "openlex-$VERSION.tar.gz.sha256"
           for f in OpenLex-*.sha256; do sha256sum -c "$f"; done
-          for f in OpenLex-*; do case "$f" in *.sha256) ;; *) sha256sum "$f" >> SHA256SUMS ;; esac; done
+          for f in OpenLex-* latest*.yml; do case "$f" in *.sha256) ;; *) sha256sum "$f" >> SHA256SUMS ;; esac; done
           sort -k2 -o SHA256SUMS SHA256SUMS
           cat SHA256SUMS
           ls -la
@@ -166,6 +171,11 @@ jobs:
             out/SHA256SUMS
             out/OpenLex-${{ env.VERSION }}-mac-arm64.dmg
             out/OpenLex-${{ env.VERSION }}-mac-x64.dmg
+            out/OpenLex-${{ env.VERSION }}-mac-arm64.zip
+            out/OpenLex-${{ env.VERSION }}-mac-x64.zip
+            out/latest-mac.yml
+            out/latest.yml
+            out/latest-linux.yml
             out/OpenLex-${{ env.VERSION }}-windows-x64-setup.exe
             out/OpenLex-${{ env.VERSION }}-linux-x64.AppImage
             out/OpenLex-${{ env.VERSION }}-*.cdx.json
@@ -184,6 +194,16 @@ jobs:
         with:
           subject-path: out/OpenLex-${{ env.VERSION }}-mac-x64.dmg
           sbom-path: out/OpenLex-${{ env.VERSION }}-mac-x64.dmg.cdx.json
+      - name: SBOM attestation, macOS update zip (Apple Silicon)
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: out/OpenLex-${{ env.VERSION }}-mac-arm64.zip
+          sbom-path: out/OpenLex-${{ env.VERSION }}-mac-arm64.zip.cdx.json
+      - name: SBOM attestation, macOS update zip (Intel)
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: out/OpenLex-${{ env.VERSION }}-mac-x64.zip
+          sbom-path: out/OpenLex-${{ env.VERSION }}-mac-x64.zip.cdx.json
       - name: SBOM attestation, Windows
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
@@ -234,7 +254,7 @@ jobs:
           cat >> notes.md <<EOF
 
           ---
-          **Desktop app:** \`OpenLex-$VERSION-mac-arm64.dmg\` (Apple Silicon), \`OpenLex-$VERSION-mac-x64.dmg\` (Intel Mac), \`OpenLex-$VERSION-windows-x64-setup.exe\`, \`OpenLex-$VERSION-linux-x64.AppImage\`. These builds are not signed by Apple or Microsoft: how to open them the first time is in [docs/guides/desktop-app.md](https://github.com/$GH_REPO/blob/$TAG/docs/guides/desktop-app.md).
+          **Desktop app:** \`OpenLex-$VERSION-mac-arm64.dmg\` (Apple Silicon), \`OpenLex-$VERSION-mac-x64.dmg\` (Intel Mac), \`OpenLex-$VERSION-windows-x64-setup.exe\`, \`OpenLex-$VERSION-linux-x64.AppImage\`. The \`.zip\` files and \`latest*.yml\` are for in-app updates. These builds are not signed by Apple or Microsoft: how to open them the first time is in [docs/guides/desktop-app.md](https://github.com/$GH_REPO/blob/$TAG/docs/guides/desktop-app.md).
 
           **Verify this download:** every file is signed (Sigstore, \`*.bundle\`) and has a build provenance attestation from this repository's release workflow. See [docs/VERIFY.md](https://github.com/$GH_REPO/blob/$TAG/docs/VERIFY.md).
           EOF
@@ -300,8 +320,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { name: macOS Apple Silicon, os: macos-latest, target: mac, arch: arm64, file: mac-arm64.dmg }
-          - { name: macOS Intel, os: macos-latest, target: mac, arch: x64, file: mac-x64.dmg }
+          - { name: macOS Apple Silicon, os: macos-latest, target: mac, arch: arm64, file: mac-arm64.dmg, zip: mac-arm64.zip }
+          - { name: macOS Intel, os: macos-latest, target: mac, arch: x64, file: mac-x64.dmg, zip: mac-x64.zip }
           - { name: Windows, os: windows-latest, target: win, arch: x64, file: windows-x64-setup.exe }
           - { name: Linux, os: ubuntu-latest, target: linux, arch: x64, file: linux-x64.AppImage }
     env:
@@ -375,12 +395,31 @@ jobs:
       - name: Smoke test (bundled engine + Qdrant from the packaged app)
         if: matrix.target != 'linux'
         run: node scripts/smoke-packaged.js --arch=${{ matrix.arch }}
+      - name: Check the update zip (macOS)
+        if: matrix.target == 'mac'
+        run: |
+          z="dist/OpenLex-$VERSION-${{ matrix.zip }}"
+          [ -f "$z" ] || { echo "::error::$z not built"; ls dist; exit 1; }
+          t=$(mktemp -d)
+          ditto -x -k "$z" "$t"
+          app="$t/OpenLex.app"
+          [ -d "$app" ] || { echo "::error::$z has no OpenLex.app at its top"; ls -la "$t"; exit 1; }
+          v=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")
+          id=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist")
+          [ "$v" = "$VERSION" ] || { echo "::error::zip app version $v, expected $VERSION"; exit 1; }
+          [ "$id" = "com.lexvault.app" ] || { echo "::error::zip app id $id"; exit 1; }
+          # Framework symlinks must survive the zip, or the signature breaks.
+          [ -L "$app/Contents/Frameworks/Electron Framework.framework/Versions/Current" ] || { echo "::error::framework symlinks lost in the zip"; exit 1; }
+          codesign --verify --deep --strict --verbose=2 "$app"
+          echo "update zip ok: $z ($v, $id)"
+          rm -rf "$t"
       - name: Collect the installer
         run: |
           f="OpenLex-$VERSION-${{ matrix.file }}"
           mkdir -p ../../desktop-out
           [ -f "dist/$f" ] || { echo "::error::dist/$f not built"; ls dist; exit 1; }
           cp "dist/$f" ../../desktop-out/
+          if [ -n "${{ matrix.zip }}" ]; then cp "dist/OpenLex-$VERSION-${{ matrix.zip }}" ../../desktop-out/; echo "ZIP=OpenLex-$VERSION-${{ matrix.zip }}" >> "$GITHUB_ENV"; fi
           case "${{ matrix.target }}-${{ matrix.arch }}" in
             mac-arm64) echo "UNPACKED=desktop/electron/dist/mac-arm64" >> "$GITHUB_ENV" ;;
             mac-x64)   echo "UNPACKED=desktop/electron/dist/mac" >> "$GITHUB_ENV" ;;
@@ -403,10 +442,58 @@ jobs:
           node -e "const s=require('./$FILE.cdx.json'); if(!s.components||!s.components.length) process.exit(1); console.log('SBOM: '+s.components.length+' components')"
           if command -v sha256sum >/dev/null; then sha256sum "$FILE" > "$FILE.sha256"; else shasum -a 256 "$FILE" > "$FILE.sha256"; fi
           cat "$FILE.sha256"
+          if [ -n "${ZIP:-}" ]; then
+            # The zip holds the same app as the dmg: same SBOM.
+            cp "$FILE.cdx.json" "$ZIP.cdx.json"
+            shasum -a 256 "$ZIP" > "$ZIP.sha256"
+            cat "$ZIP.sha256"
+          fi
           ls -la
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: desktop-${{ matrix.target }}-${{ matrix.arch }}
           path: desktop-out/
+          if-no-files-found: error
+          retention-days: 7
+
+  # latest-mac.yml / latest.yml / latest-linux.yml for update feeds (the
+  # shape main/updater.js reads). Runs on dry runs too, so a "Run workflow"
+  # checks it. Named desktop-* so the sign job picks it up with the installers.
+  update-metadata:
+    name: update metadata
+    needs: [build, desktop]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VERSION: ${{ needs.build.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: desktop/electron/scripts
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: desktop-*
+          path: installers
+          merge-multiple: true
+      - name: Write latest*.yml
+        run: |
+          node desktop/electron/scripts/update-info.js installers "$VERSION"
+          mkdir -p meta && mv installers/latest*.yml meta/
+          for f in meta/*.yml; do echo "── $f"; cat "$f"; done
+          # every macOS update zip is listed, with the SHA-512 of the file built here
+          for a in arm64 x64; do
+            z="OpenLex-$VERSION-mac-$a.zip"
+            grep -q "url: $z" meta/latest-mac.yml || { echo "::error::$z missing from latest-mac.yml"; exit 1; }
+            want=$(openssl dgst -sha512 -binary "installers/$z" | base64 -w0)
+            grep -q "sha512: $want" meta/latest-mac.yml || { echo "::error::$z SHA-512 mismatch"; exit 1; }
+          done
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: desktop-update-metadata
+          path: meta/
           if-no-files-found: error
           retention-days: 7

@@ -78,7 +78,8 @@
     "mac": {
       "category": "public.app-category.business",
       "target": [
-        "dmg"
+        "dmg",
+        "zip"
       ],
       "identity": null,
       "icon": "build/icon.icns",

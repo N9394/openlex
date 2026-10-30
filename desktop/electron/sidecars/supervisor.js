@@ -326,7 +326,7 @@ log_level: WARN
     }
     const modelPath = this.modelPath !== undefined ? this.modelPath : path.join(this.paths.models, 'llm', this._readHardware().model_filename)
     if (modelPath && !fs.existsSync(modelPath)) {
-      throw new Error(`LLM model missing at ${modelPath}. Boot should have downloaded it.`)
+      throw new Error(`LLM model missing at ${modelPath}.`)
     }
     // No local model: the proxy still runs so cloud / custom providers work
     // through the engine; local requests get a clear error (_ensureLLMRunning).

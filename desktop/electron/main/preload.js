@@ -70,7 +70,20 @@ contextBridge.exposeInMainWorld('lexvault', {
   // Manually download a specific entitled jurisdiction pack
   downloadPack: (code) => ipcRenderer.invoke('lexvault:downloadPack', code),
 
-  // Force re-download of the LLM model (deletes existing + refetches with full SHA validation)
+  // A local model the distribution recommends (null in the community build
+  // or when it recommends none): { variant, filename, title, sizeBytes,
+  // installed, download }. Downloaded only on click; progress arrives via
+  // onModelDownload ({ filename, downloaded, total, pct }); the result is
+  // { ok, file } or { ok: false, error } — a failure never stops the App.
+  localModelSuggestion: () => ipcRenderer.invoke('lexvault:localModelSuggestion'),
+  downloadSuggestedModel: () => ipcRenderer.invoke('lexvault:downloadSuggestedModel'),
+  onModelDownload: (cb) => {
+    const listener = (_e, payload) => cb(payload)
+    ipcRenderer.on('lexvault:model-download', listener)
+    return () => ipcRenderer.removeListener('lexvault:model-download', listener)
+  },
+  // Download the recommended model again, checked against its full SHA-256
+  // (the old file is replaced only once the new one is verified)
   refetchModel: () => ipcRenderer.invoke('lexvault:refetchModel'),
 
   // Hardware detail (raw hardware.json, includes detected.gpu.diag)

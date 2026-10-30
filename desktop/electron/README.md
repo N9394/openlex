@@ -27,6 +27,46 @@ distributor's build adds its server with `OPENLEX_DISTRIBUTION=<path to
 distribution.json>` (and `OPENLEX_PUBLIC_KEY_PATH` for licence checks) at
 build time; that file never goes into this repository.
 
+### Licensed (distribution) mode
+
+Where the App looks (`main/distribution.js`), first match wins:
+
+| What | Where |
+|---|---|
+| `distribution.json` | 1. `$OPENLEX_DISTRIBUTION` (a path) · 2. `<userData>/distribution.json` (an installer or IT can drop it there) · 3. `distribution.json` built into the installer's resources · none: community build |
+| licence token | `<userData>/token.txt` (Settings → License writes it; an installer may drop it there, and on the next start the App fetches the signed licence with it) |
+| signed licence | `<userData>/license.json` |
+
+`<userData>` is the settings folder, still called `LexVault` so existing
+installs keep their data: macOS `~/Library/Application Support/LexVault`,
+Windows `%APPDATA%\LexVault`, Linux `~/.config/LexVault`. The App passes the
+file it found on to the engine (`OPENLEX_DISTRIBUTION`).
+
+With a licence the App sets up the AI exactly like the community App: it
+downloads no model at start and never stops because a model is missing; the
+first-start setup page offers a local model, the lawyer's own key or help.
+Model files in `models/llm` are never deleted at start. A distribution may
+recommend a model its server provides (`GET <server>/api/app/model/<variant>`
+with the token) by adding `"localModel": true` (the model `hardware-tiers.json`
+names for the computer) or `"localModel": { "variant", "filename", "sizeBytes",
+"sha256", "title" }` to `distribution.json`; it appears on the setup page's
+"On this computer" card and downloads only on a click, with progress.
+
+### Updates (distributions only)
+
+The update feed is the distribution's server (`<server>/api/app/update/{win,mac,mac-x64,linux}`,
+with the token), serving the `latest*.yml` the release workflow writes
+(`scripts/update-info.js`) and the files they list. Every file is checked
+against its SHA-512 from the feed before anything is installed. macOS
+installs from `OpenLex-X.Y.Z-mac-{arm64,x64}.zip`, not the dmg, and without
+Squirrel.Mac (it needs a Developer ID signature): after the App quits, a
+script unpacks the zip next to the installed `OpenLex.app`, checks the new
+bundle (`codesign --verify --deep --strict`, which works for ad-hoc
+signatures, and the same bundle id), swaps the two bundles, rolling back on
+any failure, and starts OpenLex again. If the App cannot replace itself (not
+writable, started from the dmg or a translocated copy, or macOS refuses), it
+says so and shows the downloaded zip to install by hand.
+
 ## Layout
 
 ```

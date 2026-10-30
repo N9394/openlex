@@ -4,6 +4,14 @@ All notable changes to OpenLex are listed here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+### Fixed
+- **Desktop app with a licence (distribution builds) sets up the AI like the community app.** It no longer downloads a fixed model at first start or quits with "model setup failed" when that download fails: the first-start setup page (On this computer · I brought my own key · I need help) handles it. A distribution can recommend its own model (`"localModel"` in `distribution.json`); it is offered on the "On this computer" card and downloads only on a click, with progress. A failed download says so and the app keeps running.
+- **Model files are never deleted at start.** The licensed app used to remove every GGUF that was not its tier's model; now all of them stay (Settings → AI removes one when you ask). "Download again" in Settings → Dependencies replaces the file only once the new one is complete and verified.
+- **macOS in-app updates.** Releases now also ship `OpenLex-X.Y.Z-mac-arm64.zip` and `-mac-x64.zip` (checksums, Sigstore bundles, attestations and SBOMs like the dmg) plus `latest-mac.yml`, `latest.yml` and `latest-linux.yml` update metadata. The updater installs the zip without Squirrel.Mac (which needs a Developer ID signature): it checks the new app's signature and bundle id, swaps the app bundle with a rollback on failure and restarts; when it cannot (app not writable, run from the dmg), it says so and shows the download. It also refuses update files without a SHA-512, of the wrong type or architecture, or with names outside the updates folder.
+
+### Changed
+- The desktop app finds `distribution.json` in `$OPENLEX_DISTRIBUTION`, then in its settings folder (`<userData>/distribution.json`, so installers can drop it there), then in the installer; the licence token stays in `<userData>/token.txt`. Documented in `desktop/electron/README.md`.
+
 ## [0.3.0] - 2026-10-30
 
 First release with the desktop app as a download (macOS, Windows, Linux; unsigned public builds, signed builds through support). The app now runs entirely on the open engine.
