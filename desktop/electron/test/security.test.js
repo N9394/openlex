@@ -93,3 +93,13 @@ test('main.js installs the hardening and the window is sandboxed', () => {
   assert.match(src, /nodeIntegration: false/)
   assert.doesNotMatch(src, /shell\.openExternal\(url\)\)/, 'no unchecked openExternal')
 })
+
+test('the updater talks https only and keeps the licence token on the feed host', () => {
+  const U = require('../main/updater')
+  for (const u of ['https://updates.example/api/app/update/mac', 'http://127.0.0.1:9/x', 'http://localhost:9/x']) assert.ok(U.transportOk(u), u)
+  for (const u of ['http://updates.example/x', 'ftp://x/y', 'file:///tmp/x.zip', 'nonsense']) assert.ok(!U.transportOk(u), u)
+  const h = { Authorization: 'Bearer lv_live_x', 'User-Agent': 'u' }
+  assert.strictEqual(U.headersFor('https://feed.example/a.zip', h, 'https://feed.example/api').Authorization, 'Bearer lv_live_x')
+  assert.strictEqual(U.headersFor('https://cdn.example/a.zip', h, 'https://feed.example/api').Authorization, undefined)
+  assert.strictEqual(U.headersFor('https://cdn.example/a.zip', h, 'https://feed.example/api')['User-Agent'], 'u')
+})
