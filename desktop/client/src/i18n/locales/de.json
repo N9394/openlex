@@ -1617,7 +1617,13 @@
     "remove": "Entfernen",
     "removed": "Von diesem Computer entfernt.",
     "keepCountry": "Ein Land auf diesem Computer speichern…",
-    "keepLocal": "Auf diesem Computer speichern…"
+    "keepLocal": "Auf diesem Computer speichern…",
+    "secReady": "Bereit",
+    "secKey": "Braucht Ihren Schlüssel oder eine Anmeldung",
+    "secOff": "Aus",
+    "otherCountries": "Andere Länder ({{n}})",
+    "gateway": "Zugang zu vielen Ländern",
+    "used": "in dieser Akte {{count}}-mal genutzt"
   },
   "keyCard": {
     "saved": "Der Schlüssel für {{name}} ist im Schlüsselbund dieses Computers gespeichert. Stellen Sie Ihre Frage erneut, um ihn zu nutzen.",

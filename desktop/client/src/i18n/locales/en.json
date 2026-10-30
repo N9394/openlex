@@ -1846,5 +1846,13 @@
     "recommended": "recommended",
     "keyIntro": "Choose the service your key is from, paste the key and press \"Use\". OpenLex tests it first (without sending any of your documents). The key stays in this computer's keychain.",
     "more": "More services ({{n}})"
+  },
+  "law": {
+    "secReady": "Ready",
+    "secKey": "Needs your key or a sign-in",
+    "secOff": "Off",
+    "otherCountries": "Other countries ({{n}})",
+    "gateway": "Gateway: many countries",
+    "used": "used {{count}} times in this matter"
   }
 }
