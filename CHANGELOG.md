@@ -4,6 +4,10 @@ All notable changes to OpenLex are listed here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-10-31
+
+(0.3.1–0.3.3 were built but not published; their changes, listed below, ship with this release.)
+
 ### Fixed
 - **The redaction check no longer claims a name finder that did not run.** The optional name finder needs a native ONNX runtime, which the 0.3.x installers and the CLI did not contain: the model could be downloaded but never ran, and the check still said "with name finder". Now the engine tells apart *available* (the runtime loads on this computer) from *installed* (the model files are there); Settings offers the download only where it can run; and each check says "basic detection" unless the model really went through every text of that check — with the reason (did not run for this text / needs the desktop app / cannot run on this computer). The data line and the AI record note "checked by you (basic detection)" or "(with name finder)" (English and German).
 
