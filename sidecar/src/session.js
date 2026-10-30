@@ -66,7 +66,7 @@ function compactSources(list) {
 }
 function compactData(list) {
   if (!Array.isArray(list)) return []
-  return list.slice(0, 10).map((m) => ({ provider: str(m?.provider, 40), label: str(m?.label, 60), model: str(m?.model, 80) || null, local: !!m?.local, region: str(m?.region, 30) || null, redacted: !!m?.redacted, calls: Math.max(1, +m?.calls || 1) }))
+  return list.slice(0, 10).map((m) => ({ provider: str(m?.provider, 40), label: str(m?.label, 60), model: str(m?.model, 80) || null, local: !!m?.local, region: str(m?.region, 30) || null, redacted: !!m?.redacted, ...(m?.checked ? { checked: true } : {}), calls: Math.max(1, +m?.calls || 1) }))
 }
 
 class Session {

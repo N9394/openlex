@@ -90,7 +90,7 @@ test('service names never show a model id; the data line counts calls', () => {
   let models = []
   models = x.addModel(models, { provider: 'anthropic', model: 'claude-x', region: 'eu-central-1', redacted: true })
   models = x.addModel(models, { provider: 'anthropic', model: 'claude-x', region: 'eu-central-1', redacted: true })
-  assert.strictEqual(x.dataLine(models, []).text, 'Sent to: Claude (Anthropic, EU) — names hidden · 2 times')
+  assert.strictEqual(x.dataLine(models, []).text, 'Sent to: Claude (Anthropic, EU) — names and numbers hidden (pseudonymised) · 2 times')
   assert.deepStrictEqual(x.dataLine([], []), { text: 'Stayed on this computer', left: false })
   assert.strictEqual(x.dataLine([{ local: true, calls: 3 }], ['RIS (Austria\'s federal law database)']).left, true)
 })

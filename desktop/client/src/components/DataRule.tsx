@@ -1,13 +1,15 @@
 // "Where client data may go" (/data, Settings): the client-data rule in plain
 // words, translated. The engine's policy (GET/POST /api/policy) decides what
 // may leave this computer: nothing (only this computer), or only the services
-// ticked here; optionally only EU regions, and names hidden. Privileged
+// ticked here; optionally only EU regions, the redaction check (on by default)
+// and names and numbers hidden. Privileged
 // matters always stay on this computer. The power-user view stays in More tools.
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Cloud, Lock } from 'lucide-react'
 import { engine } from '../lib/commands'
 import { friendly } from '../lib/turn'
+import RedactionSetting from './RedactionSetting'
 
 interface Target { id: string; label: string }
 
@@ -75,9 +77,10 @@ export default function DataRule({ say }: { say?: (text: string, kind?: 'ok' | '
         ))}
       </div>
       <div className="border-t border-tobacco/60 pt-3 space-y-2">
+        <RedactionSetting allow={allow} say={say} />
         <label className={`flex items-start gap-2 ${allow ? 'text-cream' : 'text-antique'}`}>
           <input type="checkbox" className="mt-0.5" disabled={!allow || locked} checked={!!rule.redact} onChange={(ev) => set({ ...rule, redact: ev.target.checked })} />
-          <span>{t('data.redact', 'Also hide names')}<span className="block text-xs text-antique">{t('data.redactHint', 'Client and listed names, e-mail addresses, IBANs and phone numbers are replaced before anything goes online.')}</span></span>
+          <span>{t('data.redact', 'Always hide names and numbers, also without the check')}<span className="block text-xs text-antique">{t('data.redactHint', 'Names on the matter\'s list, e-mail addresses, IBANs, ID and phone numbers are replaced (pseudonymised) before anything goes online, even when the redaction check is off.')}</span></span>
         </label>
         <label className={`flex items-start gap-2 ${allow ? 'text-cream' : 'text-antique'}`}>
           <input type="checkbox" className="mt-0.5" disabled={!allow || locked} checked={(rule.regions || []).includes('eu')} onChange={(ev) => set({ ...rule, regions: ev.target.checked ? ['eu'] : undefined })} />

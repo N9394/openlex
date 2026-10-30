@@ -18,7 +18,7 @@ import DiligenceCard from './DiligenceCard'
 
 const STATUS: Record<string, string> = { waiting: '·', reading: '▸', done: '✓', failed: '!', skipped: '–' }
 
-export default function BatchCard({ attachments = [], matterId, onStarted, kind = 'analyse', options, jobId, sessionId, message }: {
+export default function BatchCard({ attachments = [], matterId, onStarted, kind = 'analyse', options, jobId, sessionId, message, redactionCheck }: {
   attachments?: string[]
   matterId: string | null
   onStarted?: (id: string) => void
@@ -29,6 +29,8 @@ export default function BatchCard({ attachments = [], matterId, onStarted, kind 
   /** The conversation it belongs to (it comes back there). */
   sessionId?: string | null
   message?: string
+  /** The confirmed redaction check covering every document (online AI). */
+  redactionCheck?: string
 }) {
   const { t } = useTranslation()
   const [estimate, setEstimate] = useState<any>(null)
@@ -50,12 +52,12 @@ export default function BatchCard({ attachments = [], matterId, onStarted, kind 
   const start = useCallback(async () => {
     setError(null)
     try {
-      const r = await engine()!.call('POST', '/api/batch/start', { attachments, kind, ...(options ? { options } : {}), ...(matterId ? { matterId } : {}), ...(sessionId ? { sessionId, message } : {}), confirmed: true })
+      const r = await engine()!.call('POST', '/api/batch/start', { attachments, kind, ...(options ? { options } : {}), ...(matterId ? { matterId } : {}), ...(sessionId ? { sessionId, message } : {}), ...(redactionCheck ? { redactionCheck } : {}), confirmed: true })
       setJob(r.batch)
       onStarted?.(r.batch.id)
       poll(r.batch.id)
     } catch (err) { setError(friendly(err)) }
-  }, [attachments, kind, options, matterId, sessionId, message, onStarted, poll])
+  }, [attachments, kind, options, matterId, sessionId, message, redactionCheck, onStarted, poll])
 
   useEffect(() => {
     if (jobId) { poll(jobId); return }

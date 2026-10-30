@@ -27,7 +27,7 @@ test('terms (longest first, case-insensitive, word bounded) and patterns', () =>
   assert.match(out, /§ 1295 ABGB, 2026/, 'statute numbers and years untouched')
   assert.match(out, /Acmeville/, 'no partial-word replacement')
   assert.strictEqual(r.restore(out), 'Acme Holding GmbH (Acme) and Dr. Eva Huber, eva.huber@acme.at, IBAN AT61 1904 3002 3457 3201, tel +43 664 1234567. § 1295 ABGB, 2026. Acmeville stays.')
-  assert.strictEqual(r.restore('[[PARTY_2]]] and [PARTY_1]]'), 'Dr. Eva Huber and Acme Holding GmbH', 'tolerates a lost/extra bracket')
+  assert.strictEqual(r.restore('[[PARTY_3]]] and [PARTY_1]]'), 'Dr. Eva Huber and Acme Holding GmbH', 'tolerates a lost/extra bracket')
 })
 
 test('stream restorer handles placeholders split across chunks', () => {
@@ -80,8 +80,9 @@ test('cloud call: provider sees placeholders only, user gets real names', async 
     const audit = fs.readFileSync(policy.AUDIT_PATH, 'utf8').trim().split('\n').map(JSON.parse).pop()
     assert.strictEqual(audit.redacted, 4)
 
-    // Without redact in the rule, the text goes as-is.
+    // Without redact in the rule and with the redaction check switched off, the text goes as-is.
     policy.setRule(m.id, { mode: 'allow-list', providers: ['openai'] })
+    require('../src/redaction_check').setCheck(false)
     await policy.withMatter(m.id, () => llm.chatWithReasoning([{ role: 'user', content: 'Acme Holding GmbH' }]))
     assert.match(seen[1], /Acme Holding GmbH/)
   } finally {

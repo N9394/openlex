@@ -155,6 +155,15 @@ function withRequest(rid, fn) {
   return matterStore.run({ ...(matterStore.getStore() || {}), rid: rid || null }, fn)
 }
 
+/** Run `fn` with a redaction check in context (redaction_check.js within). */
+function withRedaction(ctx, fn) {
+  return matterStore.run({ ...(matterStore.getStore() || {}), redaction: ctx || null }, fn)
+}
+
+function redactionContext() {
+  return matterStore.getStore()?.redaction || null
+}
+
 function currentMatter() {
   return matterStore.getStore()?.matterId || null
 }
@@ -171,4 +180,4 @@ function audit(entry) {
   }
 }
 
-module.exports = { load, save, setRule, ruleFor, check, withMatter, withRequest, observeModels, reportModel, currentMatter, audit, POLICY_PATH, AUDIT_PATH, MODES }
+module.exports = { load, save, setRule, ruleFor, check, withMatter, withRequest, withRedaction, redactionContext, observeModels, reportModel, currentMatter, audit, POLICY_PATH, AUDIT_PATH, MODES }

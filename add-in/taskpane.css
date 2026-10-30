@@ -250,6 +250,15 @@ h4 { font-size: 0.78rem; margin: 0.6rem 0 0.2rem; }
 .perm-outcome { font-size: 0.78rem; font-style: italic; color: var(--text-dim); }
 .msg.permission.settled { border-color: var(--hairline); background: transparent; }
 
+/* ── redaction check (compact list) ───────────────────────────────────── */
+.rc-group { margin-top: 0.35rem; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim); }
+.rc-row { display: flex; align-items: center; gap: 0.35rem; font-size: 0.8rem; min-width: 0; }
+.rc-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rc-meta { color: var(--text-dim); font-size: 0.7rem; white-space: nowrap; }
+.rc-add { display: flex; align-items: center; gap: 0.35rem; margin-top: 0.35rem; }
+.rc-input { flex: 1; min-width: 0; font: inherit; font-size: 0.8rem; padding: 0.15rem 0.35rem; border: 1px solid var(--hairline-strong); border-radius: 6px; background: var(--glass); color: var(--text); }
+.rc-added { display: flex; flex-direction: column; }
+
 /* ── scorecard, obligations ────────────────────────────────────────────── */
 .scard, .oclist { align-self: stretch; background: var(--glass); border: 1px solid var(--hairline); border-radius: var(--r-card); padding: 0.55rem 0.7rem; }
 .scard-head { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; }

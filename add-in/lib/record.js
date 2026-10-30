@@ -50,7 +50,7 @@
     return b
   }
 
-  /** "12 requests · 3 sent to Claude (Anthropic, EU), names hidden · … · record intact ✓" */
+  /** "12 requests · 3 sent to Claude (Anthropic, EU), names and numbers hidden · … · record intact ✓" */
   function summaryLine(r) {
     const text = (r && r.summary && r.summary.text) || 'Nothing recorded yet'
     const v = r && r.verify

@@ -73,6 +73,9 @@ export function createApi(c = client) {
     setWorkspace: (p) => call('POST', '/api/config/workspace', { path: p }),
     addFolder: (p, matterId) => call('POST', '/api/library/folders', { path: p, matterId }),
     chat: (body, onEvent, signal) => stream('/api/chat', body, onEvent, signal),
+    redactionCheck: (body) => call('POST', '/api/redaction/check', body),
+    redactionConfirm: (id, d) => call('POST', '/api/redaction/confirm', { id, ...d }),
+    redactionCancel: (id) => call('POST', '/api/redaction/cancel', { id }),
     panelEstimate: (body) => call('POST', '/api/panel/estimate', body),
     panel: (body, onEvent, signal) => stream('/api/panel/run', body, onEvent, signal),
     judge: () => call('GET', '/api/config/judge'),
@@ -156,7 +159,7 @@ export function describeModel(info) {
 export function describeRule(rule, matter) {
   if (matter?.privileged) return 'stays on this computer (privileged)'
   if (!rule || rule.mode !== 'allow-list' || !(rule.providers || []).length) return 'stays on this computer'
-  const extras = [rule.regions?.length ? (rule.regions.every(isEu) ? 'EU only' : rule.regions.join(', ')) : '', rule.redact ? 'names hidden' : ''].filter(Boolean)
+  const extras = [rule.regions?.length ? (rule.regions.every(isEu) ? 'EU only' : rule.regions.join(', ')) : '', rule.redact ? 'names and numbers hidden' : ''].filter(Boolean)
   return `may go to ${rule.providers.map(nameOf).join(', ')}${extras.length ? ` (${extras.join(', ')})` : ''}`
 }
 

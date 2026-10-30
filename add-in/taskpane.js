@@ -587,6 +587,108 @@
     if (t.act.stopped && !t.review) addNote(P.activity.stopSentence(t.act), 'note stop-note')
   }
 
+  // ── redaction check: before a question or the document goes to an online AI ──
+  // The compact version of the app's check: the findings as a list (grouped,
+  // each can be unticked), "also hide" for anything missed, then send or
+  // cancel. Only when the matter may use online AI (the engine decides).
+  const DE_UI = /^de/i.test((typeof navigator !== 'undefined' && navigator.language) || '')
+  const RC = DE_UI ? {
+    title: 'Vor dem Senden prüfen, was verdeckt wird',
+    note: 'OpenLex sucht nach Namen, Nummern und Anschriften und verdeckt, was es findet. Es kann etwas übersehen, vor allem indirekte Angaben (eine seltene Berufsbezeichnung, ein einmaliges Ereignis). Bitte prüfen Sie vor dem Senden. Verdeckter Text wird auf Ihrem Computer ersetzt und in der Antwort wiederhergestellt.',
+    basic: 'Einfache Erkennung (Muster, Ihre Liste, Titel und Rechtsformen).',
+    groups: { people: 'Personen', orgs: 'Organisationen', addresses: 'Anschriften', ids: 'Kennungen & Nummern', contact: 'Kontakt', other: 'Sonstiges' },
+    none: 'Nichts zum Verdecken gefunden.', also: 'Auch verdecken:', add: 'Hinzufügen', send: 'Mit diesen Verdeckungen senden', cancel: 'Abbrechen',
+    cancelled: 'Es wurde nichts gesendet.', sent: (n) => `${n} verdeckt — von Ihnen geprüft.`, question: 'Ihre Frage', doc: 'Das Dokument', scanning: 'Suche nach Namen und Nummern zum Verdecken…',
+  } : {
+    title: 'Check what is hidden before sending',
+    note: 'OpenLex looks for names, numbers and addresses and hides what it finds. It can miss things, especially indirect details (a rare job title, a unique event). Please check before sending. Hidden text is replaced on your computer and restored in the answer.',
+    basic: 'Basic detection (patterns, your list, titles and company forms).',
+    groups: { people: 'People', orgs: 'Organisations', addresses: 'Addresses', ids: 'IDs & numbers', contact: 'Contact', other: 'Other' },
+    none: 'Nothing found to hide.', also: 'Also hide:', add: 'Add', send: 'Send with these hidden', cancel: 'Cancel',
+    cancelled: 'Nothing was sent.', sent: (n) => `${n} hidden — checked by you.`, question: 'Your question', doc: 'The document', scanning: 'Looking for names and numbers to hide…',
+  }
+  /** undefined: no check due · the check id: confirmed · null: cancelled. */
+  async function redactionCheck({ message, text }) {
+    let r
+    const wait = addNote(RC.scanning, 'note')
+    try { r = await api('/api/redaction/check', { method: 'POST', body: { docId, message, messageName: RC.question, text, name: RC.doc, lang: DE_UI ? 'de' : 'en' } }) } finally { wait.remove() }
+    if (!r || !r.needed || !r.review) return undefined
+    const review = r.review
+    return new Promise((resolve) => {
+      const card = el('div', 'msg permission redaction-card')
+      card.setAttribute('role', 'group')
+      card.setAttribute('aria-label', RC.title)
+      card.append(el('div', 'perm-q', RC.title), el('div', 'perm-risk', RC.note))
+      if (review.basic) card.appendChild(el('div', 'perm-risk', RC.basic))
+      const state = new Map(review.entries.map((x) => [x.key, x.on]))
+      const added = []
+      if (!review.entries.length) card.appendChild(el('div', 'perm-risk', RC.none))
+      for (const g of review.groups) {
+        const list = review.entries.filter((x) => x.group === g)
+        if (!list.length) continue
+        card.appendChild(el('div', 'rc-group', `${RC.groups[g] || g} (${list.length})`))
+        for (const x of list) {
+          const row = el('label', 'rc-row')
+          const box = document.createElement('input')
+          box.type = 'checkbox'
+          box.checked = !!x.on
+          box.addEventListener('change', () => state.set(x.key, box.checked))
+          row.append(box, el('span', 'rc-text', x.text), el('span', 'rc-meta', `${x.count > 1 ? `×${x.count} · ` : ''}${x.label}${x.confidence < 0.5 ? ' · ?' : ''}`))
+          row.title = x.label
+          card.appendChild(row)
+        }
+      }
+      const addRow = el('div', 'rc-add')
+      const input = document.createElement('input')
+      input.type = 'text'
+      input.className = 'rc-input'
+      input.setAttribute('aria-label', RC.also)
+      const addBtn = el('button', 'btn btn-ghost', RC.add)
+      addBtn.type = 'button'
+      const addedList = el('div', 'rc-added')
+      addBtn.addEventListener('click', () => {
+        const v = input.value.replace(/\s+/g, ' ').trim()
+        if (v.length < 2 || added.includes(v)) return
+        added.push(v)
+        addedList.appendChild(el('div', 'rc-row', `+ ${v}`))
+        input.value = ''
+        input.focus()
+      })
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addBtn.click() } })
+      addRow.append(el('span', 'rc-meta', RC.also), input, addBtn)
+      card.append(addRow, addedList)
+      const actions = el('div', 'perm-actions')
+      const send = el('button', 'btn', RC.send)
+      const cancel = el('button', 'btn btn-ghost', RC.cancel)
+      send.type = 'button'
+      cancel.type = 'button'
+      const settle = (text) => { card.classList.add('settled'); actions.remove(); card.querySelectorAll('input,button').forEach((x) => { x.disabled = true }); card.appendChild(el('div', 'perm-outcome', text)) }
+      send.addEventListener('click', async () => {
+        send.disabled = true
+        try {
+          const off = review.entries.filter((x) => x.on && !state.get(x.key)).map((x) => x.key)
+          const on = review.entries.filter((x) => !x.on && state.get(x.key)).map((x) => x.key)
+          await api('/api/redaction/confirm', { method: 'POST', body: { id: review.id, off, on, add: added.map((t) => ({ text: t, kind: 'OTHER' })) } })
+          settle(RC.sent([...state.values()].filter(Boolean).length + added.length))
+          resolve(review.id)
+        } catch (err) { send.disabled = false; addError(err, 'answer') }
+      })
+      cancel.addEventListener('click', async () => {
+        try { await api('/api/redaction/cancel', { method: 'POST', body: { id: review.id } }) } catch { /* expires anyway */ }
+        settle(RC.cancelled)
+        resolve(null)
+      })
+      card.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !card.classList.contains('settled')) { e.preventDefault(); cancel.click() } })
+      actions.append(send, cancel)
+      card.appendChild(actions)
+      if (currentView !== 'chat') showView('chat')
+      appendToChat(card)
+      revealCard(card)
+      announce(RC.title, true)
+      send.focus({ preventScroll: true })
+    })
+  }
+
   async function ask(text, opts = {}) {
     if (!sidecarOk) { addError('engine offline', 'answer', { restored: restoreInput() }); return }
     if (busy) return
@@ -605,6 +707,10 @@
         renderTree(map)
       } catch { /* not in Word — a question about the law */ }
     }
+    // Online AI: the lawyer checks what is hidden first (only this computer: no check).
+    let checked
+    try { checked = await redactionCheck({ message: text, text: docText }) } catch (err) { addError(err, 'answer', { restored: restoreInput() }); return }
+    if (checked === null) { restoreInput(); return }
     const t = newTurn()
     const abort = new AbortController()
     setBusy({ kind: 'chat', abort })
@@ -614,7 +720,7 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         // interactive: this pane answers "May OpenLex …?" (permission cards).
-        body: JSON.stringify({ message: text, doc: docMap, lang, docId, text: docText, interactive: true }),
+        body: JSON.stringify({ message: text, doc: docMap, lang, docId, text: docText, interactive: true, ...(checked ? { redactionCheck: checked } : {}) }),
         signal: abort.signal,
       })
       if (!res.ok) throw new Error(await res.text())
@@ -1679,6 +1785,9 @@
     try { body = await getDocTextAndStyles() } catch (err) { addError(err, 'review'); return }
     if (!body.text || !body.text.trim()) { addNote('This document is empty — there is nothing to review yet.'); return }
     addNote('Review this contract' + describeOptions(opts), 'user')
+    let checked
+    try { checked = await redactionCheck({ text: body.text.slice(0, 400000) }) } catch (err) { addError(err, 'review'); return }
+    if (checked === null) return
     const t = newTurn()
     const rv = { state: P.review.start(opts, now()), placing: Promise.resolve() }
     t.review = rv
@@ -1689,7 +1798,7 @@
       const res = await fetch(SIDECAR + '/api/document/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: body.text.slice(0, 400000), styles: body.styles, docId, side: opts.side, playbook: opts.playbook, focus: opts.focus, interactive: true }),
+        body: JSON.stringify({ text: body.text.slice(0, 400000), styles: body.styles, docId, side: opts.side, playbook: opts.playbook, focus: opts.focus, interactive: true, ...(checked ? { redactionCheck: checked } : {}) }),
         signal: abort.signal,
       })
       if (!res.ok) throw new Error(await res.text())
