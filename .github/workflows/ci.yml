@@ -121,6 +121,9 @@ jobs:
       - name: Layout check
         working-directory: desktop/client
         run: node e2e/layout-check.mjs
+      - name: Redaction check end to end (fake online model)
+        working-directory: desktop/client
+        run: node e2e/redaction-check.mjs
 
   desktop:
     name: package desktop app (Linux AppImage, smoke test)
