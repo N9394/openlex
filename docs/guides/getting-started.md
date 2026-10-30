@@ -8,7 +8,7 @@ There are three ways in. They share one engine on your computer, so your matters
 |---|---|---|
 | **Terminal app** | Everyone, on macOS, Linux and Windows. The leanest version. | One line in the terminal (below) |
 | **Word add-in** | Working inside contracts: review, suggested edits as tracked changes, law search | Installer from the [download page](https://openlex.pinemarshlands.com/download) |
-| **Desktop app** | Research, document analysis, due diligence | Installer from [GitHub Releases](https://github.com/N9394/openlex/releases/latest) ([how to install](desktop-app.md)) |
+| **Desktop app** | Research, document analysis, due diligence | One line in the terminal (below), or the installer from [GitHub Releases](https://github.com/N9394/openlex/releases/latest) ([how to install](desktop-app.md)) |
 
 ## 1. Install
 
@@ -27,6 +27,20 @@ irm https://openlex.pinemarshlands.com/install.ps1 | iex
 You need Node.js 20 or newer (on Windows: `winget install OpenJS.NodeJS.LTS`). If you don't have it, install it from [nodejs.org](https://nodejs.org) first. With Homebrew you can instead run `brew install n9394/openlex/openlex`.
 
 The installer only writes to `~/.openlex`. It checks the release checksum and changes nothing else on your computer.
+
+**The desktop app** installs the same way. Add `--app` (or `--all` for the app and the terminal app):
+
+```bash
+curl -fsSL https://openlex.pinemarshlands.com/install | bash -s -- --app
+```
+
+On Windows:
+
+```powershell
+$env:OPENLEX_APP = 1; irm https://openlex.pinemarshlands.com/install.ps1 | iex
+```
+
+This is the recommended way for now: the app is checked against the release's checksum (and its signature, if `cosign` or `gh` is installed), and there are no security warnings to click through. The app needs no Node.js. Downloading the installer yourself also works; see [Desktop app](desktop-app.md).
 
 ## 2. Choose where the AI runs
 

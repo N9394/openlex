@@ -48,21 +48,22 @@ Type `openlex` (no arguments) in a terminal and a full-screen app opens: no comm
 
 **Work in a folder.** Start it in a client's folder (`cd ~/Clients/Alpine && openlex`, or `--folder`) and OpenLex works there, the way a coding assistant works in its folder: it reads the Word, PDF and text files there when a question needs them, asks before it saves, renames or deletes anything (*"OpenLex wants to **save** obligations.csv in this folder: ~/Clients/Alpine. Allow?"* — once, always for this folder, or no; deleting is asked every time and keeps a copy), and refuses everything outside that folder and your matter folders without asking. The whole home folder is never used without a warning. `openlex ask` does the same, with the same plain sentences while it works and where the data went at the end. Screen-reader mode, reduced motion, no-colour and plain-ASCII settings are under Settings → Accessibility. See [docs/guides/terminal-app.md](docs/guides/terminal-app.md).
 
-## Install the CLI
+## Install
 
 | | |
 |---|---|
-| Script (macOS, Linux) | `curl -fsSL https://openlex.pinemarshlands.com/install \| bash` installs into `~/.openlex`, checks the release checksum and links `openlex` into `~/.local/bin`. |
-| Script (Windows) — **beta, not yet tested on real Windows** | `irm https://openlex.pinemarshlands.com/install.ps1 \| iex` in PowerShell, no admin: installs into `%USERPROFILE%\.openlex`, verifies the checksum and adds `openlex.cmd` to your user PATH. No Node yet: `winget install OpenJS.NodeJS.LTS`. Use Windows Terminal for the full-screen app. |
+| CLI script (macOS, Linux) | `curl -fsSL https://openlex.pinemarshlands.com/install \| bash` installs into `~/.openlex`, checks the release checksum and links `openlex` into `~/.local/bin`. |
+| CLI script (Windows) — **beta, not yet tested on real Windows** | `irm https://openlex.pinemarshlands.com/install.ps1 \| iex` in PowerShell, no admin: installs into `%USERPROFILE%\.openlex`, verifies the checksum and adds `openlex.cmd` to your user PATH. No Node yet: `winget install OpenJS.NodeJS.LTS`. Use Windows Terminal for the full-screen app. |
+| Desktop app (recommended for now) | Add `--app` (or `--all` for the app and the CLI): `curl -fsSL https://openlex.pinemarshlands.com/install \| bash -s -- --app`. Windows: `$env:OPENLEX_APP = 1; irm https://openlex.pinemarshlands.com/install.ps1 \| iex` (or `OPENLEX_ALL`). macOS: `OpenLex.app` into `/Applications` (or `~/Applications`); Windows: the installer runs silently for your user; Linux: the AppImage into `~/Applications` with a menu entry. Checked like the CLI, and no Gatekeeper or SmartScreen warnings, since the app is not downloaded through a browser. The app needs no Node.js. Manual download: [desktop app guide](docs/guides/desktop-app.md). |
 | Homebrew | `brew install n9394/openlex/openlex` |
 | Manual | Download `openlex-<version>.tar.gz` from [Releases](https://github.com/N9394/openlex/releases), [verify it](docs/VERIFY.md), unpack, run `./openlex`. |
 | From source | `cd sidecar && npm install && npm link` |
 
-The install scripts are also attached to every release built by the release workflow, so they can be fetched straight from GitHub: `https://github.com/N9394/openlex/releases/latest/download/install.sh` and `…/install.ps1` (the website's `/install` points there). Both check the release checksum; if [`cosign`](https://docs.sigstore.dev/cosign/system_config/installation/) or the [GitHub CLI](https://cli.github.com) (`gh`, logged in) is installed they also check that the package was built and signed by this repository's release workflow, and they say which checks were made. Details and manual checks: **[Verify your download](docs/VERIFY.md)**.
+The install scripts are also attached to every release built by the release workflow, so they can be fetched straight from GitHub: `https://github.com/N9394/openlex/releases/latest/download/install.sh` and `…/install.ps1` (the website's `/install` points there). Both check the release checksum (for the CLI and the desktop app); if [`cosign`](https://docs.sigstore.dev/cosign/system_config/installation/) or the [GitHub CLI](https://cli.github.com) (`gh`, logged in) is installed they also check that the package was built and signed by this repository's release workflow, and they say which checks were made. Details and manual checks: **[Verify your download](docs/VERIFY.md)**.
 
 A specific version: `OPENLEX_VERSION=0.2.0` (Windows: `$env:OPENLEX_VERSION = '0.2.0'`) before the line. Running it again upgrades. Uninstall: delete `~/.openlex` (Windows: `%USERPROFILE%\.openlex`, and remove its `bin` folder from your user PATH); your matters and keys in `~/.lexvault` stay.
 
-All need Node.js 20 or newer. Models are not included: add a cloud key, or run a local model (`brew install llama.cpp`; OpenLex finds `llama-server` on `PATH`) with a GGUF in `~/.lexvault/models/`.
+The CLI needs Node.js 20 or newer (the desktop app does not). Models are not included: add a cloud key, or run a local model (`brew install llama.cpp`; OpenLex finds `llama-server` on `PATH`) with a GGUF in `~/.lexvault/models/`.
 
 ## Use the CLI
 
