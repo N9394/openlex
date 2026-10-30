@@ -23,6 +23,10 @@
  *   panel    agents working together: { concurrency: 3, rounds: 2 } (panel.js)
  *   redaction the redaction check before online AI: { check: true, terms: [], patterns: [] }
  *            (redaction_check.js; a firm locks it with "lock": ["redaction"])
+ *   decide   decision models (Phase 9): which tasks use one (all off until a model
+ *            exists), thresholds per task, GOWA runtime settings (decide_tasks.js, gowa.js):
+ *            { tasks: { redaction, injection, clause_type, relevance, routing, claim_support },
+ *              thresholds: { <task>: 0.9 }, gowa: { threads, idleMinutes, batch, source } }
  *   prices   the firm's own prices per million tokens for the spending meter and
  *            the batch estimate: { "<model regex>": { input, output, currency } } (spend.js)
  *
@@ -36,7 +40,7 @@ const path = require('path')
 const { DATA_DIR } = require('./config')
 
 const USER_PATH = path.join(DATA_DIR, 'openlex.json')
-const SECTIONS = ['routes', 'hooks', 'agents', 'features', 'sources', 'models', 'prompts', 'permissions', 'spending', 'judge', 'panel', 'prices', 'redaction']
+const SECTIONS = ['routes', 'hooks', 'agents', 'features', 'sources', 'models', 'prompts', 'permissions', 'spending', 'judge', 'panel', 'prices', 'redaction', 'decide']
 
 const DEFAULTS = {
   routes: { roles: {}, rules: [], fallback: [] },
@@ -51,6 +55,8 @@ const DEFAULTS = {
   panel: { concurrency: 3, rounds: 2 },
   prices: {},
   redaction: { check: true, terms: [], patterns: [] },
+  // Decision-model tasks are off until a model exists and someone switches them on.
+  decide: { tasks: { redaction: false, injection: false, clause_type: false, relevance: false, routing: false, claim_support: false }, thresholds: {}, gowa: {} },
   // shell (run_bash) is off unless a firm turns it on; it also needs an OS sandbox.
   features: { monitors: true, skillSuggestions: true, grid: true, plans: true, shell: false },
 }

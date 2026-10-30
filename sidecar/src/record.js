@@ -71,7 +71,7 @@ function decidedBy(by) {
 function serviceOf(e) {
   let local = e.provider === 'local'
   try { const p = require('./providers/catalog').PROVIDERS[e.provider]; if (p) local = !!p.local } catch { /* no catalog */ }
-  if (e.provider === 'decide') local = /^(localhost|127\.|::1|\[::1\])/.test(String(e.host || ''))
+  if (e.provider === 'decide') local = e.local === true || e.host === 'this computer' || /^(localhost|127\.|::1|\[::1\])/.test(String(e.host || ''))
   const service = e.provider === 'decide' ? `the decision service${local ? ' on this computer' : ''}` : serviceName({ provider: e.provider, model: e.model, region: e.region, local })
   return { local, service: local ? 'the AI on this computer' : service }
 }
@@ -132,6 +132,11 @@ function absorb(acc, e) {
     acc.checks.push({ decision: e.decision, hidden: e.hidden || {}, changed: !!e.changed, documents: +e.documents || 0, basic: e.detection === 'basic' })
     return
   }
+  // Decision-model tasks (decide_tasks.js): counts and outcome only.
+  if (e.call === 'decision') {
+    acc.decisions.push({ task: String(e.task || ''), n: +e.decisions || 0, automated: +e.automated || 0, escalated: +e.escalated || 0, local: !!e.local })
+    return
+  }
   if (e.provider === 'permissions') {
     if (e.by === 'default' && e.decision === 'allowed') { acc.routine++; return }
     // Prompt injection guard (untrusted.js): the kind of finding only, never content.
@@ -179,7 +184,7 @@ function absorb(acc, e) {
   if (e.ok === false) s.failed++
 }
 
-const emptyAcc = () => ({ ai: [], lookups: [], permissions: [], blocked: [], checks: [], routine: 0 })
+const emptyAcc = () => ({ ai: [], lookups: [], permissions: [], blocked: [], checks: [], decisions: [], routine: 0 })
 
 const GUARD_NOTES = {
   exfil: ' (what would have been sent looked like client data)',
@@ -203,6 +208,10 @@ function detailLines(x) {
     lines.push(c.decision === 'cancelled'
       ? `Redaction check: cancelled — nothing was sent`
       : `Redaction check: ${hiddenWords(c.hidden) || 'nothing'} hidden${c.documents ? ` in ${plural(c.documents, 'text')}` : ''} — ${c.changed ? 'changed by you' : 'as suggested'}${c.basic ? ' (basic detection)' : ''}`)
+  }
+  const TASK_WORDS = { redaction: 'the redaction check', injection: 'the prompt-injection signal', claim_support: 'hints for the second pass', clause_type: 'clause types', relevance: 'law search ranking', routing: 'request routing' }
+  for (const d of x.decisions || []) {
+    lines.push(`Decision model${d.local ? ' on this computer' : ''}: ${plural(d.n, 'decision')} for ${TASK_WORDS[d.task] || 'a task'} — ${d.automated} confident, ${d.escalated} left for review`)
   }
   for (const s of x.ai) {
     lines.push(s.local
@@ -280,6 +289,7 @@ function standaloneTitle(e, acc) {
   if (e.provider === 'hook') return 'Your firm\'s rule'
   if (e.provider === 'mcp-server') return 'Another program used OpenLex'
   if (e.call === 'redaction-check') return e.decision === 'cancelled' ? 'Redaction check cancelled' : 'Redaction check'
+  if (e.call === 'decision') return 'Decision model used'
   if (e.call === 'monitor') return 'Check for law updates'
   if (e.call === 'test') return 'Test of the AI connection'
   if (e.call === 'law_source' || (e.provider === 'web' && /^source:/.test(String(e.call)))) return 'Looked up the law online'
