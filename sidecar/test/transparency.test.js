@@ -2,7 +2,7 @@
 /**
  * What the engine tells a front end so a lawyer always knows what is going
  * on: one `model` event per AI call (which service, local or cloud,
- * region, names hidden — never content), plain details on `step` events,
+ * region, names and numbers hidden — never content), plain details on `step` events,
  * and the per-matter activity log behind GET /api/activity.
  *
  *   node --test test/transparency.test.js

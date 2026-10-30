@@ -30,6 +30,7 @@ import AnalysisCard from '../components/AnalysisCard'
 import BatchCard from '../components/BatchCard'
 import SourceKeyCard from '../components/SourceKeyCard'
 import ToolCard, { ResultCard, Result, ToolRun } from '../components/ToolCard'
+import RedactionCheck, { CheckReview, runRedactionCheck } from '../components/RedactionCheck'
 import PanelCard, { PanelRun, PanelSetup, PanelSpec, parseTeam, specWords, usePanelAgents } from '../components/Panel'
 
 interface Matter { id: string; title: string; number?: string; client?: string; privileged?: boolean; agent?: string | null }
@@ -54,7 +55,7 @@ interface Message {
   tip?: string
   analyses?: any[] // full document analyses (POST /api/analyse), shown as cards
   analysisIds?: string[] // from a stored turn: loaded by the card
-  batch?: { attachments: string[] } // several documents: analysed one by one in the background
+  batch?: { attachments: string[]; redactionCheck?: string } // several documents: analysed one by one in the background
   tool?: ToolRun // /investigate, /diligence, /draft just asked for (the card starts it)
   panel?: PanelRun // a Panel of agents just asked for (the card shows the estimate, then runs it)
   results?: Result[] // tool results kept in the conversation (investigation, due diligence, draft, a batch)
@@ -110,6 +111,9 @@ export default function Research() {
   const [input, setInput] = useState('')
   const [files, setFiles] = useState<Attachment[]>([]) // attached documents, read by the engine on this computer
   const [attaching, setAttaching] = useState<string[]>([]) // names being read right now
+  // The redaction check before online AI (RedactionCheck): the open check and who waits for it.
+  const [check, setCheck] = useState<{ review: CheckReview; resolve: (id: string | null) => void } | null>(null)
+  const [scanning, setScanning] = useState(false)
   const [convDocs, setConvDocs] = useState<Attachment[]>([]) // documents this conversation is about (sent with every question)
   const [dragging, setDragging] = useState(false)
   const [docsOpen, setDocsOpen] = useState(false)
@@ -273,7 +277,7 @@ export default function Research() {
   // ── the tools from the old desktop app: /investigate, /diligence, /draft ──
   const toolRef = useRef<(name: string, arg: string) => void>(() => {})
   const toolAfterAttach = useRef<{ name: string; arg: string } | null>(null)
-  const runTool = (name: string, arg: string, only?: Attachment[]) => {
+  const runTool = async (name: string, arg: string, only?: Attachment[]) => {
     if (!engine()) return sys(t('chat.noEngine', 'The chat needs the OpenLex engine, which runs with the desktop app.'), 'warn')
     // The documents: just attached, else the ones this conversation is about.
     // (A draft uses only documents attached for it: they are its precedents or the document to work on.)
@@ -293,6 +297,9 @@ export default function Research() {
     const sid = sessionId || `app:${matterId || 'quick'}:${Date.now().toString(36)}`
     if (!sessionId) setSessionId(sid)
     const message = `/${name}${arg ? ` ${arg}` : ''}`
+    // Investigation and due diligence read every document online (when allowed): one check for all of them first.
+    let checked: string | null | undefined
+    if (name !== 'draft') { checked = await checkFirst({ message: arg, attachments: att.map((f) => f.id) }); if (checked === null) return }
     const lang = /^de/i.test(i18n.language || '') ? 'de' : 'en'
     const options = name === 'investigate' ? { question: arg, lang } : name === 'diligence' ? {
       perspective: /seller|verkäufer/i.test(arg) ? 'seller' : 'buyer',
@@ -304,7 +311,7 @@ export default function Research() {
     nearBottom.current = true
     setMessages((m) => [...m,
       { id: nextId(), role: 'user', content: message, files: att.map((f) => f.name), client: 'app' },
-      { id: nextId(), role: 'assistant', content: '', tool: { name: name as ToolRun['name'], arg, attachments: att.map((f) => f.id), matterId, sessionId: sid, message, options } },
+      { id: nextId(), role: 'assistant', content: '', tool: { name: name as ToolRun['name'], arg, attachments: att.map((f) => f.id), matterId, sessionId: sid, message, options, ...(checked ? { redactionCheck: checked } : {}) } },
     ])
     // The engine keeps the tool's turn in the conversation: show it in the list.
     for (const ms of [1500, 15000]) setTimeout(() => loadList(matterId), ms)
@@ -312,8 +319,10 @@ export default function Research() {
   useEffect(() => { toolRef.current = (name: string, arg: string) => runTool(name, arg) })
 
   // ── a Panel of agents: the question goes to all of them (PanelCard runs it) ──
-  const askPanel = (spec: PanelSpec, question: string) => {
+  const askPanel = async (spec: PanelSpec, question: string) => {
     const att = mergeDocs(convDocs, files)
+    const checked = await checkFirst({ message: question, attachments: att.map((f) => f.id) })
+    if (checked === null) return
     setConvDocs(att)
     const sid = sessionId || `app:${matterId || 'quick'}:${Date.now().toString(36)}`
     if (!sessionId) setSessionId(sid)
@@ -323,7 +332,7 @@ export default function Research() {
     nearBottom.current = true
     setMessages((m) => [...m,
       { id: nextId(), role: 'user', content: question, files: files.map((f) => f.name), client: 'app', as: specWords(spec, panelAgents, t) },
-      { id: nextId(), role: 'assistant', content: '', as: t('panel.title', 'Panel'), panel: { spec, question, matterId, sessionId: sid, attachments: att.map((f) => f.id), message } },
+      { id: nextId(), role: 'assistant', content: '', as: t('panel.title', 'Panel'), panel: { spec, question, matterId, sessionId: sid, attachments: att.map((f) => f.id), message, ...(checked ? { redactionCheck: checked } : {}) } },
     ])
     for (const ms of [3000, 30000]) setTimeout(() => loadList(matterId), ms)
   }
@@ -342,6 +351,17 @@ export default function Research() {
     }
   })
 
+  // ── the redaction check: what goes online is checked first (undefined: no check due; null: cancelled) ──
+  const checkFirst = async (body: Record<string, unknown>): Promise<string | null | undefined> => {
+    try {
+      return await runRedactionCheck({ ...body, messageName: t('redaction.yourQuestion', 'Your question'), ...(matterId ? { matterId } : {}) }, (review) => new Promise((resolve) => setCheck({ review, resolve })), /^de/i.test(i18n.language || '') ? 'de' : 'en', setScanning)
+    } catch (err) {
+      sys(friendly(err), 'bad')
+      return null
+    }
+  }
+  const closeCheck = (id: string | null) => { setCheck((c) => { c?.resolve(id); return null }); if (!id) sys(t('redaction.cancelled', 'Nothing was sent.'), 'info') }
+
   // ── asking ──
   const send = async (raw: string) => {
     const typed = raw.trim()
@@ -355,6 +375,9 @@ export default function Research() {
     // The conversation's documents stay with it: follow-up questions are about them too
     // (and an online AI service reads them from its cache).
     const att = mergeDocs(convDocs, files)
+    // Online AI: the lawyer checks what is hidden first (only this computer: no check).
+    const checked = await checkFirst({ message, attachments: att.map((f) => f.id) })
+    if (checked === null) return
     setConvDocs(att)
     const sid = sessionId || `app:${matterId || 'quick'}:${Date.now().toString(36)}`
     if (!sessionId) setSessionId(sid)
@@ -380,6 +403,7 @@ export default function Research() {
     let failed = false
     const body = {
       message, docId: `app:${matterId || 'quick'}`, sessionId: sid, interactive: true,
+      ...(checked ? { redactionCheck: checked } : {}),
       ...(matterId ? { matterId } : { agent: quickAgent }),
       ...(att.length ? { attachments: att.map((f) => f.id), files: att.map((f) => f.name) } : {}),
     }
@@ -497,6 +521,9 @@ export default function Research() {
     const sid = sessionId || `app:${matterId || 'quick'}:${Date.now().toString(36)}`
     if (!sessionId) setSessionId(sid)
     const names = att.length ? att.map((f) => f.name) : [named]
+    // Online AI: one check for every document before the analysis starts.
+    const checked = await checkFirst(att.length ? { attachments: att.map((f) => f.id), ...(named ? { message: named } : {}) } : { files: [named] })
+    if (checked === null) return
     // Several documents: one by one in the background, with an estimate first (BatchCard).
     if (att.length >= 3) {
       setInput('')
@@ -504,7 +531,7 @@ export default function Research() {
       nearBottom.current = true
       setMessages((m) => [...m,
         { id: nextId(), role: 'user', content: `/analyse ${att.length} documents`, files: names, client: 'app' },
-        { id: nextId(), role: 'assistant', content: '', batch: { attachments: att.map((f) => f.id) } },
+        { id: nextId(), role: 'assistant', content: '', batch: { attachments: att.map((f) => f.id), ...(checked ? { redactionCheck: checked } : {}) } },
       ])
       return
     }
@@ -526,6 +553,7 @@ export default function Research() {
     try {
       const r = await e.stream('/api/analyse', {
         message, sessionId: sid, interactive: true,
+        ...(checked ? { redactionCheck: checked } : {}),
         ...(matterId ? { matterId } : {}),
         ...(att.length ? { attachments: att.map((f) => f.id), ...(named ? { focus: named } : {}) } : { files: [named] }),
       }, (ev) => {
@@ -812,6 +840,8 @@ export default function Research() {
           </div>
         )}
         {perm && <PermissionDialog req={perm} onAnswer={(d) => answerPerm(perm, d)} />}
+        {check && <RedactionCheck review={check.review} onDone={closeCheck} />}
+        {scanning && <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40 rounded-button border border-tobacco bg-deep-brown px-4 py-2 text-sm text-cream shadow-xl" role="status" data-testid="redaction-scanning">{t('redaction.scanning', 'Looking for names and numbers to hide…')}</div>}
       </div>
     </div>
   )
@@ -855,7 +885,7 @@ function Answer({ m, now, live, openSteps, toggleSteps, onCopy, copied, onWord, 
         </div>
         <div className="px-5 py-4 space-y-3">
           {m.reading && <div className="text-xs text-antique">· {m.reading}</div>}
-          {m.batch && <BatchCard attachments={m.batch.attachments} matterId={matterId} />}
+          {m.batch && <BatchCard attachments={m.batch.attachments} matterId={matterId} redactionCheck={m.batch.redactionCheck} />}
           {m.tool && <ToolCard tool={m.tool} />}
           {m.panel && <PanelCard run={m.panel} onPermission={onPermission} />}
           {(m.results || []).map((r) => <ResultCard key={`${r.kind}:${r.id}`} result={r} matterId={matterId} />)}

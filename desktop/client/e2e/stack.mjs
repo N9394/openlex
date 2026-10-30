@@ -17,21 +17,29 @@ export const WEB_PORT = ENGINE_PORT + 2
 
 const ANSWER = '**Short answer:** under § 879 ABGB a two-year non-compete is enforceable only if it is reasonable.\n\n| Point | Assessment |\n|---|---|\n| Duration | two years: likely too long |\n| Territory | EU-wide: likely too wide |\n\nArbeitnehmerschutzvorschriftenumsetzungsgesetzesnovellierungsverordnung.'
 
-export async function startStack() {
+/**
+ * opts.answer(prompt, body) → the fake model's reply (default: a fixed answer);
+ * the returned `seen` holds every prompt the fake model received.
+ */
+export async function startStack(opts = {}) {
   const DATA = fs.mkdtempSync(path.join(os.tmpdir(), 'openlex-e2e-'))
+  const seen = []
   const model = http.createServer((req, res) => {
     let raw = ''
     req.on('data', (c) => { raw += c })
     req.on('end', () => {
       let body = {}
       try { body = JSON.parse(raw || '{}') } catch { /* empty */ }
+      const prompt = (body.messages || []).map((m) => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content))).join('\n')
+      seen.push(prompt)
+      const reply = opts.answer ? opts.answer(prompt, body) : ANSWER
       if (body.stream) {
         res.writeHead(200, { 'Content-Type': 'text/event-stream' })
-        for (const piece of ANSWER.match(/.{1,40}/gs)) res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: piece } }] })}\n\n`)
+        for (const piece of reply.match(/.{1,40}/gs)) res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: piece } }] })}\n\n`)
         res.write('data: [DONE]\n\n'); return res.end()
       }
       res.writeHead(200, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({ choices: [{ message: { content: ANSWER } }] }))
+      res.end(JSON.stringify({ choices: [{ message: { content: reply } }] }))
     })
   })
   await new Promise((r) => model.listen(MODEL_PORT, '127.0.0.1', r))
@@ -75,7 +83,7 @@ export async function startStack() {
   })
   await new Promise((r) => web.listen(WEB_PORT, '127.0.0.1', r))
   const stop = () => { try { engine.kill() } catch { /* gone */ } model.close(); web.close(); try { fs.rmSync(DATA, { recursive: true, force: true }) } catch { /* busy */ } }
-  return { DATA, ids, stop }
+  return { DATA, ids, stop, seen }
 }
 
 /** Stand-in for the Electron preload: the engine through the proxy, matters, a few no-ops. */

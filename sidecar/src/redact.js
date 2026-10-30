@@ -1,29 +1,37 @@
 "use strict"
 /**
- * Redact-before-send — pseudonymise client data for cloud model calls.
+ * Redact-before-send — names and numbers are hidden (pseudonymised) for
+ * online AI calls.
  *
- * Before a request leaves the machine, sensitive strings are replaced with
- * stable placeholders ([[PARTY_1]], [[EMAIL_2]] …); the reply is restored
- * locally, so the lawyer sees real names and the provider never does.
+ * Before a request leaves the machine, what pii_detect.js finds is replaced
+ * with placeholders ([[PERSON_1]], [[IBAN_2]] …); the reply is restored
+ * locally, so the lawyer sees real names and the provider gets placeholders.
  *
  * What gets replaced:
- *   - the matter's terms: client, parties, people (matters.js redactTerms + client)
- *   - patterns: e-mail addresses, IBANs, phone numbers, card-like numbers
+ *   - the matter's list: client, parties, people, and what the lawyer ticked
+ *     or added in a redaction check (matters.js redactTerms, redactKinds)
+ *   - the firm's list and patterns (openlex.json → "redaction")
+ *   - patterns with check digits: e-mail, phone, IBAN, cards, national IDs,
+ *     register and court numbers, addresses, dates of birth (pii_patterns.js)
+ *   - titles before names and legal forms after company names
+ * What the lawyer unticked in a check (redactKeep) stays as it is.
  *
- * Deterministic, local, no model involved. It is a strong default, not a
- * guarantee: names the lawyer didn't list and indirect identifiers can
- * still leave — the UI says so.
+ * Placeholders are stable per matter (kept on this computer in
+ * <data>/redaction/<matter>.json, readable only by this user): "Huber" is
+ * [[PERSON_3]] in every call and every document of the matter, so answers
+ * and exports are restored consistently.
+ *
+ * Pseudonymised text is still personal data. This is a help, not a
+ * guarantee: names nobody listed and indirect details (a rare job title, a
+ * unique event) can still leave — the check and the guide say so.
  */
 
-const PATTERNS = [
-  // Bounded parts (RFC limits): unbounded runs made long dotted strings take seconds (quadratic).
-  { kind: 'EMAIL', re: /\b[A-Z0-9._%+-]{1,64}@(?:[A-Z0-9-]{1,63}\.){1,8}[A-Z]{2,24}\b/gi },
-  { kind: 'IBAN', re: /\b[A-Z]{2}\d{2}(?:[ ]?[A-Z0-9]{4}){2,7}(?:[ ]?[A-Z0-9]{1,4})?\b/g },
-  { kind: 'CARD', re: /\b(?:\d[ -]?){13,19}\b/g },
-  { kind: 'PHONE', re: /(?<![\w])\+?\d{1,3}[ /.-]?\(?\d{1,4}\)?(?:[ /.-]?\d{2,4}){2,4}(?!\d)/g },
-]
+const fs = require('fs')
+const path = require('path')
+const { DATA_DIR } = require('./config')
+const detect = require('./pii_detect')
 
-const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+const STORE_DIR = path.join(DATA_DIR, 'redaction')
 
 // Placeholders inside a web address are never restored (prompt injection):
 // an instruction hidden in a document can make the model build a link or an
@@ -42,40 +50,90 @@ function insideUrl(text) {
   }
   return (i) => spans.some(([a, b]) => i >= a && i < b)
 }
+const SAFE_ID = /^[\w-]{1,80}$/
+
+// ── stable placeholders per matter ──────────────────────────────────────
+// One state object per matter in this process, so parallel calls (a panel)
+// never hand out the same number twice.
+const states = new Map()
+
+function stateFor(matterId) {
+  const key = matterId || ''
+  if (states.has(key)) return states.get(key)
+  const st = { matterId: matterId || null, map: new Map(), orig: new Map(), counts: {} }
+  if (matterId && SAFE_ID.test(matterId)) {
+    try {
+      const d = JSON.parse(fs.readFileSync(path.join(STORE_DIR, `${matterId}.json`), 'utf8'))
+      for (const [k, ph] of Object.entries(d.map || {})) st.map.set(k, ph)
+      for (const [ph, o] of Object.entries(d.orig || {})) st.orig.set(ph, o)
+      st.counts = d.counts && typeof d.counts === 'object' ? d.counts : {}
+    } catch { /* first use */ }
+  }
+  states.set(key, st)
+  return st
+}
+
+function saveState(st) {
+  if (!st.matterId || !SAFE_ID.test(st.matterId)) return
+  try {
+    fs.mkdirSync(STORE_DIR, { recursive: true, mode: 0o700 })
+    const file = path.join(STORE_DIR, `${st.matterId}.json`)
+    const tmp = `${file}.${process.pid}.${Date.now()}.tmp`
+    fs.writeFileSync(tmp, JSON.stringify({ v: 1, map: Object.fromEntries(st.map), orig: Object.fromEntries(st.orig), counts: st.counts }), { mode: 0o600 })
+    fs.renameSync(tmp, file)
+  } catch (err) { console.warn('[redact] placeholders not saved:', err.message) }
+}
+
+/** Forget a matter's placeholders (tests; a closed matter). */
+function forget(matterId) {
+  states.delete(matterId || '')
+  if (matterId && SAFE_ID.test(matterId)) fs.rmSync(path.join(STORE_DIR, `${matterId}.json`), { force: true })
+}
 
 class Redactor {
-  constructor(terms = []) {
-    // Longest first so "Acme Holding GmbH" wins over "Acme".
-    this.terms = [...new Set(terms.map((t) => String(t || '').trim()).filter((t) => t.length >= 2))].sort((a, b) => b.length - a.length)
-    this.toPlaceholder = new Map() // lower-cased original → placeholder
-    this.toOriginal = new Map() // placeholder → original (first spelling seen)
-    this.counts = {}
+  /**
+   * @param {string[]|object} opts  a list of terms (old form), or
+   *   { terms: [string|{text,kind}], keep: [string], patterns: [entries], matterId }
+   */
+  constructor(opts = []) {
+    const o = Array.isArray(opts) ? { terms: opts } : (opts || {})
+    this.terms = (o.terms || []).map((t) => (typeof t === 'string' ? { text: t.trim() } : { ...t, text: String(t.text || '').trim() })).filter((t) => t.text.length >= 2)
+    this.keep = o.keep || []
+    this.patterns = o.patterns || []
+    this.state = o.matterId !== undefined ? stateFor(o.matterId) : { matterId: null, map: new Map(), orig: new Map(), counts: {} }
+    this.used = new Map() // placeholder → kind, for this call's record
   }
 
   _placeholder(kind, original) {
-    const key = `${kind}:${original.toLowerCase()}`
-    if (this.toPlaceholder.has(key)) return this.toPlaceholder.get(key)
-    this.counts[kind] = (this.counts[kind] || 0) + 1
-    const ph = `[[${kind}_${this.counts[kind]}]]`
-    this.toPlaceholder.set(key, ph)
-    this.toOriginal.set(ph, original)
+    const st = this.state
+    const key = `${kind}:${detect.norm(original)}`
+    let ph = st.map.get(key)
+    if (!ph) {
+      st.counts[kind] = (st.counts[kind] || 0) + 1
+      ph = `[[${kind}_${st.counts[kind]}]]`
+      st.map.set(key, ph)
+      st.orig.set(ph, original)
+      this._dirty = true
+    }
+    this.used.set(ph, kind)
     return ph
   }
 
   redact(text) {
-    let out = String(text ?? '')
-    // Patterns first: a party name inside an e-mail address must not break it.
-    for (const { kind, re } of PATTERNS) {
-      out = out.replace(re, (m) => {
-        // Phone/card patterns must carry enough digits to be identifiers, not years or § numbers.
-        if ((kind === 'PHONE' || kind === 'CARD') && m.replace(/\D/g, '').length < (kind === 'PHONE' ? 8 : 13)) return m
-        return this._placeholder(kind, m)
-      })
+    const src = String(text ?? '')
+    if (!src) return src
+    const found = detect.scan(src, { terms: this.terms, keep: this.keep, patterns: this.patterns })
+    let out = ''
+    let at = 0
+    for (const f of found) {
+      if (f.start < at) continue
+      // Text that is already a placeholder stays as it is.
+      if (/^\[\[[A-Z]+_\d+\]\]$/.test(f.text)) continue
+      out += src.slice(at, f.start) + this._placeholder(f.kind, f.text)
+      at = f.end
     }
-    for (const term of this.terms) {
-      const re = new RegExp(`(?<![\\p{L}\\p{N}])${escapeRe(term)}(?![\\p{L}\\p{N}])`, 'giu')
-      out = out.replace(re, (m) => this._placeholder('PARTY', m))
-    }
+    out += src.slice(at)
+    if (this._dirty) { saveState(this.state); this._dirty = false }
     return out
   }
 
@@ -89,11 +147,11 @@ class Redactor {
    * came just before (streaming), so an address split across chunks counts.
    */
   restore(text, before = '') {
-    if (!this.toOriginal.size) return text
+    if (!this.state.orig.size) return text
     const s = String(text ?? '')
     const ctx = String(before || '').slice(-URL_CONTEXT)
     const inUrl = insideUrl(ctx + s)
-    return s.replace(/\[?\[\[?([A-Z]+_\d+)\]\]?\]?/g, (m, id, off) => (inUrl(ctx.length + off) ? m : this.toOriginal.get(`[[${id}]]`) ?? m))
+    return s.replace(/\[?\[\[?([A-Z]+_\d+)\]\]?\]?/g, (m, id, off) => (inUrl(ctx.length + off) ? m : this.state.orig.get(`[[${id}]]`) ?? m))
   }
 
   /** Wrap a streaming callback: hold back a possibly split placeholder until it is complete. */
@@ -114,18 +172,49 @@ class Redactor {
     }
   }
 
+  /** How many different things were hidden in this call. */
   get replaced() {
-    return this.toOriginal.size
+    return this.used.size
+  }
+
+  /** { PERSON: 2, IBAN: 1 } — counts only, for the AI record. */
+  get hidden() {
+    const out = {}
+    for (const kind of this.used.values()) out[kind] = (out[kind] || 0) + 1
+    return out
   }
 }
 
-/** Redactor for a matter (null when the matter's policy doesn't ask for redaction). */
-function forMatter(matterId) {
-  const rule = require('./policy').ruleFor(matterId)
-  if (!rule.redact) return null
-  const m = matterId ? require('./matters').get(matterId) : null
-  const terms = [...(m?.redactTerms || []), ...(m?.client ? [m.client] : [])]
-  return new Redactor(terms)
+/** The matter's list for the redactor and the check: { terms: [{ text, kind }], keep, patterns }. */
+function termsFor(matterId) {
+  let m = null
+  try { m = matterId ? require('./matters').get(matterId) : null } catch { /* no matter */ }
+  const kinds = m?.redactKinds || {}
+  const terms = [
+    ...(m?.redactTerms || []).map((t) => ({ text: t, kind: kinds[detect.norm(t)] || 'PARTY' })),
+    ...(m?.client ? [{ text: m.client, kind: 'PARTY' }] : []),
+  ]
+  const firm = require('./redaction_check').firmRules()
+  return {
+    terms: [...terms, ...firm.terms.map((t) => ({ text: t, kind: 'PARTY', source: 'firm' }))],
+    keep: m?.redactKeep || [],
+    patterns: firm.patterns,
+  }
 }
 
-module.exports = { Redactor, forMatter, insideUrl }
+/**
+ * Redactor for a matter, or null when nothing is to be hidden: the matter's
+ * rule asks for hidden names, or the redaction check is on for a matter that
+ * may use online AI (redaction_check.js decides).
+ */
+function forMatter(matterId) {
+  const check = require('./redaction_check')
+  if (!check.hidingOn(matterId)) return null
+  const t = termsFor(matterId)
+  // Terms the lawyer added or ticked in this request's check (also when there is no matter).
+  const ctx = require('./policy').redactionContext()
+  const review = ctx?.review || null
+  return new Redactor({ terms: [...t.terms, ...(review?.terms || [])], keep: [...t.keep, ...(review?.keep || [])], patterns: t.patterns, matterId: matterId || null })
+}
+
+module.exports = { Redactor, forMatter, termsFor, forget, insideUrl, STORE_DIR }

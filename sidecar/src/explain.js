@@ -14,7 +14,7 @@
  *   explainTool(tool, d)  a tool + its safe detail → { text, online? }
  *   friendly(err)         an engine error → one line a lawyer can act on
  *   serviceName(model)    "Claude (Anthropic, EU)" — never a model id
- *   dataLine(models, web) "Sent to: Claude (Anthropic, EU) — names hidden · 2 times"
+ *   dataLine(models, web) "Sent to: Claude (Anthropic, EU) — names and numbers hidden (pseudonymised) · 2 times"
  *   checkLine(sugg)       "checked against ABGB § 933 ✓" / "could not be verified …"
  *
  * Ported from sidecar/tui/explain.mjs (the terminal app moves to this module
@@ -273,8 +273,8 @@ function addModel(models, ev) {
   const key = `${ev.local ? 'local' : ev.provider}|${ev.region || ''}|${ev.redacted ? 1 : 0}`
   const out = models.map((m) => ({ ...m }))
   const hit = out.find((m) => m.key === key)
-  if (hit) hit.calls++
-  else out.push({ key, provider: ev.provider, label: ev.label, model: ev.model || null, local: !!ev.local, region: ev.region || null, redacted: !!ev.redacted, calls: 1 })
+  if (hit) { hit.calls++; if (ev.checked) hit.checked = true }
+  else out.push({ key, provider: ev.provider, label: ev.label, model: ev.model || null, local: !!ev.local, region: ev.region || null, redacted: !!ev.redacted, ...(ev.checked ? { checked: true } : {}), calls: 1 })
   return out
 }
 
@@ -287,7 +287,7 @@ const times = (n) => (n === 1 ? 'once' : n === 2 ? '2 times' : `${n} times`)
 function dataLine(models = [], online = [], { running = false } = {}) {
   const cloud = models.filter((m) => !m.local)
   const parts = []
-  if (cloud.length) parts.push(`Sent to: ${cloud.map((m) => `${serviceName(m)} — ${m.redacted ? 'names hidden' : 'names not hidden'} · ${times(m.calls)}`).join('; ')}`)
+  if (cloud.length) parts.push(`Sent to: ${cloud.map((m) => `${serviceName(m)} — ${m.redacted ? `names and numbers hidden (pseudonymised)${m.checked ? ', checked by you' : ''}` : 'names and numbers not hidden'} · ${times(m.calls)}`).join('; ')}`)
   const web = [...new Set(online)]
   if (web.length) parts.push(`${cloud.length ? 'Also looked' : 'Looked'} up online: ${web.join(', ')} (only search words or web addresses)`)
   if (!parts.length) return { text: running ? 'Nothing has left this computer so far' : 'Stayed on this computer', left: false }

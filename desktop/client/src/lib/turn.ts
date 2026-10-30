@@ -36,7 +36,7 @@ const NAMES: Record<string, string> = {
 const FAMILIES: [RegExp, string][] = [[/claude|anthropic/i, 'Claude'], [/gpt|^o\d|openai/i, 'GPT'], [/mistral|mixtral|magistral|codestral/i, 'Mistral'], [/gemini/i, 'Gemini'], [/llama/i, 'Llama'], [/qwen/i, 'Qwen']]
 const isEu = (r: unknown) => /^(eu|europe)/i.test(String(r || ''))
 
-export interface ModelUse { key?: string; provider: string; label?: string; model?: string | null; local: boolean; region?: string | null; redacted: boolean; calls: number }
+export interface ModelUse { key?: string; provider: string; label?: string; model?: string | null; local: boolean; region?: string | null; redacted: boolean; checked?: boolean; calls: number }
 
 /** "Claude (Anthropic, EU)", "Mistral (EU)", "this computer" — never a model id. */
 export function serviceName(m: Partial<ModelUse>) {
@@ -70,19 +70,19 @@ export function addModel(models: ModelUse[], ev: any): ModelUse[] {
   const key = `${ev.local ? 'local' : ev.provider}|${ev.region || ''}|${ev.redacted ? 1 : 0}`
   const out = models.map((m) => ({ ...m }))
   const hit = out.find((m) => m.key === key)
-  if (hit) hit.calls++
-  else out.push({ key, provider: ev.provider, label: ev.label, model: ev.model || null, local: !!ev.local, region: ev.region || null, redacted: !!ev.redacted, calls: 1 })
+  if (hit) { hit.calls++; if (ev.checked) hit.checked = true }
+  else out.push({ key, provider: ev.provider, label: ev.label, model: ev.model || null, local: !!ev.local, region: ev.region || null, redacted: !!ev.redacted, ...(ev.checked ? { checked: true } : {}), calls: 1 })
   return out
 }
 
 const shortName = (name: string) => String(name || '').replace(/\s*\(.*\)\s*$/, '').trim() || String(name || '')
 
-/** The always-visible line: ✓ Stayed on this computer · ! Sent to Claude (Anthropic, EU) — names hidden · 2 times. */
+/** The always-visible line: ✓ Stayed on this computer · ! Sent to Claude (Anthropic, EU) — names and numbers hidden (pseudonymised) · 2 times. */
 export function dataLine(models: ModelUse[] = [], online: string[] = [], running = false) {
   const cloud = models.filter((m) => !m.local)
   const web = [...new Set(online)]
   const parts: string[] = []
-  for (const m of cloud) parts.push(tr('sentTo', 'Sent to {{name}} — {{names}} · {{times}}', { name: serviceName(m), names: m.redacted ? tr('namesHidden', 'names hidden') : tr('namesNotHidden', 'names not hidden'), times: times(m.calls || 1) }))
+  for (const m of cloud) parts.push(tr('sentTo', 'Sent to {{name}} — {{names}} · {{times}}', { name: serviceName(m), names: m.redacted ? (m.checked ? tr('namesHiddenChecked', 'names and numbers hidden (pseudonymised), checked by you') : tr('namesHidden', 'names and numbers hidden (pseudonymised)')) : tr('namesNotHidden', 'names and numbers not hidden'), times: times(m.calls || 1) }))
   if (web.length) parts.push(tr('lookedUp', 'Looked up online: {{list}}', { list: web.map(shortName).join(', ') }))
   if (!parts.length) return { symbol: '✓', left: false, text: running ? tr('nothingLeftYet', 'Nothing has left this computer so far') : tr('stayed', 'Stayed on this computer'), title: tr('stayedTitle', 'The AI ran on this computer and nothing was looked up online.') }
   const title = [

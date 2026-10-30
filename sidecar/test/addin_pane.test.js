@@ -106,7 +106,7 @@ test('data line: symbol + words for each case', () => {
   for (const ev of fakeChatStream()) act = activity.apply(act, ev, 1)
   const l = dataline.line(act.models, act.online)
   assert.strictEqual(l.symbol, '!')
-  assert.strictEqual(l.text, 'Sent to Claude (Anthropic, EU) — names hidden · 2 times · Looked up online: RIS')
+  assert.strictEqual(l.text, 'Sent to Claude (Anthropic, EU) — names and numbers hidden (pseudonymised) · 2 times · Looked up online: RIS')
   assert.match(l.title, /Only search words or web addresses went to: RIS \(Austria/)
   const onlyWeb = dataline.line([{ local: true, calls: 1, key: 'local' }], ['RIS (Austria\'s federal law database)'])
   assert.deepStrictEqual(pick(onlyWeb), { symbol: '!', text: 'Looked up online: RIS', left: true })
@@ -315,15 +315,15 @@ test('AI record view: menu entries once the engine has it, query and export from
   assert.deepStrictEqual(record.exportBody({}, 'exe'), { format: 'pdf' })
 
   const r = {
-    summary: { text: '12 requests · 3 sent to Claude (Anthropic, EU), names hidden · 2 online lookups · 1 permission denied' },
+    summary: { text: '12 requests · 3 sent to Claude (Anthropic, EU), names and numbers hidden · 2 online lookups · 1 permission denied' },
     verify: { ok: true, text: 'Record intact: all 3 logs checked, no line changed, removed or moved.', fingerprint: '3f2a 9c1d' },
     entries: [
-      { id: 'r1', at: '2026-10-29T13:02:00.000Z', title: 'Question: “Is the cap valid?”', window: 'Word', matter: 'Alpine share deal', left: true, outcome: 'done', lines: ['AI: Claude (Anthropic, EU) — sent outside this computer, names hidden · 3 calls'] },
+      { id: 'r1', at: '2026-10-29T13:02:00.000Z', title: 'Question: “Is the cap valid?”', window: 'Word', matter: 'Alpine share deal', left: true, outcome: 'done', lines: ['AI: Claude (Anthropic, EU) — sent outside this computer, names and numbers hidden (pseudonymised) · 3 calls'] },
       { id: 'r2', at: '2026-10-29T12:02:00.000Z', title: 'Checklist review: “spa”', window: 'Terminal app', left: false, outcome: 'done', lines: [] },
       { id: 'r3', at: '2026-10-29T11:02:00.000Z', title: 'Question: “Translate”', left: false, outcome: 'failed', lines: [] },
     ],
   }
-  assert.strictEqual(record.summaryLine(r), '12 requests · 3 sent to Claude (Anthropic, EU), names hidden · 2 online lookups · 1 permission denied · record intact ✓')
+  assert.strictEqual(record.summaryLine(r), '12 requests · 3 sent to Claude (Anthropic, EU), names and numbers hidden · 2 online lookups · 1 permission denied · record intact ✓')
   assert.match(record.summaryLine({ ...r, verify: { ok: false } }), /record changed ✗$/)
   assert.strictEqual(record.summaryLine(null), 'Nothing recorded yet')
   const rows = r.entries.map(record.row)

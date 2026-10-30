@@ -31,7 +31,8 @@ You can allow several at once: `openlex policy allow azure,web`. `web` covers of
 ## Extra safeguards
 
 - **EU only:** `--regions eu` allows a cloud model only if it runs in an EU region (Mistral; Azure, Bedrock or Vertex in an EU region). A provider without a fixed region is refused.
-- **Hide names before sending:** `--redact` replaces client names, the matter's listed parties, e-mail addresses, IBANs and phone numbers with placeholders before anything is sent. The real names are put back on your computer when the answer arrives.
+- **Redaction check (on by default):** before a question or a document goes to an online AI, you see what OpenLex hides (names, numbers, addresses) and can change it. See [Redaction check](redaction-check.md) — a help, not a guarantee.
+- **Hide names and numbers always:** `--redact` replaces names on the matter's list, e-mail addresses, IBANs, ID and phone numbers with placeholders (pseudonymised) before anything is sent, also when the redaction check is off. The real names are put back on your computer when the answer arrives.
 
 ```bash
 openlex policy allow anthropic --regions eu --redact

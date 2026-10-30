@@ -89,7 +89,12 @@ function update(id, patch = {}) {
   if (patch.redactTerms !== undefined) {
     // Names of parties/people to pseudonymise before cloud calls.
     m.redactTerms = (Array.isArray(patch.redactTerms) ? patch.redactTerms : String(patch.redactTerms).split(/[\n,;]/))
-      .map((t) => str(t, 120)).filter((t) => t.length >= 2).slice(0, 200)
+      .map((t) => str(t, 200)).filter((t) => t.length >= 2).slice(0, 1000)
+  }
+  if (patch.redactKeep !== undefined) {
+    // What a redaction check said need not be hidden (the lawyer unticked it).
+    m.redactKeep = (Array.isArray(patch.redactKeep) ? patch.redactKeep : String(patch.redactKeep).split(/[\n;]/))
+      .map((t) => str(t, 200)).filter((t) => t.length >= 2).slice(0, 500)
   }
   if (patch.status !== undefined) {
     if (!STATUSES.includes(patch.status)) throw new Error(`status must be one of: ${STATUSES.join(', ')}`)
@@ -99,6 +104,36 @@ function update(id, patch = {}) {
     m.privileged = !!patch.privileged
     if (m.privileged) policy.setRule(m.id, { mode: 'local-only' })
   }
+  m.updatedAt = new Date().toISOString()
+  write(d)
+  return withPolicy(m)
+}
+
+/**
+ * Remember a redaction check's decisions for the matter: what was hidden
+ * joins the list (with its kind), what was unticked is kept as it is next
+ * time. Only on this computer, in matters.json.
+ */
+function learnRedaction(id, { hide = [], keep = [] } = {}) {
+  const d = read()
+  const m = d.matters.find((x) => x.id === id)
+  if (!m) throw new Error(`unknown matter: ${id}`)
+  const norm = (t) => String(t || '').replace(/\s+/g, ' ').trim().toLowerCase()
+  const terms = Array.isArray(m.redactTerms) ? [...m.redactTerms] : []
+  const kinds = m.redactKinds && typeof m.redactKinds === 'object' ? { ...m.redactKinds } : {}
+  const have = new Set(terms.map(norm))
+  for (const h of hide) {
+    const t = str(h?.text, 200)
+    if (t.length < 2) continue
+    if (!have.has(norm(t))) { terms.push(t); have.add(norm(t)) }
+    if (h.kind && h.kind !== 'PARTY') kinds[norm(t)] = String(h.kind)
+  }
+  const keepList = [...new Set([...(Array.isArray(m.redactKeep) ? m.redactKeep : []), ...keep.map((t) => str(t, 200)).filter((t) => t.length >= 2)])]
+    .filter((t) => !have.has(norm(t)))
+  // Hidden again after being kept: the newer decision wins.
+  m.redactTerms = terms.slice(-1000)
+  m.redactKinds = kinds
+  m.redactKeep = keepList.slice(-500)
   m.updatedAt = new Date().toISOString()
   write(d)
   return withPolicy(m)
@@ -145,4 +180,4 @@ function active(client) {
   return id ? get(id) : null
 }
 
-module.exports = { list, get, create, update, bindDoc, unbindDoc, forDoc, setActive, active, MATTERS_PATH, STATUSES }
+module.exports = { list, get, create, update, learnRedaction, bindDoc, unbindDoc, forDoc, setActive, active, MATTERS_PATH, STATUSES }
