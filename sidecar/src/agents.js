@@ -179,7 +179,7 @@ const TOOL_GROUPS = [
   { id: 'law', en: 'The law collection on this computer', de: 'Die Gesetzessammlung auf diesem Computer', tools: ['search_law', 'get_law_section'] },
   { id: 'austria', en: 'Austrian law online (RIS)', de: 'Österreichisches Recht online (RIS)', tools: ['search_ris'] },
   { id: 'eu', en: 'EU law online (EUR-Lex)', de: 'EU-Recht online (EUR-Lex)', tools: ['search_eurlex', 'get_eu_law'] },
-  { id: 'otherLaw', en: 'German, Slovak and Czech law, and law databases you connected', de: 'Deutsches, slowakisches und tschechisches Recht sowie verbundene Rechtsdatenbanken', tools: ['search_law_sources', 'get_law_source'] },
+  { id: 'otherLaw', en: 'German, Slovak and Czech law, and law databases you connected', de: 'Deutsches, slowakisches und tschechisches Recht sowie verbundene Rechtsdatenbanken', tools: ['search_law_sources', 'get_law_source', 'law_sources_status'] },
   { id: 'firm', en: 'The firm\'s library and clause bank', de: 'Die Bibliothek und Klauselsammlung der Kanzlei', tools: ['search_firm_library', 'find_clause', 'search_sources'] },
   { id: 'documents', en: 'The matter\'s documents', de: 'Die Dokumente der Akte', tools: ['get_document_map', 'search_docs', 'read_file', 'list_directory', 'search_local_files'] },
   { id: 'web', en: 'Web pages (asks first)', de: 'Webseiten (fragt vorher)', tools: ['web_fetch', 'web_save'] },

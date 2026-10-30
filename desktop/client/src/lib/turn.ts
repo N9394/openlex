@@ -103,7 +103,11 @@ export interface Activity {
   suggestions: number; stopped: boolean; failed: boolean; waiting: string | null; answerWords: number
   /** The second pass (judge): did it check this answer, and what did it find? */
   judge?: { ran: boolean; ok?: boolean; reason?: string; notes?: string[]; unavailable?: boolean } | null
+  /** Keys the AI asked the lawyer for (a secure field each; the key never enters the conversation). */
+  keys?: KeyRequest[]
 }
+
+export interface KeyRequest { source: string; label: string; labelDe?: string; keyHelp?: string | null; keyHelpDe?: string | null; guide?: string; signIn?: boolean }
 
 const generic = () => tr('generic', 'Working on your question')
 
@@ -111,7 +115,7 @@ export function startActivity(now = Date.now()): Activity {
   return { startedAt: now, endedAt: null, steps: [{ text: tr('workingOut', 'Working out how to answer'), status: 'now', at: now }], models: [], online: [], sources: [], clauses: [], notes: [], suggestions: 0, stopped: false, failed: false, waiting: null, answerWords: 0 }
 }
 
-const clone = (a: Activity): Activity => ({ ...a, judge: a.judge ? { ...a.judge } : a.judge, steps: a.steps.map((s) => ({ ...s })), online: [...a.online], sources: [...a.sources], clauses: [...a.clauses], notes: [...a.notes], models: [...a.models] })
+const clone = (a: Activity): Activity => ({ ...a, judge: a.judge ? { ...a.judge } : a.judge, steps: a.steps.map((s) => ({ ...s })), online: [...a.online], sources: [...a.sources], clauses: [...a.clauses], notes: [...a.notes], models: [...a.models], keys: [...(a.keys || [])] })
 const current = (a: Activity) => { for (let i = a.steps.length - 1; i >= 0; i--) if (a.steps[i].status === 'now') return a.steps[i]; return null }
 function push(a: Activity, text: string, now: number, extra: Partial<Step> = {}) {
   const cur = current(a)
@@ -148,6 +152,9 @@ export function applyEvent(act: Activity, ev: any, now = Date.now()): Activity {
     }
     case 'law':
       for (const s of ev.sources || []) if (s && !a.sources.some((x) => sameSource(x, s))) a.sources.push(s)
+      return a
+    case 'key_request':
+      if (ev.source && !(a.keys || []).some((k) => k.source === ev.source)) a.keys = [...(a.keys || []), { source: ev.source, label: ev.label, labelDe: ev.labelDe, keyHelp: ev.keyHelp, keyHelpDe: ev.keyHelpDe, guide: ev.guide, signIn: !!ev.signIn }]
       return a
     case 'note':
       if (ev.claim || ev.entity) a.notes.push({ entity: ev.entity || '', claim: ev.claim || '', section: ev.section == null ? '' : ev.section })

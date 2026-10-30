@@ -1,0 +1,130 @@
+<akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0" xmlns:html="http://www.w3.org/1999/xhtml" xmlns:uk="https://caselaw.nationalarchives.gov.uk/akn">
+  <judgment name="judgment">
+    <meta>
+      <identification source="#tna">
+	<FRBRWork>
+	  <FRBRthis value="https://caselaw.nationalarchives.gov.uk/id/uksc/2024/12"/>
+	  <FRBRuri value="https://caselaw.nationalarchives.gov.uk/id/uksc/2024/12"/>
+	  <FRBRdate date="2024-04-17" name="judgment"/>
+	  <FRBRauthor href="#uksc"/>
+	  <FRBRcountry value="GB-UKM"/>
+	  <FRBRnumber value="12"/>
+	  <FRBRname value="Secretary of State for Business and Trade v Mercer"/>
+	</FRBRWork>
+	<FRBRExpression>
+	  <FRBRthis value="https://caselaw.nationalarchives.gov.uk/uksc/2024/12"/>
+	  <FRBRuri value="https://caselaw.nationalarchives.gov.uk/uksc/2024/12"/>
+	  <FRBRdate date="2024-04-17" name="judgment"/>
+	  <FRBRauthor href="#uksc"/>
+	  <FRBRlanguage language="eng"/>
+	</FRBRExpression>
+	<FRBRManifestation>
+	  <FRBRthis value="https://caselaw.nationalarchives.gov.uk/uksc/2024/12/data.xml"/>
+	  <FRBRuri value="https://caselaw.nationalarchives.gov.uk/uksc/2024/12/data.xml"/>
+	  <FRBRdate date="2024-11-22T05:01:07" name="transform"/>
+	  <FRBRdate date="2024-11-27T05:06:52" name="tna-enriched"/>
+	  <FRBRauthor href="#tna"/>
+	  <FRBRformat value="application/xml"/>
+	</FRBRManifestation>
+      </identification>
+      <lifecycle source="#">
+	<eventRef date="2024-04-17" refersTo="#judgment" source="#"/>
+      </lifecycle>
+      <references source="#tna">
+	<TLCOrganization eId="uksc" href="https://www.supremecourt.uk/" showAs="The Supreme Court"/>
+	<TLCOrganization eId="tna" href="https://www.nationalarchives.gov.uk/" showAs="The National Archives"/>
+	<TLCEvent eId="judgment" href="#" showAs="judgment"/>
+	<TLCPerson eId="secretary-of-state-for-business-and-trade" href="" showAs="Secretary of State for Business and Trade"/>
+	<TLCPerson eId="mercer" href="" showAs="Mercer"/>
+	<TLCRole eId="respondent" href="" showAs="Respondent"/>
+	<TLCRole eId="appellant" href="" showAs="Appellant"/>
+	<TLCPerson eId="judge-lord-lloyd-jones" href="/judge-lord-lloyd-jones" showAs="Lord Lloyd-Jones"/>
+	<TLCPerson eId="judge-lord-hamblen" href="/judge-lord-hamblen" showAs="Lord Hamblen"/>
+	<TLCPerson eId="judge-lord-burrows" href="/judge-lord-burrows" showAs="Lord Burrows"/>
+	<TLCPerson eId="judge-lord-richards" href="/judge-lord-richards" showAs="Lord Richards"/>
+	<TLCPerson eId="judge-lady-simler" href="/judge-lady-simler" showAs="Lady Simler"/>
+      </references>
+      <proprietary source="#">
+	<uk:court>UKSC</uk:court>
+	<uk:year>2024</uk:year>
+	<uk:number>12</uk:number>
+	<uk:cite>[2024] UKSC 12</uk:cite>
+	<uk:parser>0.26.14</uk:parser>
+	<uk:hash>1eca1d72deecdb23c60de33d82c5da639ed2affc7a22979715698f37e60f5411</uk:hash>
+	<uk:tna-enrichment-engine>6.0.2</uk:tna-enrichment-engine>
+      </proprietary>
+      
+    </meta>
+    <header>
+      <p class="JudgmentReferences"><img src="image1.png" style="width:99.35pt;height:99.35pt"/></p>
+      <p class="JudgmentReferences"><span style="font-weight:bold;font-family:'Times New Roman'">Easter Term</span><br/><neutralCitation style="font-weight:bold;font-family:'Times New Roman'">[2024] UKSC 12</neutralCitation><br/><span style="font-style:italic;font-family:'Times New Roman'">On appeal from: </span><ref href="https://caselaw.nationalarchives.gov.uk/ewca/civ/2022/379" style="font-style:italic;font-family:'Times New Roman'" uk:canonical="[2022] EWCA Civ 379" uk:isNeutral="true" uk:origin="parser" uk:type="case">[2022] EWCA Civ 379</ref></p>
+      <p class="JudgmentTitle"><span style="font-family:'Times New Roman'">JUDGMENT</span></p>
+      <p class="JudgmentJudges"><party as="#respondent" refersTo="#secretary-of-state-for-business-and-trade" style="font-family:'Times New Roman';font-size:20pt">Secretary of State for Business and Trade</party><span style="font-family:'Times New Roman';font-size:20pt"> (</span><role refersTo="#respondent" style="font-family:'Times New Roman';font-size:20pt">Respondent</role><span style="font-family:'Times New Roman';font-size:20pt">) </span><span style="font-style:italic;font-family:'Times New Roman';font-size:20pt">v</span><span style="font-family:'Times New Roman';font-size:20pt"/><party as="#appellant" refersTo="#mercer" style="font-family:'Times New Roman';font-size:20pt">Mercer</party><span style="font-family:'Times New Roman';font-size:20pt"> (</span><role refersTo="#appellant" style="font-family:'Times New Roman';font-size:20pt">Appellant</role><span style="font-family:'Times New Roman';font-size:20pt">)</span></p>
+      <p class="JudgmentJudges"><span style="font-weight:normal;font-family:'Times New Roman'">before</span><br/><br/><judge refersTo="#judge-lord-lloyd-jones" style="font-family:'Times New Roman'">Lord Lloyd-Jones</judge><br/><judge refersTo="#judge-lord-hamblen" style="font-family:'Times New Roman'">Lord Hamblen</judge><br/><judge refersTo="#judge-lord-burrows" style="font-family:'Times New Roman'">Lord Burrows</judge><br/><judge refersTo="#judge-lord-richards" style="font-family:'Times New Roman'">Lord Richards</judge><br/><judge refersTo="#judge-lady-simler" style="font-family:'Times New Roman'">Lady Simler</judge></p>
+      <p class="JudgmentJudges"><span style="font-family:'Times New Roman'">JUDGMENT GIVEN ON</span><br/><docDate date="2024-04-17" refersTo="#judgment" style="font-family:'Times New Roman'">17 April 2024</docDate><br/><br/><span style="font-family:'Times New Roman'">Heard on 12 and 13 December 2023</span></p>
+      <p class="JudgmentAppRespInt"><span style="font-style:italic;font-family:'Times New Roman'">Appellant</span><br/><span style="font-family:'Times New Roman'">Michael Ford KC</span><br/><span style="font-family:'Times New Roman'">Stuart Brittenden</span><br/><span style="font-family:'Times New Roman'">Alan Bogg</span><br/><span style="font-family:'Times New Roman'">(Instructed by UNISON Legal Services (London))</span></p>
+      <p class="JudgmentAppRespInt"><span style="font-style:italic;font-family:'Times New Roman'">Respondent</span><br/><span style="font-family:'Times New Roman'">Daniel Stilitz KC </span><br/><span style="font-family:'Times New Roman'">Hannah Slarks</span><br/><span style="font-family:'Times New Roman'">(Instructed by Government Legal Department)</span></p>
+    </header>
+    <judgmentBody>
+      <decision>
+	<level class="author">
+	  <content>
+	    <p class="NewSpeech"><span style="text-transform:none;font-family:'Times New Roman'">LADY SIMLER (with whom Lord Lloyd-Jones, Lord Hamblen, Lord Burrows and Lord Richards agree</span><span style="font-family:'Times New Roman'">): </span></p>
+	  </content>
+	</level>
+	<level eId="lvl_1">
+	  <content>
+	    <p class="ParaHeading1"><span style="text-transform:none;font-family:'Times New Roman'">Introduction</span></p>
+	  </content>
+	</level>
+	<paragraph eId="para_1">
+	  <num style="font-family:'Times New Roman';font-size:13pt">1.</num>
+	  <content>
+	    <p class="ParaApprovedLevel1" style="margin-left:0in;text-indent:0.5in"><span style="font-family:'Times New Roman'">Employees who are dismissed for taking part in lawful strike action have some statutory remedies for unfair dismissal but there is no express statutory (or other) protection in domestic law against action short of dismissal for employees, or indeed, workers who participate in lawful strike action. The question on this appeal is whether <ref href="http://www.legislation.gov.uk/id/ukpga/1992/52/section/146" uk:canonical="" uk:origin="TNA" uk:type="legislation">section 146</ref> of the <ref href="http://www.legislation.gov.uk/id/ukpga/1992/52" uk:canonical="1992 c. 52" uk:origin="TNA" uk:type="legislation">Trade Union and Labour Relations (Consolidation) Act 1992</ref> (&#8220;TULRCA&#8221;) can properly be interpreted as extending to provide such protection, and if not, what is the consequence.</span></p>
+	  </content>
+	</paragraph>
+<paragraph eId="para_2">
+	  <num style="font-family:'Times New Roman';font-size:13pt">2.</num>
+	  <content>
+	    <p class="ParaApprovedLevel1" style="margin-left:0in;text-indent:0.5in"><span style="font-family:'Times New Roman'">Fiona Mercer, the appellant, was at all material times employed as a support worker in the care sector by Alternative Futures Group Ltd (&#8220;AFG&#8221;), a care services provider. As a UNISON workplace representative, she was involved in planning and took part in lawful strike action at her workplace. She was suspended by her employer. During her suspension she received normal pay, but received nothing for the overtime she would normally have worked. The effect, if not the purpose, of the suspension was also to remove her from the workplace while the industrial action was in progress. She complained to an employment tribunal that the decision to suspend her was taken for the sole or main purpose of preventing or deterring her from taking part in the activities of an independent trade union &#8220;at an appropriate time&#8221; or penalising her for having done so. Her claim was disputed as a matter of fact (her employer argued that the suspension was because she abandoned her shift without permission and spoke to the press without permission) and as a matter of law. </span></p>
+	  </content>
+	</paragraph>
+<paragraph eId="para_3">
+	  <num style="font-family:'Times New Roman';font-size:13pt">3.</num>
+	  <content>
+	    <p class="ParaApprovedLevel1" style="margin-left:0in;text-indent:0.5in"><span style="font-family:'Times New Roman'">As a matter of ordinary domestic construction, <ref href="http://www.legislation.gov.uk/id/ukpga/1992/52/section/146" uk:canonical="" uk:origin="TNA" uk:type="legislation">section 146</ref> of TULRCA has been interpreted as not providing protection from detriment short of dismissal to workers engaged in lawful strike action. This is because the words &#8220;at an appropriate time&#8221; are defined to exclude working time (save where the employer has consented to the activities in question) so that they limit the protection available to activities which are outside working time and/or not inconsistent with the worker&#8217;s performance of their primary duties to their employer. However, the appellant argues that the protection afforded by article 11 of the European Convention on Human Rights (&#8220;the Convention&#8221;) together with the strong interpretative obligation in <ref href="http://www.legislation.gov.uk/id/ukpga/1998/42/section/3" uk:canonical="" uk:origin="TNA" uk:type="legislation">section 3</ref> of the <ref href="http://www.legislation.gov.uk/id/ukpga/1998/42" uk:canonical="1998 c. 42" uk:origin="TNA" uk:type="legislation">Human Rights Act 1998</ref> (&#8220;the HRA&#8221;) make it possible to construe <ref href="http://www.legislation.gov.uk/id/ukpga/1992/52/section/146" uk:canonical="" uk:origin="TNA" uk:type="legislation">section 146</ref> compatibly with article 11 to offer extended protection to workers for detriment short of dismissal for participation in lawful strike action.</span></p>
+	  </content>
+	</paragraph>
+<paragraph eId="para_22">
+	  <num style="font-family:'Times New Roman';font-size:13pt">22.</num>
+	  <content>
+	    <p class="ParaApprovedLevel1" style="margin-left:0in;text-indent:0.5in"><span style="font-family:'Times New Roman'">Section 4 of the HRA empowers the senior courts to make a declaration that a provision is incompatible with a Convention right. So far as material it provides:</span></p>
+	    <block name="embeddedStructure"><embeddedStructure>
+		<paragraph>
+		  <num style="font-family:'Times New Roman';font-size:13pt">&#8220;(1)</num>
+		  <content>
+		    <p class="Quote" style="margin-left:1in;text-indent:0.5in"><span style="font-family:'Times New Roman'">Subsection (2) applies in any proceedings in which a court determines whether a provision of primary legislation is compatible with a Convention right.</span></p>
+		  </content>
+		</paragraph>
+<paragraph eId="para_23">
+	  <num style="font-family:'Times New Roman';font-size:13pt">23.</num>
+	  <content>
+	    <p class="ParaApprovedLevel1" style="margin-left:0in;text-indent:0.5in"><span style="font-family:'Times New Roman'">By section 4(6) of the HRA, a declaration of incompatibility does not affect the continuing validity of the relevant provision and nor is it binding on the parties in the proceedings.</span></p>
+	  </content>
+	</paragraph>
+<paragraph eId="para_24">
+	  <num style="font-family:'Times New Roman';font-size:13pt">24.</num>
+	  <content>
+	    <p class="ParaApprovedLevel1" style="margin-left:0in;text-indent:0.5in"><span style="font-family:'Times New Roman'">The appellant was employed as a support worker by AFG from 2009 and was a workplace representative for UNISON, the recognised union for collective bargaining with AFG on behalf of its members. Her employment ceased in 2022.</span></p>
+	  </content>
+	</paragraph>
+<paragraph>
+		  <num style="font-family:'Times New Roman';font-size:13pt">2.</num>
+		  <content>
+		    <p class="Quote" style="margin-left:1in;text-indent:0.5in"><span style="font-family:'Times New Roman'">Such protection shall apply more particularly in respect of acts calculated to -</span></p>
+		  </content>
+		</paragraph>
+      </decision>
+    </judgmentBody>
+  </judgment>
+</akomaNtoso>

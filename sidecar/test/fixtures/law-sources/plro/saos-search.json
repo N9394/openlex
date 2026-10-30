@@ -1,0 +1,203 @@
+{
+ "links": [
+  {
+   "rel": "self",
+   "href": "https://www.saos.org.pl/api/search/judgments?pageSize=2&pageNumber=0&all=r%C4%99kojmia%20za%20wady&sortingField=JUDGMENT_DATE&sortingDirection=DESC"
+  },
+  {
+   "rel": "next",
+   "href": "https://www.saos.org.pl/api/search/judgments?pageSize=2&pageNumber=1&all=r%C4%99kojmia%20za%20wady&sortingField=JUDGMENT_DATE&sortingDirection=DESC"
+  }
+ ],
+ "items": [
+  {
+   "id": 553722,
+   "href": "https://www.saos.org.pl/api/judgments/553722",
+   "courtType": "COMMON",
+   "courtCases": [
+    {
+     "caseNumber": "III Ca 259/26"
+    }
+   ],
+   "judgmentType": "REASONS",
+   "judges": [],
+   "textContent": ". inż. L. F. <em>za</em> wiarygodne oraz <em>za</em> sporządzone w sposób fachowy i prawidłowy, w sytuacji, gdy: ̶ biegły nie stwierdził kategorycznie istnienia <em>wady</em> oraz źródła rzekomego hałasu, ̶ biegły nie przedstawił ...  cena pozostaje w proporcji do ceny wynikającej z umowy w jakiej wartość rzeczy z <em>wadą</em> pozostaje do wartości rzeczy bez <em>wady</em>, w sytuacji, gdy nie zo",
+   "keywords": [
+    "rękojmia"
+   ],
+   "division": {
+    "href": "https://www.saos.org.pl/api/ccDivisions/1018",
+    "id": 1018,
+    "name": "III Wydział Cywilny Odwoławczy",
+    "code": "0001503",
+    "court": {
+     "href": "https://www.saos.org.pl/api/commonCourts/159",
+     "id": 159,
+     "code": "15251000",
+     "name": "Sąd Okręgowy w Łodzi"
+    }
+   },
+   "judgmentDate": "2026-09-14"
+  },
+  {
+   "id": 551215,
+   "href": "https://www.saos.org.pl/api/judgments/551215",
+   "courtType": "COMMON",
+   "courtCases": [
+    {
+     "caseNumber": "VIII Ua 30/26"
+    }
+   ],
+   "judgmentType": "REASONS",
+   "judges": [
+    {
+     "name": "Agnieszka Olejniczak-Kosiara",
+     "function": null,
+     "specialRoles": [
+      "PRESIDING_JUDGE"
+     ]
+    }
+   ],
+   "textContent": ", które nie ukończyły 16 roku życia zaliczane są do osób niepełnosprawnych, jeżeli mają naruszoną sprawność fizyczną lub psychiczną o przewidywanym okresie powyżej 12 miesięcy, z powodu <em>wady</em> wrodzonej ... , należą: 1)  <em>wady</em> wrodzone i schorzenia o różnej etiologii prowadzące do niedowładów, porażenia kończyn lub zmian w narządzie ruchu, upośledzające w znacznym stopniu zdolność c",
+   "keywords": [
+    "niepełnosprawność"
+   ],
+   "division": {
+    "href": "https://www.saos.org.pl/api/ccDivisions/1023",
+    "id": 1023,
+    "name": "VIII Wydział Pracy i Ubezpieczeń Społecznych",
+    "code": "0004021",
+    "court": {
+     "href": "https://www.saos.org.pl/api/commonCourts/159",
+     "id": 159,
+     "code": "15251000",
+     "name": "Sąd Okręgowy w Łodzi"
+    }
+   },
+   "judgmentDate": "2026-08-27"
+  }
+ ],
+ "queryTemplate": {
+  "pageNumber": {
+   "value": 0,
+   "description": "Represents current page number",
+   "allowedValues": "Not negative integer"
+  },
+  "pageSize": {
+   "value": 2,
+   "description": "Represents maximum number of items on the page",
+   "allowedValues": "Any integer greater or equal to 1 and less or equal to 100"
+  },
+  "sortingField": {
+   "value": "JUDGMENT_DATE",
+   "description": "Represents the field by which you want to sort a list of items",
+   "allowedValues": [
+    "DATABASE_ID",
+    "JUDGMENT_DATE",
+    "REFERENCING_JUDGMENTS_COUNT",
+    "MAXIMUM_MONEY_AMOUNT",
+    "CC_COURT_TYPE",
+    "CC_COURT_ID",
+    "CC_COURT_CODE",
+    "CC_COURT_NAME",
+    "CC_COURT_DIVISION_ID",
+    "CC_COURT_DIVISION_CODE",
+    "CC_COURT_DIVISION_NAME",
+    "SC_JUDGMENT_FORM_ID",
+    "SC_PERSONNEL_TYPE",
+    "SC_COURT_DIVISION_ID",
+    "SC_COURT_DIVISION_NAME",
+    "SC_COURT_DIVISIONS_CHAMBER_ID",
+    "SC_COURT_DIVISIONS_CHAMBER_NAME"
+   ]
+  },
+  "sortingDirection": {
+   "value": "DESC",
+   "description": "Represents the direction in which to sort a list of items",
+   "allowedValues": [
+    "ASC",
+    "DESC"
+   ]
+  },
+  "all": "rękojmia za wady",
+  "legalBase": null,
+  "referencedRegulation": null,
+  "lawJournalEntryCode": {
+   "value": null,
+   "description": "Represents polish law journal entry (pl. pozycja dziennika ustaw)",
+   "allowedValues": "String in format : 'year/entry_number'"
+  },
+  "judgeName": null,
+  "caseNumber": null,
+  "courtType": {
+   "value": null,
+   "description": "Represents judgment's court type",
+   "allowedValues": [
+    "COMMON",
+    "SUPREME",
+    "CONSTITUTIONAL_TRIBUNAL",
+    "NATIONAL_APPEAL_CHAMBER",
+    "ADMINISTRATIVE"
+   ]
+  },
+  "ccCourtType": {
+   "value": null,
+   "description": "Represents common court type",
+   "allowedValues": [
+    "APPEAL",
+    "REGIONAL",
+    "DISTRICT"
+   ]
+  },
+  "ccCourtId": null,
+  "ccCourtCode": null,
+  "ccCourtName": null,
+  "ccDivisionId": null,
+  "ccDivisionCode": null,
+  "ccDivisionName": null,
+  "ccIncludeDependentCourtJudgments": null,
+  "scPersonnelType": {
+   "value": null,
+   "description": "Represents supreme court judgment's personnel type",
+   "allowedValues": [
+    "ONE_PERSON",
+    "THREE_PERSON",
+    "FIVE_PERSON",
+    "SEVEN_PERSON",
+    "ALL_COURT",
+    "ALL_CHAMBER",
+    "JOINED_CHAMBERS"
+   ]
+  },
+  "scJudgmentForm": null,
+  "scChamberId": null,
+  "scChamberName": null,
+  "scDivisionId": null,
+  "scDivisionName": null,
+  "judgmentTypes": {
+   "value": [],
+   "description": "Represents list of judgments types",
+   "allowedValues": [
+    "DECISION",
+    "RESOLUTION",
+    "SENTENCE",
+    "REGULATION",
+    "REASONS"
+   ]
+  },
+  "keywords": [],
+  "judgmentDateFrom": {
+   "value": "",
+   "description": "Represents the earliest allowed judgment's date on the list of items",
+   "allowedValues": "Date in format : 'yyyy-MM-dd'"
+  },
+  "judgmentDateTo": {
+   "value": "",
+   "description": "Represents the latest of allowed judgment's date on the list of items",
+   "allowedValues": "Date in format : 'yyyy-MM-dd'"
+  }
+ },
+ "info": {
+  "totalResults": 6280
+ }
+}

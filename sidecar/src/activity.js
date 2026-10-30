@@ -56,7 +56,7 @@ function toolDetail(tool, args = {}, section = null) {
     } catch { /* no folder module in old tests */ }
   }
   // Law sources (connectors/): which ones, never more than their ids.
-  if (/^(search_law_sources|get_law_source)$/.test(tool)) {
+  if (/^(search_law_sources|get_law_source|enable_law_source|request_law_source_key)$/.test(tool)) {
     const list = Array.isArray(a.sources) ? a.sources : typeof a.sources === 'string' && a.sources ? a.sources.split(/[\s,]+/) : a.source ? [a.source] : []
     if (list.length) d.sources = list.slice(0, 6).map((x) => clip(String(x).toLowerCase(), 20))
   }

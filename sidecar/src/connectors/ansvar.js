@@ -28,6 +28,7 @@
 const crypto = require('crypto')
 const { request, SourceError } = require('./http')
 const oauth = require('./oauth')
+const { pickResponse, resultText } = require('./mcp_http')
 
 const GATEWAY = () => process.env.OPENLEX_ANSVAR_URL || 'https://gateway.ansvar.eu/mcp'
 const TOKEN_URL = () => process.env.OPENLEX_ANSVAR_TOKEN_URL || 'https://auth.ansvar.eu/realms/ansvar/protocol/openid-connect/token'
@@ -91,19 +92,6 @@ async function accessToken(key, ctx = {}) {
   if (!j.access_token) throw new SourceError('Ansvar did not accept the key', 'key', 'no access_token')
   tokens.set(id, { token: j.access_token, until: Date.now() + (Number(j.expires_in) || 300) * 1000 })
   return j.access_token
-}
-
-/** The JSON-RPC answer with this id from a JSON or an event-stream body. */
-function pickResponse(contentType, raw, id) {
-  if (/event-stream/.test(contentType)) {
-    for (const block of raw.split(/\r?\n\r?\n/)) {
-      const data = block.split(/\r?\n/).filter((l) => l.startsWith('data:')).map((l) => l.slice(5).trimStart()).join('\n')
-      if (!data) continue
-      try { const msg = JSON.parse(data); if (msg.id === id) return msg } catch { /* keep looking */ }
-    }
-    return null
-  }
-  try { const msg = JSON.parse(raw); return Array.isArray(msg) ? msg.find((m) => m.id === id) : msg } catch { return null }
 }
 
 function rpcError(e) {
@@ -210,12 +198,6 @@ function stringProp(t, names) {
   return req || null
 }
 
-/** Text of a tools/call result (MCP content blocks). */
-function resultText(r) {
-  if (r?.structuredContent) return JSON.stringify(r.structuredContent)
-  return (r?.content || []).filter((c) => c.type === 'text').map((c) => c.text).join('\n')
-}
-
 const pick = (o, names) => { for (const n of names) if (o && o[n] != null && o[n] !== '') return o[n]; return null }
 const flat = (v) => (typeof v === 'string' ? v : v == null ? '' : typeof v === 'object' ? (v.text || v.name || v.title || JSON.stringify(v)) : String(v))
 
@@ -244,16 +226,26 @@ const connector = {
   id: 'ansvar',
   label: 'Ansvar',
   country: 'INT',
-  jurisdictions: [], // many: national law of EU and other countries, EU law
+  // EU, EEA and EFTA (Ansvar's stated area), the UK, and EU law. Hungary and
+  // Cyprus are left out: their official sites forbid automated access, so a
+  // copy's provenance would need checking with Ansvar first (docs/SOURCES.md).
+  jurisdictions: ['EU', 'AT', 'BE', 'BG', 'HR', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE', 'IS', 'LI', 'NO', 'CH', 'UK'],
+  recommended: true,
   kind: 'law',
   gateway: true,
-  description: 'Paid law-research gateway by Ansvar Systems (Sweden): national law of many countries, EU law and guidance, each answer with its source',
+  description: 'Law-research gateway by Ansvar Systems (Sweden): national law of the EU, EEA and EFTA countries, EU law and guidance, each answer with its source. Free plan: 100 searches a day, one country per question; sign in with your browser.',
+  de: {
+    label: 'Ansvar',
+    description: 'Rechercheplattform von Ansvar Systems (Schweden): nationales Recht der EU-, EWR- und EFTA-Staaten, EU-Recht und Leitlinien, jede Antwort mit Quelle. Kostenloser Tarif: 100 Suchen am Tag, ein Land pro Frage; Anmeldung im Browser.',
+    needsKeyWords: 'kostenlos anmelden oder Schlüssel einfügen',
+    keyHelp: 'Kostenlos: Konto auf ansvar.eu anlegen (ohne Karte), dann „Im Browser anmelden“ wählen und den angezeigten Code eingeben. Premium: Dienst-Zugangsdaten als client-id:client-secret einfügen.',
+  },
   licence: 'Your own Ansvar subscription; Ansvar\'s terms apply (no sharing or reselling of access or results)',
   licenceUrl: 'https://ansvar.eu/terms',
   homepage: 'https://ansvar.eu',
   needsKey: true,
-  keyHelp: 'Paste the service credential from your Ansvar workspace as client-id:client-secret (Ansvar Premium plan or higher). Each lawyer uses their own. On the free and Solo plans, sign in with your browser instead.',
-  needsKeyWords: 'sign in or paste your key',
+  keyHelp: 'Free: create an account on ansvar.eu (no card), then choose "Sign in with your browser" and type the code OpenLex shows. Premium plan: paste a service credential as client-id:client-secret instead. Each lawyer uses their own.',
+  needsKeyWords: 'sign in free or paste your key',
   guide: 'ansvar',
   signIn,
   /** How the saved credential reads in the list. */

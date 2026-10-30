@@ -593,7 +593,8 @@ async function handle(req, res) {
       try {
         const law = require('./connectors')
         // Law sources (connectors/): one plain list for every front end.
-        if (req.method === 'GET' && p === '/api/sources/law') return sendJson(res, 200, { sources: await law.status({ matterId: url.searchParams.get('matterId') || null }) })
+        if (req.method === 'GET' && p === '/api/sources/law') return sendJson(res, 200, { sources: await law.status({ matterId: url.searchParams.get('matterId') || null }), offline: await law.offline() })
+        if (req.method === 'GET' && p === '/api/sources/law/download') return sendJson(res, 200, { job: law.downloadStatus(url.searchParams.get('name'), url.searchParams.get('part') || null) })
         if (req.method === 'GET' && p === '/api/sources') return sendJson(res, 200, { law: await law.status({ matterId: url.searchParams.get('matterId') || null }), sources: src.list(), presets: Object.keys(src.PRESETS), kinds: src.KINDS, types: src.TYPES })
         if (req.method === 'GET' && p === '/api/sources/law/signin') return sendJson(res, 200, law.signInStatus(url.searchParams.get('name')))
         if (req.method !== 'POST') return sendJson(res, 404, { error: 'not found' })
@@ -603,6 +604,12 @@ async function handle(req, res) {
         if (p === '/api/sources/law/signin') return sendJson(res, 200, await law.signIn(body.name, { open: body.open !== false }))
         if (p === '/api/sources/law/signin/cancel') return sendJson(res, 200, law.cancelSignIn(body.name))
         if (p === '/api/sources/law/nightcopy') return sendJson(res, 200, law.setNightCopy(body.name, body.on !== false))
+        // Local copies: the size first (no confirm), then the download (confirm: true); remove from this computer.
+        if (p === '/api/sources/law/download') return sendJson(res, 200, body.confirm ? { job: await law.download(body.name, body.part || null, { confirm: true, history: !!body.history }) } : { plan: await law.downloadPlan(body.name, body.part || null) })
+        if (p === '/api/sources/law/download/cancel') return sendJson(res, 200, { job: law.cancelDownload(body.name, body.part || null) })
+        if (p === '/api/sources/law/download/remove') return sendJson(res, 200, await law.removeDownload(body.name, body.part || null))
+        // "Work fully offline": plan (sizes) → on with confirm (downloads start) → off.
+        if (p === '/api/sources/law/offline') return sendJson(res, 200, body.plan || (body.on && !body.confirm) ? await law.offline({ countries: body.countries, plan: true }) : await law.setOffline(!!body.on, { countries: body.countries, confirm: !!body.confirm }))
         const isLaw = law.IDS.includes(String(body.name || body.source || '').toLowerCase())
         if (p === '/api/sources/law/search') return sendJson(res, 200, await policy.withMatter(matterId, () => law.search(body)))
         if (p === '/api/sources/law/get') return sendJson(res, 200, await policy.withMatter(matterId, () => law.get(body)))
@@ -1824,6 +1831,7 @@ server.listen(config.PORT, '127.0.0.1', () => {
   // Monitors (Phase 7.4): check due watches every 15 minutes while the engine runs.
   if (process.env.OPENLEX_MONITORS !== '0') require('./monitors').startScheduler()
   if (process.env.OPENLEX_MONITORS !== '0') require('./web/ris').startNightly() // RIS local copy, only in the hours the RIS terms allow (opt-in)
+  if (process.env.OPENLEX_MONITORS !== '0') require('./connectors').startRefresh() // local law copies (offline mode): git pull once a day
   console.log(`[sidecar] OpenLex engine on https://localhost:${config.PORT}${httpsServer ? '' : ' (http fallback)'}`)
   console.log(`[sidecar] serving add-in from ${config.ADDIN_ROOT}`)
   console.log(`[sidecar] model: ${config.LLM_MODEL} (llama.cpp at ${config.LLM_BASE})`)

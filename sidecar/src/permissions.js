@@ -95,6 +95,11 @@ const BUILTIN = {
   // paid gateway (the lawyer's own subscription, e.g. Ansvar) would be used.
   search_law_sources: 'law_sources',
   get_law_source: 'law_sources',
+  // Setting sources up: reading the list is free; switching one on is asked;
+  // the key field only shows a secure input (the lawyer types the key).
+  law_sources_status: 'allow',
+  enable_law_source: 'ask',
+  request_law_source_key: 'allow',
 
   // The firm's own knowledge, indexed on this computer.
   search_firm_library: 'allow',
@@ -165,7 +170,7 @@ function kindOf(tool) {
   if (WEB_TOOLS.has(tool)) return 'web'
   if (tool === 'run_bash') return 'command'
   if (tool === 'sync_calendar') return 'calendar'
-  if (tool === 'search_sources' || tool === 'search_law_sources' || tool === 'get_law_source') return 'sources'
+  if (tool === 'search_sources' || tool === 'search_law_sources' || tool === 'get_law_source' || tool === 'law_sources_status' || tool === 'enable_law_source' || tool === 'request_law_source_key') return 'sources'
   return 'other'
 }
 
@@ -417,6 +422,9 @@ function summarize(tool, args = {}) {
     case 'download_to_matter': return `Download ${path.posix.basename(String(a.url || '').split(/[?#]/)[0]) || 'a file'} from ${hostOf(a.url) || 'the web'} into the matter folder`
     case 'search_law_sources': return `Look up "${short(a.query, 60)}" in ${lawSources(tool, a).map((c) => c.label).join(', ') || 'the law sources'}`
     case 'get_law_source': return `Open a document from ${lawSources(tool, a).map((c) => c.label).join(', ') || 'a law source'}`
+    case 'enable_law_source': { let l = short(a.source, 30); try { l = require('./connectors').connector(a.source).label } catch { /* unknown */ } return `Switch on the law source ${l}` }
+    case 'request_law_source_key': return `Ask you for the key of ${short(a.source, 30)} in a secure field`
+    case 'law_sources_status': return 'See which law sources are connected'
     case 'search_sources': return `Search ${searchedSources(a).filter((s) => !s.local).map((s) => s.title || s.name).join(', ') || 'a connected source'} for "${short(a.query, 60)}"`
     default:
       if (String(tool).startsWith('mcp__')) { const [, server, ...t] = String(tool).split('__'); return `Use "${t.join('__')}" from the ${server} connector` }

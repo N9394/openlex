@@ -1,0 +1,51 @@
+{
+ "totalResultNumber": 1,
+ "executionTime": 52,
+ "typePagination": "ARTICLE",
+ "facets": [],
+ "results": [
+  {
+   "titles": [
+    {
+     "id": "LEGITEXT000006070721",
+     "cid": "LEGITEXT000006070721",
+     "title": "Code civil",
+     "legalStatus": "VIGUEUR",
+     "startDate": "1804-03-21",
+     "nature": "CODE"
+    }
+   ],
+   "nature": "CODE",
+   "etat": "VIGUEUR",
+   "sections": [
+    {
+     "id": "LEGISCTA000032021488",
+     "title": "Sous-titre II : La responsabilité extracontractuelle",
+     "legalStatus": "VIGUEUR",
+     "extracts": [
+      {
+       "id": "LEGIARTI000032041571",
+       "num": "1240",
+       "type": "articles",
+       "legalStatus": "VIGUEUR",
+       "dateDebut": 1475280000000,
+       "values": [
+        "Tout fait quelconque de l'homme, qui cause à autrui un <mark>dommage</mark>, oblige celui par la faute duquel il est arrivé à le <mark>réparer</mark>."
+       ]
+      },
+      {
+       "id": "LEGIARTI000032041559",
+       "num": "1242",
+       "type": "articles",
+       "legalStatus": "VIGUEUR",
+       "dateDebut": 1475280000000,
+       "values": [
+        "On est responsable non seulement du <mark>dommage</mark> que l'on cause par son propre fait…"
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

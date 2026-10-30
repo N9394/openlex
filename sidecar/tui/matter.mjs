@@ -313,6 +313,7 @@ export function Matter({ matterId = null }) {
         if (ev.type === 'law') patch((a) => { for (const s of ev.sources || []) if (!a.sources.some((x) => (x.chunk_id && x.chunk_id === s.chunk_id) || (x.source_name === s.source_name && x.section === s.section))) a.sources = [...a.sources, s] })
         else if (ev.type === 'suggestion') patch((a) => { a.suggestions = [...a.suggestions, ev.suggestion] })
         else if (ev.type === 'skill') patch((a) => { a.skill = ev.title })
+        else if (ev.type === 'key_request') patch((a) => { a.tip = `OpenLex needs your free key for ${ev.label}${ev.signIn ? ' (or a free browser sign-in)' : ''}: type /law, choose ${ev.label}, and paste it there (it stays hidden and never goes into the chat). ${ev.keyHelp || ''}`.trim() })
         else if (ev.type === 'skill_suggestion' && ev.name) patch((a) => { a.tip = `Your firm's instructions "${ev.title || ev.name}" may fit — choose them under Actions → Use your firm's instructions.` })
         else if (ev.type === 'error') patch((a) => { a.error = friendly(ev.message); a.err = errorParts(ev.message) })
         else if (ev.type === 'permission') { setPerm(ev); setMode('chat') }

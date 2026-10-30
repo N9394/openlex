@@ -62,14 +62,20 @@ const EURLEX = 'EUR-Lex (the EU\'s law database)'
 const LAW_SOURCES = {
   ris: 'RIS (Austria\'s federal law database)', eurlex: 'EUR-Lex (the EU\'s law database)', neuris: 'NeuRIS (Germany\'s federal law portal)',
   slovlex: 'Slov-Lex (Slovakia\'s law portal)', esbirka: 'e-Sbírka (Czechia\'s Collection of Laws)', ansvar: 'Ansvar (a law-research service you subscribe to)',
+  legalize: 'Legalize (laws of many countries, a community project)', opencaselaw: 'opencaselaw.ch (Swiss court decisions)', fedlex: 'Fedlex (Switzerland\'s federal law portal)',
+  openlegaldata: 'Open Legal Data (German court decisions, a community project)', gii: 'Gesetze im Internet (Germany\'s federal laws)',
+  ukleg: 'legislation.gov.uk (UK legislation)', ukcaselaw: 'Find Case Law (the UK National Archives)', bwb: 'wetten.overheid.nl (Dutch statutes)', rechtspraak: 'rechtspraak.nl (Dutch court decisions)',
+  legifrance: 'Légifrance (French law)', judilibre: 'Judilibre (French Cour de cassation decisions)', ecfr: 'eCFR (US federal regulations)', govinfo: 'GovInfo (US Government Publishing Office)',
+  courtlistener: 'CourtListener (US court decisions)', sejm: 'Sejm ELI (Poland\'s Journal of Laws)', saos: 'SAOS (Polish court judgments)', rolegis: 'legislatie.just.ro (Romania\'s legislation portal)',
+  rodata: 'Romanian law data (a community copy on this computer)',
 }
-const LAW_SOURCE_FOR = { AT: 'ris', EU: 'eurlex', DE: 'neuris', SK: 'slovlex', CZ: 'esbirka' }
+const LAW_SOURCE_FOR = { AT: ['ris'], EU: ['eurlex'], DE: ['neuris', 'openlegaldata', 'gii'], SK: ['slovlex'], CZ: ['esbirka'], CH: ['fedlex', 'opencaselaw'], UK: ['ukleg', 'ukcaselaw'], GB: ['ukleg', 'ukcaselaw'], NL: ['bwb', 'rechtspraak'], FR: ['legifrance', 'judilibre'], US: ['ecfr', 'govinfo', 'courtlistener'], PL: ['sejm', 'saos'], RO: ['rolegis'] }
 function lawSourcesOf(d = {}) {
   const ids = (Array.isArray(d.sources) ? d.sources : []).filter((id) => LAW_SOURCES[id])
   if (ids.length) return ids.map((id) => LAW_SOURCES[id])
   const j = String(d.jurisdiction || '').toUpperCase()
   if (!j) return []
-  return [LAW_SOURCE_FOR[j] ? LAW_SOURCES[LAW_SOURCE_FOR[j]] : 'a law-research service you connected']
+  return LAW_SOURCE_FOR[j] ? LAW_SOURCE_FOR[j].map((id) => LAW_SOURCES[id]) : ['a law-research service you connected']
 }
 
 /**
@@ -86,6 +92,9 @@ const TOOL_WORDS = {
   search_eurlex: (d) => ({ text: `Checking EUR-Lex, the EU's official law database${quoted(d.query, 40)}`, online: EURLEX }),
   search_law_sources: (d) => { const who = lawSourcesOf(d); return { text: `Looking up the law in ${who.length ? who.join(', ') : 'the official law databases'}${quoted(d.query, 40)}`, online: who.length ? who.join(', ') : 'official law databases' } },
   get_law_source: (d) => { const who = lawSourcesOf(d); return { text: `Reading a law text from ${who[0] || 'an official law database'}${d.article ? `, section ${clip(d.article, 12)}` : ''}`, online: who[0] || 'an official law database' } },
+  law_sources_status: () => ({ text: 'Checking which law sources are connected' }),
+  enable_law_source: (d) => ({ text: `Switching on a law source${d.sources?.[0] && LAW_SOURCES[d.sources[0]] ? `: ${LAW_SOURCES[d.sources[0]]}` : ''}` }),
+  request_law_source_key: (d) => ({ text: `Asking you for a free key${d.sources?.[0] && LAW_SOURCES[d.sources[0]] ? ` for ${LAW_SOURCES[d.sources[0]]}` : ''} (in a secure field)` }),
   get_eu_law: (d) => ({ text: `Reading EU law on EUR-Lex${d.article ? `, Article ${d.article}` : ''}`, online: EURLEX }),
   web_fetch: (d) => ({ text: `Opening a web page: ${d.host || 'a website'}`, online: d.host || 'a website' }),
   web_save: (d) => ({ text: `Saving a web page into the matter: ${d.host || 'a website'}`, online: d.host || 'a website' }),
