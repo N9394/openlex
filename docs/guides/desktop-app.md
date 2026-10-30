@@ -72,6 +72,8 @@ Firms that need installers signed by Apple (notarised) or Microsoft (Authenticod
 
 Run the install line again, or download the new version and install it over the old one. Your settings, matters and models stay where they are.
 
+Builds from a distributor with a licence update themselves: the app downloads the new version, checks it, and asks you to restart. On a Mac it replaces `OpenLex.app` in place; if it cannot (for example when the app is not in a folder you can write to, or was opened straight from the disk image), it tells you and shows the downloaded file to install by hand.
+
 If you used the older app called **LexVault**, OpenLex picks up its settings and data. On a Mac, you can delete `LexVault.app` from Applications afterwards; on Windows, the OpenLex installer replaces it.
 
 ## Hardware for local models

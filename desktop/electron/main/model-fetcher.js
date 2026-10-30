@@ -1,9 +1,10 @@
 /**
  * GGUF download helper.
  *
- * On boot, after hardware-detect picks a tier, the App calls fetchModel() with
- * the tier's model variant. If the file already exists at the right size + sha,
- * we no-op. Otherwise we stream it from license-server, resumable, and verify.
+ * Used only when the lawyer clicks "Download" on a model a distribution
+ * recommends (main/model-setup.js) — never automatically at start. If the
+ * file already exists at the right size + sha, we no-op. Otherwise we stream
+ * it from the distribution's server, resumable, and verify.
  *
  * The download is token-authenticated: we attach the user's bearer token from
  * tokens.json (written by the renderer's first-run paste flow). This is the
@@ -37,10 +38,12 @@ async function fetchModel({
   const finalPath = path.join(destDir, filename)
   const partPath = finalPath + '.part'
 
-  // Skip if already present + correct size (and hash if known)
+  // Skip if already present + correct size (and hash if known). A file
+  // that does not match is NOT deleted here: the download goes to .part and
+  // replaces it only once complete and verified (the lawyer asked for it).
   if (fs.existsSync(finalPath)) {
     const st = fs.statSync(finalPath)
-    if (st.size === expectedBytes) {
+    if (expectedBytes && st.size === expectedBytes) {
       if (!expectedSha256 || expectedSha256.startsWith('REPLACE_')) {
         return { path: finalPath, skipped: true, reason: 'exists with matching size' }
       }
@@ -48,11 +51,6 @@ async function fetchModel({
       if (actualSha === expectedSha256) {
         return { path: finalPath, skipped: true, reason: 'exists with matching hash' }
       }
-      // Wrong hash — delete and re-download
-      fs.unlinkSync(finalPath)
-    } else {
-      // Wrong size — clobber
-      fs.unlinkSync(finalPath)
     }
   }
 
@@ -78,6 +76,8 @@ async function fetchModel({
         res.resume()
         return reject(new Error(`HTTP ${res.statusCode} from ${url}`))
       }
+      // 200 to a Range request: the server sends the whole file again.
+      if (res.statusCode === 200 && downloaded > 0) downloaded = 0
       const totalBytes = expectedBytes || (parseInt(res.headers['content-length'], 10) + downloaded) || 0
       const sink = fs.createWriteStream(partPath, { flags: downloaded > 0 ? 'a' : 'w' })
       res.on('data', chunk => {
@@ -88,8 +88,10 @@ async function fetchModel({
       sink.on('finish', resolve)
       sink.on('error', reject)
       res.on('error', reject)
+      res.on('aborted', () => reject(new Error('download interrupted — try again to resume')))
     })
     req.on('error', reject)
+    req.setTimeout(5 * 60_000, () => req.destroy(new Error('no data for 5 minutes — try again to resume')))
   })
 
   // Verify

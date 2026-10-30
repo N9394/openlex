@@ -23,10 +23,12 @@ For version `X.Y.Z` (replace it in the commands below, e.g. `0.3.0`):
 | `openlex-X.Y.Z.cdx.json` | SBOM: the npm packages inside the tarball, in [CycloneDX](https://cyclonedx.org) format. |
 | `install.sh`, `install.ps1` | The install scripts for macOS/Linux and Windows. |
 | `OpenLex-X.Y.Z-mac-arm64.dmg`, `OpenLex-X.Y.Z-mac-x64.dmg` | The desktop app for Apple Silicon and Intel Macs. |
+| `OpenLex-X.Y.Z-mac-arm64.zip`, `OpenLex-X.Y.Z-mac-x64.zip` | The same Mac apps as zip: what in-app updates install. |
 | `OpenLex-X.Y.Z-windows-x64-setup.exe` | The desktop app for Windows. |
 | `OpenLex-X.Y.Z-linux-x64.AppImage` | The desktop app for Linux. |
 | `<installer>.sha256` | The installer's SHA-256 checksum. |
 | `<installer>.cdx.json` | SBOM: everything inside the installed app (npm packages, Electron, Qdrant, llama.cpp), CycloneDX, made with [syft](https://github.com/anchore/syft). |
+| `latest-mac.yml`, `latest.yml`, `latest-linux.yml` | Update metadata (version, file names, SHA-512, sizes) for update feeds. |
 | `SHA256SUMS` | Checksums of all of the above. |
 | `<file>.bundle` | The Sigstore signature bundle for each file above. |
 

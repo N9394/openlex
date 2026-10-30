@@ -8,7 +8,7 @@ type DepStatus = {
     tier: string; model: string; modelFilename: string; modelSizeBytes: number
     ctx: number; gpuLayers: number
   } | null
-  model: { state: string; filename?: string; downloaded?: number; total?: number; pct?: number; actualBytes?: number; installed?: boolean; path?: string }
+  model: { state: string; filename?: string; downloaded?: number; total?: number; pct?: number; actualBytes?: number; installed?: boolean; path?: string; suggestion?: string | null }
   embeddings: { reachable: boolean }
   qdrant: { reachable: boolean; collectionExists: boolean; totalChunks: number }
   llm: { reachable: boolean; llmRunning: boolean; lastUsedAt?: number; idleMs?: number }
@@ -303,7 +303,7 @@ export default function DependenciesTab() {
   const refetchModel = async () => {
     const w = window as any
     if (!w.lexvault?.refetchModel) return
-    if (!confirm('Re-download the LLM model? This will delete the existing 5.7 GB file and download it fresh with full SHA256 validation. Takes 5-15 minutes depending on connection.')) return
+    if (!confirm('Download the recommended model again? It is checked against its full SHA-256; your current file is replaced only once the new one is complete and verified.')) return
     setRefetching(true)
     try { await w.lexvault.refetchModel() }
     catch (e: any) { alert('Refetch failed: ' + (e?.message || e)) }
@@ -362,15 +362,15 @@ export default function DependenciesTab() {
                 </div>
               )}
             </div>
-            <button
+            {dep.model.suggestion && <button
               onClick={refetchModel}
               disabled={refetching || dep.model.state === 'downloading'}
               className="px-3 py-1 bg-tobacco/30 text-cream rounded text-xs font-medium hover:bg-tobacco/50 disabled:opacity-50 flex items-center gap-1"
-              title="Delete existing model file and download fresh with full SHA256 validation"
+              title="Download the recommended model again, verified against its SHA-256"
             >
               {refetching ? <RefreshCw size={12} className="animate-spin" /> : <RefreshCw size={12} />}
               {t('diag.refetch', "Refetch")}
-            </button>
+            </button>}
           </div>
           <Row
             icon={Cpu}

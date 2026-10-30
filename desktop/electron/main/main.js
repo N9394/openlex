@@ -30,6 +30,8 @@ const crypto = require('crypto')
 const Supervisor = require('../sidecars/supervisor')
 const { detect: detectHardware } = require('./hardware-detect')
 const { fetchModel } = require('./model-fetcher')
+const { settleLocalModel, localModelSuggestion, downloadSuggestedModel } = require('./model-setup')
+const { loadDistribution, serverOf, readToken } = require('./distribution')
 const { syncPacks } = require('./pack-fetcher')
 
 // Custom mini-updater that bypasses electron-updater's signed-publisher
@@ -97,15 +99,19 @@ try {
 } catch {}
 
 // Licence / update / download server: none in the open-source code. A
-// distributor's build ships resources/distribution.json (see
-// sidecar/src/distribution.js); LEXVAULT_LICENSE_SERVER overrides it.
-const DISTRIBUTION = (() => {
-  for (const f of [process.env.OPENLEX_DISTRIBUTION, path.join(process.resourcesPath || '', 'distribution.json'), path.join(__dirname, '..', 'distribution.json')].filter(Boolean)) {
-    try { return JSON.parse(require('fs').readFileSync(f, 'utf8')) } catch { /* next */ }
-  }
-  return {}
-})()
-const LICENSE_SERVER = process.env.LEXVAULT_LICENSE_SERVER || (DISTRIBUTION.server ? String(DISTRIBUTION.server).replace(/\/+$/, '') : null)
+// distributor's settings (distribution.json) come from $OPENLEX_DISTRIBUTION,
+// else <userData>/distribution.json, else the installer's resources (see
+// main/distribution.js); LEXVAULT_LICENSE_SERVER overrides the server.
+const DISTRIBUTION_FOUND = loadDistribution({
+  userData: app.getPath('userData'),
+  resourcesPath: RESOURCES_DIR,
+  devDir: app.isPackaged ? null : path.join(__dirname, '..'),
+})
+const DISTRIBUTION = DISTRIBUTION_FOUND.config
+// The engine and the embeddings service (child processes) read the same file.
+if (DISTRIBUTION_FOUND.file && !process.env.OPENLEX_DISTRIBUTION) process.env.OPENLEX_DISTRIBUTION = DISTRIBUTION_FOUND.file
+if (DISTRIBUTION_FOUND.file) console.log(`[distribution] ${DISTRIBUTION_FOUND.file} (${DISTRIBUTION_FOUND.from})`)
+const LICENSE_SERVER = serverOf(DISTRIBUTION)
 
 let supervisor = null
 let mainWindow = null
@@ -172,8 +178,6 @@ function verifyLicense(signed) {
 // token downloads are skipped; models are the user's own (API key, local
 // GGUF, llama-server / Ollama).
 const COMMUNITY_LICENSE = Object.freeze({ account_id: null, email: null, tier: 'community', entitlements: [], community: true })
-
-const NO_DOWNLOAD_SERVER = 'This OpenLex build has no download server. Use your own model: an API key or a custom llama-server / Ollama endpoint in the model settings, or put a .gguf file in '
 
 const TOKEN_PATTERN = /^lv_live_[0-9a-f]{40}$/i
 
@@ -740,37 +744,69 @@ function registerIpc(license) {
     return { ok: true, override: tier, restartRequired: true }
   })
 
-  // Force-refetch the LLM model. Deletes the on-disk file (and any .part)
-  // then re-downloads with full SHA256 validation. Used by Dependencies tab
-  // "Refetch model" button when the file looks wrong or the user wants to
-  // reset to a known-good state.
-  ipcMain.handle('lexvault:refetchModel', async () => {
-    if (!_bootHardware) throw new Error('hardware tier not detected yet')
-    const hw = _bootHardware
+  // A local model the distribution recommends (distribution.json
+  // "localModel"): offered on the setup page's "On this computer" card,
+  // downloaded only on the lawyer's click, with progress. Never at start,
+  // and a failed download never stops the App (main/model-setup.js).
+  const suggestion = () => localModelSuggestion({
+    distribution: DISTRIBUTION,
+    licensed: !license.community && !!LICENSE_SERVER,
+    token: readToken(PATHS.userData),
+    server: LICENSE_SERVER,
+    hw: _bootHardware,
+    modelDir: path.join(PATHS.models, 'llm'),
+  })
+  ipcMain.handle('lexvault:localModelSuggestion', () => {
+    const s = suggestion()
+    if (!s) return null
+    const { path: _p, ...pub } = s
+    return { ...pub, download: _modelFetchState.state === 'downloading' && _modelFetchState.filename === s.filename ? _modelFetchState : null }
+  })
+  let _modelDownload = null
+  const downloadSuggested = () => {
+    if (_modelDownload) return _modelDownload
+    const s = suggestion()
+    if (!s) return Promise.resolve({ ok: false, error: 'This build recommends no model to download.' })
     const modelDir = path.join(PATHS.models, 'llm')
-    const modelPath = path.join(modelDir, hw.model_filename)
-    const partPath = modelPath + '.part'
-    if (fs.existsSync(modelPath)) fs.unlinkSync(modelPath)
-    if (fs.existsSync(partPath)) fs.unlinkSync(partPath)
-
-    const token = fs.existsSync(PATHS.token) ? fs.readFileSync(PATHS.token, 'utf8').trim() : null
-    if (!token || !LICENSE_SERVER) throw new Error(LICENSE_SERVER ? 'Model downloads need an activation token (Settings → License).' : NO_DOWNLOAD_SERVER + modelDir)
-    _modelFetchState = { state: 'downloading', filename: hw.model_filename, downloaded: 0, total: hw.model_size_bytes, pct: 0 }
-    await fetchModel({
+    _modelFetchState = { state: 'downloading', filename: s.filename, downloaded: 0, total: s.sizeBytes, pct: 0 }
+    let lastPct = -1
+    _modelDownload = downloadSuggestedModel({
+      suggestion: s,
       server: LICENSE_SERVER,
-      token,
-      variant: hw.model,
-      destDir: modelDir,
-      filename: hw.model_filename,
-      expectedBytes: hw.model_size_bytes,
-      expectedSha256: hw.model_sha256,    // full hash check on manual refetch
+      token: readToken(PATHS.userData),
+      modelDir,
+      fetchModel,
       onProgress: ({ downloaded, total }) => {
-        const pct = total ? Math.round(downloaded / total * 100) : 0
-        _modelFetchState = { state: 'downloading', filename: hw.model_filename, downloaded, total, pct }
+        const pct = total ? Math.floor(downloaded / total * 100) : null
+        _modelFetchState = { state: 'downloading', filename: s.filename, downloaded, total, pct }
+        if (pct !== lastPct) {
+          lastPct = pct
+          for (const w of BrowserWindow.getAllWindows()) {
+            try { w.webContents.send('lexvault:model-download', { filename: s.filename, downloaded, total, pct }) } catch {}
+          }
+        }
       },
-    })
-    _modelFetchState = { state: 'done', filename: hw.model_filename, downloaded: hw.model_size_bytes, total: hw.model_size_bytes, pct: 100 }
-    return { ok: true, path: modelPath }
+    }).then((r) => {
+      if (r.ok) {
+        _bootModelPath = r.path
+        _modelFetchState = { state: 'done', filename: s.filename, pct: 100 }
+        console.log(`[model] downloaded ${s.filename}`)
+      } else {
+        _modelFetchState = { state: 'failed', filename: s.filename, error: r.error }
+        console.warn(`[model] download of ${s.filename} failed: ${r.error}`)
+      }
+      return r
+    }).finally(() => { _modelDownload = null })
+    return _modelDownload
+  }
+  ipcMain.handle('lexvault:downloadSuggestedModel', () => downloadSuggested())
+  // Settings → Dependencies "Download again": the same download, checked
+  // against the full SHA-256; the old file is replaced only once the new
+  // one is complete and verified.
+  ipcMain.handle('lexvault:refetchModel', async () => {
+    const r = await downloadSuggested()
+    if (!r.ok) throw new Error(r.error)
+    return r
   })
 
   // Manually trigger download + ingest of a single jurisdiction pack.
@@ -822,7 +858,7 @@ function registerIpc(license) {
         modelFilename: _bootHardware.model_filename, modelSizeBytes: _bootHardware.model_size_bytes,
         ctx: _bootHardware.ctx, gpuLayers: _bootHardware.n_gpu_layers,
       } : null,
-      model: { ..._modelFetchState, path: _bootModelPath },
+      model: { ..._modelFetchState, path: _bootModelPath, suggestion: suggestion()?.filename || null },
       embeddings: { reachable: false },
       qdrant: { reachable: false, collectionExists: false, totalChunks: 0 },
       llm: { reachable: false, llmRunning: false },
@@ -1023,91 +1059,32 @@ async function boot() {
     return
   }
 
-  // Real airgapped boot:
-  //   1. Detect hardware → write hardware.json
-  //   2. If model file is missing, download it (one-time, online)
-  //   3. Spawn sidecars + backend, wait for ready, then open window
+  // Boot, licensed or not:
+  //   1. Detect hardware → write hardware.json (only sizes the local model)
+  //   2. Use a local model if one is there — never download one here, never
+  //      delete one, never stop because there is none: the first-start setup
+  //      page lets the lawyer choose (a local model, their own key, help),
+  //      and a distribution's recommended model is offered there (on click).
+  //   3. Spawn sidecars + engine, wait for ready, then open window
   try {
     emitBoot('detecting-hardware')
-    const hw = detectHardware({
+    _bootHardware = detectHardware({
       hardwareJson: PATHS.hardware,
       overrideJson: PATHS.hardwareOverride,
       tiersJson: PATHS.tiers,
     })
-    console.log(`[boot] tier=${hw.tier} model=${hw.model}`)
-    emitBoot('hardware-ready', { tier: hw.tier, gpu: hw.detected?.gpu?.name })
-
-    const modelDir = path.join(PATHS.models, 'llm')
-    const modelPath = path.join(modelDir, hw.model_filename)
-    _bootHardware = hw
-    _bootModelPath = modelPath
-
-    // Validation policy: always run fetchModel — it's idempotent. It checks
-    // size against expectedBytes; on mismatch it deletes the file and re-
-    // downloads. Skips when size matches. This auto-refetches in three
-    // cases: (1) file is missing, (2) registry bumped model_size_bytes,
-    // (3) old install has a different filename (different model variant).
-    const token = fs.existsSync(PATHS.token) ? fs.readFileSync(PATHS.token, 'utf8').trim() : null
-    if (!licensed || !token) {
-      // Community mode: no download. Use the tier's model if present, else
-      // any .gguf the user put in models/llm, else no local model — the App
-      // still runs on the user's own API key or llama-server / Ollama.
-      let own = null
-      try { own = fs.readdirSync(modelDir).filter(f => f.endsWith('.gguf')).sort()[0] || null } catch {}
-      _bootModelPath = fs.existsSync(modelPath) ? modelPath : own ? path.join(modelDir, own) : null
-      _modelFetchState = _bootModelPath ? { state: 'done', filename: path.basename(_bootModelPath) } : { state: 'none' }
-      console.log(`[boot] community mode — local model: ${_bootModelPath || `none (API key / custom endpoint, or a .gguf in ${modelDir})`}`)
-      emitBoot('model-ready')
-    } else {
-      console.log(`[boot] validating model ${hw.model_filename} (expected ${hw.model_size_bytes} bytes)`)
-      _modelFetchState = { state: 'downloading', filename: hw.model_filename, downloaded: 0, total: hw.model_size_bytes, pct: 0 }
-      let last = 0
-      const result = await fetchModel({
-        server: LICENSE_SERVER,
-        token,
-        variant: hw.model,
-        destDir: modelDir,
-        filename: hw.model_filename,
-        expectedBytes: hw.model_size_bytes,
-        // Skip hash check on boot for speed (10s sha256 on 5.7 GB hurts).
-        // Manual "Refetch" passes the hash and full-validates.
-        expectedSha256: null,
-        onProgress: ({ downloaded, total }) => {
-          const pct = total ? Math.round(downloaded / total * 100) : 0
-          _modelFetchState = { state: 'downloading', filename: hw.model_filename, downloaded, total, pct }
-          if (pct - last >= 5) { console.log(`[boot] model download ${pct}%`); last = pct }
-          emitBoot('model-downloading', { pct, downloaded, total, filename: hw.model_filename })
-        },
-      })
-      if (result.skipped) {
-        console.log(`[boot] model OK (${result.reason})`)
-      } else {
-        console.log(`[boot] model downloaded fresh`)
-      }
-      _modelFetchState = { state: 'done', filename: hw.model_filename, downloaded: hw.model_size_bytes, total: hw.model_size_bytes, pct: 100 }
-      emitBoot('model-ready')
-
-      // Garbage-collect any orphan GGUFs from previous installs (old tier
-      // variants, stale .part files). Keeps userData clean.
-      try {
-        for (const f of fs.readdirSync(modelDir)) {
-          const full = path.join(modelDir, f)
-          if (full === modelPath) continue
-          if (f.endsWith('.gguf') || f.endsWith('.gguf.part')) {
-            console.log(`[boot] removing orphan model file ${f}`)
-            fs.unlinkSync(full)
-          }
-        }
-      } catch (gcErr) {
-        console.warn('[boot] orphan GC failed:', gcErr.message)
-      }
-    }
+    console.log(`[boot] tier=${_bootHardware.tier} model=${_bootHardware.model}`)
+    emitBoot('hardware-ready', { tier: _bootHardware.tier, gpu: _bootHardware.detected?.gpu?.name })
   } catch (err) {
-    console.error('[boot] hardware detect / model fetch failed:', err)
-    dialog.showErrorBox('OpenLex — model setup failed', `${err.message}\n\nIf this is a network problem, ensure you're online for the first launch only — the App runs offline after that.`)
-    app.quit()
-    return
+    // Only the local model needs it; cloud keys and Ollama work without.
+    console.warn('[boot] hardware detection failed (the local model may not start):', err.message)
   }
+  const modelDir = path.join(PATHS.models, 'llm')
+  const settled = settleLocalModel({ modelDir, hw: _bootHardware })
+  _bootModelPath = settled.modelPath
+  _modelFetchState = settled.state
+  console.log(`[boot] ${licensed ? 'licensed' : 'community'} mode — local model: ${_bootModelPath || `none yet (the setup page offers one; or an API key / Ollama, or a .gguf in ${modelDir})`}`)
+  emitBoot('model-ready')
 
   // The old desktop server stays off unless OPENLEX_LEGACY_SERVER=1 (main/legacy.js).
   supervisor = new Supervisor({ paths: PATHS, license, modelPath: _bootModelPath, legacyBackend: require('./legacy').legacyServerWanted() })

@@ -162,7 +162,7 @@ CI runs these on Linux, macOS and Windows with Node 20 and 22 for every pull req
 
 ## Community build and distributions
 
-The code here has no built-in server: it is the **community build**, with no licence check and no update feed. A company that distributes OpenLex with its own licences, updates, law packs and models ships a `distribution.json` next to the engine (format: `distribution.example.json`; lookup: `sidecar/src/distribution.js`; build scripts read the path from `OPENLEX_DISTRIBUTION`). That file never belongs in this repository.
+The code here has no built-in server: it is the **community build**, with no licence check and no update feed. A company that distributes OpenLex with its own licences, updates, law packs and models ships a `distribution.json` next to the engine (format: `distribution.example.json`; lookup: `sidecar/src/distribution.js`; build scripts read the path from `OPENLEX_DISTRIBUTION`). The desktop app also finds it in its settings folder (`<userData>/distribution.json`, see [desktop/electron/README.md](desktop/electron/README.md#licensed-distribution-mode)). That file never belongs in this repository.
 
 ## Help with setup and data
 
