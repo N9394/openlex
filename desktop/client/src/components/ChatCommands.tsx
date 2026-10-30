@@ -18,7 +18,7 @@ import { Check, Download, Lock, X } from 'lucide-react'
 import { ModelPicker, PickerProvider } from './ModelPicker'
 import AgentEditor from './AgentEditor'
 import { useWordLink } from '../lib/hub'
-import { ChatCommand, PROVIDER_WORDS, didYouMean, engine, filterCommands, loadCommands, matterFolderName, menuQuery, parseCommand } from '../lib/commands'
+import { ChatCommand, PROVIDER_WORDS, agentTitle, didYouMean, engine, filterCommands, loadCommands, matterFolderName, menuQuery, parseCommand } from '../lib/commands'
 import { Basis, friendly, patternWords } from '../lib/turn'
 import LawSources from './LawSources'
 import DataRule from './DataRule'
@@ -519,10 +519,10 @@ async function chooseAgent(a: Agent, setQuickAgent?: (name: string) => void): Pr
     if (b?.update) await b.update(m.id, patch)
     else await engine()!.call('POST', '/api/matters/update', { id: m.id, patch })
     window.dispatchEvent(new CustomEvent('openlex:matter-changed'))
-    return String(i18n.t('commands.nowAsMatter', { defaultValue: 'Now working as {{who}} for this matter.', who: a.title }))
+    return String(i18n.t('commands.nowAsMatter', { defaultValue: 'Now working as {{who}} for this matter.', who: agentTitle(a, i18n.t as any) }))
   }
   setQuickAgent?.(a.name)
-  return String(i18n.t('commands.nowAs', { defaultValue: 'Now working as {{who}}.', who: a.title }))
+  return String(i18n.t('commands.nowAs', { defaultValue: 'Now working as {{who}}.', who: agentTitle(a, i18n.t as any) }))
 }
 
 async function setPrivileged(m: Matter, on: boolean) {
@@ -553,7 +553,7 @@ function AgentChoice({ quickAgent, setQuickAgent, onDone, onRun }: { quickAgent?
       {list.map((a) => (
         <button key={a.name} type="button" onClick={async () => { try { onDone(await chooseAgent(a, setQuickAgent)) } catch (err) { setError(friendly(err)) } }} className="w-full flex items-start gap-3 rounded px-2 py-2 text-left hover:bg-leather/40 focus:bg-leather/40 outline-none">
           <span className="flex-1">
-            <span className="text-cream">{a.title}</span>
+            <span className="text-cream">{agentTitle(a, t)}</span>
             {a.description && <span className="block text-xs text-antique">{a.description}</span>}
           </span>
           {a.name === current && <Check size={16} className="text-forest mt-0.5" />}

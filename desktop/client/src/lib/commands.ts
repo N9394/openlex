@@ -74,3 +74,8 @@ export const PROVIDER_WORDS: Record<string, string> = { claude: 'anthropic', com
 /** Folder name the engine uses for a matter's files (workspace.matterFolder). */
 export const matterFolderName = (m: { number?: string; title: string } | null | undefined) =>
   String(m ? (m.number ? `${m.number} ${m.title}` : m.title) : 'default').replace(/[^\w\-.]/g, '_').slice(0, 80)
+
+/** An agent's title in the App's language (the engine's built-in roles are English). */
+export function agentTitle(a: { name: string; title: string }, t: (k: string, d: string) => string): string {
+  return t(`agents.${a.name}`, a.title)
+}

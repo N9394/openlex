@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { CheckCircle, AlertTriangle, Cpu, Database, Brain, Server, RefreshCw, Search } from 'lucide-react'
 
 type DepStatus = {
@@ -49,6 +50,7 @@ function Row({ icon: Icon, name, status, detail, progress }: {
 }
 
 function LLMTestPanel() {
+  const { t } = useTranslation()
   const [state, setState] = useState<any>(null)
   const [running, setRunning] = useState(false)
   const [result, setResult] = useState<any>(null)
@@ -87,7 +89,7 @@ function LLMTestPanel() {
           className="px-3 py-1 bg-accent/20 text-accent rounded text-xs font-medium hover:bg-accent/30 disabled:opacity-50 flex items-center gap-1"
         >
           {running ? <RefreshCw size={12} className="animate-spin" /> : <Cpu size={12} />}
-          {running ? 'Testing…' : 'Test inference'}
+          {running ? t('diag.testing', 'Testing…') : t('diag.testInference', 'Test inference')}
         </button>
       </div>
       {result && (
@@ -114,6 +116,7 @@ function LLMTestPanel() {
 }
 
 function RetrievalTestPanel({ entitled }: { entitled: string[] }) {
+  const { t } = useTranslation()
   const [jurisdiction, setJurisdiction] = useState(entitled[0] || 'AT')
   const [query, setQuery] = useState('Verjährung')
   const [running, setRunning] = useState(false)
@@ -131,7 +134,7 @@ function RetrievalTestPanel({ entitled }: { entitled: string[] }) {
         <button onClick={run} disabled={running}
           className="px-3 py-1 bg-accent/20 text-accent rounded text-xs font-medium hover:bg-accent/30 disabled:opacity-50 flex items-center gap-1">
           {running ? <RefreshCw size={12} className="animate-spin" /> : <Search size={12} />}
-          {running ? 'Testing…' : 'Test retrieval'}
+          {running ? t('diag.testing', 'Testing…') : t('diag.testRetrieval', 'Test retrieval')}
         </button>
       </div>
       <div className="flex gap-2 mb-2">
@@ -264,6 +267,7 @@ function normalise(d: any): DepStatus {
 }
 
 export default function DependenciesTab() {
+  const { t } = useTranslation()
   const [dep, setDep] = useState<DepStatus | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [packState, setPackState] = useState<Record<string, PackEvent>>({})
@@ -315,19 +319,19 @@ export default function DependenciesTab() {
     ? `${dep.hardware?.modelFilename || dep.model.filename} — ${formatBytes(dep.model.actualBytes || dep.hardware?.modelSizeBytes)}`
     : dep.model.state === 'downloading'
       ? `Downloading ${formatBytes(dep.model.downloaded)} / ${formatBytes(dep.model.total)} (${dep.model.pct}%)`
-      : 'Not downloaded'
+      : t('diag.notDownloaded', 'Not downloaded')
 
   return (
     <div className="card space-y-6">
       <div>
-        <h2 className="font-serif text-xl text-parchment">Dependencies</h2>
+        <h2 className="font-serif text-xl text-parchment">{t('diag.title', "Dependencies")}</h2>
         <p className="text-antique text-sm mt-1">
-          Live health of every component the App relies on. Updates every 2.5 s.
+          {t('diag.live', "Live health of every component the App relies on. Updates every 2.5 s.")}
         </p>
       </div>
 
       <div>
-        <div className="text-cream text-sm font-medium mb-2">Hardware tier</div>
+        <div className="text-cream text-sm font-medium mb-2">{t('diag.hardware', "Hardware tier")}</div>
         <div className="bg-obsidian/30 rounded p-3 text-sm grid grid-cols-2 gap-2 font-mono">
           <div><span className="text-antique">Tier:</span> {dep.hardware?.tier || '—'}</div>
           <div><span className="text-antique">Model:</span> {dep.hardware?.model || '—'}</div>
@@ -340,7 +344,7 @@ export default function DependenciesTab() {
       </div>
 
       <div>
-        <div className="text-cream text-sm font-medium mb-2">Local services</div>
+        <div className="text-cream text-sm font-medium mb-2">{t('diag.services', "Local services")}</div>
         <div className="bg-obsidian/30 rounded px-4">
           <div className="flex items-center gap-3 py-3 border-b border-tobacco/40">
             <Brain size={18} className="text-cream/70 flex-shrink-0" />
@@ -365,7 +369,7 @@ export default function DependenciesTab() {
               title="Delete existing model file and download fresh with full SHA256 validation"
             >
               {refetching ? <RefreshCw size={12} className="animate-spin" /> : <RefreshCw size={12} />}
-              Refetch
+              {t('diag.refetch', "Refetch")}
             </button>
           </div>
           <Row
@@ -416,10 +420,10 @@ export default function DependenciesTab() {
       </div>
 
       <div>
-        <div className="text-cream text-sm font-medium mb-2">Statute packs</div>
+        <div className="text-cream text-sm font-medium mb-2">{t('diag.packs', "Statute packs")}</div>
         <div className="bg-obsidian/30 rounded p-3">
           {dep.packs.entitled.length === 0 ? (
-            <div className="text-antique text-sm">No active subscriptions.</div>
+            <div className="text-antique text-sm">{t('diag.noSubs', "No active subscriptions.")}</div>
           ) : (
             <div className="space-y-2">
               {dep.packs.entitled.map(code => {
@@ -483,8 +487,7 @@ export default function DependenciesTab() {
             </div>
           )}
           <div className="text-antique text-xs mt-3">
-            Statute packs sync automatically on every launch. New chunks for an entitled jurisdiction
-            ship as a delta and ingest in seconds.
+            {t('diag.sync', 'Statute packs sync automatically on every launch. New chunks for an entitled jurisdiction ship as a delta and ingest in seconds.')}
           </div>
         </div>
       </div>

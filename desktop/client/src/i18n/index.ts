@@ -4,24 +4,18 @@ import LanguageDetector from 'i18next-browser-languagedetector'
 
 import en from './locales/en.json'
 import de from './locales/de.json'
-import sk from './locales/sk.json'
-import cs from './locales/cs.json'
-import ro from './locales/ro.json'
-import el from './locales/el.json'
-import fr from './locales/fr.json'
 
-export const SUPPORTED_LANGUAGES = ['auto', 'en', 'de', 'fr', 'sk', 'cs', 'ro', 'el'] as const
+// Only English and German are offered: the other locale files (fr, sk, cs,
+// ro, el) are about half translated and gave mixed-language screens. They
+// stay in the repository for translators; add one back here when it is
+// complete (≥ 95 % of the keys).
+export const SUPPORTED_LANGUAGES = ['auto', 'en', 'de'] as const
 export type SupportedLanguage = typeof SUPPORTED_LANGUAGES[number]
 
 export const LANGUAGE_LABELS: Record<SupportedLanguage, string> = {
-  auto: 'Auto — match your prompt',
+  auto: 'Auto',
   en: 'English',
   de: 'Deutsch',
-  fr: 'Français',
-  sk: 'Slovenčina',
-  cs: 'Čeština',
-  ro: 'Română',
-  el: 'Ελληνικά',
 }
 
 i18n
@@ -31,14 +25,10 @@ i18n
     resources: {
       en: { translation: en },
       de: { translation: de },
-      fr: { translation: fr },
-      sk: { translation: sk },
-      cs: { translation: cs },
-      ro: { translation: ro },
-      el: { translation: el },
     },
     fallbackLng: 'en',
-    supportedLngs: ['en', 'de', 'fr', 'sk', 'cs', 'ro', 'el'],
+    supportedLngs: ['en', 'de'],
+    nonExplicitSupportedLngs: true,
     interpolation: { escapeValue: false },
     detection: {
       order: ['localStorage', 'navigator'],
@@ -50,10 +40,7 @@ i18n
 export function setUiLanguage(language: SupportedLanguage) {
   if (language === 'auto') {
     const browser = (navigator.language || 'en').split('-')[0]
-    const target = (['en', 'de', 'fr', 'sk', 'cs', 'ro', 'el'] as const).includes(browser as never)
-      ? browser
-      : 'en'
-    i18n.changeLanguage(target)
+    i18n.changeLanguage(browser === 'de' ? 'de' : 'en')
     localStorage.setItem('lexvault-ui-lang-pref', 'auto')
   } else {
     i18n.changeLanguage(language)

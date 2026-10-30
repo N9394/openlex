@@ -20,7 +20,7 @@ import { useWordLink, hubBridge } from '../lib/hub'
 import { useChatCommands } from '../components/ChatCommands'
 import { ModelLabel } from '../components/ModelPicker'
 import i18n from '../i18n'
-import { engine } from '../lib/commands'
+import { agentTitle, engine } from '../lib/commands'
 import {
   Activity, Basis, LawSource, ModelUse, WINDOW_WORDS, applyEvent, basedOn, checkLine, basisText, clip, dataLine, duration,
   endActivity, friendly, judgeLine, mark, permission, startActivity, stopSentence, summaryLine,
@@ -361,7 +361,7 @@ export default function Research() {
     nearBottom.current = true
     setMessages((m) => [...m,
       { id: nextId(), role: 'user', content: message, files: files.map((f) => f.name), client: 'app' },
-      { id: aid, role: 'assistant', content: '', act: startActivity(t0), suggestions: [], notes: [], as: agent.name !== 'associate' ? agent.title : '' },
+      { id: aid, role: 'assistant', content: '', act: startActivity(t0), suggestions: [], notes: [], as: agent.name !== 'associate' ? agentTitle(agent, t) : '' },
     ])
     setRunning(streamId)
     setNow(t0)
@@ -642,7 +642,7 @@ export default function Research() {
           </div>
           <div className="flex items-center gap-3 flex-shrink-0 text-xs">
             <button type="button" onClick={() => commands.run('as')} disabled={panelOn} className={`btn-secondary !px-3 !py-1.5 text-xs inline-flex items-center gap-1 ${panelOn ? 'opacity-50' : ''}`} title={t('chat.asHint', 'Who OpenLex works as (/as)')}>
-              {t('chat.workingAs', 'Working as: {{who}}', { who: agent.title })} <ChevronDown size={12} />
+              {t('chat.workingAs', 'Working as: {{who}}', { who: agentTitle(agent, t) })} <ChevronDown size={12} />
             </button>
             <span className={`inline-flex items-center rounded-button border text-xs ${panelOn ? 'border-accent text-accent bg-accent/10' : 'border-tobacco text-antique'}`} data-testid="panel-toggle">
               <button type="button" onClick={() => (panelOn ? setPanelSetup(true) : panelSpec ? setPanelOn(true) : setPanelSetup(true))} className="px-3 py-1.5 inline-flex items-center gap-1 hover:text-cream" title={t('panel.toggleHint', 'Several agents answer together, debate or review (/team)')}>
