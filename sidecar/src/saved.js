@@ -102,6 +102,10 @@ function add(o = {}) {
   }
   if (!KINDS.includes(kind)) throw new Error(`kind must be one of: ${KINDS.join(', ')}`)
   content = String(content || '')
+  // A panel kept by reference: its text (question, summary, transcript) makes it searchable.
+  if (!content.trim() && source?.kind === 'panel') {
+    try { const r = require('./panel').get(source.id); content = require('./panel').toMarkdown(r); title = title || `Panel: ${r.question.slice(0, 100)}`; matterId = matterId || r.matterId } catch { /* gone: saved by reference only */ }
+  }
   if (!content.trim() && !source) throw new Error('nothing to save')
   if (content.length > MAX_CONTENT) throw new Error('too long to save (more than 2 million characters) — save the document in the matter folder instead')
   title = str(title, 200).trim() || firstLine(content) || 'Saved item'

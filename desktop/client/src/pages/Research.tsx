@@ -13,7 +13,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import ReactMarkdown from 'react-markdown'
-import { BookOpen, Check, ChevronDown, ChevronUp, Clock, Copy, FileSearch, FileText, FolderOpen, Lock, MessageSquare, Paperclip, Plus, Send, Sparkles, Square, Trash2, X } from 'lucide-react'
+import { BookOpen, Check, ChevronDown, ChevronUp, Clock, Copy, FileSearch, FileText, FolderOpen, Lock, MessageSquare, Paperclip, Plus, Send, Sparkles, Square, Trash2, Users, X } from 'lucide-react'
 import { useLocation } from 'react-router-dom'
 import { useWordLink, hubBridge } from '../lib/hub'
 import { useChatCommands } from '../components/ChatCommands'
@@ -22,12 +22,13 @@ import i18n from '../i18n'
 import { engine } from '../lib/commands'
 import {
   Activity, Basis, LawSource, ModelUse, WINDOW_WORDS, applyEvent, basedOn, checkLine, basisText, clip, dataLine, duration,
-  endActivity, friendly, mark, permission, startActivity, stopSentence, summaryLine,
+  endActivity, friendly, judgeLine, mark, permission, startActivity, stopSentence, summaryLine,
 } from '../lib/turn'
 import { Attachment, attachFile, chipDetail, refusal } from '../lib/attach'
 import AnalysisCard from '../components/AnalysisCard'
 import BatchCard from '../components/BatchCard'
 import ToolCard, { ResultCard, Result, ToolRun } from '../components/ToolCard'
+import PanelCard, { PanelRun, PanelSetup, PanelSpec, parseTeam, specWords, usePanelAgents } from '../components/Panel'
 
 interface Matter { id: string; title: string; number?: string; client?: string; privileged?: boolean; agent?: string | null }
 interface Conversation { id: string; title: string; matterId: string | null; clients: string[]; turns: number; updatedAt: string | null }
@@ -53,6 +54,7 @@ interface Message {
   analysisIds?: string[] // from a stored turn: loaded by the card
   batch?: { attachments: string[] } // several documents: analysed one by one in the background
   tool?: ToolRun // /investigate, /diligence, /draft just asked for (the card starts it)
+  panel?: PanelRun // a Panel of agents just asked for (the card shows the estimate, then runs it)
   results?: Result[] // tool results kept in the conversation (investigation, due diligence, draft, a batch)
   reading?: string // how an attached document is read ("in full by Claude (EU)" / "part by part")
 }
@@ -65,7 +67,7 @@ const nextId = () => `m${Date.now().toString(36)}${++seq}`
 function storedMessage(m: any): Message {
   if (m.role === 'user') return { id: nextId(), role: 'user', content: m.content, at: m.at, client: m.client, stored: true }
   const at = m.at ? Date.parse(m.at) : Date.now()
-  const act: Activity = { ...startActivity(at), steps: [], endedAt: at, models: (m.data || []) as ModelUse[], online: m.online || [], sources: (m.sources || []) as LawSource[], stopped: !!m.stopped }
+  const act: Activity = { ...startActivity(at), steps: [], endedAt: at, models: (m.data || []) as ModelUse[], online: m.online || [], sources: (m.sources || []) as LawSource[], stopped: !!m.stopped, judge: m.judge || null }
   const analysisIds = (m.results || []).filter((r: any) => r && r.kind === 'analysis' && r.id).map((r: any) => r.id)
   const results = (m.results || []).filter((r: any) => r && r.kind !== 'analysis' && r.id)
   return { id: nextId(), role: 'assistant', content: m.content, at: m.at, client: m.client, as: m.agent || '', act, stored: true, ...(analysisIds.length ? { analysisIds } : {}), ...(results.length ? { results } : {}) }
@@ -114,6 +116,12 @@ export default function Research() {
   const [copied, setCopied] = useState<string | null>(null)
   const [sentToWord, setSentToWord] = useState<string | null>(null)
   const [openSteps, setOpenSteps] = useState<Record<string, boolean>>({})
+  // Panel (agents working together): its setup, whether it answers the next questions, the setup dialog.
+  const [panelSpec, setPanelSpec] = useState<PanelSpec | null>(null)
+  const [panelOn, setPanelOn] = useState(false)
+  const [panelSetup, setPanelSetup] = useState(false)
+  const panelAgents = usePanelAgents()
+  const panelRef = useRef<(arg: string) => void>(() => {})
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const folderRef = useRef<HTMLInputElement>(null)
@@ -238,6 +246,9 @@ export default function Research() {
     newConversation: startNew,
     analyse: (arg: string) => { analyseRef.current(arg) },
     tool: (name: string, arg: string) => { toolRef.current(name, arg) },
+    panel: (arg: string) => { panelRef.current(arg) },
+    sessionId,
+    matterId,
     quickAgent,
     setQuickAgent,
     running: !!running,
@@ -287,6 +298,37 @@ export default function Research() {
   }
   useEffect(() => { toolRef.current = (name: string, arg: string) => runTool(name, arg) })
 
+  // ── a Panel of agents: the question goes to all of them (PanelCard runs it) ──
+  const askPanel = (spec: PanelSpec, question: string) => {
+    const att = [...convDocs.filter((d) => !files.some((f) => f.id === d.id)), ...files]
+    setConvDocs(att)
+    const sid = sessionId || `app:${matterId || 'quick'}:${Date.now().toString(36)}`
+    if (!sessionId) setSessionId(sid)
+    const message = `/team ${spec.mode} ${spec.agents.map((a) => a.name).join(' ')}: ${question}`
+    setInput('')
+    setFiles([])
+    nearBottom.current = true
+    setMessages((m) => [...m,
+      { id: nextId(), role: 'user', content: question, files: files.map((f) => f.name), client: 'app', as: specWords(spec, panelAgents, t) },
+      { id: nextId(), role: 'assistant', content: '', as: t('panel.title', 'Panel'), panel: { spec, question, matterId, sessionId: sid, attachments: att.map((f) => f.id), message } },
+    ])
+    for (const ms of [3000, 30000]) setTimeout(() => loadList(matterId), ms)
+  }
+  // /team [parallel | debate | review] [agents…][: question]
+  useEffect(() => {
+    panelRef.current = (arg: string) => {
+      const [setup, ...rest] = arg.split(':')
+      const question = rest.join(':').trim()
+      if (/^(off|aus)$/i.test(setup.trim())) { setPanelOn(false); return sys(t('panel.off', 'Panel off: one agent answers again.'), 'info') }
+      const spec = parseTeam(setup, panelSpec || undefined)
+      if (!spec) { setPanelSetup(true); return }
+      setPanelSpec(spec)
+      setPanelOn(true)
+      if (question) askPanel(spec, question)
+      else sys(t('panel.on', 'Panel on ({{what}}). Type your question; /team off ends it.', { what: specWords(spec, panelAgents, t) }), 'ok')
+    }
+  })
+
   // ── asking ──
   const send = async (raw: string) => {
     const typed = raw.trim()
@@ -296,6 +338,7 @@ export default function Research() {
     if (!e?.stream) return sys(t('chat.noEngine', 'The chat needs the OpenLex engine, which runs with the desktop app.'), 'warn')
     if (running) return sys(t('chat.stillWriting', 'The answer is still being written. Wait for it (or press Stop), then ask again. Commands like /model work meanwhile.'), 'warn')
     const message = typed || t('chat.aboutFile', 'Please look at the attached file.')
+    if (panelOn && panelSpec) return askPanel(panelSpec, message)
     // The conversation's documents stay with it: follow-up questions are about them too
     // (and an online AI service reads them from its cache).
     const att = [...convDocs.filter((d) => !files.some((f) => f.id === d.id)), ...files]
@@ -589,9 +632,15 @@ export default function Research() {
             </div>
           </div>
           <div className="flex items-center gap-3 flex-shrink-0 text-xs">
-            <button type="button" onClick={() => commands.run('as')} className="btn-secondary !px-3 !py-1.5 text-xs inline-flex items-center gap-1" title={t('chat.asHint', 'Who OpenLex works as (/as)')}>
+            <button type="button" onClick={() => commands.run('as')} disabled={panelOn} className={`btn-secondary !px-3 !py-1.5 text-xs inline-flex items-center gap-1 ${panelOn ? 'opacity-50' : ''}`} title={t('chat.asHint', 'Who OpenLex works as (/as)')}>
               {t('chat.workingAs', 'Working as: {{who}}', { who: agent.title })} <ChevronDown size={12} />
             </button>
+            <span className={`inline-flex items-center rounded-button border text-xs ${panelOn ? 'border-accent text-accent bg-accent/10' : 'border-tobacco text-antique'}`} data-testid="panel-toggle">
+              <button type="button" onClick={() => (panelOn ? setPanelSetup(true) : panelSpec ? setPanelOn(true) : setPanelSetup(true))} className="px-3 py-1.5 inline-flex items-center gap-1 hover:text-cream" title={t('panel.toggleHint', 'Several agents answer together, debate or review (/team)')}>
+                <Users size={12} /> {panelOn && panelSpec ? clip(`${t('panel.title', 'Panel')}: ${specWords(panelSpec, panelAgents, t)}`, 60) : t('panel.title', 'Panel')}
+              </button>
+              {panelOn && <button type="button" onClick={() => setPanelOn(false)} className="pr-2 hover:text-cream" aria-label={t('panel.turnOff', 'Panel off')}><X size={12} /></button>}
+            </span>
           </div>
         </div>
 
@@ -638,12 +687,13 @@ export default function Research() {
                   <div className="max-w-3xl bg-accent/20 rounded-card rounded-br-sm px-5 py-3">
                     <p className="text-parchment whitespace-pre-wrap">{m.content}</p>
                     {!!m.files?.length && <p className="mt-1 text-xs text-antique">📎 {m.files.join(', ')}</p>}
+                    {m.as && !m.stored && <p className="mt-1 text-xs text-antique">{t('panel.askedPanel', 'To the Panel')}: {m.as}</p>}
                     {m.stored && m.client && m.client !== 'app' && <p className="mt-1 text-[11px] text-antique">{t('chat.askedIn', 'asked in {{where}}', { where: WINDOW_WORDS[m.client] || m.client })}{m.at ? ` · ${when(m.at)}` : ''}</p>}
                   </div>
                 </div>
               )
             }
-            return <Answer key={m.id} m={m} now={now} live={!!running && m === messages[messages.length - 1]} openSteps={!!openSteps[m.id]} toggleSteps={() => setOpenSteps((s) => ({ ...s, [m.id]: !s[m.id] }))}
+            return <Answer key={m.id} onPermission={setPerm} m={m} now={now} live={!!running && m === messages[messages.length - 1]} openSteps={!!openSteps[m.id]} toggleSteps={() => setOpenSteps((s) => ({ ...s, [m.id]: !s[m.id] }))}
               onCopy={() => copy(m)} copied={copied === m.id} onWord={wordLink.connected && m.content ? () => toWord(m) : null} sentToWord={sentToWord === m.id} onStop={stop} matterId={matterId} />
           })}
         </div>
@@ -723,6 +773,20 @@ export default function Research() {
           {commands.hint}
         </form>
         {commands.overlay}
+        {panelSetup && (
+          <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-[10vh]">
+            <div className="fixed inset-0 bg-ink/70" onClick={() => setPanelSetup(false)} />
+            <div role="dialog" aria-modal="true" aria-label={t('panel.setupTitle', 'Panel: agents working together')} className="relative w-full max-w-xl rounded-card border border-tobacco bg-deep-brown shadow-2xl animate-fade-in">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-tobacco">
+                <h2 className="font-serif text-lg text-parchment">{t('panel.setupTitle', 'Panel: agents working together')}</h2>
+                <button type="button" onClick={() => setPanelSetup(false)} className="text-antique hover:text-cream" aria-label={t('common.close', 'Close')}><X size={18} /></button>
+              </div>
+              <div className="max-h-[72vh] overflow-y-auto p-4">
+                <PanelSetup initial={panelSpec} onCancel={() => setPanelSetup(false)} onUse={(spec) => { setPanelSpec(spec); setPanelOn(true); setPanelSetup(false); sys(t('panel.on', 'Panel on ({{what}}). Type your question; /team off ends it.', { what: specWords(spec, panelAgents, t) }), 'ok'); inputRef.current?.focus() }} />
+              </div>
+            </div>
+          </div>
+        )}
         {perm && <PermissionDialog req={perm} onAnswer={(d) => answerPerm(perm, d)} />}
       </div>
     </div>
@@ -731,8 +795,8 @@ export default function Research() {
 
 // ── one answer ─────────────────────────────────────────────────────────────
 
-function Answer({ m, now, live, openSteps, toggleSteps, onCopy, copied, onWord, sentToWord, onStop, matterId = null }: {
-  m: Message; now: number; live: boolean; matterId?: string | null; openSteps: boolean; toggleSteps: () => void
+function Answer({ m, now, live, openSteps, toggleSteps, onCopy, copied, onWord, sentToWord, onStop, matterId = null, onPermission }: {
+  m: Message; now: number; live: boolean; matterId?: string | null; openSteps: boolean; toggleSteps: () => void; onPermission?: (ev: any) => void
   onCopy: () => void; copied: boolean; onWord: (() => void) | null; sentToWord: boolean; onStop: () => void
 }) {
   const { t } = useTranslation()
@@ -769,6 +833,7 @@ function Answer({ m, now, live, openSteps, toggleSteps, onCopy, copied, onWord, 
           {m.reading && <div className="text-xs text-antique">· {m.reading}</div>}
           {m.batch && <BatchCard attachments={m.batch.attachments} matterId={matterId} />}
           {m.tool && <ToolCard tool={m.tool} />}
+          {m.panel && <PanelCard run={m.panel} onPermission={onPermission} />}
           {(m.results || []).map((r) => <ResultCard key={`${r.kind}:${r.id}`} result={r} matterId={matterId} />)}
           {(m.analyses || []).map((a) => <AnalysisCard key={a.id} analysis={a} />)}
           {(m.analysisIds || []).map((id) => <AnalysisCard key={id} id={id} />)}
@@ -840,6 +905,12 @@ function Answer({ m, now, live, openSteps, toggleSteps, onCopy, copied, onWord, 
           })}
 
           {(m.notes || []).map((n, i) => <div key={i} className="text-xs text-amber-400">! {n}</div>)}
+          {!running && act?.judge && (
+            <div className={`text-xs ${act.judge.ran && act.judge.ok === false ? 'text-amber-400' : 'text-antique'}`} data-testid="judge-line">
+              {m.stored ? <div>{act.judge.ran && act.judge.ok !== false ? '✓' : '·'} {judgeLine(act)}</div> : null}
+              {(act.judge.notes || []).map((n, i) => <div key={i}>! {t('chat.judgeNote', 'Second pass')}: {n}</div>)}
+            </div>
+          )}
           {m.error && <div className="text-sm text-red-400">✗ {m.error}</div>}
           {m.stopNote ? <div className="text-xs text-antique">{m.stopNote}</div> : m.stored && act?.stopped ? <div className="text-xs text-antique">{t('chat.wasStopped', '(stopped)')}</div> : null}
           {m.tip && <div className="text-xs text-antique">{m.tip}</div>}

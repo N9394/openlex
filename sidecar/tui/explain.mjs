@@ -320,6 +320,7 @@ export function applyEvent(act, ev, now = clock.now()) {
     case 'warning': push(a, `Note from your firm's rules: ${clip(ev.message, 70)}`, now); return a
     case 'withheld': push(a, `Your firm's rules held this answer back: ${clip(ev.message, 60)}`, now, { failed: true }); finish(a, now); return a
     case 'error': a.failed = true; push(a, errorSentence(ev.message, { partial: a.steps.some((s) => s.phase === 'writing') }), now, { failed: true }); finish(a, now); return a
+    case 'judge': a.judge = { ran: !!ev.ran, ok: ev.ok, reason: ev.reason, notes: Array.isArray(ev.notes) ? ev.notes : [] }; return a
     case 'done': if (ev.stopped) a.stopped = true; finish(a, now); return a
     default: return act // reasoning, compact, agent, skill_suggestion: nothing for the lawyer to act on
   }
@@ -384,10 +385,19 @@ export function activityLines(act, { now = clock.now(), width = 78, maxSteps = 6
 }
 
 /** After the answer: one line saying how long it took, then the data line. */
+/** Whether the second pass (the judge) checked the answer, in words ('' when the engine did not say). */
+export function judgeWords(j) {
+  if (!j) return ''
+  if (j.ran) return j.ok === false ? 'second pass found something (below)' : 'checked by a second pass'
+  return j.reason === 'off' ? 'not double-checked (switched off: /judge on)' : 'not double-checked (no sources to check against)'
+}
+
 export function doneLines(act, width = 78) {
   const n = act.steps.length
+  const j = judgeWords(act.judge)
   return [
-    [{ t: `${act.stopped ? 'Stopped' : act.failed ? 'Ended early' : 'Done'} after ${duration((act.endedAt || act.startedAt) - act.startedAt)} ${sym.sep} ${n} step${n === 1 ? '' : 's'}`, dim: true }],
+    [{ t: `${act.stopped ? 'Stopped' : act.failed ? 'Ended early' : 'Done'} after ${duration((act.endedAt || act.startedAt) - act.startedAt)} ${sym.sep} ${n} step${n === 1 ? '' : 's'}${j ? ` ${sym.sep} ${j}` : ''}`, dim: true }],
+    ...(act.judge?.notes || []).map((x) => [{ t: `! Second pass: ${clip(x, Math.max(20, width - 16))}`, color: color.warn }]),
     ...dataRows(dataLine(act.models, act.online, { unreported: act.unreported }), width),
   ]
 }
