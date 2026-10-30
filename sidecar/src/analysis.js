@@ -356,7 +356,7 @@ async function runAnalyse(o = {}) {
   for (const a of Array.isArray(o.attachments) ? require('./attachments').load(o.attachments) : []) inputs.push({ name: a.name, text: a.text, meta: a.meta })
   if (typeof o.text === 'string' && o.text.trim()) inputs.push({ name: String(o.name || 'Document').slice(0, 120), text: o.text })
   const list = Array.isArray(o.files) ? o.files : o.file ? [o.file] : []
-  for (const f of list) inputs.push({ file: require('./workflows_docs').resolveDoc(o.matterId, String(f)) })
+  for (const f of list) inputs.push({ file: require('./workflows_docs').resolveDoc(o.matterId, String(f), { strict: !!o.strict }) })
   if (!inputs.length) throw new Error('No document: pass a file (or files) to analyse.')
   const analyses = []
   const files = []

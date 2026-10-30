@@ -656,7 +656,7 @@ async function dispatch({ doc, memory, search, embeddings, packStore }, rawName,
           const bound = require('./matters').forDoc(doc.docId)?.docs?.find((d) => d.docId === doc.docId)
           input = { text: doc.text, name: bound?.title || 'Word document' }
         }
-        const r = await an.runAnalyse({ matterId, ...input })
+        const r = await an.runAnalyse({ matterId, ...input, strict: true }) // the model names the file: only the matter's places
         return { output: `ANALYSIS (verified quotes only; the lawyer can open the full report):\n${r.summary}\n\nSaved: ${r.files.join(', ')}` }
       } catch (e) {
         return { output: `ERROR: ${e.message}` }

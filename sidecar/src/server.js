@@ -370,7 +370,7 @@ async function handle(req, res) {
     if (p === '/' || p.startsWith('/taskpane') || p.startsWith('/commands') || p.startsWith('/assets/') || p.startsWith('/lib/') || p.startsWith('/outlook')) {
       const file = p === '/' ? '/taskpane.html' : p
       const fp = path.normalize(path.join(config.ADDIN_ROOT, file))
-      if (!fp.startsWith(config.ADDIN_ROOT)) return sendJson(res, 403, { error: 'forbidden' })
+      if (!fp.startsWith(path.resolve(config.ADDIN_ROOT) + path.sep) || /[\\/]\./.test(fp.slice(path.resolve(config.ADDIN_ROOT).length))) return sendJson(res, 403, { error: 'forbidden' }) // inside the add-in folder, no dot-files (.git)
       if (!fs.existsSync(fp)) return sendJson(res, 404, { error: 'not found' })
       const ext = path.extname(fp)
       const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.xml': 'text/xml' }
