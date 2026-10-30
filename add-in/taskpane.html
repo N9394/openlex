@@ -127,163 +127,176 @@
   <section id="view-settings" class="view" hidden aria-labelledby="h-settings">
     <div class="view-head"><button class="btn btn-ghost back" type="button">← Back to the conversation</button><h2 id="h-settings">Settings</h2></div>
 
-    <h3 id="set-ai">Which AI</h3>
-    <div class="card" id="providerBox">
-      <label class="field-label" for="providerSel">AI service</label>
-      <select id="providerSel" class="select"></select>
-      <div id="providerFields">
-        <div id="providerKeyRow">
-          <label class="field-label" for="providerKey">Key <span class="muted" id="providerKeyState"></span></label>
-          <input type="password" id="providerKey" placeholder="Paste the key — kept in your computer's keychain" autocomplete="off">
+    <!-- Five short rows. Everything else is under "Advanced" (closed by default). -->
+    <div class="card set-row" id="set-ai">
+      <div class="set-head"><h3>AI</h3><span class="set-value" id="setAiLabel">…</span></div>
+      <p class="muted set-note" id="setAiApp" hidden>The desktop app is open — change the AI there.</p>
+      <details class="set-more" id="providerDetails">
+        <summary>Change the AI</summary>
+        <div id="providerBox">
+          <label class="field-label" for="providerSel">AI service</label>
+          <select id="providerSel" class="select"></select>
+          <div id="providerFields">
+            <div id="providerKeyRow">
+              <label class="field-label" for="providerKey">Key <span class="muted" id="providerKeyState"></span></label>
+              <input type="password" id="providerKey" placeholder="Paste the key — kept in your computer's keychain" autocomplete="off">
+            </div>
+            <details class="tech">
+              <summary>Technical details</summary>
+              <label class="field-label" for="providerModel">Model name</label>
+              <input type="text" id="providerModel" list="providerModels" placeholder="leave empty for the recommended one">
+              <datalist id="providerModels"></datalist>
+              <div id="providerUrlRow">
+                <label class="field-label" for="providerUrl">Address of the service</label>
+                <input type="text" id="providerUrl" placeholder="https://…">
+              </div>
+              <div id="providerCloudRow" class="row">
+                <div class="grow"><label class="field-label" for="providerRegion">Region</label><input type="text" id="providerRegion" placeholder="eu-central-1"></div>
+                <div class="grow" id="providerProjectWrap"><label class="field-label" for="providerProject">Google Cloud project</label><input type="text" id="providerProject"></div>
+              </div>
+              <label class="row" id="providerLocalRow"><input type="checkbox" id="providerLocal"> This server runs inside our firm's network (counts as this computer)</label>
+            </details>
+          </div>
+          <div class="btn-row">
+            <button class="btn" id="providerSave" type="button">Save and use</button>
+            <button class="btn btn-ghost" id="providerTest" type="button">Test</button>
+            <button class="btn btn-ghost" id="providerKeyDel" type="button">Remove key</button>
+          </div>
+          <div class="muted" id="providerMsg" role="status" aria-live="polite"></div>
         </div>
-        <details class="tech">
-          <summary>Technical details</summary>
-          <label class="field-label" for="providerModel">Model name</label>
-          <input type="text" id="providerModel" list="providerModels" placeholder="leave empty for the recommended one">
-          <datalist id="providerModels"></datalist>
-          <div id="providerUrlRow">
-            <label class="field-label" for="providerUrl">Address of the service</label>
-            <input type="text" id="providerUrl" placeholder="https://…">
-          </div>
-          <div id="providerCloudRow" class="row">
-            <div class="grow"><label class="field-label" for="providerRegion">Region</label><input type="text" id="providerRegion" placeholder="eu-central-1"></div>
-            <div class="grow" id="providerProjectWrap"><label class="field-label" for="providerProject">Google Cloud project</label><input type="text" id="providerProject"></div>
-          </div>
-          <label class="row" id="providerLocalRow"><input type="checkbox" id="providerLocal"> This server runs inside our firm's network (counts as this computer)</label>
-        </details>
+      </details>
+    </div>
+
+    <details class="card set-row" id="set-data-row">
+      <summary class="set-head"><h3 id="set-data">Where client data may go</h3><span class="set-value" id="policySummary"></span></summary>
+      <div id="policyBox">
+        <fieldset>
+          <legend class="sr-only">Client-data rule</legend>
+          <label class="row"><input type="radio" name="policyMode" value="local-only"> Only on this computer — client data never leaves it</label>
+          <label class="row"><input type="radio" name="policyMode" value="allow-list"> Also these AI services and sources:</label>
+        </fieldset>
+        <div id="policyProviders" class="policy-providers"></div>
+        <label class="row" title="AI services are only used when they are pinned to an EU region."><input type="checkbox" id="policyEu"> Only services in the EU</label>
+        <label class="row" title="The client's name, the matter's listed names, e-mail addresses, IBANs and phone numbers are replaced before sending and put back in the answer."><input type="checkbox" id="policyRedact"> Hide names and identifiers from AI services</label>
+        <div class="muted" id="policyMsg" role="status" aria-live="polite"></div>
       </div>
-      <div class="btn-row">
-        <button class="btn" id="providerSave" type="button">Save and use</button>
-        <button class="btn btn-ghost" id="providerTest" type="button">Test</button>
-        <button class="btn btn-ghost" id="providerKeyDel" type="button">Remove key</button>
+    </details>
+
+    <div class="card set-row" id="set-lang">
+      <div class="set-head"><h3><label for="answerLangSel">Answers in</label></h3>
+        <select id="answerLangSel" class="select set-select">
+          <option value="auto">Same as my question</option>
+          <option value="de">Deutsch</option>
+          <option value="en">English</option>
+        </select>
       </div>
-      <div class="muted" id="providerMsg" role="status" aria-live="polite"></div>
+      <div class="muted set-note" id="answerLangMsg" role="status" aria-live="polite"></div>
     </div>
 
-    <h3 id="set-data">Where client data may go</h3>
-    <div class="card" id="policyBox">
-      <fieldset>
-        <legend class="sr-only">Client-data rule</legend>
-        <label class="row"><input type="radio" name="policyMode" value="local-only"> Only on this computer — client data never leaves it</label>
-        <label class="row"><input type="radio" name="policyMode" value="allow-list"> Also these AI services and sources:</label>
-      </fieldset>
-      <div id="policyProviders" class="policy-providers"></div>
-      <label class="row" title="AI services are only used when they are pinned to an EU region."><input type="checkbox" id="policyEu"> Only services in the EU</label>
-      <label class="row" title="The client's name, the matter's listed names, e-mail addresses, IBANs and phone numbers are replaced before sending and put back in the answer."><input type="checkbox" id="policyRedact"> Hide names and identifiers from AI services</label>
-      <div class="muted" id="policyMsg" role="status" aria-live="polite"></div>
-    </div>
-
-    <h3 id="set-library">Firm library</h3>
-    <div class="card" id="libraryBox">
-      <div class="muted">Your precedents, templates and past work — searched on this computer. Word, PDF, text and Markdown files.</div>
-      <div id="libFolders" class="lib-folders"></div>
-      <label class="field-label" for="libPath">Folder</label>
-      <input type="text" id="libPath" placeholder="e.g. ~/Documents/Precedents">
-      <label class="row"><input type="checkbox" id="libMatter"> Only for the current matter</label>
-      <div class="btn-row">
-        <button class="btn" id="libAdd" type="button">Add folder</button>
-        <button class="btn btn-ghost" id="libSync" type="button">Look for new files now</button>
+    <div class="card set-row" id="set-theme">
+      <div class="set-head"><h3><label for="themeSel">Colours</label></h3>
+        <select id="themeSel" class="select set-select">
+          <option value="auto">Match Word</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select>
       </div>
-      <div class="muted" id="libMsg" role="status" aria-live="polite"></div>
     </div>
 
-    <h3>Proposed changes</h3>
-    <div class="card">
-      <label class="row" for="aggression">How much to propose</label>
-      <div class="row"><input type="range" id="aggression" min="0" max="2" step="1" value="1" aria-describedby="aggLabel"><span id="aggLabel">Balanced</span></div>
-      <label class="row"><input type="checkbox" id="postComments" checked> Add a Word comment with the reason and the legal basis</label>
-      <label class="row"><input type="checkbox" id="applyTracked" checked> Put changes into the document as tracked changes</label>
-      <label class="row"><input type="checkbox" id="autopilot"> Put changes in without asking me each time (still as tracked changes)</label>
-    </div>
+    <details class="card set-row" id="set-about">
+      <summary class="set-head"><h3>About and updates</h3><span class="set-value" id="aboutSummary">…</span></summary>
+      <div id="setupBox">Loading…</div>
+      <div id="updateBox">Checking…</div>
+    </details>
 
-    <h3>Appearance</h3>
-    <div class="card">
-      <label class="field-label" for="themeSel">Colours</label>
-      <select id="themeSel" class="select">
-        <option value="auto">Match Word</option>
-        <option value="light">Light</option>
-        <option value="dark">Dark</option>
-      </select>
-      <label class="field-label" for="langSel">Language of answers</label>
-      <select id="langSel" class="select">
-        <option value="auto">Same as the document</option>
-        <option value="de">Deutsch</option>
-        <option value="en">English</option>
-        <option value="ro">Română</option>
-        <option value="sk">Slovenčina</option>
-        <option value="cs">Čeština</option>
-      </select>
-    </div>
+    <details class="set-advanced" id="setAdvanced">
+      <summary>Advanced <span class="muted">— firm library, connected systems, law collections, more</span></summary>
 
-    <h3>How thoroughly to read</h3>
-    <div class="card">
-      <label class="field-label" for="depthSel">Thoroughness</label>
-      <select id="depthSel" class="select">
-        <option value="fast">Quick</option>
-        <option value="balanced">Balanced</option>
-        <option value="deep">Thorough</option>
-        <option value="ultra">Most thorough (slow)</option>
-      </select>
-      <details class="tech"><summary>Technical details</summary><div class="muted" id="depthNote"></div></details>
-    </div>
-
-    <h3>Your files folder</h3>
-    <div class="card">
-      <div class="muted">Files OpenLex creates (reviews, checklists, calendars) are saved here, one folder per matter.</div>
-      <label class="field-label" for="wsPath">Folder</label>
-      <input type="text" id="wsPath" placeholder="~/OpenLex">
-      <div class="btn-row">
-        <button class="btn" id="wsSave" type="button">Use this folder</button>
-        <button class="btn btn-ghost" id="wsReveal" type="button">Show in Finder / Explorer</button>
+      <h3>Proposed changes</h3>
+      <div class="card">
+        <label class="row"><input type="checkbox" id="postComments" checked> Add a Word comment with the reason and the legal basis</label>
+        <label class="row"><input type="checkbox" id="applyTracked" checked> Put changes into the document as tracked changes</label>
+        <label class="row"><input type="checkbox" id="autopilot"> Put changes in without asking me each time (still as tracked changes)</label>
       </div>
-      <details class="tech"><summary>Files in it</summary><div id="wsList" class="muted">…</div></details>
-    </div>
 
-    <h3>Calendar</h3>
-    <div class="card">
-      <label class="row"><input type="checkbox" id="calEnabled"> Put contract deadlines into my calendar when I ask</label>
-      <label class="field-label" for="calProviderSel">Calendar</label>
-      <select id="calProviderSel" class="select">
-        <option value="auto">Find it automatically</option>
-        <option value="apple">Apple Calendar</option>
-        <option value="outlook">Microsoft Outlook</option>
-      </select>
-    </div>
+      <h3>How thoroughly to read</h3>
+      <div class="card">
+        <label class="field-label" for="depthSel">Thoroughness</label>
+        <select id="depthSel" class="select">
+          <option value="fast">Quick</option>
+          <option value="balanced">Balanced</option>
+          <option value="deep">Thorough</option>
+          <option value="ultra">Most thorough (slow)</option>
+        </select>
+        <details class="tech"><summary>Technical details</summary><div class="muted" id="depthNote"></div></details>
+      </div>
 
-    <h3>Online sources and sign-ins</h3>
-    <div class="card" id="webBox">
-      <div class="muted">OpenLex can read official sources (RIS) and web pages when your client-data rule allows it. For subscription databases, sign in once yourself — OpenLex keeps the session, never the password.</div>
-      <label class="field-label" for="webLoginUrl">Sign-in page of a legal database</label>
-      <input type="text" id="webLoginUrl" placeholder="https://…">
-      <div class="btn-row"><button class="btn btn-ghost" id="webLogin" type="button">Open sign-in window</button></div>
-      <div class="muted" id="webMsg" role="status" aria-live="polite">Check each database's terms first — many do not allow automated access.</div>
-    </div>
+      <h3 id="set-library">Firm library</h3>
+      <div class="card" id="libraryBox">
+        <div class="muted">Your precedents, templates and past work — searched on this computer. Word, PDF, text and Markdown files.</div>
+        <div id="libFolders" class="lib-folders"></div>
+        <label class="field-label" for="libPath">Folder</label>
+        <input type="text" id="libPath" placeholder="e.g. ~/Documents/Precedents">
+        <label class="row"><input type="checkbox" id="libMatter"> Only for the current matter</label>
+        <div class="btn-row">
+          <button class="btn" id="libAdd" type="button">Add folder</button>
+          <button class="btn btn-ghost" id="libSync" type="button">Look for new files now</button>
+        </div>
+        <div class="muted" id="libMsg" role="status" aria-live="polite"></div>
+      </div>
 
-    <h3>Connected systems</h3>
-    <div class="card" id="mcpBox">
-      <div class="muted">Document management, mail, drives, court portals… (MCP servers). OpenLex can then search and use them.</div>
-      <div id="mcpList" class="lib-folders"></div>
-      <label class="field-label" for="mcpName">Name</label>
-      <input type="text" id="mcpName" placeholder="e.g. imanage">
-      <label class="field-label" for="mcpCmd">Command that starts it</label>
-      <input type="text" id="mcpCmd" placeholder="e.g. npx -y @acme/imanage-mcp">
-      <label class="row"><input type="checkbox" id="mcpRemote" checked> It sends data off this computer (needs your client-data rule to allow it)</label>
-      <div class="btn-row"><button class="btn" id="mcpAdd" type="button">Connect</button><button class="btn btn-ghost" id="mcpReconnect" type="button">Reconnect all</button></div>
-      <div class="muted" id="mcpMsg" role="status" aria-live="polite"></div>
-    </div>
+      <h3>Your files folder</h3>
+      <div class="card">
+        <div class="muted">Files OpenLex creates (reviews, checklists, calendars) are saved here, one folder per matter.</div>
+        <label class="field-label" for="wsPath">Folder</label>
+        <input type="text" id="wsPath" placeholder="~/OpenLex">
+        <div class="btn-row">
+          <button class="btn" id="wsSave" type="button">Use this folder</button>
+          <button class="btn btn-ghost" id="wsReveal" type="button">Show in Finder / Explorer</button>
+        </div>
+        <details class="tech"><summary>Files in it</summary><div id="wsList" class="muted">…</div></details>
+      </div>
 
-    <h3>Law collections</h3>
-    <div id="jurList" class="jur-list"></div>
-    <details class="tech"><summary>Downloaded files</summary><div id="packList" class="muted">…</div></details>
+      <h3>Calendar</h3>
+      <div class="card">
+        <label class="row"><input type="checkbox" id="calEnabled"> Put contract deadlines into my calendar when I ask</label>
+        <label class="field-label" for="calProviderSel">Calendar</label>
+        <select id="calProviderSel" class="select">
+          <option value="auto">Find it automatically</option>
+          <option value="apple">Apple Calendar</option>
+          <option value="outlook">Microsoft Outlook</option>
+        </select>
+      </div>
 
-    <h3>Licence</h3>
-    <div id="setupBox" class="card">Loading…</div>
+      <h3>Online sources and sign-ins</h3>
+      <div class="card" id="webBox">
+        <div class="muted">OpenLex can read official sources (RIS) and web pages when your client-data rule allows it. For subscription databases, sign in once yourself — OpenLex keeps the session, never the password.</div>
+        <label class="field-label" for="webLoginUrl">Sign-in page of a legal database</label>
+        <input type="text" id="webLoginUrl" placeholder="https://…">
+        <div class="btn-row"><button class="btn btn-ghost" id="webLogin" type="button">Open sign-in window</button></div>
+        <div class="muted" id="webMsg" role="status" aria-live="polite">Check each database's terms first — many do not allow automated access.</div>
+      </div>
 
-    <h3>Conversation</h3>
-    <button class="btn btn-ghost" id="clearConv" type="button">Forget this conversation</button>
+      <h3>Connected systems</h3>
+      <div class="card" id="mcpBox">
+        <div class="muted">Document management, mail, drives, court portals… (MCP servers). OpenLex can then search and use them.</div>
+        <div id="mcpList" class="lib-folders"></div>
+        <label class="field-label" for="mcpName">Name</label>
+        <input type="text" id="mcpName" placeholder="e.g. imanage">
+        <label class="field-label" for="mcpCmd">Command that starts it</label>
+        <input type="text" id="mcpCmd" placeholder="e.g. npx -y @acme/imanage-mcp">
+        <label class="row"><input type="checkbox" id="mcpRemote" checked> It sends data off this computer (needs your client-data rule to allow it)</label>
+        <div class="btn-row"><button class="btn" id="mcpAdd" type="button">Connect</button><button class="btn btn-ghost" id="mcpReconnect" type="button">Reconnect all</button></div>
+        <div class="muted" id="mcpMsg" role="status" aria-live="polite"></div>
+      </div>
 
-    <h3>Updates</h3>
-    <div id="updateBox" class="card">Checking…</div>
+      <h3>Law collections</h3>
+      <div id="jurList" class="jur-list"></div>
+      <details class="tech"><summary>Downloaded files</summary><div id="packList" class="muted">…</div></details>
+
+      <h3>Conversation</h3>
+      <button class="btn btn-ghost" id="clearConv" type="button">Forget this conversation</button>
+    </details>
   </section>
 </main>
 
