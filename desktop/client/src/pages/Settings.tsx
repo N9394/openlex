@@ -396,15 +396,15 @@ export default function Settings() {
   }
 
   return (
-    <div className="p-8 max-w-5xl mx-auto">
+    <div className="p-4 lg:p-8 max-w-5xl mx-auto">
       <div className="mb-8">
         <h1 className="font-serif text-3xl text-parchment mb-2">{t('settings.title')}</h1>
       </div>
 
-      <div className="flex gap-8">
+      <div className="flex flex-col lg:flex-row gap-4 lg:gap-8">
         {/* Tabs */}
-        <div className="w-52 flex-shrink-0">
-          <nav className="space-y-1">
+        <div className="lg:w-52 flex-shrink-0">
+          <nav className="flex lg:block gap-1 overflow-x-auto lg:space-y-1">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
@@ -445,7 +445,7 @@ export default function Settings() {
         </div>
 
         {/* Content */}
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           {/* Profile Tab */}
           {activeTab === 'profile' && (
             <div className="card space-y-6">

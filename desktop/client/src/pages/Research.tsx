@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next'
 import ReactMarkdown from 'react-markdown'
 import { BookOpen, Check, ChevronDown, ChevronUp, Clock, Copy, FileSearch, FileText, FolderOpen, Lock, MessageSquare, Paperclip, Plus, Send, Sparkles, Square, Trash2, Users, X } from 'lucide-react'
 import { useLocation } from 'react-router-dom'
+import { useWindowWidth, NARROW_CHAT } from '../lib/viewport'
 import { useWordLink, hubBridge } from '../lib/hub'
 import { useChatCommands } from '../components/ChatCommands'
 import { ModelLabel } from '../components/ModelPicker'
@@ -113,7 +114,13 @@ export default function Research() {
   const [running, setRunning] = useState<string | null>(null) // stream id while an answer is written
   const [now, setNow] = useState(Date.now())
   const [perm, setPerm] = useState<any>(null) // a permission question waiting for the lawyer
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  // The conversation list: a column from 1280 px, an overlay below (closed at first).
+  const width = useWindowWidth()
+  const narrowChat = width < NARROW_CHAT
+  const [listOpen, setListOpen] = useState(() => (typeof window === 'undefined' ? true : window.innerWidth >= NARROW_CHAT))
+  useEffect(() => { setListOpen(!narrowChat) }, [narrowChat])
+  const sidebarCollapsed = !listOpen
+  const setSidebarCollapsed = (v: boolean) => setListOpen(!v)
   const [copied, setCopied] = useState<string | null>(null)
   const [sentToWord, setSentToWord] = useState<string | null>(null)
   const [openSteps, setOpenSteps] = useState<Record<string, boolean>>({})
@@ -553,11 +560,12 @@ export default function Research() {
   const otherWindows = useMemo(() => (current?.clients || []).filter((c) => c !== 'app').map((c) => WINDOW_WORDS[c] || c), [current])
 
   return (
-    <div className="h-[calc(100vh-0px)] flex overflow-hidden">
+    <div className="h-full flex overflow-clip relative">
+      {narrowChat && listOpen && <div className="absolute inset-0 z-20 bg-ink/40" onClick={() => setListOpen(false)} aria-hidden="true" />}
       {/* Conversations of this matter, from every window */}
-      <aside className={`${sidebarCollapsed ? 'w-0' : 'w-72'} border-r border-tobacco flex flex-col transition-all duration-200 overflow-hidden bg-deep-brown`}>
+      <aside className={`${sidebarCollapsed ? 'w-0 border-r-0' : 'w-72 border-r'} border-tobacco flex flex-col transition-[width] duration-200 overflow-hidden bg-deep-brown flex-shrink-0 ${narrowChat ? 'absolute inset-y-0 left-0 z-30 shadow-2xl' : ''}`} aria-hidden={sidebarCollapsed} data-testid="conversation-list">
         <div className="h-[72px] px-4 border-b border-tobacco flex items-center">
-          <button onClick={startNew} disabled={!!running} className="w-full btn-primary flex items-center justify-center gap-2 !py-2">
+          <button onClick={() => { startNew(); if (narrowChat) setListOpen(false) }} disabled={!!running} className="w-full btn-primary flex items-center justify-center gap-2 !py-2">
             <Plus size={18} />
             {t('chat.new', 'New conversation')}
           </button>
@@ -577,7 +585,7 @@ export default function Research() {
                   key={c.id}
                   role="button"
                   tabIndex={0}
-                  onClick={() => !running && openConversation(c.id)}
+                  onClick={() => { if (running) return; openConversation(c.id); if (narrowChat) setListOpen(false) }}
                   onKeyDown={(e) => { if (e.key === 'Enter' && !running) openConversation(c.id) }}
                   className={`group px-4 py-3 cursor-pointer transition-colors ${c.id === sessionId ? 'bg-accent/10 border-l-2 border-accent' : 'hover:bg-leather border-l-2 border-transparent'}`}
                 >
@@ -617,15 +625,15 @@ export default function Research() {
       >
         {dragging && <div className="absolute inset-0 z-10 flex items-center justify-center bg-ink/60 text-parchment text-lg pointer-events-none">{t('chat.dropHere', 'Drop the document: OpenLex reads it on this computer')}</div>}
         {/* Header: the matter, who OpenLex works as, where the AI runs */}
-        <div className="h-[72px] border-b border-tobacco px-6 flex items-center justify-between gap-4">
+        <div className="min-h-[64px] py-2 border-b border-tobacco px-4 lg:px-6 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
           <div className="flex items-center gap-3 min-w-0 flex-1">
-            <button onClick={() => setSidebarCollapsed(!sidebarCollapsed)} className="text-antique hover:text-cream transition-colors flex-shrink-0" aria-label={t('chat.conversations', 'Conversations')}>
+            <button onClick={() => setSidebarCollapsed(!sidebarCollapsed)} className="p-1.5 -m-1.5 text-antique hover:text-cream transition-colors flex-shrink-0" aria-label={t('chat.conversations', 'Conversations')} aria-expanded={!sidebarCollapsed} title={t('chat.conversations', 'Conversations')}>
               <MessageSquare size={20} />
             </button>
             <div className="min-w-0">
-              <h1 className="font-serif text-lg text-parchment truncate flex items-center gap-2">
-                {title}
-                {matter?.privileged && <span className="inline-flex items-center gap-1 text-xs text-forest border border-forest/40 rounded px-1.5 py-0.5"><Lock size={11} /> {t('chat.privileged', 'privileged — stays on this computer')}</span>}
+              <h1 className="font-serif text-lg text-parchment flex items-center gap-2 min-w-0">
+                {matter?.privileged && <span className="inline-flex flex-shrink-0 items-center gap-1 text-xs font-sans text-forest border border-forest/40 rounded px-1.5 py-0.5" title={t('chat.privileged', 'privileged — stays on this computer')}><Lock size={11} /> {narrowChat ? t('chat.privilegedShort', 'privileged') : t('chat.privileged', 'privileged — stays on this computer')}</span>}
+                <span className="truncate" title={matter ? `${matter.number ? `${matter.number} · ` : ''}${matter.title}${matter.client ? ` — ${matter.client}` : ''}` : title}>{title}</span>
               </h1>
               <p className="text-antique text-xs truncate">
                 {current ? `${clip(current.title, 60)}${otherWindows.length ? ` · ${t('chat.alsoIn', 'also asked in {{where}}', { where: otherWindows.join(' and ') })}` : ''}` : t('chat.newConversation', 'New conversation')}
@@ -646,7 +654,8 @@ export default function Research() {
         </div>
 
         {/* The conversation */}
-        <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-5 min-h-0" aria-live="polite">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 lg:p-6 min-h-0" aria-live="polite">
+          <div className="max-w-4xl mx-auto w-full space-y-5">
           {!hasEngine && (
             <div className="max-w-xl mx-auto px-4 py-3 bg-amber-500/10 border border-amber-500/30 rounded-card text-sm text-amber-300">
               {t('chat.noEngine', 'The chat needs the OpenLex engine, which runs with the desktop app.')}
@@ -685,8 +694,8 @@ export default function Research() {
             if (m.role === 'user') {
               return (
                 <div key={m.id} className="flex justify-end">
-                  <div className="max-w-3xl bg-accent/20 rounded-card rounded-br-sm px-5 py-3">
-                    <p className="text-parchment whitespace-pre-wrap">{m.content}</p>
+                  <div className="max-w-3xl min-w-0 bg-accent/20 rounded-card rounded-br-sm px-5 py-3">
+                    <p className="text-parchment whitespace-pre-wrap [overflow-wrap:anywhere]">{m.content}</p>
                     {!!m.files?.length && <p className="mt-1 text-xs text-antique">📎 {m.files.join(', ')}</p>}
                     {m.as && !m.stored && <p className="mt-1 text-xs text-antique">{t('panel.askedPanel', 'To the Panel')}: {m.as}</p>}
                     {m.stored && m.client && m.client !== 'app' && <p className="mt-1 text-[11px] text-antique">{t('chat.askedIn', 'asked in {{where}}', { where: WINDOW_WORDS[m.client] || m.client })}{m.at ? ` · ${when(m.at)}` : ''}</p>}
@@ -697,10 +706,12 @@ export default function Research() {
             return <Answer key={m.id} onPermission={setPerm} m={m} now={now} live={!!running && m === messages[messages.length - 1]} openSteps={!!openSteps[m.id]} toggleSteps={() => setOpenSteps((s) => ({ ...s, [m.id]: !s[m.id] }))}
               onCopy={() => copy(m)} copied={copied === m.id} onWord={wordLink.connected && m.content ? () => toWord(m) : null} sentToWord={sentToWord === m.id} onStop={stop} matterId={matterId} />
           })}
+          </div>
         </div>
 
         {/* The question field */}
-        <form onSubmit={(e) => { e.preventDefault(); send(input) }} className="border-t border-tobacco p-4 bg-deep-brown">
+        <form onSubmit={(e) => { e.preventDefault(); send(input) }} className="border-t border-tobacco px-3 py-3 lg:p-4 bg-deep-brown" data-testid="composer">
+          <div className="max-w-4xl mx-auto w-full">
           {(!!files.length || !!attaching.length) && (
             <div className="mb-2 space-y-1" data-testid="attachments">
               <div className="flex flex-wrap gap-2">
@@ -741,17 +752,17 @@ export default function Research() {
           <div className="flex gap-3 items-end">
             <input ref={fileRef} type="file" multiple accept=".docx,.pdf,.xlsx,.eml,.txt,.md,.csv,.json,.xml,.html,.rtf" className="hidden" onChange={(e) => attach(e.target.files)} data-testid="attach-input" />
             <input ref={folderRef} type="file" multiple className="hidden" onChange={(e) => attach(e.target.files ? Array.from(e.target.files).filter((f) => !refusal(f)) : null)} {...({ webkitdirectory: '', directory: '' } as any)} />
-            <button type="button" onClick={() => fileRef.current?.click()} disabled={!!running} className="text-antique hover:text-cream transition-colors px-1 pb-2" title={t('research.attachFile', 'Attach documents (Word, PDF, Excel, e-mail, text) — or drop them here')}>
+            <button type="button" onClick={() => fileRef.current?.click()} disabled={!!running} className="text-antique hover:text-cream transition-colors p-1.5 mb-1.5" aria-label={t('research.attachFile', 'Attach documents (Word, PDF, Excel, e-mail, text) — or drop them here')} title={t('research.attachFile', 'Attach documents (Word, PDF, Excel, e-mail, text) — or drop them here')}>
               <Paperclip size={18} />
             </button>
-            <button type="button" onClick={() => folderRef.current?.click()} disabled={!!running} className="text-antique hover:text-cream transition-colors px-1 pb-2" title={t('research.attachFolder', 'Attach a folder (every document in it)')}>
+            <button type="button" onClick={() => folderRef.current?.click()} disabled={!!running} className="text-antique hover:text-cream transition-colors p-1.5 mb-1.5" aria-label={t('research.attachFolder', 'Attach a folder (every document in it)')} title={t('research.attachFolder', 'Attach a folder (every document in it)')}>
               <FolderOpen size={18} />
             </button>
             <textarea
               ref={inputRef}
               rows={1}
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={(e) => { setInput(e.target.value); const el = e.target; el.style.height = 'auto'; el.style.height = `${Math.min(el.scrollHeight, 160)}px` }}
               onKeyDown={(e) => {
                 commands.onKeyDown(e)
                 if (e.defaultPrevented) return
@@ -759,7 +770,9 @@ export default function Research() {
                 if (e.key === 'Escape' && running) { e.preventDefault(); stop() }
               }}
               placeholder={running ? t('chat.placeholderRunning', 'Commands work while the answer is written: /model, /data …') : t('chat.placeholder', 'Type your question (or / for commands) and press Enter')}
-              className="input flex-1 resize-none min-h-[42px] max-h-40"
+              className="input flex-1 min-w-[12rem] resize-none min-h-[44px] max-h-40 !py-2.5"
+              data-testid="question"
+              aria-label={t('chat.questionLabel', 'Your question')}
             />
             {running ? (
               <button type="button" onClick={stop} className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-button transition-colors inline-flex items-center gap-2" title={t('chat.stopHint', 'Stop (Esc): the answer so far is kept')}>
@@ -772,6 +785,7 @@ export default function Research() {
             )}
           </div>
           {commands.hint}
+          </div>
         </form>
         {commands.overlay}
         {panelSetup && (

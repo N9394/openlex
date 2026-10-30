@@ -1048,8 +1048,8 @@
     "example2": "Is a two-year non-compete enforceable under Austrian law?",
     "askedIn": "asked in {{where}}",
     "attachSentence": "Sent with your question, under your client-data rule.",
-    "placeholderRunning": "Commands work while the answer is written: /model, /data …",
-    "placeholder": "Type your question (or / for commands) and press Enter",
+    "placeholderRunning": "Commands work meanwhile: /model, /data …",
+    "placeholder": "Ask a question — / for commands",
     "stopHint": "Stop (Esc): the answer so far is kept",
     "send": "Send",
     "as": "as {{who}}",
@@ -1080,7 +1080,9 @@
     "attachAsk": "Ask about it, or run the full analysis.",
     "convDocs": "Questions are about",
     "analysisReady": "The document analysis is ready — click to view.",
-    "judgeNote": "Second pass"
+    "judgeNote": "Second pass",
+    "questionLabel": "Your question",
+    "privilegedShort": "privileged"
   },
   "turn": {
     "once": "once",
@@ -1630,5 +1632,21 @@
     "editTitle": "Change the agent",
     "newTitle": "Your own agent",
     "makeOwn": "+ Make your own agent (/agent new) — /agent edit NAME changes one"
+  },
+  "data": {
+    "title": "Where client data may go",
+    "web": "Looking things up online (RIS, EUR-Lex, public pages)",
+    "connector": "Connector: {{name}}",
+    "nowLocal": "Client data now stays on this computer.",
+    "saved": "Saved: client data may go only where you ticked.",
+    "locked": "Set by your firm.",
+    "local": "Only this computer",
+    "localHint": "Nothing about your clients leaves this computer. Online AI and online look-ups get nothing.",
+    "allow": "Also these services:",
+    "redact": "Also hide names",
+    "redactHint": "Client and listed names, e-mail addresses, IBANs and phone numbers are replaced before anything goes online.",
+    "euOnly": "Only data centres in the EU",
+    "euOnlyHint": "AWS Bedrock in Frankfurt, Mistral, Azure or Google in an EU region.",
+    "privileged": "Privileged matters always stay on this computer, whatever is ticked here."
   }
 }

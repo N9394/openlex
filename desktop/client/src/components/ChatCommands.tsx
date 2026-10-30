@@ -21,6 +21,7 @@ import { useWordLink } from '../lib/hub'
 import { ChatCommand, PROVIDER_WORDS, didYouMean, engine, filterCommands, loadCommands, matterFolderName, menuQuery, parseCommand } from '../lib/commands'
 import { Basis, friendly, patternWords } from '../lib/turn'
 import LawSources from './LawSources'
+import DataRule from './DataRule'
 
 interface Matter { id: string; title: string; number?: string; client?: string; privileged?: boolean; agent?: string | null }
 interface Agent { name: string; title: string; description?: string }
@@ -37,6 +38,7 @@ type Dialog =
   | { kind: 'permissions' }
   | { kind: 'sources'; items: Basis[] }
   | { kind: 'law' }
+  | { kind: 'data' }
   | { kind: 'agent'; edit: string | null; proposal: boolean }
 
 const mattersBridge = () => (typeof window !== 'undefined' && (window as any).lexvault?.matters) || null
@@ -167,7 +169,7 @@ export function useChatCommands(opts: {
           return say(t('commands.nowUsing', 'Now using {{name}}. This applies from your next question.', { name: p.local ? t('commands.thisComputer', 'the AI on this computer') : p.label }))
         } catch (err) { return say((err as Error).message, 'bad') }
       }
-      case 'data': return navigate('/hub')
+      case 'data': return setDialog({ kind: 'data' })
       case 'matter': {
         if (!arg) return setDialog({ kind: 'matter' })
         const b = mattersBridge()
@@ -390,6 +392,7 @@ function CommandDialog({ dialog, commands, onClose, onRun, onSaveOnce, say, quic
     permissions: t('commands.permsTitle', 'What OpenLex may do without asking'),
     sources: t('commands.sourcesTitle', 'What the last answer is based on'),
     law: t('commands.lawTitle', 'Where OpenLex looks up the law'),
+    data: t('data.title', 'Where client data may go'),
     agent: dialog.kind === 'agent' && dialog.edit ? t('agentEditor.editTitle', 'Change the agent') : t('agentEditor.newTitle', 'Your own agent'),
   }
   return (
@@ -418,6 +421,7 @@ function CommandDialog({ dialog, commands, onClose, onRun, onSaveOnce, say, quic
           {dialog.kind === 'permissions' && <PermissionRules say={say} />}
           {dialog.kind === 'sources' && <SourcesList items={dialog.items} />}
           {dialog.kind === 'law' && <LawSources say={say} matter={activeMatter} />}
+          {dialog.kind === 'data' && <DataRule say={say} />}
           {dialog.kind === 'agent' && <AgentEditor edit={dialog.edit} proposal={dialog.proposal} sessionId={sessionId} matterId={matterId} onCancel={onClose} onDone={(text) => { say(text); window.dispatchEvent(new CustomEvent('openlex:setup-changed')); onClose() }} />}
           {dialog.kind === 'save' && (
             <div className="space-y-4">

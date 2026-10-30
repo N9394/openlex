@@ -248,6 +248,21 @@ type PackEvent =
   | { kind: 'pack-error'; code: string; version: string; error: string }
   | { kind: string; [k: string]: any }
 
+// An older or failed main process may leave parts out: fill them so the page never crashes.
+function normalise(d: any): DepStatus {
+  return {
+    ...d,
+    app: d.app || { version: '—', platform: '', arch: '' },
+    hardware: d.hardware || null,
+    model: d.model || { state: 'unknown', installed: false },
+    llm: d.llm || { reachable: false },
+    embeddings: d.embeddings || { reachable: false },
+    qdrant: d.qdrant || { reachable: false, collectionExists: false, totalChunks: 0 },
+    backend: d.backend || { off: true },
+    packs: { entitled: [], downloaded: [], installed_meta: {}, ...(d.packs || {}) },
+  }
+}
+
 export default function DependenciesTab() {
   const [dep, setDep] = useState<DepStatus | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -263,7 +278,7 @@ export default function DependenciesTab() {
           return
         }
         const next = await w.lexvault.getDependencyStatus()
-        if (!cancelled) { setDep(next); setError(null) }
+        if (!cancelled) { setDep(next ? normalise(next) : null); setError(next ? null : 'Status not available.') }
       } catch (e: any) {
         if (!cancelled) setError(e.message || String(e))
       }
@@ -295,7 +310,7 @@ export default function DependenciesTab() {
   if (!dep) return <div className="card text-antique">Loading…</div>
 
   const modelStatus: 'ok' | 'busy' | 'down' =
-    dep.model.installed ? 'ok' : dep.model.state === 'downloading' ? 'busy' : 'down'
+    dep?.model?.installed ? 'ok' : dep.model.state === 'downloading' ? 'busy' : 'down'
   const modelDetail = dep.model.installed
     ? `${dep.hardware?.modelFilename || dep.model.filename} — ${formatBytes(dep.model.actualBytes || dep.hardware?.modelSizeBytes)}`
     : dep.model.state === 'downloading'
@@ -379,7 +394,7 @@ export default function DependenciesTab() {
               !dep.qdrant.reachable
                 ? 'Not reachable on 127.0.0.1:16333'
                 : dep.qdrant.collectionExists
-                  ? `${dep.qdrant.totalChunks.toLocaleString()} chunks indexed`
+                  ? `${(dep.qdrant.totalChunks || 0).toLocaleString()} chunks indexed`
                   : 'No collection — download statute packs to populate'
             }
           />

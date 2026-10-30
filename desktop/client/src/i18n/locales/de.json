@@ -1048,8 +1048,8 @@
     "example2": "Ist ein zweijähriges Wettbewerbsverbot nach österreichischem Recht durchsetzbar?",
     "askedIn": "gefragt in {{where}}",
     "attachSentence": "Wird mit Ihrer Frage gesendet, gemäß Ihrer Regel für Mandantendaten.",
-    "placeholderRunning": "Befehle funktionieren, während die Antwort geschrieben wird: /model, /data …",
-    "placeholder": "Geben Sie Ihre Frage ein (oder / für Befehle) und drücken Sie die Eingabetaste",
+    "placeholderRunning": "Befehle gehen auch jetzt: /model, /data …",
+    "placeholder": "Frage eingeben — / für Befehle",
     "stopHint": "Anhalten (Esc): Die bisherige Antwort bleibt erhalten",
     "send": "Senden",
     "as": "als {{who}}",
@@ -1080,7 +1080,9 @@
     "attachAsk": "Stellen Sie eine Frage dazu oder starten Sie die vollständige Analyse.",
     "convDocs": "Fragen beziehen sich auf",
     "analysisReady": "Die Dokumentanalyse ist fertig – zum Ansehen klicken.",
-    "judgeNote": "Zweiter Durchgang"
+    "judgeNote": "Zweiter Durchgang",
+    "questionLabel": "Ihre Frage",
+    "privilegedShort": "vertraulich"
   },
   "turn": {
     "once": "einmal",
@@ -1677,5 +1679,21 @@
     "editTitle": "Agent ändern",
     "newTitle": "Ihr eigener Agent",
     "makeOwn": "+ Eigenen Agenten anlegen (/agent new) — /agent edit NAME ändert einen"
+  },
+  "data": {
+    "title": "Wohin Mandantendaten dürfen",
+    "web": "Online nachschlagen (RIS, EUR-Lex, öffentliche Seiten)",
+    "connector": "Anbindung: {{name}}",
+    "nowLocal": "Mandantendaten bleiben jetzt auf diesem Computer.",
+    "saved": "Gespeichert: Mandantendaten dürfen nur dorthin, wo ein Häkchen ist.",
+    "locked": "Von Ihrer Kanzlei festgelegt.",
+    "local": "Nur dieser Computer",
+    "localHint": "Nichts über Ihre Mandanten verlässt diesen Computer. Online-KI und Online-Suche erhalten nichts.",
+    "allow": "Auch diese Dienste:",
+    "redact": "Zusätzlich Namen verbergen",
+    "redactHint": "Mandanten- und gelistete Namen, E-Mail-Adressen, IBANs und Telefonnummern werden ersetzt, bevor etwas online geht.",
+    "euOnly": "Nur Rechenzentren in der EU",
+    "euOnlyHint": "AWS Bedrock in Frankfurt, Mistral, Azure oder Google in einer EU-Region.",
+    "privileged": "Vertrauliche Akten bleiben immer auf diesem Computer, egal was hier angehakt ist."
   }
 }
