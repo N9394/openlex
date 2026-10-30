@@ -41,6 +41,7 @@ const BUILT_IN = {
     title: 'Associate',
     description: 'The default: reads the document, searches the law, answers and proposes changes.',
     instructions: '',
+    de: { title: 'Juristischer Mitarbeiter', description: 'Der Standard: liest das Dokument, sucht im Recht, antwortet und schlägt Änderungen vor.' },
   },
   researcher: {
     title: 'Researcher',
@@ -48,17 +49,20 @@ const BUILT_IN = {
     instructions: 'You are doing legal research. Search before you answer (search_law in the jurisdiction\'s language, search_ris for current Austrian federal law, search_eurlex then get_eu_law for EU law, search_law_sources then get_law_source for German federal, Slovak and Czech law and any gateway the lawyer connected) and read the full section you rely on (get_law_section). Answer as a short memo: question, short answer, legal basis with the decisive words quoted, analysis, open points. Never propose document changes. If the sources don\'t answer the question, say so.',
     tools: ['search_law', 'get_law_section', 'search_ris', 'search_eurlex', 'get_eu_law', 'search_law_sources', 'get_law_source', 'web_fetch', 'web_save', 'search_firm_library', 'recall', 'write_file'],
     depth: 'deep',
+    de: { title: 'Recherche', description: 'Beantwortet Rechtsfragen aus Gesetz und EU-Recht mit genauen Fundstellen; ändert das Dokument nicht.' },
   },
   reviewer: {
     title: 'Reviewer',
     description: 'Reviews the document for the client\'s risks and proposes granular, anchored fixes.',
     instructions: 'You are reviewing for risk. Work clause by clause, flag what disadvantages the client, ground legal points in a law search, and propose one granular suggestion per issue with the exact original text as anchor. Rank by severity.',
+    de: { title: 'Prüfer', description: 'Prüft das Dokument auf Risiken für die Mandantschaft und schlägt einzelne, verankerte Korrekturen vor.' },
   },
   drafter: {
     title: 'Drafter',
     description: 'Drafts and redrafts clauses, preferring the firm\'s own wording.',
     instructions: 'You are drafting. First look for the firm\'s own wording (find_clause, search_firm_library) and follow it; keep the document\'s defined terms, numbering and language. Produce complete, signable text. Check mandatory law with search_law when the clause touches it.',
     skills: ['rebalance-clause'],
+    de: { title: 'Entwurfsverfasser', description: 'Entwirft und überarbeitet Klauseln, bevorzugt in der eigenen Formulierung der Kanzlei.' },
   },
 }
 
@@ -83,15 +87,49 @@ function clean(name, a) {
     depth: DEPTHS.includes(a.depth) ? a.depth : null,
     skills: list(a.skills),
     ...(model ? { model } : {}),
+    ...(deOf(a.de) ? { de: deOf(a.de) } : {}),
   }
   return out
+}
+
+/** The German display name and description ({ title?, description? }), or null. */
+function deOf(de) {
+  if (!de || typeof de !== 'object' || Array.isArray(de)) return null
+  const out = {}
+  if (typeof de.title === 'string' && de.title.trim()) out.title = de.title.trim().slice(0, 60)
+  if (typeof de.description === 'string' && de.description.trim()) out.description = de.description.trim().slice(0, 300)
+  return Object.keys(out).length ? out : null
+}
+
+/**
+ * A built-in profile with the firm's or user's changes. A changed title or
+ * description is the firm's own wording: the built-in German one no longer
+ * applies to it (the firm can give its own under "de").
+ */
+function overlay(builtIn, a) {
+  const out = { ...builtIn, ...a }
+  if (builtIn.de && !a.de) {
+    const de = { ...builtIn.de }
+    if (a.title && a.title !== builtIn.title) delete de.title
+    if (a.description && a.description !== builtIn.description) delete de.description
+    out.de = Object.keys(de).length ? de : undefined
+  }
+  return out
+}
+
+/** The name to show for a profile in the UI language ('de' or 'en'); firm and user agents keep their own name unless they give a German one. */
+function titleFor(agent, lang) {
+  return (/^de/i.test(String(lang || '')) && agent?.de?.title) || agent?.title || agent?.name || ''
+}
+function descriptionFor(agent, lang) {
+  return (/^de/i.test(String(lang || '')) && agent?.de?.description) || agent?.description || ''
 }
 
 /** All profiles: built-in, then openlex.json (firm, user) by name. Invalid ones are listed with an error. */
 function list() {
   const fromConfig = (() => { try { return require('./harness').load().agents || {} } catch { return {} } })()
   const merged = { ...BUILT_IN }
-  for (const [name, a] of Object.entries(fromConfig)) merged[name] = a && typeof a === 'object' ? { ...(BUILT_IN[name] || {}), ...a, source: BUILT_IN[name] ? 'built-in+config' : 'config' } : a
+  for (const [name, a] of Object.entries(fromConfig)) merged[name] = a && typeof a === 'object' ? { ...(BUILT_IN[name] ? overlay(BUILT_IN[name], a) : a), source: BUILT_IN[name] ? 'built-in+config' : 'config' } : a
   return Object.entries(merged).map(([name, a]) => {
     try { return { ...clean(name, a || {}), source: a?.source || 'built-in' } } catch (err) { return { name, error: err.message } }
   })
@@ -126,7 +164,7 @@ function matchInvocation(message, profiles) {
   const as = text.match(/^\s*(?:as|als)\s+(?:(?:the|an?|der|die)\s+)?([^:\n]{2,60}?)\s*:\s*([\s\S]*)$/i)
   if (as) {
     const want = as[1].trim().toLowerCase()
-    const a = usable.find((x) => x.name === want || String(x.title || '').toLowerCase() === want)
+    const a = usable.find((x) => x.name === want || String(x.title || '').toLowerCase() === want || String(x.de?.title || '').toLowerCase() === want)
     return a ? { agent: a, message: as[2].trim() } : null
   }
   return null
@@ -196,20 +234,20 @@ function groupsOf(tools) {
 const CITE = 'Cite a source for every legal point (the statute and section, the case, or the clause of the document) and quote the decisive words exactly.'
 /** Starting points for the form ("Templates"). A panel can use them by name without saving. */
 const TEMPLATES = {
-  'claimant-counsel': { title: 'Claimant\'s counsel', description: 'Argues for the claimant: the strongest case, with sources.', instructions: `You act for the claimant. Build the strongest legally sound case for the claimant's position: the claims, their legal basis, the evidence that supports them, and answers to the obvious defences. Be an advocate, but never invent facts or law. ${CITE}`, groups: ['law', 'austria', 'eu', 'otherLaw', 'documents', 'firm'], depth: 'balanced' },
-  'defendant-counsel': { title: 'Defendant\'s counsel', description: 'Argues for the defendant: defences, weaknesses of the claim, with sources.', instructions: `You act for the defendant. Find every defence: missing elements of the claim, limitation periods, exclusions, contributory fault, procedural points, and the weaknesses of the claimant's evidence. Be an advocate, but never invent facts or law. ${CITE}`, groups: ['law', 'austria', 'eu', 'otherLaw', 'documents', 'firm'], depth: 'balanced' },
-  'devils-advocate': { title: 'Devil\'s advocate', description: 'Attacks the position on the table and finds what could go wrong.', instructions: `You are the devil's advocate. Take the position that is currently favoured and attack it: what a court, the other side or a regulator would say against it, which facts are missing, which risks are underrated. Say what would change your mind. ${CITE}`, groups: ['law', 'austria', 'eu', 'otherLaw', 'documents'], depth: 'balanced' },
-  drafter: { title: 'Drafter', description: 'Drafts and redrafts clauses, preferring the firm\'s own wording.', instructions: BUILT_IN.drafter.instructions, groups: ['firm', 'law', 'documents'], depth: 'balanced' },
-  researcher: { title: 'Researcher', description: BUILT_IN.researcher.description, instructions: BUILT_IN.researcher.instructions, groups: ['law', 'austria', 'eu', 'otherLaw', 'firm', 'web', 'memory'], depth: 'deep' },
-  'compliance-checker': { title: 'Compliance checker', description: 'Checks against mandatory law and regulation (consumer law, data protection, sector rules).', instructions: `You check compliance. Go through the document or the plan point by point against mandatory law and regulation (consumer protection, data protection/GDPR, competition, sector rules, formal requirements). For each problem: what it is, the rule it breaks, how serious it is, and the fix. Say clearly when you found nothing. ${CITE}`, groups: ['law', 'austria', 'eu', 'otherLaw', 'documents'], depth: 'deep' },
+  'claimant-counsel': { title: 'Claimant\'s counsel', description: 'Argues for the claimant: the strongest case, with sources.', instructions: `You act for the claimant. Build the strongest legally sound case for the claimant's position: the claims, their legal basis, the evidence that supports them, and answers to the obvious defences. Be an advocate, but never invent facts or law. ${CITE}`, groups: ['law', 'austria', 'eu', 'otherLaw', 'documents', 'firm'], depth: 'balanced', de: { title: 'Klägervertretung', description: 'Argumentiert für die Klägerseite: die stärkste Position, mit Quellen.' } },
+  'defendant-counsel': { title: 'Defendant\'s counsel', description: 'Argues for the defendant: defences, weaknesses of the claim, with sources.', instructions: `You act for the defendant. Find every defence: missing elements of the claim, limitation periods, exclusions, contributory fault, procedural points, and the weaknesses of the claimant's evidence. Be an advocate, but never invent facts or law. ${CITE}`, groups: ['law', 'austria', 'eu', 'otherLaw', 'documents', 'firm'], depth: 'balanced', de: { title: 'Beklagtenvertretung', description: 'Argumentiert für die Beklagtenseite: Einwendungen und Schwächen der Klage, mit Quellen.' } },
+  'devils-advocate': { title: 'Devil\'s advocate', description: 'Attacks the position on the table and finds what could go wrong.', instructions: `You are the devil's advocate. Take the position that is currently favoured and attack it: what a court, the other side or a regulator would say against it, which facts are missing, which risks are underrated. Say what would change your mind. ${CITE}`, groups: ['law', 'austria', 'eu', 'otherLaw', 'documents'], depth: 'balanced', de: { title: 'Advocatus Diaboli', description: 'Greift die vorliegende Position an und findet, was schiefgehen könnte.' } },
+  drafter: { title: 'Drafter', description: 'Drafts and redrafts clauses, preferring the firm\'s own wording.', instructions: BUILT_IN.drafter.instructions, groups: ['firm', 'law', 'documents'], depth: 'balanced', de: { title: BUILT_IN.drafter.de.title, description: BUILT_IN.drafter.de.description } },
+  researcher: { title: 'Researcher', description: BUILT_IN.researcher.description, instructions: BUILT_IN.researcher.instructions, groups: ['law', 'austria', 'eu', 'otherLaw', 'firm', 'web', 'memory'], depth: 'deep', de: { title: BUILT_IN.researcher.de.title, description: BUILT_IN.researcher.de.description } },
+  'compliance-checker': { title: 'Compliance checker', description: 'Checks against mandatory law and regulation (consumer law, data protection, sector rules).', instructions: `You check compliance. Go through the document or the plan point by point against mandatory law and regulation (consumer protection, data protection/GDPR, competition, sector rules, formal requirements). For each problem: what it is, the rule it breaks, how serious it is, and the fix. Say clearly when you found nothing. ${CITE}`, groups: ['law', 'austria', 'eu', 'otherLaw', 'documents'], depth: 'deep', de: { title: 'Compliance-Prüfung', description: 'Prüft gegen zwingendes Recht und Regulierung (Verbraucherrecht, Datenschutz, Branchenregeln).' } },
 }
 function templates() {
-  return Object.entries(TEMPLATES).map(([name, t]) => ({ name, title: t.title, description: t.description, instructions: t.instructions, groups: t.groups, depth: t.depth }))
+  return Object.entries(TEMPLATES).map(([name, t]) => ({ name, title: t.title, description: t.description, instructions: t.instructions, groups: t.groups, depth: t.depth, de: t.de }))
 }
 /** A template as a usable profile (a panel's "claimant-counsel" without saving one first). */
 function fromTemplate(name) {
   const t = TEMPLATES[name]
-  return t ? { ...clean(name, { title: t.title, description: t.description, instructions: t.instructions, tools: groupTools(t.groups), depth: t.depth }), source: 'template' } : null
+  return t ? { ...clean(name, { title: t.title, description: t.description, instructions: t.instructions, tools: groupTools(t.groups), depth: t.depth, de: t.de }), source: 'template' } : null
 }
 /** A profile, or the template of that name. */
 function resolve(name) {
@@ -316,4 +354,4 @@ async function handle(method, p, params, body = {}) {
   }
 }
 
-module.exports = { list, get, resolve, parseInvocation, matchInvocation, validate, run, current, promptBlock, allowedTools, save, remove, propose, templates, fromTemplate, groupsOf, groupTools, handle, slug, BUILT_IN, DEPTHS, TOOL_GROUPS, TEMPLATES }
+module.exports = { list, get, resolve, titleFor, descriptionFor, parseInvocation, matchInvocation, validate, run, current, promptBlock, allowedTools, save, remove, propose, templates, fromTemplate, groupsOf, groupTools, handle, slug, BUILT_IN, DEPTHS, TOOL_GROUPS, TEMPLATES }

@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Library, Plug, ListChecks, Link2, BookOpen, Languages } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { languageName } from '../i18n'
 import { useWordLink } from '../lib/hub'
 import { SkillsPanel } from './SkillsPanel'
 
@@ -152,7 +153,7 @@ export default function Hub() {
           </select>
           <div className="flex gap-2">
             <select className={input} value={target} onChange={(ev) => setTarget(ev.target.value)}>
-              {Object.entries(langs).map(([code, name]) => <option key={code} value={code}>{name}</option>)}
+              {Object.entries(langs).map(([code, name]) => <option key={code} value={code}>{languageName(code, name)}</option>)}
             </select>
             <input className={input} placeholder={t('hub.glossary', 'glossary (optional)')} value={glossary} onChange={(ev) => setGlossary(ev.target.value)} />
             <button className={ghost} disabled={busy || !docA} onClick={() => runWorkflow('translate')}>{t('hub.translate', 'Translate')}</button>

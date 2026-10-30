@@ -16,15 +16,15 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import Markdown from './Markdown'
 import { ChevronDown, ChevronUp, MessageSquare, Plus, Square, Users, X } from 'lucide-react'
-import { engine } from '../lib/commands'
-import { ModelUse, addModel, clip, dataLine, friendly } from '../lib/turn'
+import { agentTitle, engine } from '../lib/commands'
+import { ModelUse, addModel, clip, dataLine, friendly, sourcesNote } from '../lib/turn'
 import ExportButtons from './ExportButtons'
 
 export type PanelMode = 'parallel' | 'debate' | 'review'
 export interface PanelMember { name: string; side?: string; label?: string }
 export interface PanelSpec { mode: PanelMode; agents: PanelMember[]; rounds: number; moderator: string | null }
 export interface PanelRun { spec: PanelSpec; question: string; matterId: string | null; sessionId: string | null; attachments: string[]; message: string }
-interface AgentChoice { name: string; title: string; description?: string; template?: boolean }
+interface AgentChoice { name: string; title: string; description?: string; template?: boolean; de?: { title?: string; description?: string } | null }
 
 export const DEFAULT_SPEC: PanelSpec = { mode: 'debate', agents: [{ name: 'claimant-counsel' }, { name: 'defendant-counsel' }], rounds: 2, moderator: 'judge' }
 const MODES: PanelMode[] = ['parallel', 'debate', 'review']
@@ -51,8 +51,8 @@ export function usePanelAgents() {
   const [list, setList] = useState<AgentChoice[]>([])
   useEffect(() => {
     engine()?.call('GET', '/api/agents').then((r) => {
-      const own: AgentChoice[] = (r.agents || []).filter((a: any) => !a.error).map((a: any) => ({ name: a.name, title: a.title, description: a.description }))
-      const tpl: AgentChoice[] = (r.templates || []).filter((x: any) => !own.some((a) => a.name === x.name)).map((x: any) => ({ name: x.name, title: x.title, description: x.description, template: true }))
+      const own: AgentChoice[] = (r.agents || []).filter((a: any) => !a.error).map((a: any) => ({ name: a.name, title: a.title, description: a.description, de: a.de || null }))
+      const tpl: AgentChoice[] = (r.templates || []).filter((x: any) => !own.some((a) => a.name === x.name)).map((x: any) => ({ name: x.name, title: x.title, description: x.description, de: x.de || null, template: true }))
       setList([...own, ...tpl])
     }).catch(() => setList([]))
   }, [])
@@ -61,7 +61,7 @@ export function usePanelAgents() {
 
 export function specWords(spec: PanelSpec, agents: AgentChoice[], tf: unknown) {
   const t = (k: string, d: string, o?: Record<string, unknown>) => String((tf as (k: string, o: Record<string, unknown>) => unknown)(k, { defaultValue: d, ...(o || {}) }))
-  const names = spec.agents.map((a) => a.label || agents.find((x) => x.name === a.name)?.title || a.name)
+  const names = spec.agents.map((a) => { const x = agents.find((y) => y.name === a.name); return a.label || (x ? agentTitle(x) : a.name) })
   const how = spec.mode === 'debate' ? t('panel.debateN', 'Debate, {{n}} rounds', { n: spec.rounds }) : spec.mode === 'review' ? t('panel.reviewShort', 'Draft and review') : t('panel.parallelShort', 'Side by side')
   return `${how}: ${names.join(' · ')}`
 }
@@ -102,7 +102,7 @@ export function PanelSetup({ initial, onUse, onCancel }: { initial?: PanelSpec |
               {spec.mode === 'review' && <span className="w-20 text-xs text-antique shrink-0">{i === 0 ? t('panel.drafter', 'Drafter') : t('panel.reviewer', 'Reviewer')}</span>}
               <select className="input flex-1 !py-1.5" value={a.name} onChange={(e) => member(i, { name: e.target.value })} data-testid={`panel-agent-${i}`}>
                 {!agents.some((x) => x.name === a.name) && <option value={a.name}>{a.name}</option>}
-                {agents.map((x) => <option key={x.name} value={x.name}>{x.title}{x.template ? ` (${t('panel.template', 'template')})` : ''}</option>)}
+                {agents.map((x) => <option key={x.name} value={x.name}>{agentTitle(x)}{x.template ? ` (${t('panel.template', 'template')})` : ''}</option>)}
               </select>
               {spec.mode !== 'review' && <input className="input flex-1 !py-1.5" value={a.side || ''} onChange={(e) => member(i, { side: e.target.value })} placeholder={spec.mode === 'debate' ? t('panel.positionPh', 'Position (optional), e.g. for the tenant') : t('panel.focusPh', 'Focus (optional), e.g. EU law')} />}
               {spec.mode !== 'review' && spec.agents.length > 2 && <button type="button" onClick={() => set({ agents: spec.agents.filter((_, j) => j !== i) })} className="text-antique hover:text-cream" aria-label={t('panel.remove', 'Remove')}><X size={14} /></button>}
@@ -128,7 +128,7 @@ export function PanelSetup({ initial, onUse, onCancel }: { initial?: PanelSpec |
           <select className="input flex-1 !py-1" value={spec.moderator || ''} onChange={(e) => set({ moderator: e.target.value || null })} data-testid="panel-moderator">
             {spec.mode === 'parallel' && <option value="">{t('panel.noSummary', 'Nobody — show the answers side by side')}</option>}
             <option value="judge">{t('panel.judge', 'The judge (the second pass)')}</option>
-            {agents.filter((x) => !x.template).map((x) => <option key={x.name} value={x.name}>{x.title}</option>)}
+            {agents.filter((x) => !x.template).map((x) => <option key={x.name} value={x.name}>{agentTitle(x)}</option>)}
           </select>
         </label>
       )}
@@ -173,7 +173,7 @@ export default function PanelCard({ run, id, onPermission }: { run?: PanelRun; i
       }, (ev) => {
         switch (ev.type) {
           case 'panel_start':
-            setLanes([...ev.members.map((m: any) => ({ lane: m.lane, title: m.title, side: m.side, where: m.where, local: m.local, skipped: m.skipped, note: m.note, status: m.skipped ? 'skipped' : 'waiting', plain: m.skipped ? t('panel.sitsOut', 'Does not take part') : t('panel.waiting', 'Waiting for its turn'), live: '', models: [], online: [] })),
+            setLanes([...ev.members.map((m: any) => ({ lane: m.lane, title: agentTitle(m), side: m.side, where: m.where, local: m.local, skipped: m.skipped, note: m.note, status: m.skipped ? 'skipped' : 'waiting', plain: m.skipped ? t('panel.sitsOut', 'Does not take part') : t('panel.waiting', 'Waiting for its turn'), live: '', models: [], online: [] })),
               ...(ev.moderator ? [{ lane: 'moderator', title: ev.moderator.title, status: 'waiting', plain: t('panel.modWaits', 'Sums up at the end'), live: '', models: [], online: [] }] : [])])
             return
           case 'panel_note': setNotes((n) => [...n, ev.text]); return
@@ -228,7 +228,7 @@ export default function PanelCard({ run, id, onPermission }: { run?: PanelRun; i
       {phase === 'confirm' && estimate && (
         <div className="space-y-2">
           {estimate.notes?.map((n: string, i: number) => <div key={i} className="text-xs text-amber-400">! {n}</div>)}
-          {estimate.agents?.filter((a: any) => !a.skipped).map((a: any) => <div key={a.lane} className="text-xs text-antique">· {a.title}: {a.local ? t('panel.onThisComputer', 'on this computer') : a.where} — {t('panel.calls', 'about {{n}} calls', { n: a.calls })}{a.eur ? `, €${a.eur.toFixed(2)}` : ''}</div>)}
+          {estimate.agents?.filter((a: any) => !a.skipped).map((a: any) => <div key={a.lane} className="text-xs text-antique">· {agentTitle(a)}: {a.local ? t('panel.onThisComputer', 'on this computer') : a.where} — {t('panel.calls', 'about {{n}} calls', { n: a.calls })}{a.eur ? `, €${a.eur.toFixed(2)}` : ''}</div>)}
           {estimate.capReached ? <div className="text-red-400 text-xs">✗ {t('panel.capReached', 'This month\'s limit for online AI is reached. Use agents on this computer, or raise the limit.')}</div>
             : estimate.overCap ? <div className="text-amber-400 text-xs">! {t('panel.overCap', 'This may go over your monthly limit; the panel stops when the limit is reached and keeps what was said.')}</div> : null}
           <div className="flex gap-2">
@@ -287,16 +287,20 @@ function PanelResult({ r, lanes }: { r: any; lanes: Lane[] }) {
   const [open, setOpen] = useState<Record<number, boolean>>({})
   const [showLanes, setShowLanes] = useState(false)
   const s = r.summary
-  const turnLabel = (x: any) => (r.mode === 'debate' ? `${t('panel.roundShort', 'round {{n}}', { n: x.round })} — ${x.title}` : r.mode === 'review' ? `${x.title} — ${x.kind === 'draft' ? t('panel.kDraft', 'draft') : x.kind === 'review' ? t('panel.kReview', 'review') : t('panel.kRevision', 'revision')}` : x.title)
+  // Names in the App's language: built-in roles and templates have a German one (titleDe).
+  const nameOf = (x: any) => (x ? agentTitle(x) : '')
+  const byLane = (lane: string | null | undefined, fallback: string) => { const m = (r.members || []).find((y: any) => y.lane === lane); return m ? nameOf(m) : fallback }
+  const byTitle = (title: string) => { const m = (r.members || []).find((y: any) => y.title === title); return m ? nameOf(m) : title }
+  const turnLabel = (x: any) => (r.mode === 'debate' ? `${t('panel.roundShort', 'round {{n}}', { n: x.round })} — ${nameOf(x)}` : r.mode === 'review' ? `${nameOf(x)} — ${x.kind === 'draft' ? t('panel.kDraft', 'draft') : x.kind === 'review' ? t('panel.kReview', 'review') : t('panel.kRevision', 'revision')}` : nameOf(x))
   return (
     <div className="space-y-3" data-testid="panel-result">
       {r.stopped && <div className="text-xs text-amber-400">! {r.stopped === 'cap' ? t('panel.stoppedCap', 'Stopped: the monthly limit for online AI was reached. What was said so far is kept.') : t('panel.stoppedYou', 'Stopped by you. What was said so far is kept; nothing more is sent.')}</div>}
       {r.members.filter((m: any) => m.note).map((m: any) => <div key={m.lane} className="text-xs text-amber-400">! {m.note}</div>)}
       {s && !s.fallback && (
         <div className="space-y-2 border-l-2 border-accent pl-3">
-          {s.stronger && <div><span className="text-xs uppercase text-accent">{t('panel.stronger', 'Stronger position')}</span><div className="text-parchment"><span className="text-cream font-medium">{s.stronger.title || t('panel.neither', 'Neither clearly')}</span>: {s.stronger.why}<Cites ids={s.stronger.cites} sources={r.sources} /></div></div>}
+          {s.stronger && <div><span className="text-xs uppercase text-accent">{t('panel.stronger', 'Stronger position')}</span><div className="text-parchment"><span className="text-cream font-medium">{s.stronger.title ? byLane(s.stronger.lane, s.stronger.title) : t('panel.neither', 'Neither clearly')}</span>: {s.stronger.why}<Cites ids={s.stronger.cites} sources={r.sources} /></div></div>}
           {s.agreement.length > 0 && <div><span className="text-xs uppercase text-accent">{t('panel.agree', 'Where they agree')}</span><ul className="list-disc ml-5 text-parchment">{s.agreement.map((a: any, i: number) => <li key={i}>{a.point}<Cites ids={a.cites} sources={r.sources} /></li>)}</ul></div>}
-          {s.disagreement.length > 0 && <div><span className="text-xs uppercase text-accent">{t('panel.disagree', 'Where they disagree')}</span><ul className="list-disc ml-5 text-parchment">{s.disagreement.map((d: any, i: number) => <li key={i}>{d.point}<Cites ids={d.cites} sources={r.sources} />{d.positions.map((p: any) => <div key={p.lane} className="text-xs text-antique">{p.title}: {p.view}</div>)}</li>)}</ul></div>}
+          {s.disagreement.length > 0 && <div><span className="text-xs uppercase text-accent">{t('panel.disagree', 'Where they disagree')}</span><ul className="list-disc ml-5 text-parchment">{s.disagreement.map((d: any, i: number) => <li key={i}>{d.point}<Cites ids={d.cites} sources={r.sources} />{d.positions.map((p: any) => <div key={p.lane} className="text-xs text-antique">{byLane(p.lane, p.title)}: {p.view}</div>)}</li>)}</ul></div>}
           {s.open.length > 0 && <div><span className="text-xs uppercase text-accent">{t('panel.open', 'Open questions')}</span><ul className="list-disc ml-5 text-parchment">{s.open.map((o: any, i: number) => <li key={i}>{o.question}{o.why ? <span className="text-antique"> — {o.why}</span> : null}</li>)}</ul></div>}
           {s.quotes?.length > 0 && <div className="text-xs text-antique">{s.quotes.map((q: any, i: number) => <div key={i}>“{q.text}”{q.source ? <Cites ids={[q.source]} sources={r.sources} /> : null}</div>)}</div>}
           {s.removed ? <div className="text-xs text-antique">✓ {t('panel.removed', '{{count}} citations or quotes of the moderator could not be verified and were removed.', { count: s.removed })}</div> : <div className="text-xs text-antique">✓ {t('panel.citesChecked', 'Every citation points to a source an agent brought.')}</div>}
@@ -319,8 +323,8 @@ function PanelResult({ r, lanes }: { r: any; lanes: Lane[] }) {
       {r.sources.length > 0 && (
         <div className="border-t border-tobacco/50 pt-2">
           <div className="text-xs font-medium text-parchment mb-1">{t('panel.sources', 'Sources the agents brought')}</div>
-          <ul className="space-y-0.5 text-xs text-parchment/90">{r.sources.map((x: any) => <li key={x.id}><span className="text-accent">[{x.id}]</span> {x.label}{x.snippet ? <span className="text-antique"> — {clip(x.snippet, 100)}</span> : null} <span className="text-antique">({x.by.join(', ')})</span></li>)}</ul>
-          <div className="text-[11px] text-antique/70 mt-1">{t('chat.checkSources', 'Law sections come from the law collection on this computer. Check them before relying on the answer.')}</div>
+          <ul className="space-y-0.5 text-xs text-parchment/90">{r.sources.map((x: any) => <li key={x.id}><span className="text-accent">[{x.id}]</span> {x.label}{x.snippet ? <span className="text-antique"> — {clip(x.snippet, 100)}</span> : null} <span className="text-antique">({x.by.map(byTitle).join(', ')})</span></li>)}</ul>
+          <div className="text-[11px] text-antique/70 mt-1">{sourcesNote(r.sources)}</div>
         </div>
       )}
       {lanes.length > 0 && (

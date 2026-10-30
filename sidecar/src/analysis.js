@@ -126,6 +126,12 @@ const LABELS = {
   },
 }
 const labelsFor = (lang) => LABELS[lang] || LABELS.en
+/** The document's language named in the export's language ("Deutsch" in a German export, "German" in an English one). */
+function languageLabel(doc = {}) {
+  const ui = LABELS[doc.language] ? doc.language : 'en'
+  try { const n = doc.language && new Intl.DisplayNames([ui], { type: 'language' }).of(doc.language); if (n && n !== doc.language) return n.charAt(0).toLocaleUpperCase(ui) + n.slice(1) } catch { /* fall back */ }
+  return doc.languageName || doc.language || ''
+}
 
 // ── locations ────────────────────────────────────────────────────────────
 // A heading-like start of a line: "§ 7", "Art. 3", "Section 4.2", "Clause 9", "4.2", "IV.".
@@ -650,7 +656,7 @@ function sourceLine(s) {
 
 function headline(a, L) {
   const st = a.stats
-  return `${a.createdAt.slice(0, 10)} · ${L.language}: ${a.document.languageName} · ${L.risks}: ${st.high} ${L.lv.high}, ${st.medium} ${L.lv.medium}, ${st.low} ${L.lv.low} · ${st.verified} ${L.verified} · ${st.dropped} ${L.dropped}`
+  return `${a.createdAt.slice(0, 10)} · ${L.language}: ${languageLabel(a.document)} · ${L.risks}: ${st.high} ${L.lv.high}, ${st.medium} ${L.lv.medium}, ${st.low} ${L.lv.low} · ${st.verified} ${L.verified} · ${st.dropped} ${L.dropped}`
 }
 
 function toMarkdown(a) {
@@ -892,4 +898,4 @@ function brief(a) {
   return lines.join('\n')
 }
 
-module.exports = { lawLookup, askObject, locate: locate, labelsFor, webAllowed, stepWords, runAnalyse, detectLanguage, firstObject, level, toMarkdown, toDocx, toCsv, toPdf, rows, exportAnalysis, get, brief, splitParts, partChars, setLawSources, overallRisk, readability, LABELS, searchLocal, searchWeb }
+module.exports = { lawLookup, askObject, locate: locate, labelsFor, languageLabel, webAllowed, stepWords, runAnalyse, detectLanguage, firstObject, level, toMarkdown, toDocx, toCsv, toPdf, rows, exportAnalysis, get, brief, splitParts, partChars, setLawSources, overallRisk, readability, LABELS, searchLocal, searchWeb }

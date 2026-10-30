@@ -16,8 +16,14 @@
 <header class="brandbar">
   <h1>Open<span class="accent">Lex</span></h1>
   <div class="hdr-matter">
-    <label for="matterSel" class="sr-only">Matter</label>
-    <select id="matterSel" class="select matter-sel" title="The matter this document belongs to: its client-data rule, folder and notes apply"><option value="">No matter</option></select>
+    <!-- The full matter name: its number above, the name wrapped below (a native
+         select cut it off at 350 px). The real select lies invisibly on top, so
+         choosing, the keyboard and screen readers work as before. -->
+    <div class="matter-pick" id="matterPick">
+      <span class="matter-face" id="matterFace" aria-hidden="true">No matter</span>
+      <label for="matterSel" class="sr-only">Matter</label>
+      <select id="matterSel" class="select matter-sel" title="The matter this document belongs to: its client-data rule, folder and notes apply"><option value="">No matter</option></select>
+    </div>
     <button class="btn-icon btn-tiny" id="matterPrivBtn" type="button" hidden></button>
   </div>
   <button class="btn-icon menu-btn" id="menuBtn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="menu" aria-keyshortcuts="Control+K Meta+K" title="What can I do here? (Ctrl+K or ⌘K)">

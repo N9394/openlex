@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
+import { languageName } from '../i18n'
 import {
   Send,
   FileText,
@@ -675,7 +676,7 @@ export default function Navigator() {
                   >
                     {languages.map((l) => (
                       <option key={l.code} value={l.code}>
-                        {l.label}
+                        {languageName(l.code, l.label)}
                       </option>
                     ))}
                   </select>

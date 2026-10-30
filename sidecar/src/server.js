@@ -1640,7 +1640,7 @@ async function handle(req, res) {
         const plan = st.forModel({ tokens: require('./read').tokensFor(attached.text), role: 'plan', matterId: matterIdFor(body, entry), outputTokens: config.AGENT.WRITE_MAX_TOKENS })
         sendSse(res, { type: 'strategy', mode: plan.mode, kind: plan.kind, cache: plan.cache, ctx: plan.ctx, tokens: plan.tokens, text: st.explain(plan, { name: attached.names.join(', '), pages }) })
       }
-      if (agent && agent.name !== 'associate') sendSse(res, { type: 'agent', name: agent.name, title: agent.title })
+      if (agent && agent.name !== 'associate') sendSse(res, { type: 'agent', name: agent.name, title: agent.title, ...(agent.de?.title ? { titleDe: agent.de.title } : {}) })
       if (skill) sendSse(res, { type: 'skill', name: skill.name, title: skill.title })
       else if (body.suggestSkill !== false) {
         const hint = await rec.run(() => policy.withMatter(matterIdFor(body, entry), () => skillsMod.suggest(body.message).catch(() => null)))

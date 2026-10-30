@@ -10,7 +10,7 @@ import { BookOpen, ChevronDown, ChevronUp, Download, FileSpreadsheet, FileText, 
 import { engine } from '../lib/commands'
 import { download, findQuote } from '../lib/attach'
 import { clip, friendly } from '../lib/turn'
-import i18n from '../i18n'
+import i18n, { languageName } from '../i18n'
 
 type Level = 'high' | 'medium' | 'low'
 const LEVEL_MARK: Record<Level, string> = { high: '!!', medium: '!', low: '·' }
@@ -79,7 +79,7 @@ export default function AnalysisCard({ id, analysis: given }: { id?: string; ana
           <div className="text-xs uppercase tracking-wide text-accent">{t('analysis.title', 'Document analysis')}</div>
           <div className="font-serif text-lg text-parchment truncate" title={a.document?.name}>{a.document?.name}</div>
           <div className="text-xs text-antique">
-            {[s.type, a.document?.pages ? t('analysis.pages', '{{count}} pages', { count: a.document.pages }) : '', st.strategy ? (st.strategy.mode === 'full' ? t('analysis.readFull', 'read in full') : t('analysis.readParts', 'read in {{n}} parts', { n: st.parts })) : '', a.document?.languageName].filter(Boolean).join(' · ')}
+            {[s.type, a.document?.pages ? t('analysis.pages', '{{count}} pages', { count: a.document.pages }) : '', st.strategy ? (st.strategy.mode === 'full' ? t('analysis.readFull', 'read in full') : t('analysis.readParts', 'read in {{n}} parts', { n: st.parts })) : '', languageName(a.document?.language, a.document?.languageName)].filter(Boolean).join(' · ')}
           </div>
         </div>
         {overall && (

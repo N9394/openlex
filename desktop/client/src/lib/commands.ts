@@ -4,6 +4,8 @@
 // pane use — so a lawyer meets the same commands in every window. This file
 // is the plain logic (no React): load, filter, parse.
 
+import i18n from '../i18n'
+
 export interface ChatCommand {
   name: string
   args: string
@@ -75,7 +77,28 @@ export const PROVIDER_WORDS: Record<string, string> = { claude: 'anthropic', com
 export const matterFolderName = (m: { number?: string; title: string } | null | undefined) =>
   String(m ? (m.number ? `${m.number} ${m.title}` : m.title) : 'default').replace(/[^\w\-.]/g, '_').slice(0, 80)
 
-/** An agent's title in the App's language (the engine's built-in roles are English). */
-export function agentTitle(a: { name: string; title: string }, t: (k: string, d: string) => string): string {
-  return t(`agents.${a.name}`, a.title)
+/** An agent as the engine describes it: built-in roles and templates carry a German name and description ("de"). */
+export interface AgentNames { name: string; title: string; description?: string; de?: { title?: string; description?: string } | null; titleDe?: string }
+
+const uiIsGerman = () => /^de/i.test(i18n.resolvedLanguage || i18n.language || '')
+
+/**
+ * An agent's name in the App's language. Built-in roles and the panel
+ * templates have a German name from the engine; the firm's and the
+ * lawyer's own agents keep the name they were given.
+ */
+export function agentTitle(a: AgentNames, t?: (k: string, d: string) => string): string {
+  if (uiIsGerman()) {
+    const de = a.titleDe || a.de?.title
+    if (de) return de
+    // An older engine without "de": the built-in names, only while the agent keeps its English name.
+    const en = String(i18n.getFixedT('en')(`agents.${a.name}`, { defaultValue: '' }))
+    if (t && en && en === a.title) return t(`agents.${a.name}`, a.title)
+  }
+  return a.title
+}
+
+/** An agent's one-line description in the App's language (same rule as agentTitle). */
+export function agentDescription(a: AgentNames): string {
+  return (uiIsGerman() && a.de?.description) || a.description || ''
 }

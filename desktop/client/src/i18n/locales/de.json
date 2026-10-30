@@ -1285,7 +1285,16 @@
     "judgeFound": "zweiter Durchgang hat etwas gefunden — siehe unten",
     "judgeOk": "in einem zweiten Durchgang geprüft",
     "judgeOff": "nicht gegengeprüft (in den Einstellungen ausgeschaltet)",
-    "judgeNothing": "nicht gegengeprüft (keine Quellen zum Abgleichen)"
+    "judgeNothing": "nicht gegengeprüft (keine Quellen zum Abgleichen)",
+    "checkPlain": "Prüfen Sie die Quellen, bevor Sie sich auf die Antwort verlassen.",
+    "fromOnline": "{{name}} (online)",
+    "fromOnlineAny": "einer amtlichen Rechtsdatenbank (online)",
+    "fromCopy": "Ihrer Offline-Kopie von {{name}}",
+    "fromCopyAny": "einer Offline-Kopie auf diesem Computer",
+    "fromCollection": "der Rechtssammlung auf diesem Computer",
+    "checkLaw": "Prüfen Sie die Normen, bevor Sie sich auf die Antwort verlassen.",
+    "and": "und",
+    "lawFrom": "Die Normen stammen aus {{list}}. Prüfen Sie sie, bevor Sie sich auf die Antwort verlassen."
   },
   "analysis": {
     "choose": "Wählen Sie das zu analysierende Dokument (Word, PDF, Excel, E-Mail oder Text) – oder ziehen Sie es hierher.",
@@ -1871,7 +1880,7 @@
     "noConnectors": "Keine Anbindungen. MCP-Server fügen Sie in Word unter Einstellungen → Erweitert → Anbindungen hinzu, oder in ~/.lexvault/mcp-servers.json."
   },
   "agents": {
-    "associate": "Associate",
+    "associate": "Juristischer Mitarbeiter",
     "researcher": "Recherche",
     "reviewer": "Prüfer",
     "drafter": "Entwurfsverfasser",

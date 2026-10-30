@@ -101,7 +101,7 @@ function members(list, matterId) {
     while (seen.has(lane)) lane = `${agent.name}-${i + 1}`
     seen.add(lane)
     const side = clip(spec.side || '', 200)
-    return { lane, name: agent.name, title: spec.label ? clip(spec.label, 60) : agent.title, side, agent, ...placement(agent, matterId) }
+    return { lane, name: agent.name, title: spec.label ? clip(spec.label, 60) : agent.title, ...(!spec.label && agent.de?.title ? { titleDe: agent.de.title } : {}), side, agent, ...placement(agent, matterId) }
   })
 }
 
@@ -143,7 +143,7 @@ function estimate({ mode = 'debate', agents: list = [], rounds, moderator, matte
     const depth = m.agent.depth || require('./agent-config').load().depth || 'balanced'
     const calls = m.provider ? turns[i] * (PER_TURN[depth] || 3) : 0
     const eur = calls * callCost(m.provider, 4000 + docTok + (mode === 'parallel' ? 0 : 1500), 700)
-    return { lane: m.lane, name: m.name, title: m.title, side: m.side, where: m.where, local: m.local, skipped: !m.provider, note: m.note, calls, eur: round2(eur) }
+    return { lane: m.lane, name: m.name, title: m.title, ...(m.titleDe ? { titleDe: m.titleDe } : {}), side: m.side, where: m.where, local: m.local, skipped: !m.provider, note: m.note, calls, eur: round2(eur) }
   })
   // The moderator: one call with the whole transcript (debate; parallel only when asked).
   let mod = null
@@ -203,7 +203,7 @@ function turnCitations(text, r) {
   const law = []
   for (const s of r?.sources || []) {
     if (!s || law.some((x) => (x.chunk_id && x.chunk_id === s.chunk_id) || (x.source_name === s.source_name && x.section === s.section))) continue
-    law.push({ kind: 'law', chunk_id: s.chunk_id || null, source_name: clip(s.source_name, 120), section: clip(s.section, 60), snippet: clip(s.snippet, 200) })
+    law.push({ kind: 'law', chunk_id: s.chunk_id || null, source_name: clip(s.source_name, 120), section: clip(s.section, 60), snippet: clip(s.snippet, 200), ...(s.origin ? { origin: s.origin } : {}), ...(s.from ? { from: clip(s.from, 60) } : {}), ...(s.fromDe ? { fromDe: clip(s.fromDe, 60) } : {}) })
   }
   const named = namedCitations(text).map((c) => ({ kind: 'named', text: c }))
   return [...law, ...named]
@@ -261,7 +261,7 @@ async function run(opts = {}) {
   const modMember = moderatorSpec && moderatorSpec !== 'judge' ? members([moderatorSpec], matterId)[0] : null
   const result = {
     id, at: new Date().toISOString(), mode, question: String(question).slice(0, 4000), matterId: matterId || null, rounds: mode === 'parallel' ? 1 : rounds,
-    members: all.map((m) => ({ lane: m.lane, name: m.name, title: m.title, side: m.side, where: m.where, local: m.local, ...(m.provider ? {} : { skipped: true }), ...(m.note ? { note: m.note } : {}) })),
+    members: all.map((m) => ({ lane: m.lane, name: m.name, title: m.title, ...(m.titleDe ? { titleDe: m.titleDe } : {}), side: m.side, where: m.where, local: m.local, ...(m.provider ? {} : { skipped: true }), ...(m.note ? { note: m.note } : {}) })),
     moderator: moderatorSpec ? { name: modMember ? modMember.name : 'judge', title: modMember ? modMember.title : 'The judge (second pass)' } : null,
     turns: [], summary: null, sources: [], stopped: false, notes: all.filter((m) => m.note).map((m) => m.note),
   }
@@ -311,7 +311,7 @@ async function run(opts = {}) {
       r = await policy.observeModels((ev) => { track(m.lane, ev); onEvent({ type: 'model', lane: m.lane, ...ev }) }, () => agents.run(m.agent, () => require('./agent').runAction(ctx, prompt, forward, { signal, agent: m.agent, prose: true, judge: false })))
     } catch (err) {
       if (err.code === 'SPEND_CAP') capHit = err.message
-      const t = { lane: m.lane, name: m.name, title: m.title, side: m.side, round, kind, text: '', error: require('./explain').friendly ? require('./explain').friendly(err) : err.message, citations: [] }
+      const t = { lane: m.lane, name: m.name, title: m.title, ...(m.titleDe ? { titleDe: m.titleDe } : {}), side: m.side, round, kind, text: '', error: require('./explain').friendly ? require('./explain').friendly(err) : err.message, citations: [] }
       lane(m, 'failed', `Could not answer: ${clip(t.error, 120)}`, { round })
       result.turns.push(t)
       return t
@@ -319,7 +319,7 @@ async function run(opts = {}) {
     const text = String(r.text || '').trim()
     const citations = turnCitations(text, r)
     const evidence = (r.evidence || []).map((x) => x.text)
-    const t = { lane: m.lane, name: m.name, title: m.title, side: m.side, round, kind, text, citations, ...(r.stopped ? { stopped: true } : {}), ...(!citations.length && kind !== 'draft' ? { noSource: true } : {}), _evidence: evidence }
+    const t = { lane: m.lane, name: m.name, title: m.title, ...(m.titleDe ? { titleDe: m.titleDe } : {}), side: m.side, round, kind, text, citations, ...(r.stopped ? { stopped: true } : {}), ...(!citations.length && kind !== 'draft' ? { noSource: true } : {}), _evidence: evidence }
     result.turns.push(t)
     onEvent({ type: 'panel_turn', lane: m.lane, round, kind, text, citations, ...(t.noSource ? { noSource: true } : {}), ...(r.stopped ? { stopped: true } : {}) })
     lane(m, r.stopped ? 'stopped' : 'done', r.stopped ? 'Stopped' : t.noSource ? 'Done — but it cited no source' : `Done${citations.length ? ` · ${citations.length} source${citations.length === 1 ? '' : 's'} cited` : ''}`, { round, ...(t.noSource ? { warn: true } : {}) })
@@ -388,7 +388,7 @@ function sourceList(turns) {
       const label = c.kind === 'law' ? [c.source_name, c.section].filter(Boolean).join(' ') : c.text
       const key = c.kind === 'law' ? (c.chunk_id || label) : label.toLowerCase()
       let s = out.find((x) => x.key === key)
-      if (!s) { s = { id: `S${out.length + 1}`, key, kind: c.kind, label, chunk_id: c.chunk_id || null, snippet: c.snippet || '', by: [] }; out.push(s) }
+      if (!s) { s = { id: `S${out.length + 1}`, key, kind: c.kind, label, chunk_id: c.chunk_id || null, snippet: c.snippet || '', ...(c.origin ? { origin: c.origin } : {}), ...(c.from ? { from: c.from } : {}), ...(c.fromDe ? { fromDe: c.fromDe } : {}), by: [] }; out.push(s) }
       if (!s.by.includes(t.title)) s.by.push(t.title)
     }
   }

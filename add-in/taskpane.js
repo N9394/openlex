@@ -2330,7 +2330,21 @@
     showMatterPolicy()
   }
 
+  /** The picker's face: the chosen matter's whole name ("2026-014 · Alpine shareholder …" wraps, never cut off at the pane's width). */
+  function showMatterFace() {
+    const face = $('#matterFace')
+    if (!face) return
+    const m = mattersCache.find((x) => x.id === $('#matterSel').value)
+    face.textContent = ''
+    face.classList.toggle('none', !m)
+    if (!m) { face.textContent = 'No matter'; $('#matterPick').title = 'No matter chosen. Choose the matter this document belongs to.'; return }
+    if (m.number) face.appendChild(el('span', 'matter-num', m.number))
+    face.appendChild(el('span', 'matter-name', m.title))
+    $('#matterPick').title = (m.number ? m.number + ' · ' : '') + m.title + (m.client ? ' — ' + m.client : '')
+  }
+
   function showMatterPolicy() {
+    showMatterFace()
     const m = mattersCache.find((x) => x.id === $('#matterSel').value)
     const b = $('#matterPolicy')
     b.textContent = m ? policyLabel(m) : ''
@@ -2375,7 +2389,7 @@
 
   function bindMatters() {
     const sel = $('#matterSel')
-    sel.addEventListener('change', () => { bindDocToMatter(sel.value).catch((err) => addError(err, 'settings')); refreshClauses() })
+    sel.addEventListener('change', () => { showMatterFace(); bindDocToMatter(sel.value).catch((err) => addError(err, 'settings')); refreshClauses() })
     $('#matterCancel').addEventListener('click', () => { $('#matterNew').hidden = true; $('#input').focus() })
     $('#matterPrivBtn').addEventListener('click', togglePrivileged)
     $('#matterCreate').addEventListener('click', async () => {

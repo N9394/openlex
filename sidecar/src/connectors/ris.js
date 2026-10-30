@@ -75,7 +75,7 @@ const connector = {
     const at = all.search(/(^|\n)Text\n/)
     const text = at >= 0 ? all.slice(at).replace(/^\n?Text\n/, '') : all
     const title = [name, section].filter(Boolean).join(' ') || id
-    return { ref: id, title, citation: connector.citation(id, { title }), url, text, inForceFrom: field('Inkrafttretensdatum'), ...(page.note ? { note: page.note } : {}) }
+    return { ref: id, title, citation: connector.citation(id, { title }), url, text, inForceFrom: field('Inkrafttretensdatum'), ...(page.note ? { note: page.note } : {}), ...(page.copiedAt ? { copiedAt: page.copiedAt } : {}) }
   },
 
   /** "ABGB § 933 (RIS, NOR12019008)". */

@@ -89,6 +89,16 @@ body {
 .accent { color: var(--brass); }
 .hdr-matter { display: flex; align-items: center; gap: 0.25rem; flex: 1; min-width: 0; }
 .matter-sel { flex: 1; min-width: 0; font-size: 0.75rem; padding: 0.25rem 0.4rem; }
+/* The matter picker: number above, the whole name below (it wraps); the native select lies invisibly on top. */
+.matter-pick { position: relative; flex: 1; min-width: 0; display: flex; align-items: center; min-height: 28px; padding: 0.2rem 1.35rem 0.2rem 0.5rem; background: var(--sunk); border: 1px solid var(--hairline-strong); border-radius: var(--r-btn); cursor: pointer; }
+.matter-pick::after { content: "▾"; position: absolute; right: 0.5rem; top: 50%; transform: translateY(-50%); font-size: 0.7rem; color: var(--text-faint); pointer-events: none; }
+.matter-pick:hover { border-color: var(--brass); }
+.matter-pick:has(.matter-sel:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
+.matter-face { display: flex; flex-direction: column; min-width: 0; font-size: 0.74rem; line-height: 1.25; color: var(--text); }
+.matter-face.none { color: var(--text-dim); }
+.matter-face .matter-num { font-size: 0.64rem; color: var(--text-faint); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.matter-face .matter-name { overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.matter-pick .matter-sel { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; opacity: 0; cursor: pointer; }
 .ai-badge { background: none; cursor: pointer; font-family: inherit; font-size: 0.68rem; color: var(--text-dim); border: 1px solid var(--hairline-strong); border-radius: 999px; padding: 0.1rem 0.55rem; min-height: 24px; min-width: 24px; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .status-msg { display: inline-flex; align-items: center; gap: 0.35rem; }
 .ai-badge.cloud { color: var(--warn); border-color: var(--warn); }

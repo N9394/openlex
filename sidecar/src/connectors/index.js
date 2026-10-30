@@ -367,7 +367,9 @@ async function get({ source, ref, article = null, lang = 'en', date = null } = {
   const blocked = offline ? null : await gate(c)
   if (blocked) throw new SourceError(`Not looked up: ${blocked}`, 'blocked')
   const doc = await run(c, () => c.get(String(ref).trim(), { article, lang, date }, { key, saveKey: saverOf(c.id) }))
-  return { ...withProvenance(c, doc, new Date().toISOString()), notice: NOTICE }
+  // `local`: read from the copy on this computer (a downloaded copy, or the
+  // copy RIS keeps of what was looked up before), not looked up online now.
+  return { ...withProvenance(c, doc, new Date().toISOString()), local: !!offline || !!doc?.copiedAt, ...(c.de?.label ? { sourceLabelDe: c.de.label } : {}), notice: NOTICE }
 }
 
 /** A citation for a reference, without going online. */
