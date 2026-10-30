@@ -3,7 +3,7 @@
 // (checkboxes in plain words), where it runs (the AI services set up in
 // /model) and how thorough it is. Saved in your openlex.json; with
 // "for the whole firm" in the firm's (the firm can lock the list).
-// Starts from a template (Claimant's counsel, Defendant's counsel, Devil's
+// Starts from a template (Claimant's side, Defendant's side, Devil's
 // advocate, Drafter, Researcher, Compliance checker), from an existing
 // agent (/agent edit NAME) or from this conversation (/agent from-chat).
 //

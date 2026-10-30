@@ -1069,7 +1069,7 @@
     "justNow": "gerade eben",
     "minAgo": "vor {{n}} Min.",
     "todayAt": "heute {{time}}",
-    "associate": "Associate",
+    "associate": "Assistenz",
     "noEngine": "Der Chat braucht die OpenLex-Engine, die mit der Desktop-App läuft.",
     "stillWriting": "Die Antwort wird noch geschrieben. Warten Sie darauf (oder klicken Sie auf „Anhalten“) und fragen Sie dann erneut. Befehle wie /model funktionieren währenddessen.",
     "aboutFile": "Bitte sehen Sie sich die angehängte Datei an.",
@@ -1880,12 +1880,12 @@
     "noConnectors": "Keine Anbindungen. MCP-Server fügen Sie in Word unter Einstellungen → Erweitert → Anbindungen hinzu, oder in ~/.lexvault/mcp-servers.json."
   },
   "agents": {
-    "associate": "Juristischer Mitarbeiter",
+    "associate": "Assistenz",
     "researcher": "Recherche",
     "reviewer": "Prüfer",
     "drafter": "Entwurfsverfasser",
-    "claimant-counsel": "Klägervertretung",
-    "defendant-counsel": "Beklagtenvertretung",
+    "claimant-counsel": "Klägerseite",
+    "defendant-counsel": "Beklagtenseite",
     "devils-advocate": "Advocatus Diaboli",
     "compliance-checker": "Compliance-Prüfung"
   },

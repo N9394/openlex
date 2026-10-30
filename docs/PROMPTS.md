@@ -24,7 +24,7 @@ Items 1–4 change rarely, so hosted providers can cache them. Turn-specific tex
 
 | Block | Gets added when | What it says |
 |---|---|---|
-| `core` | always | Associate role; only the document and retrieved law; never invent statutes; cite by name and section; answer in the document's language |
+| `core` | always | Assistant role (prepares, the lawyer decides; no legal advice); only the document and retrieved law; never invent statutes; cite by name and section; answer in the document's language |
 | `ranking` | intent `ranking` | Ranking and comparison tasks get a ranked list in prose, not suggestions |
 | `notes` | after reading a clause (`get_range_text`, `get_clause_analysis`) | Take notes with `remember` so the lawyer gets bookmarks |
 | `preread` | intent `rewrite`, while planning and analysing | Use the pre-read clauses; search the law before rewriting |

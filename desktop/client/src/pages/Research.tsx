@@ -142,7 +142,7 @@ export default function Research() {
   const loadGen = useRef(0)
 
   const agentName = (matter ? matter.agent : quickAgent) || 'associate'
-  const agent = agents.find((a) => a.name === agentName) || { name: 'associate', title: t('chat.associate', 'Associate') }
+  const agent = agents.find((a) => a.name === agentName) || { name: 'associate', title: t('chat.associate', 'Assistant') }
 
   // ── setup: matter, roles, which AI ──
   const refreshSetup = useCallback(async () => {
