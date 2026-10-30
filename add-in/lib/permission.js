@@ -45,7 +45,9 @@
   /** The line under the question: what it would do and that nothing happens until answered. */
   function riskLine(evt) {
     const e = evt || {}
-    return `${RISK_WORDS[e.risk] || 'It would change something.'}${e.firmRule ? ' Your firm asks for confirmation here.' : ''} Nothing happens until you choose.`
+    // Prompt injection: why this is asked although a rule may allow it.
+    const guard = [e.warning, e.caution].filter(Boolean).map((x) => String(x).trim()).join(' ')
+    return `${guard ? guard + ' ' : ''}${RISK_WORDS[e.risk] || 'It would change something.'}${e.firmRule ? ' Your firm asks for confirmation here.' : ''} Nothing happens until you choose.`
   }
 
   /** What the card says once answered. */

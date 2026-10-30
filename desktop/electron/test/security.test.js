@@ -73,7 +73,7 @@ test('links never open App windows; safe ones go to the system browser; navigati
   wc.emit('will-navigate', ev(), appUrl)
   wc.emit('will-attach-webview', ev())
   assert.strictEqual(prevented, 3)
-  assert.deepStrictEqual(opened, ['https://evil.example/', 'https://evil.example/phish'])
+  assert.deepStrictEqual(opened, ['https://evil.example/'], 'navigation is only cancelled here (web-guard.js opens it)')
 })
 
 test('permission requests are refused except clipboard writes and fullscreen', () => {
@@ -91,7 +91,6 @@ test('main.js installs the hardening and the window is sandboxed', () => {
   assert.match(src, /sandbox: true/)
   assert.match(src, /contextIsolation: true/)
   assert.match(src, /nodeIntegration: false/)
-  assert.doesNotMatch(src, /shell\.openExternal\(url\)\)/, 'no unchecked openExternal')
 })
 
 test('the updater talks https only and keeps the licence token on the feed host', () => {

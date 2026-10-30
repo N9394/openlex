@@ -82,7 +82,8 @@ jobs:
           echo "first $first"; echo "second $second"
           [ "$first" = "$second" ] || { echo "::error::the CLI tarball is not reproducible"; exit 1; }
 
-  # The desktop app's screens: TypeScript build, then a layout check in
+  # The desktop app's screens: TypeScript build, the client tests (answers
+  # load nothing remote, the page's Content-Security-Policy), then a layout check in
   # headless Chromium at 1366×768, 1024×768 and 800×900 (English and German):
   # no sideways scroll, the last sidebar entry reachable, the question field
   # at least 320 px wide (desktop/client/e2e/layout-check.mjs; fake model).
@@ -110,6 +111,10 @@ jobs:
       - name: Build the client
         working-directory: desktop/client
         run: npm run build
+      # Answers never load remote images; the built page carries the CSP.
+      - name: Client tests (safe Markdown, Content-Security-Policy)
+        working-directory: desktop/client
+        run: npm test
       - name: Install Chromium for the check
         working-directory: sidecar
         run: npx playwright-core install --with-deps chromium

@@ -58,7 +58,7 @@ const engine = http.createServer((req, res) => {
     res.on('close', () => ac.abort())
     const { runAction } = require('../src/agent')
     const { Document } = require('../src/doc')
-    const ctx = { doc: new Document('§ 1 The Seller shall deliver.', `d-${Math.random()}`), memory: null, session: null, summary: () => '' }
+    const ctx = { doc: new Document(body.doc ?? '§ 1 The Seller shall deliver.', `d-${Math.random()}`), memory: null, session: null, summary: () => '' }
     const sess = { ask: body.interactive ? (e) => sseWrite(res, e) : null, signal: ac.signal, allow: body.allow || [], yes: !!body.yes, timeoutMs: body.timeoutMs }
     try {
       const r = await perms.session(sess, () => policy.withMatter(body.matterId || null, () => runAction(ctx, body.message, (e) => sseWrite(res, e), { signal: ac.signal })))
@@ -197,10 +197,18 @@ test('ask → "Always allow": saved to the user layer, not asked again', async (
   replies.push(writeCall('Acme/a1.csv'), 'ok')
   await chat({ message: 'Export', interactive: true }, () => 'always')
   assert.deepStrictEqual(userLayer().permissions.allow, ['write_file'])
+  // No document open: the rule applies.
   replies.push(writeCall('Beta/a2.csv'), 'ok')
-  const evs = await chat({ message: 'Export again', interactive: true }, () => { throw new Error('must not ask') })
+  const evs = await chat({ message: 'Export again', interactive: true, doc: '' }, () => { throw new Error('must not ask') })
   assert.ok(!evs.some((e) => e.type === 'permission'))
   assert.ok(fs.existsSync(path.join(WS, 'Beta', 'a2.csv')))
+  // A document was read and the file goes outside the matter folder: asked
+  // again despite the general rule, and the question says why (prompt injection).
+  replies.push(writeCall('Beta/a3.csv'), 'ok')
+  const evs2 = await chat({ message: 'Export again', interactive: true }, () => 'once')
+  const ev = evs2.find((e) => e.type === 'permission')
+  assert.ok(ev, 'asked')
+  assert.match(ev.caution, /while reading a document/)
 })
 
 test('ask → "Always allow (this matter)": only for that matter', async () => {

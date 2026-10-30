@@ -9,8 +9,8 @@
  *
  * - window.open / target=_blank: never a new App window; http(s) and
  *   mailto links open in the system browser.
- * - navigation away from the App's pages is cancelled (the link opens in
- *   the system browser instead); <webview> is never attached.
+ * - navigation away from the App's pages is cancelled (web-guard.js opens
+ *   the link in the system browser); <webview> is never attached.
  * - shell.openExternal only for http(s) and mailto (no file:, smb:,
  *   custom app protocols that can start programs).
  * - every ipcMain.handle checks that the caller is the App's own top-level
@@ -89,10 +89,11 @@ function hardenContents(contents, { shell, ...opts }) {
     openExternalSafe(shell, url)
     return { action: 'deny' }
   })
+  // Cancel only: the main window's web-guard.js opens a cancelled link in
+  // the browser (two listeners opening it would open it twice).
   const stay = (event, url) => {
     if (isAppUrl(url, opts)) return
     event.preventDefault()
-    openExternalSafe(shell, url)
   }
   contents.on('will-navigate', stay)
   contents.on('will-redirect', stay)
