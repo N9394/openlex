@@ -61,9 +61,12 @@ function ngrams(text, { max = 4000 } = {}) {
     while (words.length && (STOP.has(words[0]) || new RegExp(`^${PARTICLE}$`).test(words[0]))) { start += words[0].length + 1; words = words.slice(1) }
     while (words.length && STOP.has(words[words.length - 1])) words = words.slice(0, -1)
     if (!words.length) continue
+    // A sentence's first word is capitalised anyway: it does not count ("Kann Huber …" → "Huber").
+    // Names at a sentence start are still proposed by the first-name source and the lists.
+    if (sentenceStart(text, start)) { start += words[0].length + 1; words = words.slice(1) }
+    if (!words.length) continue
     const value = words.join(' ')
     if (value.length < 3) continue
-    if (words.length === 1 && sentenceStart(text, start)) continue
     out.push({ kind: 'OTHER', start, end: start + value.length, confidence: 0.3 })
     if (out.length >= max) break
   }

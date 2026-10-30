@@ -122,6 +122,7 @@ async function prepare({ matterId = null, items = [], signal } = {}) {
       try {
         const r = await v2.findings(it.text, { terms: [...terms, ...extraTerms], keep, patterns, cache, signal })
         if (r.stats.partial) partial = true
+        if (r.stats.failed) { console.warn('[redaction] decision model unavailable, basic detection used'); detection = 'basic' }
         return r.findings
       } catch (err) { console.warn('[redaction] decision model failed, basic detection used:', err.message); detection = 'basic'; partial = true }
     }

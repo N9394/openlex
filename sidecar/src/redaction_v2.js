@@ -71,7 +71,7 @@ function context(text, start, end) {
  *   terms, keep, patterns   as for pii_detect.scan
  *   cache                   Map norm(text) → decision, shared across the documents of one check
  *   signal
- * @returns {Promise<{ findings, stats: { candidates, asked, automated, escalated, dropped, partial, sources } }>}
+ * @returns {Promise<{ findings, stats: { candidates, asked, automated, escalated, dropped, partial, failed?, sources } }>}
  */
 async function findings(text, { terms = [], keep = [], patterns = [], cache = new Map(), signal } = {}) {
   text = String(text || '')
@@ -108,7 +108,7 @@ async function findings(text, { terms = [], keep = [], patterns = [], cache = ne
     if (signal?.aborted) break
     const part = keys.slice(i, i + BATCH)
     const res = await tasks.classifyCandidates(part.map((k) => todo.get(k)), { signal })
-    if (!res) { stats.partial = true; break }
+    if (!res) { stats.partial = true; stats.failed = true; break } // the model failed: what is left is version 1
     part.forEach((k, j) => { if (res[j]) cache.set(k, res[j]) })
   }
   stats.asked = keys.length

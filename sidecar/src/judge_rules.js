@@ -71,7 +71,7 @@ function dates(text) {
 
 // ── section references ───────────────────────────────────────────────────
 // § 16, §§ 16 und 17, § 16a, Art. 6, Article 6(1), Artikel 6, čl. 6, art. 6, Section 16, Sec. 16.
-const SEC_RE = /(§§?|\b(?:Art(?:\.|ikel|icle|icolo|ículo|icolul|ykuł|\.)?|čl\.|Čl\.|článek|článok|cikk|Section|Sec\.|Rule|Regulation))\s*(\d+[a-z]?)((?:\s*(?:,|und|and|a|i|és|și|et|bis|to|-|–)\s*\d+[a-z]?)*)/giu
+const SEC_RE = /(§§?|(?<![\p{L}])(?:Art(?:\.|ikel|icle|icolo|ículo|icolul|ykuł|\.)?|čl\.|Čl\.|článek|článok|cikk|Section|Sec\.|Rule|Regulation))\s*(\d+[a-z]?)((?:\s*(?:,|und|and|a|i|és|și|et|bis|to|-|–)\s*\d+[a-z]?)*)/giu
 function sections(text) {
   const out = []
   for (const m of String(text).matchAll(SEC_RE)) {
@@ -144,6 +144,12 @@ function valueSet(texts) {
   return all
 }
 
+const UNIT_AFTER = /^\s?(?:%|‰|€|\$|£|eur|euro|chf|czk|kč|pln|zł|ron|lei|huf|ft|usd|gbp|days?|weeks?|months?|years?|hours?|tage?n?|wochen?|monate?n?|jahre?n?|stunden?|werktage?n?|jours?|mois|ans?|semaines?|dn[íůy]|dní|týdn[ůy]|měsíc[eůí]?|mesiac[eov]?|rok[uy]?|let|dni|tygodni[e]?|miesi[ęą]c[ey]?|lat|zile|luni|ani|nap|hét|hónap|év)\b/iu
+const UNIT_BEFORE = /(?:€|\$|£|eur|euro|chf|czk|pln|ron|huf|usd|gbp)\s?$/iu
+function unitAround(text, n) {
+  return UNIT_AFTER.test(text.slice(n.end, n.end + 14)) || UNIT_BEFORE.test(text.slice(Math.max(0, n.start - 6), n.start))
+}
+
 const WORDS = {
   number: (v) => `The number “${v}” does not appear in the cited source.`,
   date: (v) => `The date “${v}” does not appear in the cited source.`,
@@ -172,8 +178,9 @@ function mismatches(claim, sources, { ignore = [], max = 12 } = {}) {
     if (missing.length) add('section', s.text)
   }
   for (const n of c.numbers) {
-    // Single digits ("2 parties", "1." list markers) are too common to be worth a flag.
-    if (n.values.every((v) => Number.isInteger(v) && v < 10)) continue
+    // Single digits ("2 parties", "1." list markers) are too common to be worth a flag — unless they
+    // carry a unit or a currency ("6 Monate", "3 %", "EUR 5"): periods and amounts matter.
+    if (n.values.every((v) => Number.isInteger(v) && v < 10) && !unitAround(claim, n)) continue
     if (!n.values.some((v) => known.numbers.has(String(v)))) add('number', n.text)
   }
   return out
