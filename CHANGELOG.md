@@ -4,6 +4,10 @@ All notable changes to OpenLex are listed here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-10-30
+
+(0.3.2 was built but not published; its changes are in the 0.3.2 section below and ship with this release.)
+
 ### Fixed
 - **The bundled search database (Qdrant) no longer sends usage statistics.** Qdrant reports anonymous telemetry by default; OpenLex now starts it with telemetry disabled (config and environment), in the engine and the desktop app.
 
