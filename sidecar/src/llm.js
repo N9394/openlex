@@ -120,12 +120,22 @@ async function cloudCall(kind, messages, opts, run, provider, routeReason) {
   const out = compact(messages, opts.maxTokens || AGENT.GENERATION_MAX_TOKENS)
   if (out.compacted) opts.onCompacted?.(out.compacted)
   const { key, matter } = await prepare(p, kind)
-  // Redact-before-send when the matter's policy asks for it: placeholders
-  // go out, the reply (and every streamed token) is restored locally.
-  const red = require('./redact').forMatter(matter)
+  // The redaction check: in a checked request nothing goes online before
+  // the lawyer confirmed what is hidden (redaction_check.js).
+  const check = require('./redaction_check')
+  if (!p.local) {
+    try { check.assertChecked(matter) } catch (err) {
+      policy.audit({ provider: p.id, model: p.model || null, matter, call: kind, decision: 'blocked', reason: 'redaction check not done' })
+      throw err
+    }
+  }
+  // Redact-before-send: placeholders go out, the reply (and every streamed
+  // token) is restored locally.
+  const red = p.local ? null : require('./redact').forMatter(matter)
   const messagesOut = red ? red.redactMessages(out.messages) : out.messages
   const restorer = red && opts.onContent ? red.streamRestorer(opts.onContent) : null
-  reportModel({ provider: p.id, label: p.label || p.id, model: p.model || null, local: !!p.local, region: p.region || null, redacted: !!red }, opts)
+  const note = red ? check.callNote() : null
+  reportModel({ provider: p.id, label: p.label || p.id, model: p.model || null, local: !!p.local, region: p.region || null, redacted: !!red, ...(note && note.check !== 'automatic' ? { checked: true } : {}) }, opts)
   // Native tool calling (hosted models): agent phases get real tool
   // definitions. Not on calls that stream prose to the pane — a hosted
   // model's "Let me check…" preamble before a tool call would leak into
@@ -153,7 +163,7 @@ async function cloudCall(kind, messages, opts, run, provider, routeReason) {
       r = { ...r, content: red.restore(r.content), reasoning: red.restore(r.reasoning) }
     }
     try { require('./spend').record({ provider: p.id, model: p.model || null, matterId: matter, usage: r.usage || null, inChars: chars(messagesOut), outChars: (r.content || '').length + (r.reasoning || '').length, local: !!p.local }) } catch (err) { console.warn('[spend] not recorded:', err.message) }
-    policy.audit({ provider: p.id, model: p.model || null, ...(p.region ? { region: p.region } : {}), matter, call: kind, ...(opts.role || opts.phase ? { role: opts.role || routing.PHASE_ROLE[opts.phase] || opts.phase } : {}), ...(routeReason ? { route: routeReason } : {}), decision: 'allowed', ok: true, ms: Date.now() - t0, inChars: chars(messagesOut), outChars: (r.content || '').length, ...(red ? { redacted: red.replaced } : {}) })
+    policy.audit({ provider: p.id, model: p.model || null, ...(p.region ? { region: p.region } : {}), matter, call: kind, ...(opts.role || opts.phase ? { role: opts.role || routing.PHASE_ROLE[opts.phase] || opts.phase } : {}), ...(routeReason ? { route: routeReason } : {}), decision: 'allowed', ok: true, ms: Date.now() - t0, inChars: chars(messagesOut), outChars: (r.content || '').length, ...(red ? { redacted: red.replaced, hidden: red.hidden, ...note } : {}) })
     return r
   } catch (err) {
     policy.audit({ provider: p.id, model: p.model || null, matter, call: kind, decision: 'allowed', ok: false, ms: Date.now() - t0, inChars: chars(out.messages), error: String(err.message).slice(0, 200) })

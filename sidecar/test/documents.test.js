@@ -83,6 +83,8 @@ test.before(async () => {
   settings.update({ active: 'openai' })
   policy = require('../src/policy')
   policy.setRule(null, { mode: 'allow-list', providers: ['openai'] })
+  // The redaction check has its own tests (redaction.test.js).
+  require('../src/redaction_check').setCheck(false)
   require('../src/workspace').setBase(path.join(DATA, 'workspace'))
   matterId = require('../src/matters').create({ title: 'Shop contract', number: '2026-77' }).id
   require('../src/analysis').setLawSources(sources)

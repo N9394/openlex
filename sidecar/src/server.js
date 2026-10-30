@@ -214,6 +214,21 @@ function sendJson(res, code, obj) {
   res.end(body)
 }
 
+/**
+ * The redaction check for an entry point (redaction_check.js): null after
+ * telling the window a check is due (the request ends), else the gate to
+ * run the work within.
+ */
+function redactionGate(res, matterId, body) {
+  const check = require('./redaction_check')
+  const g = check.gate(matterId || null, body.redactionCheck)
+  if (!g.block) return g
+  sendSse(res, { type: 'redaction_check', matterId: matterId || null })
+  sendSse(res, { type: 'error', code: 'CHECK_NEEDED', message: 'Please check what is hidden before this goes to the online AI (redaction check), then send again.' })
+  res.end()
+  return null
+}
+
 function sendSse(res, event) {
   // Client disconnected mid-stream (pane closed, Word reloaded): writes to
   // a destroyed socket can raise an 'error' on the response — one unhandled
@@ -291,6 +306,8 @@ async function runPanel(req, res) {
   if (!question) { sendSse(res, { type: 'error', message: 'What should the panel answer? Type the question.' }); return res.end() }
   const ready = await engineReady()
   if (!ready?.ok) { sendSse(res, { type: 'error', message: `model unavailable: ${ready.reason}` }); return res.end() }
+  const rgate = redactionGate(res, matterId, body)
+  if (!rgate) return
   const ac = new AbortController()
   res.on('close', () => ac.abort())
   const asked = String(body.message || `/team ${body.mode} ${question}`).slice(0, 2000)
@@ -308,9 +325,9 @@ async function runPanel(req, res) {
   sendSse(res, { type: 'panel_estimate', estimate: est })
   const makeContext = () => { const doc = new Document(docText, `panel:${matterId || 'quick'}`); return { doc, memory: null, session: null, search, embeddings, summary: () => doc.summary() } }
   try {
-    const r = await rec.run(() => require('./folder').run(folderDir, () => require('./permissions').session(permissionSession(body, res, ac.signal), () => policy.withMatter(matterId, () => panel.run({
+    const r = await rec.run(() => require('./folder').run(folderDir, () => require('./permissions').session(permissionSession(body, res, ac.signal), () => require('./redaction_check').within(rgate, () => policy.withMatter(matterId, () => panel.run({
       mode: body.mode, agents: body.agents, question, rounds: body.rounds, moderator: body.moderator || null, matterId, makeContext, signal: ac.signal, onEvent: out, concurrency: body.concurrency,
-    })))))
+    }))))))
     const md = panel.toMarkdown(r)
     out({ type: 'text', text: md })
     if (body.sessionId) {
@@ -1154,6 +1171,53 @@ async function handle(req, res) {
       }
     }
 
+    // ── Redaction check (redaction_check.js): what is hidden before online AI ──
+    if (p === '/api/redaction' || p.startsWith('/api/redaction/')) {
+      const check = require('./redaction_check')
+      const ner = require('./pii_ner')
+      try {
+        if (req.method === 'GET' && p === '/api/redaction') {
+          const matterId = url.searchParams.get('matterId') || null
+          return sendJson(res, 200, { settings: check.settings(), needed: check.needed(matterId), model: ner.status(), patterns: require('./pii_patterns').describe(url.searchParams.get('lang') || 'en') })
+        }
+        if (req.method !== 'POST') return sendJson(res, 405, { error: 'POST only' })
+        const body = await readBody(req, 60)
+        if (p === '/api/redaction/check') {
+          // The question and the documents that would go online: the window shows them with the findings.
+          const matterId = body.matterId || (body.docId ? matterIdFor(body, getDoc(body)) : null)
+          const n = check.needed(matterId)
+          if (!n.needed) return sendJson(res, 200, { needed: false, ...n })
+          const items = []
+          if (typeof body.message === 'string' && body.message.trim()) items.push({ name: body.messageName || 'Your question', text: body.message })
+          if (typeof body.text === 'string' && body.text.trim()) items.push({ name: body.name || 'The document', text: body.text })
+          const at = require('./attachments')
+          for (const id of (Array.isArray(body.attachments) ? body.attachments : []).filter((x) => typeof x === 'string').slice(0, 50)) {
+            try { items.push({ name: at.meta(id).name, text: at.text(id) }) } catch { /* gone: the turn says so */ }
+          }
+          for (const f of (Array.isArray(body.files) ? body.files : []).filter((x) => typeof x === 'string').slice(0, 50)) {
+            try {
+              require('./workspace').setBase(require('./agent-config').load().workspace)
+              const r = await require('./read').readDocument({ file: require('./workflows_docs').resolveDoc(matterId, f), name: path.basename(f) }, { ocr: false })
+              items.push({ name: r.name, text: r.text })
+            } catch { /* not readable here: the run reports it */ }
+          }
+          const review = await check.prepare({ matterId, items })
+          return sendJson(res, 200, { needed: true, review: check.view(review, { lang: body.lang || 'en' }) })
+        }
+        if (p === '/api/redaction/confirm') return sendJson(res, 200, check.confirm(body.id, body))
+        if (p === '/api/redaction/cancel') return sendJson(res, 200, check.cancel(body.id))
+        if (p === '/api/redaction/settings') { const st = check.setCheck(body.check !== false); hub.publish('policy-changed', {}, clientOf(req)); return sendJson(res, 200, { settings: st }) }
+        if (p === '/api/redaction/model') {
+          if (body.action === 'remove') return sendJson(res, 200, { model: ner.remove() })
+          ner.install().catch((err) => console.warn('[redaction] model download failed:', err.message))
+          return sendJson(res, 200, { model: ner.status() })
+        }
+        return sendJson(res, 404, { error: 'not found' })
+      } catch (err) {
+        return sendJson(res, err.code === 'CHECK_EXPIRED' ? 410 : 400, { error: err.message, ...(err.code ? { code: err.code } : {}) })
+      }
+    }
+
     // ── Data policy (where client data may go, per matter) ──────────────
     if (req.method === 'GET' && p === '/api/policy') {
       return sendJson(res, 200, { ...policy.load(), modes: policy.MODES, auditLog: policy.AUDIT_PATH })
@@ -1401,8 +1465,10 @@ async function handle(req, res) {
       const sections = map.sections.slice(0, 30)
       if (map.sections.length > sections.length) sendSse(res, { type: 'warning', message: `This document has ${map.sections.length} parts; the review covers the first ${sections.length}.` })
       const mid = matterIdFor(body, entry)
+      const rgate = redactionGate(res, mid, body)
+      if (!rgate) return
       let comments = 0
-      await require('./permissions').session(permissionSession(body, res, ac.signal), () => policy.observeModels((m) => sendSse(res, { type: 'model', ...m }), async () => {
+      await require('./permissions').session(permissionSession(body, res, ac.signal), () => require('./redaction_check').within(rgate, () => policy.observeModels((m) => sendSse(res, { type: 'model', ...m }), async () => {
         for (const [position, s] of sections.entries()) {
           if (ac.signal.aborted) break
           sendSse(res, { type: 'step', text: `analyzing § ${s.heading || s.index + 1}…`, kind: 'clause', position, total: sections.length, detail: { clause: { index: s.index, heading: s.heading || '' } } })
@@ -1411,9 +1477,10 @@ async function handle(req, res) {
             for (const sug of r.suggestions) { comments++; sendSse(res, { type: 'suggestion', suggestion: { ...sug, clause: { index: s.index, heading: s.heading || '', position } } }) }
           } catch (err) {
             sendSse(res, { type: 'error', message: `section ${s.index}: ${err.message}`, clause: { index: s.index, heading: s.heading || '' }, recoverable: true })
+            if (err.code === 'CHECK_NEEDED') break
           }
         }
-      }))
+      })))
       sendSse(res, { type: 'done', comments, stopped: ac.signal.aborted, total: sections.length })
       return res.end()
     }
@@ -1489,6 +1556,8 @@ async function handle(req, res) {
       try { names = [...attachments.map((id) => require('./attachments').meta(id).name), ...files.map((f) => path.basename(String(f)))] } catch (err) { sendSse(res, { type: 'error', message: err.message }); return res.end() }
       if (!names.length && !body.text) { sendSse(res, { type: 'error', message: 'Attach a document (or name one of the matter) to analyse.' }); return res.end() }
       const asked = String(body.message || `/analyse ${names.join(', ')}`).slice(0, 2000)
+      const rgate = redactionGate(res, matterId, body)
+      if (!rgate) return
       const rec = require('./activity').start({ matterId, kind: 'analyse', asked, client: clientOf(req), files: names })
       const turn = { data: [], sources: [] }
       const out = (e) => {
@@ -1502,10 +1571,10 @@ async function handle(req, res) {
       }
       const steps = require('./analysis').stepWords
       try {
-        const r = await rec.run(() => require('./folder').run(folderDir, () => require('./permissions').session(permissionSession(body, res, ac.signal), () => policy.observeModels((m) => out({ type: 'model', ...m }), () => policy.withMatter(matterId, () => require('./analysis').runAnalyse({
+        const r = await rec.run(() => require('./folder').run(folderDir, () => require('./permissions').session(permissionSession(body, res, ac.signal), () => require('./redaction_check').within(rgate, () => policy.observeModels((m) => out({ type: 'model', ...m }), () => policy.withMatter(matterId, () => require('./analysis').runAnalyse({
           matterId, attachments, files, text: body.text, name: body.name, focus: body.focus, signal: ac.signal,
           onProgress: (ev) => out({ type: 'step', kind: 'analyse', plain: steps(ev), ...ev }),
-        }))))))
+        })))))))
         for (const a of r.analyses) out({ type: 'analysis', analysis: a })
         const text = r.analyses.map((a) => require('./analysis').brief(a)).join('\n\n')
         if (body.sessionId && r.analyses.length) {
@@ -1616,6 +1685,9 @@ async function handle(req, res) {
           if (inv) { skill = inv.skill; body.message = inv.message || `Apply the "${inv.skill.title}" skill to this document.` }
         }
       } catch (err) { sendSse(res, { type: 'error', message: err.message }); return res.end() }
+      // The redaction check: before anything goes to an online AI, the lawyer saw what is hidden.
+      const rgate = redactionGate(res, matterIdFor(body, entry), body)
+      if (!rgate) return
       // Activity record (GET /api/activity) + `model` events (where the data went).
       const rec = require('./activity').start({ matterId: matterIdFor(body, entry), kind: 'question', asked: body.message, client: clientOf(req), files: Array.isArray(body.files) ? body.files : [] })
       // What the answer was based on and where its data went, kept with the conversation.
@@ -1643,7 +1715,7 @@ async function handle(req, res) {
       if (agent && agent.name !== 'associate') sendSse(res, { type: 'agent', name: agent.name, title: agent.title, ...(agent.de?.title ? { titleDe: agent.de.title } : {}) })
       if (skill) sendSse(res, { type: 'skill', name: skill.name, title: skill.title })
       else if (body.suggestSkill !== false) {
-        const hint = await rec.run(() => policy.withMatter(matterIdFor(body, entry), () => skillsMod.suggest(body.message).catch(() => null)))
+        const hint = await rec.run(() => require('./redaction_check').within(rgate, () => policy.withMatter(matterIdFor(body, entry), () => skillsMod.suggest(body.message).catch(() => null))))
         if (hint) sendSse(res, { type: 'skill_suggestion', ...hint })
       }
       // Stop support (Batch 1.3): when the pane aborts the SSE fetch, stop
@@ -1655,7 +1727,7 @@ async function handle(req, res) {
       try {
         // Permissions: an interactive front end answers "may OpenLex …?"
         // questions on this stream; anything else fails closed (deny).
-        const r = await rec.run(() => require('./folder').run(folderDir, () => require('./permissions').session(permissionSession(body, res, ac.signal), () => policy.observeModels((m) => out({ type: 'model', ...m }), () => policy.withMatter(matterIdFor(body, entry), () => agentsMod.run(agent, () => runAction(context, body.message, out, { signal: ac.signal, skill, agent })))))))
+        const r = await rec.run(() => require('./folder').run(folderDir, () => require('./permissions').session(permissionSession(body, res, ac.signal), () => require('./redaction_check').within(rgate, () => policy.observeModels((m) => out({ type: 'model', ...m }), () => policy.withMatter(matterIdFor(body, entry), () => agentsMod.run(agent, () => runAction(context, body.message, out, { signal: ac.signal, skill, agent }))))))))
         // Conversation memory: persist the exchange (best-effort; the
         // model's streamed prose already went out token-by-token).
         keep(ac.signal.aborted ? shown : r.text, ac.signal.aborted || !!r.stopped)

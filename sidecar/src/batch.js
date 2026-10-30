@@ -197,7 +197,10 @@ function summary(job) {
 }
 
 /** Start a batch. A cloud run above the estimate threshold needs confirmed: true (the window asked). */
-async function start({ files, folder, attachments, matterId = null, confirmed = false, focus = '', kind = 'analyse', options = {}, sessionId = null, message = '' } = {}) {
+async function start({ files, folder, attachments, matterId = null, confirmed = false, focus = '', kind = 'analyse', options = {}, sessionId = null, message = '', redactionCheck = null } = {}) {
+  // The redaction check covers every document of the run, before it starts.
+  const gate = require('./redaction_check').gate(matterId, redactionCheck)
+  if (gate.block) { const e = new Error('Please check what is hidden before these documents go to the online AI (redaction check).'); e.code = 'CHECK_NEEDED'; throw e }
   const est = await estimate({ files, folder, attachments, matterId, kind })
   if (est.needsConfirm && confirmed !== true) {
     const e = new Error(`Please confirm first: ${est.sentence}`)
@@ -211,6 +214,8 @@ async function start({ files, folder, attachments, matterId = null, confirmed = 
     matterId, focus: String(focus || '').slice(0, 300), createdAt: new Date().toISOString(), state: 'running',
     estimate: { pages: est.pages, tokens: est.tokens, cost: est.cost, service: est.service, sentence: est.sentence },
     files: est.files.map((f) => ({ file: f.file, name: f.name, pages: f.pages, status: f.skip ? 'skipped' : 'waiting', ...(f.note ? { note: f.note } : {}) })),
+    // What the lawyer decided in the check (kept with the job on this computer, for a resumed run).
+    ...(gate.review ? { redaction: { status: 'confirmed', changed: !!gate.review.changed, terms: gate.review.terms || [], keep: gate.review.keep || [] } } : {}),
   }
   // A kind may prepare the run (diligence: the review grid for these documents).
   const K = kindOf(kind)
@@ -246,7 +251,7 @@ function run(id) {
             job.state = 'finishing'
             save(job)
             try {
-              const result = await policy.withMatter(job.matterId, () => K.finish(job, ac.signal))
+              const result = await (job.redaction ? policy.withRedaction({ gated: true, review: job.redaction }, () => policy.withMatter(job.matterId, () => K.finish(job, ac.signal))) : policy.withMatter(job.matterId, () => K.finish(job, ac.signal)))
               const fresh = load(id)
               if (ac.signal.aborted) { fresh.state = 'stopped'; save(fresh); break }
               fresh.result = result
@@ -271,7 +276,8 @@ function run(id) {
         job.state = 'running'
         save(job)
         try {
-          const r = await policy.withMatter(job.matterId, () => K.one({ matterId: job.matterId, ...(next.file.startsWith('att:') ? { attachments: [next.file.slice(4)] } : { file: next.file }), name: next.name, focus: job.focus, options: job.options || {}, job, signal: ac.signal }))
+          const checked = (fn) => (job.redaction ? policy.withRedaction({ gated: true, review: job.redaction }, fn) : fn())
+          const r = await checked(() => policy.withMatter(job.matterId, () => K.one({ matterId: job.matterId, ...(next.file.startsWith('att:') ? { attachments: [next.file.slice(4)] } : { file: next.file }), name: next.name, focus: job.focus, options: job.options || {}, job, signal: ac.signal })))
           const fresh = load(id)
           const f = fresh.files.find((x) => x.file === next.file)
           // Stopped while this document was read: it is read again on resume (a partial analysis is not "done").
@@ -284,7 +290,7 @@ function run(id) {
           if (ac.signal.aborted) f.status = 'waiting'
           else Object.assign(f, { status: 'failed', note: String(err.message).split('\n')[0].slice(0, 300) })
           // The data policy forbids the service: stop the whole run (every file would fail the same way).
-          if (err.code === 'POLICY_BLOCKED' || /data policy/i.test(err.message)) { fresh.state = 'stopped'; fresh.note = String(err.message).slice(0, 300); save(fresh); break }
+          if (err.code === 'POLICY_BLOCKED' || err.code === 'CHECK_NEEDED' || /data policy/i.test(err.message)) { fresh.state = 'stopped'; fresh.note = String(err.message).slice(0, 300); save(fresh); break }
           save(fresh)
         }
       }
@@ -351,6 +357,7 @@ async function handle(method, p, params, body = {}) {
     return null
   } catch (err) {
     if (err.code === 'CONFIRM') return { status: 409, json: { error: err.message, confirm: true, estimate: err.estimate } }
+    if (err.code === 'CHECK_NEEDED') return { status: 409, json: { error: err.message, code: 'CHECK_NEEDED', redactionCheck: true } }
     return { status: 400, json: { error: err.message } }
   }
 }

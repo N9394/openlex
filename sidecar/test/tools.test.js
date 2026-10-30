@@ -124,6 +124,8 @@ test.before(async () => {
   settings.update({ provider: 'openai', overrides: { baseUrl: `http://127.0.0.1:${fake.address().port}/v1`, model: 'gpt-test' } })
   settings.update({ active: 'openai' })
   require('../src/policy').setRule(null, { mode: 'allow-list', providers: ['openai'] })
+  // These runs are about the tools; the redaction check has its own tests (redaction.test.js).
+  require('../src/redaction_check').setCheck(false)
   require('../src/workspace').setBase(path.join(DATA, 'workspace'))
   matterId = require('../src/matters').create({ title: 'Beta acquisition', number: '2026-88' }).id
   require('../src/analysis').setLawSources(sources)
