@@ -1871,5 +1871,10 @@
     "used": "used {{count}} times in this matter",
     "secOffline": "Not online for this matter",
     "secManual": "Read in your browser"
+  },
+  "markdown": {
+    "image": "image",
+    "imageNoHost": "not loaded",
+    "confirmOpen": "This address was written by the AI. Open it in your browser?\n\n{{url}}\n\nCheck it first: an address can carry text from your documents to the site."
   }
 }

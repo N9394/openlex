@@ -2,6 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<!-- Nothing in an answer may load from the web (prompt injection): images only from the pane itself,
+     requests only to the local engine; Office.js from Microsoft. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://appsforoffice.microsoft.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://appsforoffice.microsoft.com; frame-src 'self' https://*.officeapps.live.com https://*.office.com https://*.office.net https://*.microsoft.com https://*.sharepoint.com; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>OpenLex</title>
 <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>

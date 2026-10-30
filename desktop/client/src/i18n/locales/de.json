@@ -1916,5 +1916,10 @@
     "recommended": "empfohlen",
     "keyIntro": "Wählen Sie den Dienst Ihres Schlüssels, fügen Sie den Schlüssel ein und klicken Sie auf „Verwenden“. OpenLex testet ihn zuerst (ohne Ihre Dokumente zu senden). Der Schlüssel bleibt im Schlüsselbund dieses Computers.",
     "more": "Weitere Dienste ({{n}})"
+  },
+  "markdown": {
+    "image": "Bild",
+    "imageNoHost": "nicht geladen",
+    "confirmOpen": "Diese Adresse hat die KI geschrieben. Im Browser öffnen?\n\n{{url}}\n\nBitte zuerst prüfen: Eine Adresse kann Text aus Ihren Dokumenten an die Website übertragen."
   }
 }

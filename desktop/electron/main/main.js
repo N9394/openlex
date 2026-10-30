@@ -421,10 +421,15 @@ async function createWindow() {
     },
   })
 
+  // The window never reaches the internet by itself and never navigates
+  // away from the app (prompt injection: web-guard.js).
+  const indexPath = path.join(PATHS.client, 'index.html')
+  const appUrl = DEV_FRONTEND || require('url').pathToFileURL(indexPath).href
+  require('./web-guard').install(mainWindow, { shell, appUrl: () => appUrl })
+
   if (DEV_FRONTEND) {
     await mainWindow.loadURL(DEV_FRONTEND + (backendUrl ? `?${require('./legacy').windowSearch(backendUrl)}` : ''))
   } else {
-    const indexPath = path.join(PATHS.client, 'index.html')
     await mainWindow.loadFile(indexPath, backendUrl ? { search: require('./legacy').windowSearch(backendUrl) } : {})
   }
 
@@ -466,7 +471,11 @@ function registerIpc(license) {
       isDev,
     }
   })
-  ipcMain.handle('lexvault:openExternal', (_e, url) => shell.openExternal(url))
+  // Only web and mail addresses open outside the app (never file: or app schemes).
+  ipcMain.handle('lexvault:openExternal', (_e, url) => {
+    if (!require('./web-guard').externalUrlAllowed(url)) throw new Error('only http(s) and mailto addresses can be opened')
+    return shell.openExternal(String(url))
+  })
   ipcMain.handle('lexvault:reloadEntitlements', async () => readLicense() || COMMUNITY_LICENSE)
 
   // Opt-in activation from Settings → License. On success the App relaunches
