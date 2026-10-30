@@ -265,3 +265,15 @@ test('AI record: the guard shows as a reason, without content', () => {
   assert.match(md, /came up while reading a document, page or source/)
   assert.ok(!/attacker\.example|angreifer|collector\.example/.test(json + md), 'no address or content in the record')
 })
+
+test('context compaction keeps the end markers (a long document, a long page)', () => {
+  const { compact } = require('../src/ctx')
+  const doc = `DOCUMENT: 200 sections.\nFULL DOCUMENT TEXT:\n${Array.from({ length: 200 }, (_, i) => `§ ${i} Heading\n${'The party shall perform its duties. '.repeat(20)}`).join('\n')}`
+  const sys = `${untrusted.wrap(doc, 'document')}\n\nFOR THIS STEP\n- a rule`
+  const r = compact([{ role: 'system', content: sys }, { role: 'user', content: 'q' }], 0, 4000)
+  const t = r.messages[0].content
+  assert.ok(r.compacted, 'it was compressed')
+  assert.ok(t.indexOf(`<<<END UNTRUSTED ${untrusted.TAG}>>>`) > 0 && t.indexOf(`<<<END UNTRUSTED ${untrusted.TAG}>>>`) < t.indexOf('FOR THIS STEP'), 'the rules after the document stay outside the block')
+  const d = compact([{ role: 'system', content: 's' }, { role: 'user', content: 'q' }, { role: 'assistant', content: 'a' }, { role: 'tool', content: untrusted.wrap('One. Two. Three. '.repeat(3000), 'web page x.example') }], 0, 3000)
+  assert.ok(d.messages.at(-1).content.endsWith(`\n<<<END UNTRUSTED ${untrusted.TAG}>>>`))
+})

@@ -111,7 +111,8 @@ class Turn {
     this.matterId = matterId
     this.reads = [] // { label }
     this.texts = []
-    if (document && String(document.text || '').trim()) this.read('document', String(document.text), document.name ? `document ${baseName(document.name)}` : 'document')
+    // Document names are internal ids (Word, app): it is just "a document".
+    if (document && String(document.text || '').trim()) this.read('document', String(document.text), 'document')
   }
 
   /** Record a tool result (call after dispatch). */

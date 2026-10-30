@@ -107,6 +107,9 @@ function compact(messages, outputReserve = 0, budget = ctxBudgetTokens()) {
 /** First ~2 sentences of a tool output (keeps source names + holding). */
 function digestToolOutput(text) {
   const s = String(text || '')
+  // A marked outside result (untrusted.js) keeps its markers: digest the inside only.
+  const w = s.match(/^(<<<UNTRUSTED [^\n]*>>>\n)([\s\S]*)(\n<<<END UNTRUSTED [^\n]*>>>)$/)
+  if (w) return w[1] + digestToolOutput(w[2]) + w[3]
   const parts = s.split(/(?<=[.!?])\s+/)
   if (parts.length <= 2) return s
   return parts.slice(0, 2).join(' ') + ' …'
@@ -129,7 +132,8 @@ const DOC_LEVELS = [
   { chars: 0, level: 4 },     // outline: headings + paragraph sizes only
 ]
 const CONV_LINE = /^USER:|^ASSISTANT:|^CONVERSATION /
-const SECTION_MARK = /^DOCUMENT:|^HEADINGS:|^PREVIOUS:|^PRE-READ/
+// The end marker of the document's data block (untrusted.js) ends the doc block, so compression never drops it.
+const SECTION_MARK = /^DOCUMENT:|^HEADINGS:|^PREVIOUS:|^PRE-READ|^<<<END UNTRUSTED /
 
 function compressDocBlock(content, targetChars) {
   const s = String(content || '')

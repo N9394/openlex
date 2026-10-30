@@ -102,7 +102,8 @@ function docCtx(ctx, phase) {
   return `${doc}${mark}${mem ? '\n' + mem : ''}${conv}`
 }
 const untrusted = require('./untrusted')
-const docLabel = (ctx) => `document${ctx.doc?.name && !/^(d-|panel:|addin:|mail:)/.test(String(ctx.doc.name)) ? ` ${String(ctx.doc.name).split(/[\\/]/).pop()}` : ''}`
+// Document names are internal ids (Word, app, panels): the block just says "document".
+const docLabel = () => 'document'
 
 /**
  * Cross-action memory injection (plan §6): top facts + suggestion ledger

@@ -484,7 +484,8 @@ async function authorize({ tool, args = {}, matterId = null, turn = null }) {
   // that would carry client data out always need the lawyer's explicit yes.
   const guard = ev.decision === 'deny' ? null : require('./untrusted').guard(tool, args, { ev, turn, matterId })
   if (guard?.ask) {
-    ev = { ...ev, decision: 'ask', guard, canAlways: guard.exfil.length ? false : ev.canAlways }
+    // Asked because of what was read, not because of a rule (the card must not say "your firm asks").
+    ev = { ...ev, decision: 'ask', source: 'guard', guard, canAlways: guard.exfil.length ? false : !rules().locked }
   } else if (guard && ev.decision === 'ask') ev = { ...ev, guard }
   if (ev.source === 'sandbox') {
     audit({ matter: matterId, call, decision: 'blocked', by: 'sandbox' })
