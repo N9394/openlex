@@ -57,13 +57,19 @@ function originOk(origin, port, trusted = trustedOrigins()) {
 
 /**
  * @returns {{ ok: true } | { ok: false, status: number, error: string }}
+ *
+ * The pane's own files (HTML, scripts, styles, images) hold no data: Word
+ * and Outlook on the web and the new Outlook load them in a frame of an
+ * Office site, which the browser marks cross-site. They are served then
+ * (only GET/HEAD); frame-ancestors (server.js) limits who may frame them.
  */
-function check(req, { port, trusted = trustedOrigins() } = {}) {
+function check(req, { port, trusted = trustedOrigins(), isStatic = () => false } = {}) {
   if (!hostOk(req, port)) return { ok: false, status: 421, error: 'wrong host' }
   const origin = req.headers.origin
   if (origin !== undefined && !originOk(origin, port, trusted)) return { ok: false, status: 403, error: 'forbidden origin' }
   const site = String(req.headers['sec-fetch-site'] || '').toLowerCase()
-  if ((site === 'cross-site' || site === 'same-site') && !(origin !== undefined && originOk(origin, port, trusted))) {
+  const paneFile = (req.method === 'GET' || req.method === 'HEAD') && origin === undefined && isStatic(req)
+  if ((site === 'cross-site' || site === 'same-site') && !paneFile && !(origin !== undefined && originOk(origin, port, trusted))) {
     return { ok: false, status: 403, error: 'cross-site request refused' }
   }
   return { ok: true }

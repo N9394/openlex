@@ -106,6 +106,9 @@ test('the engine refuses rebinding and cross-site requests on every route, and a
     assert.doesNotMatch(rebound.raw, /sessions/)
     assert.strictEqual((await call(port, '/api/hub/info', { Host: `attacker.example:${port}`, 'Sec-Fetch-Site': 'same-origin' })).status, 421, 'the hub cannot be reached by a rebinding page posing as the pane')
     assert.strictEqual((await call(port, '/taskpane.html', { Host: `attacker.example:${port}` })).status, 421)
+    const framed = await call(port, '/taskpane.html', { 'Sec-Fetch-Site': 'cross-site', 'Sec-Fetch-Dest': 'iframe' })
+    assert.strictEqual(framed.status, 200, 'Office on the web frames the pane')
+    assert.match(framed.headers['content-security-policy'] || '', /frame-ancestors 'self' https:\/\/\*\.office\.com/)
     assert.strictEqual((await call(port, '/api/sessions', { Origin: 'https://attacker.example' })).status, 403)
     const img = await call(port, '/api/sessions', { 'Sec-Fetch-Site': 'cross-site', 'Sec-Fetch-Mode': 'no-cors' })
     assert.strictEqual(img.status, 403)
@@ -115,4 +118,13 @@ test('the engine refuses rebinding and cross-site requests on every route, and a
     await new Promise((r) => setTimeout(r, 200))
     fs.rmSync(DATA, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 })
   }
+})
+
+test('the pane\'s own files may be framed by Office on the web (cross-site GET), the API never', () => {
+  const isStatic = (r) => r.url.startsWith('/taskpane')
+  const ask = (h, url = '/taskpane.html', method = 'GET') => guard.check({ headers: h, url, method }, { port: PORT, trusted: new Set(), isStatic })
+  assert.deepStrictEqual(ask({ host: 'localhost:18001', 'sec-fetch-site': 'cross-site', 'sec-fetch-dest': 'iframe' }), { ok: true })
+  assert.strictEqual(ask({ host: 'localhost:18001', 'sec-fetch-site': 'cross-site' }, '/api/sessions').ok, false)
+  assert.strictEqual(ask({ host: 'localhost:18001', 'sec-fetch-site': 'cross-site' }, '/taskpane.html', 'POST').ok, false)
+  assert.strictEqual(ask({ host: 'evil.example:18001', 'sec-fetch-site': 'cross-site' }).ok, false, 'Host still checked')
 })

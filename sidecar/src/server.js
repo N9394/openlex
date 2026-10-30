@@ -170,6 +170,12 @@ if (process.platform === 'win32' && !process.env.LEXVAULT_KEEPALIVE) {
 // may therefore only be changed by the panes or a local process.
 const requestGuard = require('./request_guard')
 const TRUSTED_ORIGINS = requestGuard.trustedOrigins()
+/** The add-in's own files (served to the Word and Outlook panes). */
+const isPaneFile = (p) => p === '/' || p.startsWith('/taskpane') || p.startsWith('/commands') || p.startsWith('/assets/') || p.startsWith('/lib/') || p.startsWith('/outlook')
+// Who may show the pane in a frame: the desktop hosts load it directly;
+// Office on the web and the new Outlook frame it from Microsoft's sites.
+// No other site may frame it (clickjacking the Allow buttons).
+const PANE_FRAME_ANCESTORS = "frame-ancestors 'self' https://*.office.com https://*.office365.com https://*.officeapps.live.com https://*.microsoft.com https://*.sharepoint.com https://*.cloud.microsoft https://*.live.com"
 
 // One library sync at a time; callers share the in-flight run.
 let librarySyncing = null
@@ -368,7 +374,7 @@ async function handle(req, res) {
   // explicitly trusted origins get CORS headers, and any request carrying a
   // foreign Origin is refused outright — a web page could otherwise drive
   // the agent (and the lawyer's files) with a no-preflight "simple" POST.
-  const gate = requestGuard.check(req, { port: config.PORT, trusted: TRUSTED_ORIGINS })
+  const gate = requestGuard.check(req, { port: config.PORT, trusted: TRUSTED_ORIGINS, isStatic: () => isPaneFile(p) })
   if (!gate.ok) {
     res.writeHead(gate.status, { 'Content-Type': 'application/json' })
     return res.end(JSON.stringify({ error: gate.error }))
@@ -384,14 +390,14 @@ async function handle(req, res) {
 
   try {
     // Static add-in assets
-    if (p === '/' || p.startsWith('/taskpane') || p.startsWith('/commands') || p.startsWith('/assets/') || p.startsWith('/lib/') || p.startsWith('/outlook')) {
+    if (isPaneFile(p)) {
       const file = p === '/' ? '/taskpane.html' : p
       const fp = path.normalize(path.join(config.ADDIN_ROOT, file))
       if (!fp.startsWith(path.resolve(config.ADDIN_ROOT) + path.sep) || /[\\/]\./.test(fp.slice(path.resolve(config.ADDIN_ROOT).length))) return sendJson(res, 403, { error: 'forbidden' }) // inside the add-in folder, no dot-files (.git)
       if (!fs.existsSync(fp)) return sendJson(res, 404, { error: 'not found' })
       const ext = path.extname(fp)
       const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.xml': 'text/xml' }
-      res.writeHead(200, { 'Content-Type': types[ext] || 'application/octet-stream', 'Cache-Control': 'no-cache' })
+      res.writeHead(200, { 'Content-Type': types[ext] || 'application/octet-stream', 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff', ...(ext === '.html' ? { 'Content-Security-Policy': PANE_FRAME_ANCESTORS } : {}) })
       return fs.createReadStream(fp).pipe(res)
     }
 
