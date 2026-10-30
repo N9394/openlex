@@ -111,7 +111,7 @@
       "category": "Office",
       "executableName": "openlex",
       "synopsis": "Open-source, local-first legal AI",
-      "artifactName": "OpenLex-${version}-linux-${arch}.${ext}"
+      "artifactName": "OpenLex-${version}-linux-x64.${ext}"
     },
     "afterPack": "scripts/after-pack.js",
     "dmg": {
