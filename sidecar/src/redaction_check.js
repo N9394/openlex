@@ -119,9 +119,17 @@ async function prepare({ matterId = null, items = [], signal } = {}) {
     const text = full.length > MAX_TEXT ? full.slice(0, MAX_TEXT) : full
     let found = []
     try { found = model ? await ner.find(text, { signal }) : [] } catch (err) { console.warn('[redaction] name finder failed:', err.message) }
-    const findings = detect.scan(text, { terms, keep, patterns, model: found, all: true })
-    list.push({ id: `d${i + 1}`, name: String(it.name || `Document ${i + 1}`).slice(0, 200), chars: full.length, text, truncated: full.length > text.length, findings })
+    list.push({ id: `d${i + 1}`, name: String(it.name || `Document ${i + 1}`).slice(0, 200), chars: full.length, text, truncated: full.length > text.length, model: found, findings: detect.scan(text, { terms, keep, patterns, model: found, all: true }) })
   }
+  // A person or organisation found in one text counts in the others too
+  // ("Huber" in the question, "Mag. Johann Huber" in the contract).
+  const seen = new Map()
+  for (const it of list) for (const f of it.findings) if (['PERSON', 'ORG'].includes(f.kind) && f.on && f.source !== 'term' && f.source !== 'firm') seen.set(detect.norm(f.text), { text: f.text, kind: f.kind, source: 'found' })
+  if (seen.size && list.length > 1) {
+    const extra = [...seen.values()]
+    for (const it of list) it.findings = detect.scan(it.text, { terms: [...terms, ...extra], keep, patterns, model: it.model, all: true })
+  }
+  for (const it of list) delete it.model
   // One entry per distinct thing (same kind group, same text), with every place it appears.
   const entries = new Map()
   for (const it of list) {

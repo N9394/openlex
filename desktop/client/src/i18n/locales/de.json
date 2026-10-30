@@ -1966,6 +1966,7 @@
     "lists": "Listen für „{{title}}“",
     "alwaysHide": "Immer verdecken (eine Angabe pro Zeile)",
     "keepAsIs": "Unverändert lassen (eine Angabe pro Zeile)",
-    "listsSaved": "Für diese Akte gespeichert."
+    "listsSaved": "Für diese Akte gespeichert.",
+    "yourQuestion": "Ihre Frage"
   }
 }

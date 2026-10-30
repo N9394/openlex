@@ -131,7 +131,8 @@ function termHits(text, terms) {
     .sort((a, b) => b.text.length - a.text.length)
   for (const t of list) {
     const re = new RegExp(`(?<![\\p{L}\\p{N}])${escapeRe(String(t.text).trim()).replace(/\s+/g, '\\s+')}(?![\\p{L}\\p{N}])`, 'giu')
-    for (const m of text.matchAll(re)) out.push({ kind: t.kind || 'PARTY', start: m.index, end: m.index + m[0].length, confidence: 1, source: t.source || 'term' })
+    // "found": seen in another text of the same check — as certain as a finding, not a listed term.
+    for (const m of text.matchAll(re)) out.push({ kind: t.kind || 'PARTY', start: m.index, end: m.index + m[0].length, confidence: t.source === 'found' ? 0.8 : 1, source: t.source === 'found' ? 'heuristic' : (t.source || 'term') })
   }
   return out
 }

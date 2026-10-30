@@ -354,7 +354,7 @@ export default function Research() {
   // ── the redaction check: what goes online is checked first (undefined: no check due; null: cancelled) ──
   const checkFirst = async (body: Record<string, unknown>): Promise<string | null | undefined> => {
     try {
-      return await runRedactionCheck({ ...body, ...(matterId ? { matterId } : {}) }, (review) => new Promise((resolve) => setCheck({ review, resolve })), /^de/i.test(i18n.language || '') ? 'de' : 'en', setScanning)
+      return await runRedactionCheck({ ...body, messageName: t('redaction.yourQuestion', 'Your question'), ...(matterId ? { matterId } : {}) }, (review) => new Promise((resolve) => setCheck({ review, resolve })), /^de/i.test(i18n.language || '') ? 'de' : 'en', setScanning)
     } catch (err) {
       sys(friendly(err), 'bad')
       return null

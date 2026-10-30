@@ -1921,6 +1921,7 @@
     "lists": "Lists for “{{title}}”",
     "alwaysHide": "Always hide (one per line)",
     "keepAsIs": "Keep as it is (one per line)",
-    "listsSaved": "Saved for this matter."
+    "listsSaved": "Saved for this matter.",
+    "yourQuestion": "Your question"
   }
 }

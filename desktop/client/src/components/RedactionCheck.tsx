@@ -40,7 +40,8 @@ export default function RedactionCheck({ review, onDone }: { review: CheckReview
   const { t } = useTranslation()
   const [on, setOn] = useState<Record<string, boolean>>(() => Object.fromEntries(review.entries.map((x) => [x.key, x.on])))
   const [added, setAdded] = useState<{ key: string; text: string }[]>([])
-  const [item, setItem] = useState(review.items[0]?.id || '')
+  // Start with the text that has the most to check (usually the document, not the question).
+  const [item, setItem] = useState(() => [...review.items].sort((a, b) => b.findings.length - a.findings.length)[0]?.id || '')
   const [focus, setFocus] = useState<{ start: number; end: number } | null>(null)
   const [hops, setHops] = useState<Record<string, number>>({})
   const [preview, setPreview] = useState(false)
@@ -59,12 +60,13 @@ export default function RedactionCheck({ review, onDone }: { review: CheckReview
   // Places of the texts the lawyer added, in every document (case-insensitive).
   const addedAt = useMemo(() => {
     const out: Record<string, { key: string; start: number; end: number }[]> = {}
+    // Whole words only, like the engine ("Käufer" is not hidden inside "Verkäuferin").
+    const esc = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+')
     for (const it of review.items) {
-      const low = it.text.toLowerCase()
       out[it.id] = []
       for (const a of added) {
-        const needle = a.text.toLowerCase()
-        for (let i = low.indexOf(needle); i >= 0 && out[it.id].length < 2000; i = low.indexOf(needle, i + needle.length)) out[it.id].push({ key: a.key, start: i, end: i + needle.length })
+        const re = new RegExp(`(?<![\\p{L}\\p{N}])${esc(a.text)}(?![\\p{L}\\p{N}])`, 'giu')
+        for (const m of it.text.matchAll(re)) { if (out[it.id].length >= 2000) break; out[it.id].push({ key: a.key, start: m.index!, end: m.index! + m[0].length }) }
       }
     }
     return out
