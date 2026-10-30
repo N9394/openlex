@@ -30,6 +30,7 @@ function writeConfig() {
 service:
   host: 127.0.0.1
   http_port: ${port}
+telemetry_disabled: true
 `)
 }
 
@@ -75,7 +76,8 @@ async function ensureQdrant() {
   writeConfig()
   const bin = findBinary()
   const args = ['--config-path', CONFIG_PATH]
-  proc = spawn(bin, args, { stdio: 'ignore', windowsHide: true })
+  // Qdrant sends anonymous usage statistics by default; OpenLex keeps everything on this computer.
+  proc = spawn(bin, args, { stdio: 'ignore', windowsHide: true, env: { ...process.env, QDRANT__TELEMETRY_DISABLED: 'true' } })
   proc.on('error', (err) => {
     console.error('[qdrant] spawn failed:', err.message)
     proc = null
