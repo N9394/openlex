@@ -176,6 +176,7 @@ function absorb(acc, e) {
   if (!s) { s = { key, provider: local ? 'local' : e.provider, service, local, region: local ? null : (e.region || null), namesHidden: hidden, calls: 0, failed: 0 }; acc.ai.push(s) }
   s.calls++
   if (/^checked/.test(e.check || '')) s.checked = true
+  if (/^checked/.test(e.check || '') && ['basic', 'with-model'].includes(e.detection)) s.detection = s.detection === 'basic' || e.detection === 'basic' ? 'basic' : 'with-model'
   if (e.ok === false) s.failed++
 }
 
@@ -207,7 +208,7 @@ function detailLines(x) {
   for (const s of x.ai) {
     lines.push(s.local
       ? `AI: on this computer · ${plural(s.calls, 'call')}${s.failed ? ` (${s.failed} failed)` : ''}`
-      : `AI: ${s.service} — sent outside this computer, ${s.namesHidden ? `names and numbers hidden (pseudonymised)${s.checked ? ', checked by you' : ''}` : 'names and numbers not hidden'} · ${plural(s.calls, 'call')}${s.failed ? ` (${s.failed} failed)` : ''}`)
+      : `AI: ${s.service} — sent outside this computer, ${s.namesHidden ? `names and numbers hidden (pseudonymised)${s.checked ? `, checked by you${s.detection === 'basic' ? ' (basic detection)' : s.detection === 'with-model' ? ' (with name finder)' : ''}` : ''}` : 'names and numbers not hidden'} · ${plural(s.calls, 'call')}${s.failed ? ` (${s.failed} failed)` : ''}`)
   }
   if (!x.ai.length && x.type === 'request') lines.push('AI: no AI call recorded')
   const online = x.lookups.filter((l) => !l.local)

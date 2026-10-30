@@ -135,7 +135,7 @@ async function cloudCall(kind, messages, opts, run, provider, routeReason) {
   const messagesOut = red ? red.redactMessages(out.messages) : out.messages
   const restorer = red && opts.onContent ? red.streamRestorer(opts.onContent) : null
   const note = red ? check.callNote() : null
-  reportModel({ provider: p.id, label: p.label || p.id, model: p.model || null, local: !!p.local, region: p.region || null, redacted: !!red, ...(note && note.check !== 'automatic' ? { checked: true } : {}) }, opts)
+  reportModel({ provider: p.id, label: p.label || p.id, model: p.model || null, local: !!p.local, region: p.region || null, redacted: !!red, ...(note && note.check !== 'automatic' ? { checked: true, ...(note.detection ? { detection: note.detection } : {}) } : {}) }, opts)
   // Native tool calling (hosted models): agent phases get real tool
   // definitions. Not on calls that stream prose to the pane — a hosted
   // model's "Let me check…" preamble before a tool call would leak into

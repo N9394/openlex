@@ -20,6 +20,19 @@ export const NOTE = 'OpenLex looks for names, numbers and addresses and hides wh
 const MAX_ROWS = 14
 
 /** The decisions for POST /api/redaction/confirm from the entries and the switches. */
+/**
+ * The detection line: "basic" unless the name finder really ran for every
+ * text of this check. The CLI (tarball, Homebrew) has no ONNX runtime, so
+ * there it says plainly that the name finder needs the desktop app.
+ */
+export function detectionLine(review) {
+  if (!review.basic) return 'With name finder (on this computer).'
+  if (review.finder === 'failed') return 'Basic detection: the name finder did not run for this text.'
+  if (review.finder === 'unavailable') return review.runtime === 'not-bundled' ? 'Basic detection: the name finder needs the desktop app.' : 'Basic detection: the name finder cannot run on this computer.'
+  const base = 'Basic detection (patterns, lists, titles, company forms).'
+  return base
+}
+
 export function decisions(entries, on, added) {
   return {
     off: entries.filter((x) => x.on && !on[x.key]).map((x) => x.key),
@@ -77,7 +90,7 @@ export function RedactionPrompt({ review, onDone }) {
     <${Box} flexDirection="column" borderStyle=${look.accessible ? undefined : look.border} borderColor=${color.accent} paddingX=${1} width="94%">
       <${Text} bold color=${color.accent}>Check what is hidden before sending<//>
       <${Text} dimColor wrap="wrap">${NOTE}<//>
-      ${review.basic ? html`<${Text} dimColor wrap="wrap">Basic detection (patterns, lists, titles, company forms).<//>` : null}
+      <${Text} dimColor wrap="wrap">${detectionLine(review)}<//>
       ${!entries.length ? html`<${Text} wrap="wrap">OpenLex found nothing to hide. Add something with +, or send with s.<//>` : null}
       ${shown.map((r, i) => (r.head
         ? html`<${Text} key=${i} dimColor>${r.head}<//>`

@@ -274,10 +274,10 @@ function assertChecked(matterId) {
   throw e
 }
 
-/** For the AI record of one online call: was it checked, and did the lawyer change anything? */
+/** For the AI record of one online call: was it checked, did the lawyer change anything, and did the name finder run (detection)? */
 function callNote() {
   const ctx = require('./policy').redactionContext()
-  if (ctx?.review?.status === 'confirmed') return { check: ctx.review.changed ? 'checked-changed' : 'checked' }
+  if (ctx?.review?.status === 'confirmed') return { check: ctx.review.changed ? 'checked-changed' : 'checked', detection: ctx.review.basic ? 'basic' : 'with-model' }
   return { check: 'automatic' }
 }
 
