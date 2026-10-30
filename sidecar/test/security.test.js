@@ -106,3 +106,21 @@ test('the agent cannot write the firm configuration', async () => {
   const ok = await dispatch({}, 'write_file', { path: 'Acme/out.md', content: 'fine' })
   assert.match(ok.output, /^written:/)
 })
+
+test('git in run_bash never runs programs from the workspace repository config', () => {
+  const { args } = ws.checkCommand('git status')
+  for (const o of ['core.fsmonitor=false', 'core.hooksPath=/dev/null', 'core.pager=cat']) assert.ok(args.includes(o), o)
+  assert.ok(args.indexOf('core.fsmonitor=false') < args.indexOf('status'), '-c before the subcommand')
+})
+
+test('only .ics files are opened by the calendar helper (open / Invoke-Item would start programs)', async () => {
+  const cal = require('../src/calendar')
+  for (const f of ['evil.command', 'x.app', 'run.bat', 'folder', '', 'deadlines.ics.exe']) await assert.rejects(() => cal.openICS(f), /only .ics/, f)
+})
+
+test('pack extraction never goes through a shell (a file name cannot run commands)', () => {
+  for (const f of ['../src/pack_ingest.js', '../../desktop/electron/sidecars/pack_ingest.js']) {
+    const src = fs.readFileSync(path.join(__dirname, f), 'utf8')
+    assert.doesNotMatch(src, /spawnSync\('sh'|['"]-c['"],\s*`/, f)
+  }
+})
