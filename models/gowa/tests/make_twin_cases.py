@@ -31,6 +31,7 @@ CASES = [
     ("Nájemce platí nájemné měsíčně.", {"type": "score", "instructions": "Jak rizikové?", "criteria": ["nízké", "střední", "vysoké"]}, 64, [0.1, 1.5, 0.3], 0.8),
     ("word " * 80, {"type": "choice", "instructions": "pick", "criteria": ["a", "b"]}, 24, [0.0, 0.0], 1.0),
     ({"party": "Alpenbau", "amount": 5000}, {"type": "noul", "instructions": "Is there an amount?"}, 64, [3.0, -3.0], 2.0),
+    ("  Mehrere   Leerzeichen\n\nund\u00a0Umbrüche\t ", {"type": "noul", "instructions": " Gibt es  Umbrüche? "}, 64, [0.2, 0.1], 1.0),
 ]
 
 out = []

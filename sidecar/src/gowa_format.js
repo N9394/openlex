@@ -60,8 +60,10 @@ function optionKeys(q) {
  *   maxLen  the model's sequence limit
  * @returns {{ ids:number[], optionIndex:number[], decideIndex:number, truncated:boolean }}
  */
-function buildSequence({ state, question, encode, markers, maxLen = 512, cfg = {} }) {
+function buildSequence({ state, question, encode: rawEncode, markers, maxLen = 512, cfg = {} }) {
   const m = markers
+  // Whitespace runs become one space: tokenizers in Python and JS treat them differently.
+  const encode = (t) => rawEncode(squash(t))
   const opts = optionsOf(question, cfg)
   if (!opts.length) throw new Error('a question needs at least one option')
   if (opts.length > MAX_OPTIONS) throw new Error(`at most ${MAX_OPTIONS} options`)
@@ -88,6 +90,8 @@ function buildSequence({ state, question, encode, markers, maxLen = 512, cfg = {
     truncated,
   }
 }
+
+const squash = (t) => String(t).replace(/\s+/g, ' ').trim()
 
 /** Softmax of logits / temperature (numerically stable). */
 function softmax(logits, temperature = 1) {
@@ -140,4 +144,4 @@ function packBatch(seqs, pad = 0) {
   return { B, L, K, inputIds, attention, optionIndex, decideIndex: seqs.map((s) => s.decideIndex), optionCounts: seqs.map((s) => s.optionIndex.length) }
 }
 
-module.exports = { buildSequence, answerFrom, softmax, packBatch, optionsOf, optionKeys, stateText, MAX_OPTIONS, NOUL_OPTIONS }
+module.exports = { squash, buildSequence, answerFrom, softmax, packBatch, optionsOf, optionKeys, stateText, MAX_OPTIONS, NOUL_OPTIONS }

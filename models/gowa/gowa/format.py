@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from dataclasses import dataclass
 from typing import Callable, Sequence
 
@@ -64,8 +65,23 @@ class Sequence_:
     truncated: bool
 
 
+# Exactly JavaScript's \s (and String.prototype.trim), so both sides squash the same characters.
+_JS_SPACE = "\t\n\v\f\r \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff"
+_JS_SPACE_RE = re.compile(f"[{_JS_SPACE}]+")
+
+
+def squash(text: str) -> str:
+    """Whitespace runs become one space (tokenizers in Python and JS treat them differently)."""
+    return _JS_SPACE_RE.sub(" ", str(text)).strip(_JS_SPACE)
+
+
 def build_sequence(state, question: dict, encode: Callable[[str], list[int]], markers: dict, max_len: int = 512) -> Sequence_:
     m = markers
+    raw_encode = encode
+
+    def encode(t):  # noqa: F811
+        return raw_encode(squash(t))
+
     opts = options_of(question)
     if not opts:
         raise ValueError("a question needs at least one option")
@@ -139,4 +155,7 @@ def marker_ids(tokenizer) -> dict:
 
 def add_markers(tokenizer) -> int:
     """Add the GOWA marker tokens as special tokens. Returns how many were new."""
-    return tokenizer.add_special_tokens({"additional_special_tokens": list(MARKER_TOKENS.values())}, replace_additional_special_tokens=False)
+    # add_tokens(..., special_tokens=True) works the same in transformers 4.x and 5.x.
+    from tokenizers import AddedToken
+
+    return tokenizer.add_tokens([AddedToken(t, special=True, normalized=False) for t in MARKER_TOKENS.values()], special_tokens=True)
