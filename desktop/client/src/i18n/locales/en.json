@@ -1821,5 +1821,30 @@
     "defendant-counsel": "Defendant's counsel",
     "devils-advocate": "Devil's advocate",
     "compliance-checker": "Compliance checker"
+  },
+  "setup": {
+    "title": "Set up the AI",
+    "intro": "OpenLex needs an AI to answer. Choose one way; you can change it later in Settings → AI.",
+    "start": "Ask your first question",
+    "local": "On this computer",
+    "localText": "Most private and free: nothing leaves this computer. Slower, needs a recent computer.",
+    "key": "I brought my own key",
+    "keyText": "Fast and strong: AWS Bedrock in the EU, Mistral, IONOS and others. You pay the service directly.",
+    "help": "I need help getting a secure cloud key",
+    "helpText": "A step-by-step guide, or we set it up with you.",
+    "helpIntro": "The recommended way for client work is Claude in your firm's own AWS account in Frankfurt, with nothing stored. The guide takes about 20 minutes.",
+    "guide": "Read the step-by-step guide",
+    "call": "Set it up for me (book a call)",
+    "helpLocal": "Meanwhile you can use the AI on this computer.",
+    "notNow": "Not now",
+    "checking": "Looking at this computer…",
+    "noDetect": "OpenLex could not look at this computer. Try again in a moment.",
+    "useRec": "Use {{name}}",
+    "downloadRec": "Download and use {{name}}",
+    "needOllama": "To run an AI on this computer, OpenLex uses the free program Ollama. It takes three steps:",
+    "keyDone": "{{name}} is set up and tested. Client data still follows your rule (Settings → Where client data may go).",
+    "recommended": "recommended",
+    "keyIntro": "Choose the service your key is from, paste the key and press \"Use\". OpenLex tests it first (without sending any of your documents). The key stays in this computer's keychain.",
+    "more": "More services ({{n}})"
   }
 }

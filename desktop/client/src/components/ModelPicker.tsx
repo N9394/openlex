@@ -59,7 +59,7 @@ interface Spend {
   estimates: { note: string; usdToEur: number; asOf: string }
 }
 interface LocalModel { id: string; runtime: 'ollama' | 'gguf'; name: string; title: string; sizeGb: number | null; goodFor: Two; active: boolean }
-interface Detect {
+export interface Detect {
   ollama: { installed: boolean; running: boolean; version: string | null; models: { name: string }[] }
   llamacpp: { installed: boolean; running: boolean; command: string }
   ramGb: number
@@ -450,7 +450,7 @@ export function ModelPicker({ onDone, pick }: { onDone: (text: string) => void; 
 
 // ── key and settings for one service ───────────────────────────────────────
 
-function ProviderSetup({ p, onChanged, onUse }: { p: PickerProvider; onChanged: () => Promise<unknown>; onUse: () => void }) {
+export function ProviderSetup({ p, onChanged, onUse }: { p: PickerProvider; onChanged: () => Promise<unknown>; onUse: () => void }) {
   const { t } = useTranslation()
   const lang = useLang()
   const [key, setKey] = useState('')

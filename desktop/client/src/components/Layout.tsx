@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { useAuth } from '../contexts/AuthContext'
 import CommandPalette from './CommandPalette'
 import { initTheme } from '../lib/theme'
+import { needsSetup, setupSkipped } from '../pages/Setup'
 import { useWindowWidth, useWindowHeight, NARROW_APP } from '../lib/viewport'
 import {
   MessageSquare,
@@ -76,6 +77,15 @@ export default function Layout() {
       }
     })
   }, [navigate])
+
+  // First start: no AI set up yet → the setup page (once per start; "Not now" skips it).
+  useEffect(() => {
+    if (setupSkipped() || location.pathname === '/setup') return
+    let alive = true
+    needsSetup().then((need) => { if (alive && need) navigate('/setup') })
+    return () => { alive = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Colours and text size (Settings → Appearance); 'same as this computer' follows the system.
   useEffect(() => { initTheme() }, [])

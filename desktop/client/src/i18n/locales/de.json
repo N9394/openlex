@@ -1868,5 +1868,30 @@
     "defendant-counsel": "Beklagtenvertretung",
     "devils-advocate": "Advocatus Diaboli",
     "compliance-checker": "Compliance-Prüfung"
+  },
+  "setup": {
+    "title": "KI einrichten",
+    "intro": "OpenLex braucht eine KI, um zu antworten. Wählen Sie einen Weg; ändern können Sie ihn später unter Einstellungen → KI.",
+    "start": "Erste Frage stellen",
+    "local": "Auf diesem Computer",
+    "localText": "Am vertraulichsten und kostenlos: nichts verlässt diesen Computer. Langsamer, braucht einen neueren Computer.",
+    "key": "Ich habe einen eigenen Schlüssel",
+    "keyText": "Schnell und stark: AWS Bedrock in der EU, Mistral, IONOS und andere. Sie zahlen den Dienst direkt.",
+    "help": "Ich brauche Hilfe für einen sicheren Cloud-Schlüssel",
+    "helpText": "Eine Schritt-für-Schritt-Anleitung, oder wir richten es mit Ihnen ein.",
+    "helpIntro": "Für Mandatsarbeit empfohlen: Claude im eigenen AWS-Konto Ihrer Kanzlei in Frankfurt, ohne Speicherung. Die Anleitung dauert etwa 20 Minuten.",
+    "guide": "Schritt-für-Schritt-Anleitung lesen",
+    "call": "Für mich einrichten (Termin buchen)",
+    "helpLocal": "Bis dahin können Sie die KI auf diesem Computer nutzen.",
+    "notNow": "Jetzt nicht",
+    "checking": "Dieser Computer wird geprüft…",
+    "noDetect": "OpenLex konnte diesen Computer nicht prüfen. Versuchen Sie es gleich noch einmal.",
+    "useRec": "{{name}} verwenden",
+    "downloadRec": "{{name}} herunterladen und verwenden",
+    "needOllama": "Für eine KI auf diesem Computer nutzt OpenLex das kostenlose Programm Ollama. Das geht in drei Schritten:",
+    "keyDone": "{{name}} ist eingerichtet und getestet. Mandantendaten folgen weiter Ihrer Regel (Einstellungen → Wohin Mandantendaten dürfen).",
+    "recommended": "empfohlen",
+    "keyIntro": "Wählen Sie den Dienst Ihres Schlüssels, fügen Sie den Schlüssel ein und klicken Sie auf „Verwenden“. OpenLex testet ihn zuerst (ohne Ihre Dokumente zu senden). Der Schlüssel bleibt im Schlüsselbund dieses Computers.",
+    "more": "Weitere Dienste ({{n}})"
   }
 }
