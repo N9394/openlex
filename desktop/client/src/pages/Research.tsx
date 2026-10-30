@@ -64,6 +64,9 @@ interface Message {
 const mattersBridge = () => (typeof window !== 'undefined' && (window as any).lexvault?.matters) || null
 let seq = 0
 const nextId = () => `m${Date.now().toString(36)}${++seq}`
+/** The same document attached twice (each attach gets a new id) counts once: name + size. */
+const sameDoc = (a: Attachment, b: Attachment) => a.id === b.id || (a.name === b.name && a.bytes === b.bytes)
+const mergeDocs = (cur: Attachment[], add: Attachment[]) => [...cur.filter((d) => !add.some((f) => sameDoc(f, d))), ...add]
 
 /** A stored turn (GET /api/session) as a message on screen. */
 function storedMessage(m: any): Message {
@@ -83,7 +86,7 @@ function when(iso?: string | null) {
   if (mins < 1) return i18n.t('chat.justNow', 'just now')
   if (mins < 60) return i18n.t('chat.minAgo', '{{n}} min ago', { n: mins })
   if (mins < 24 * 60) return i18n.t('chat.todayAt', 'today {{time}}', { time: d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) })
-  return d.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })
+  return d.toLocaleString(i18n.language || undefined, { dateStyle: 'short', timeStyle: 'short' })
 }
 
 export default function Research() {
@@ -109,6 +112,7 @@ export default function Research() {
   const [attaching, setAttaching] = useState<string[]>([]) // names being read right now
   const [convDocs, setConvDocs] = useState<Attachment[]>([]) // documents this conversation is about (sent with every question)
   const [dragging, setDragging] = useState(false)
+  const [docsOpen, setDocsOpen] = useState(false)
   const analyseAfterAttach = useRef(false)
   const analyseRef = useRef<(arg: string) => void>(() => {}) // the newest runAnalyse (the command hook keeps its first callback)
   const [running, setRunning] = useState<string | null>(null) // stream id while an answer is written
@@ -223,6 +227,7 @@ export default function Research() {
     return () => el.removeEventListener('scroll', onScroll)
   }, [])
   useEffect(() => { const el = scrollRef.current; if (el && nearBottom.current) el.scrollTop = el.scrollHeight }, [messages, perm])
+  useEffect(() => { const el = scrollRef.current; if (el && nearBottom.current) el.scrollTop = el.scrollHeight }, [width])
   useEffect(() => {
     if (!running) return
     const t0 = setInterval(() => setNow(Date.now()), 1000)
@@ -295,7 +300,7 @@ export default function Research() {
       ...(arg.replace(/\b(buyer|seller|käufer|verkäufer|share|asset|merger|joint|venture|jv)\b/gi, '').trim() ? { focus: arg.replace(/\b(buyer|seller|käufer|verkäufer|share|asset|merger|joint|venture|jv)\b/gi, '').trim() } : {}),
     } : undefined
     setInput('')
-    if (!only && files.length) { setConvDocs((cur) => [...cur.filter((d) => !files.some((f) => f.id === d.id)), ...files]); setFiles([]) }
+    if (!only && files.length) { setConvDocs((cur) => mergeDocs(cur, files)); setFiles([]) }
     nearBottom.current = true
     setMessages((m) => [...m,
       { id: nextId(), role: 'user', content: message, files: att.map((f) => f.name), client: 'app' },
@@ -308,7 +313,7 @@ export default function Research() {
 
   // ── a Panel of agents: the question goes to all of them (PanelCard runs it) ──
   const askPanel = (spec: PanelSpec, question: string) => {
-    const att = [...convDocs.filter((d) => !files.some((f) => f.id === d.id)), ...files]
+    const att = mergeDocs(convDocs, files)
     setConvDocs(att)
     const sid = sessionId || `app:${matterId || 'quick'}:${Date.now().toString(36)}`
     if (!sessionId) setSessionId(sid)
@@ -349,7 +354,7 @@ export default function Research() {
     if (panelOn && panelSpec) return askPanel(panelSpec, message)
     // The conversation's documents stay with it: follow-up questions are about them too
     // (and an online AI service reads them from its cache).
-    const att = [...convDocs.filter((d) => !files.some((f) => f.id === d.id)), ...files]
+    const att = mergeDocs(convDocs, files)
     setConvDocs(att)
     const sid = sessionId || `app:${matterId || 'quick'}:${Date.now().toString(36)}`
     if (!sessionId) setSessionId(sid)
@@ -458,7 +463,7 @@ export default function Research() {
       try {
         const a = await attachFile(f, { matterId, sessionId: sid })
         done.push(a)
-        setFiles((cur) => [...cur.filter((x) => x.name !== a.name), a])
+        setFiles((cur) => [...cur.filter((x) => !sameDoc(x, a)), a])
       } catch (err) {
         sys(`${f.name}: ${friendly(err)}`, 'bad')
       } finally {
@@ -593,7 +598,7 @@ export default function Research() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <MessageSquare size={14} className="text-antique flex-shrink-0" />
-                        <span className="text-cream text-sm font-medium truncate">{c.title}</span>
+                        <span className="text-cream text-sm font-medium truncate" title={c.title}>{c.title}</span>
                       </div>
                       <div className="flex items-center gap-1.5 mt-1 text-xs text-antique">
                         <Clock size={10} />
@@ -604,7 +609,7 @@ export default function Research() {
                     </div>
                     <button
                       onClick={(e) => { e.stopPropagation(); deleteConversation(c) }}
-                      className="opacity-0 group-hover:opacity-100 focus:opacity-100 p-1 text-antique hover:text-red-400 transition-all"
+                      className="opacity-40 group-hover:opacity-100 focus:opacity-100 p-1.5 -m-1 rounded text-antique hover:text-red-400 transition-all"
                       aria-label={t('chat.delete', 'Delete conversation')}
                     >
                       <Trash2 size={14} />
@@ -636,7 +641,7 @@ export default function Research() {
                 <span className="truncate" title={matter ? `${matter.number ? `${matter.number} · ` : ''}${matter.title}${matter.client ? ` — ${matter.client}` : ''}` : title}>{title}</span>
               </h1>
               <p className="text-antique text-xs truncate">
-                {current ? `${clip(current.title, 60)}${otherWindows.length ? ` · ${t('chat.alsoIn', 'also asked in {{where}}', { where: otherWindows.join(' and ') })}` : ''}` : t('chat.newConversation', 'New conversation')}
+                {matter?.number ? `${matter.number} · ` : ''}{current ? `${clip(current.title, 60)}${otherWindows.length ? ` · ${t('chat.alsoIn', 'also asked in {{where}}', { where: otherWindows.join(' and ') })}` : ''}` : (messages.find((m) => m.role === 'user')?.content ? clip(messages.find((m) => m.role === 'user')!.content, 60) : t('chat.newConversation', 'New conversation'))}
               </p>
             </div>
           </div>
@@ -739,9 +744,13 @@ export default function Research() {
           )}
           {!!convDocs.length && !files.length && (
             <div className="mb-2 text-[11px] text-antique flex flex-wrap items-center gap-1" data-testid="conv-docs">
-              {t('chat.convDocs', 'Questions are about')}: {convDocs.map((d) => (
+              {t('chat.convDocs', 'Questions are about')}: {convDocs.length > 2 && !docsOpen ? (
+                <button type="button" onClick={() => setDocsOpen(true)} className="inline-flex items-center gap-1 px-1.5 py-1 rounded border border-tobacco/60 hover:text-cream" aria-expanded={false}>
+                  {t('chat.nDocs', '{{n}} documents', { n: convDocs.length })} <ChevronDown size={11} />
+                </button>
+              ) : convDocs.map((d) => (
                 <span key={d.id} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-tobacco/60">{d.name}
-                  <button type="button" onClick={() => setConvDocs((cur) => cur.filter((x) => x.id !== d.id))} aria-label={t('research.removeFile', 'Remove file')} className="hover:text-cream"><X size={10} /></button>
+                  <button type="button" onClick={() => setConvDocs((cur) => cur.filter((x) => x.id !== d.id))} aria-label={t('research.removeFile', 'Remove file')} className="p-1 -m-0.5 hover:text-cream"><X size={11} /></button>
                 </span>
               ))}
             </div>
@@ -834,11 +843,11 @@ function Answer({ m, now, live, openSteps, toggleSteps, onCopy, copied, onWord, 
           {!running && m.content && (
             <div className="flex items-center gap-2">
               {onWord && (
-                <button onClick={onWord} className="text-antique hover:text-accent transition-colors" title={t('research.sendToWord', 'Send to Word (insert at cursor)')}>
+                <button onClick={onWord} className="p-1.5 -my-1 rounded text-antique hover:text-accent transition-colors" title={t('research.sendToWord', 'Send to Word (insert at cursor)')} aria-label={t('research.sendToWord', 'Send to Word (insert at cursor)')}>
                   {sentToWord ? <Check size={14} className="text-forest" /> : <FileText size={14} />}
                 </button>
               )}
-              <button onClick={onCopy} className="text-antique hover:text-accent transition-colors" title={t('research.copyResponse', 'Copy response')}>
+              <button onClick={onCopy} className="p-1.5 -my-1 rounded text-antique hover:text-accent transition-colors" title={t('research.copyResponse', 'Copy response')} aria-label={t('research.copyResponse', 'Copy response')}>
                 {copied ? <Check size={14} className="text-forest" /> : <Copy size={14} />}
               </button>
             </div>
@@ -888,7 +897,7 @@ function Answer({ m, now, live, openSteps, toggleSteps, onCopy, copied, onWord, 
 
           {!running && act && !m.stored && (
             <div className="text-xs text-antique">
-              <button type="button" onClick={toggleSteps} className="inline-flex items-center gap-1 hover:text-cream" aria-expanded={openSteps}>
+              <button type="button" onClick={toggleSteps} className="inline-flex items-center gap-1 py-1 hover:text-cream" aria-expanded={openSteps}>
                 {summaryLine(act)} {openSteps ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
               </button>
               {openSteps && (

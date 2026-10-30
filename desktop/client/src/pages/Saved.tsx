@@ -6,6 +6,7 @@
 // drafts (/draft) are listed too and open here.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import i18n from '../i18n'
 import { useLocation, useNavigate } from 'react-router-dom'
 import Markdown from '../components/Markdown'
 import { Archive, Copy, FileUp, MessageSquare, Plus, Search, Star, Trash2, X } from 'lucide-react'
@@ -188,7 +189,7 @@ function ItemView({ item, onChanged, onDeleted, openChat }: { item: Item; onChan
           <button type="button" onClick={remove} title={t('saved.delete', 'Delete')} className="hover:text-red-400"><Trash2 size={16} /></button>
         </div>
       </div>
-      <div className="text-xs text-antique">{t(`saved.kind.${item.kind}`, item.kind)} · {new Date(item.createdAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}{item.tags.length && !editing ? ` · ${item.tags.map((g) => `#${g}`).join(' ')}` : ''}</div>
+      <div className="text-xs text-antique">{t(`saved.kind.${item.kind}`, item.kind)} · {new Date(item.createdAt).toLocaleString(i18n.language || undefined, { dateStyle: 'short', timeStyle: 'short' })}{item.tags.length && !editing ? ` · ${item.tags.map((g) => `#${g}`).join(' ')}` : ''}</div>
       {editing ? (
         <>
           <textarea value={content} onChange={(e) => setContent(e.target.value)} rows={14} className="input w-full text-sm" />

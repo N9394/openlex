@@ -1061,7 +1061,9 @@
       "gateway": "Viele Modelle mit einem Schlüssel; strenge Einstellungen sind immer aktiv.",
       "direct": "US-Unternehmen; Daten können die EU verlassen.",
       "other": "Ein Server, den Ihre Kanzlei betreibt."
-    }
+    },
+    "inUseNow": "In Verwendung: {{name}}",
+    "changeBelow": "unten eine andere wählen"
   },
   "chat": {
     "justNow": "gerade eben",
@@ -1136,7 +1138,8 @@
     "analysisReady": "Die Dokumentanalyse ist fertig – zum Ansehen klicken.",
     "judgeNote": "Zweiter Durchgang",
     "questionLabel": "Ihre Frage",
-    "privilegedShort": "vertraulich"
+    "privilegedShort": "vertraulich",
+    "nDocs": "{{n}} Dokumente"
   },
   "turn": {
     "once": "einmal",

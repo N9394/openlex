@@ -491,7 +491,7 @@ export function RecordList({ all, recent, say }: { all: boolean; recent: boolean
           <li key={i}>
             <button type="button" onClick={() => setOpen(open === i ? null : i)} aria-expanded={open === i} className="w-full flex items-baseline gap-2 rounded px-2 py-1.5 text-left hover:bg-leather/40 focus:bg-leather/40 outline-none">
               <span className={x.outcome === 'failed' ? 'text-red-400' : x.left ? 'text-amber-400' : 'text-forest'}>{x.outcome === 'failed' ? '✗' : x.left ? '!' : '✓'}</span>
-              <span className="text-antique tabular-nums shrink-0">{new Date(x.at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</span>
+              <span className="text-antique tabular-nums shrink-0">{new Date(x.at).toLocaleString(i18n.language || undefined, { dateStyle: 'short', timeStyle: 'short' })}</span>
               <span className="text-cream truncate">{x.title}{x.window ? <span className="text-antique"> ({x.window})</span> : null}</span>
             </button>
             {open === i && <div className="ml-8 mb-2 space-y-0.5 text-xs text-parchment">{(x.lines || []).map((l, j) => <div key={j}>{l}</div>)}</div>}

@@ -1061,7 +1061,9 @@
       "gateway": "Many models with one key; strict settings are always on.",
       "direct": "US companies; data may leave the EU.",
       "other": "A server your firm runs."
-    }
+    },
+    "inUseNow": "In use: {{name}}",
+    "changeBelow": "choose another below"
   },
   "chat": {
     "justNow": "just now",
@@ -1136,7 +1138,8 @@
     "analysisReady": "The document analysis is ready — click to view.",
     "judgeNote": "Second pass",
     "questionLabel": "Your question",
-    "privilegedShort": "privileged"
+    "privilegedShort": "privileged",
+    "nDocs": "{{n}} documents"
   },
   "turn": {
     "once": "once",
