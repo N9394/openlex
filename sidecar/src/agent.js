@@ -461,6 +461,14 @@ async function runAction(ctx, userMessage, onEvent, opts = {}) {
   const skillTools = require('./agents').allowedTools(opts.agent, opts.skill)
   const profile = planProfile()
   const intents = prompts.intentsOf(userMessage)
+  // Optional routing by the decision model (switch "decide.tasks.routing"): a confident answer adds an intent, never removes one.
+  try {
+    const tasks = require('./decide_tasks')
+    if (tasks.enabled('routing')) {
+      const r = await tasks.routeRequest(userMessage)
+      if (r && r.outcome === 'automate' && prompts.INTENTS?.[r.kind]) intents.add(r.kind)
+    }
+  } catch { /* the keyword intents stand */ }
   const unlocked = new Set() // tools the model loaded with get_tool_schemas this run
   const staging = () => prompts.stageTools({ intents, unlocked, allowed: skillTools, staged: profile.prompts !== 'all' })
   const mcpNames = () => { try { return require('./mcp/client').allTools().map((t) => t.qualified) } catch { return [] } }

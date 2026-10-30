@@ -504,6 +504,16 @@ async function analyseOne({ matterId, file, text, name, meta = null, focus = '',
     if (v) clauses.push({ title, kind, category: str(it.category, 40), note: str(it.note, 300), ...v })
   }
   clauses.sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'notable' ? -1 : 1) || a.location.pos - b.location.pos)
+  // Optional clause types from the decision model (switch "decide.tasks.clause_type"): a label on the card with its confidence.
+  try {
+    const tasks = require('./decide_tasks')
+    const notable = clauses.filter((c) => c.kind === 'notable' && c.quote)
+    if (notable.length && tasks.enabled('clause_type') && !signal?.aborted) {
+      const types = require('./clauses').TYPES.map(([id, label]) => [id, label])
+      const res = await tasks.clauseTypes(notable.map((c) => ({ title: c.title, text: c.location?.text || c.quote })), types, { signal })
+      res?.forEach((r, i) => { if (r) Object.assign(notable[i], { clauseType: r.answer, clauseTypeP: r.p, clauseTypeOutcome: r.outcome }) })
+    }
+  } catch (err) { stats.errors.push(`clause types: ${err.message}`) }
 
   const s = raw.summary || {}
   const folded = wf.norm(text)

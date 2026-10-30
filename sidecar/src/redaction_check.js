@@ -110,8 +110,23 @@ const keyOf = (kind, text) => `${detect.GROUPS[kind] === 'people' ? 'people' : k
 async function prepare({ matterId = null, items = [], signal } = {}) {
   prune()
   const ner = require('./pii_ner')
+  const v2 = require('./redaction_v2')
   const { terms, keep, patterns } = require('./redact').termsFor(matterId)
-  const model = ner.status().installed
+  // Version 2 (the decision model classifies every candidate) when switched on and a local model is ready; else version 1.
+  let detection = v2.detection()
+  const model = detection !== 'gowa' && ner.status().installed
+  const cache = new Map() // version 2: one decision per distinct candidate across the check
+  let partial = false
+  const scanOne = async (it, extraTerms = []) => {
+    if (detection === 'gowa') {
+      try {
+        const r = await v2.findings(it.text, { terms: [...terms, ...extraTerms], keep, patterns, cache, signal })
+        if (r.stats.partial) partial = true
+        return r.findings
+      } catch (err) { console.warn('[redaction] decision model failed, basic detection used:', err.message); detection = 'basic'; partial = true }
+    }
+    return detect.scan(it.text, { terms: [...terms, ...extraTerms], keep, patterns, model: it.model, all: true })
+  }
   const list = []
   for (const [i, it] of (Array.isArray(items) ? items : []).slice(0, 60).entries()) {
     const full = String(it?.text || '')
@@ -119,7 +134,9 @@ async function prepare({ matterId = null, items = [], signal } = {}) {
     const text = full.length > MAX_TEXT ? full.slice(0, MAX_TEXT) : full
     let found = []
     try { found = model ? await ner.find(text, { signal }) : [] } catch (err) { console.warn('[redaction] name finder failed:', err.message) }
-    list.push({ id: `d${i + 1}`, name: String(it.name || `Document ${i + 1}`).slice(0, 200), chars: full.length, text, truncated: full.length > text.length, model: found, findings: detect.scan(text, { terms, keep, patterns, model: found, all: true }) })
+    const entry = { id: `d${i + 1}`, name: String(it.name || `Document ${i + 1}`).slice(0, 200), chars: full.length, text, truncated: full.length > text.length, model: found }
+    entry.findings = await scanOne(entry)
+    list.push(entry)
   }
   // A person or organisation found in one text counts in the others too
   // ("Huber" in the question, "Mag. Johann Huber" in the contract).
@@ -127,7 +144,7 @@ async function prepare({ matterId = null, items = [], signal } = {}) {
   for (const it of list) for (const f of it.findings) if (['PERSON', 'ORG'].includes(f.kind) && f.on && f.source !== 'term' && f.source !== 'firm') seen.set(detect.norm(f.text), { text: f.text, kind: f.kind, source: 'found' })
   if (seen.size && list.length > 1) {
     const extra = [...seen.values()]
-    for (const it of list) it.findings = detect.scan(it.text, { terms: [...terms, ...extra], keep, patterns, model: it.model, all: true })
+    for (const it of list) it.findings = await scanOne(it, extra)
   }
   for (const it of list) delete it.model
   // One entry per distinct thing (same kind group, same text), with every place it appears.
@@ -148,7 +165,7 @@ async function prepare({ matterId = null, items = [], signal } = {}) {
   const order = detect.GROUP_ORDER
   const review = {
     id: `rc_${crypto.randomBytes(8).toString('hex')}`, matterId: matterId || null, at: Date.now(), status: 'open',
-    basic: !model, items: list,
+    basic: detection !== 'gowa' && !model, detection: detection === 'gowa' ? 'gowa' : model ? 'name-finder' : 'basic', ...(partial ? { partial: true } : {}), items: list,
     entries: [...entries.values()].sort((a, b) => order.indexOf(a.group) - order.indexOf(b.group) || b.count - a.count || a.text.localeCompare(b.text)),
   }
   reviews.set(review.id, review)
@@ -204,7 +221,7 @@ function confirm(id, d = {}) {
   for (const a of add) hidden[a.kind] = (hidden[a.kind] || 0) + 1
   const changed = unticked + ticked + add.length > 0
   Object.assign(r, { status: 'confirmed', confirmedAt: Date.now(), terms, keep, hidden, changed, decisions: { unticked, ticked, added: add.length } })
-  require('./policy').audit({ call: 'redaction-check', matter: r.matterId, decision: 'checked', documents: r.items.length, hidden, changed, unticked, ticked, added: add.length, detection: r.basic ? 'basic' : 'with-model' })
+  require('./policy').audit({ call: 'redaction-check', matter: r.matterId, decision: 'checked', documents: r.items.length, hidden, changed, unticked, ticked, added: add.length, detection: r.detection === 'gowa' ? 'with-gowa' : r.basic ? 'basic' : 'with-model' })
   // The text of the check is not needed any more.
   for (const it of r.items) { it.text = ''; it.findings = [] }
   return { id: r.id, status: r.status, hidden, changed }
@@ -218,12 +235,19 @@ function cancel(id) {
   return { ok: true }
 }
 
+// Honest wording for the check window: it finds candidates and suggests; the lawyer reviews.
+const DETECTION_LABELS = {
+  basic: { en: 'Basic detection (patterns, your lists, titles and legal forms)', de: 'Einfache Erkennung (Muster, Ihre Listen, Titel und Rechtsformen)' },
+  'name-finder': { en: 'With the name finder on this computer', de: 'Mit der Namenserkennung auf diesem Computer' },
+  gowa: { en: 'With the OpenLex model (GOWA) on this computer: suggestions for your review', de: 'Mit dem OpenLex-Modell (GOWA) auf diesem Computer: Vorschläge zur Prüfung' },
+}
+
 /** What the window shows: the check without internal fields. */
 function view(r, { lang = 'en' } = {}) {
   const de = /^de/i.test(lang)
   return {
-    id: r.id, matterId: r.matterId, status: r.status, basic: r.basic,
-    items: r.items.map((it) => ({ id: it.id, name: it.name, chars: it.chars, truncated: it.truncated, text: it.text, findings: it.findings.map((f) => ({ key: f.key, kind: f.kind, group: f.group, start: f.start, end: f.end, on: f.on, confidence: f.confidence, source: f.source })) })),
+    id: r.id, matterId: r.matterId, status: r.status, basic: r.basic, detection: r.detection, detectionLabel: DETECTION_LABELS[r.detection]?.[de ? 'de' : 'en'] || '', ...(r.partial ? { partial: true } : {}),
+    items: r.items.map((it) => ({ id: it.id, name: it.name, chars: it.chars, truncated: it.truncated, text: it.text, findings: it.findings.map((f) => ({ key: f.key, kind: f.kind, group: f.group, start: f.start, end: f.end, on: f.on, confidence: f.confidence, source: f.source, ...(f.decided ? { decided: f.decided } : {}) })) })),
     entries: r.entries.map((e) => ({ key: e.key, kind: e.kind, group: e.group, text: e.text, label: e.label?.[de ? 'de' : 'en'] || e.label?.en || e.kind, confidence: e.confidence, sources: e.sources, on: e.on, count: e.count, at: e.at })),
     groups: detect.GROUP_ORDER,
   }

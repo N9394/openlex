@@ -497,7 +497,15 @@ async function dispatch({ doc, memory, search, embeddings, packStore }, rawName,
       }
       if (firstError && !seen.size) return { output: `SEARCH ERROR: ${firstError} (is the law pack installed for ${jurisdiction}?)` }
       if (!seen.size) return { output: `NO RESULTS for ${jurisdiction} — nothing found in installed packs.` }
-      const entries = [...seen.entries()]
+      let entries = [...seen.entries()]
+      // Optional reranking by the decision model (switch "decide.tasks.relevance"); off or unsure: the search order stays.
+      try {
+        const tasks = require('./decide_tasks')
+        if (entries.length > 1 && tasks.enabled('relevance')) {
+          const order = await tasks.rerank(queries.join(' / '), entries.map(([id, p]) => ({ id, p, text: `${p.source_name || ''} ${p.section || ''}\n${p.content || ''}` })))
+          if (order) entries = order.map((x) => [x.id, x.p])
+        }
+      } catch { /* the search result stands */ }
       const digests = entries.slice(0, 8).map(([id, p]) => `[${id}] ${lawDigest({ source_name: p.source_name, section: p.section, content: p.content })}`)
       // Structured law sources for the pane ("which laws did the agent find")
       const lawSources = entries.slice(0, 8).map(([id, p]) => ({

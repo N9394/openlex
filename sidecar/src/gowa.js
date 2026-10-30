@@ -190,7 +190,7 @@ async function fetchTo(url, dest, f, onChunk) {
 
 /** Download the pinned files (checked by SHA-256). Refused while the weights are not available. */
 async function install({ onProgress } = {}) {
-  if (job) return job.promise
+  if (job) return job.promise.then(() => status())
   const m = manifest()
   if (!m.files.length) { const e = new Error(m.note); e.code = 'NOT_AVAILABLE'; throw e }
   if (!REQUIRED.every((n) => m.files.some((f) => f.name === n))) throw new Error(`GOWA: the release must list ${REQUIRED.join(', ')}`)
@@ -205,9 +205,9 @@ async function install({ onProgress } = {}) {
       await fetchTo(fileUrl(m, f), dest, f, (n) => { job.received += n; onProgress?.(status().downloading) })
     }
     readConfig() // a release with a broken head config is not "installed"
-    return status()
   })()
-  try { return await job.promise } catch (err) { lastError = err.message; throw err } finally { job = null }
+  try { await job.promise } catch (err) { lastError = err.message; throw err } finally { job = null }
+  return status()
 }
 
 function remove() {
