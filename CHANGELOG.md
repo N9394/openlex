@@ -4,6 +4,10 @@ All notable changes to OpenLex are listed here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+### Security
+- **Prompt injection: answers never load anything by themselves.** The desktop app, the Word pane and the Outlook pane show an image in an answer as "[image: website]" instead of loading it, do not render raw HTML, and open links only on a click (full address on hover; a question first when the address looks like it carries data). The built desktop page and the Office panes carry a Content-Security-Policy without remote sources; the desktop window cancels requests to other computers, stays on the app and opens only web and mail links in the browser. With "hide names" on, placeholders are never put back inside a web address.
+- **Prompt injection: documents are data.** The open document and every outside tool result (files, web pages, law sources, connectors) reach the AI inside marked blocks it is told to treat as data; text inside cannot close its block. Once something was read, opening a web page the lawyer did not name, saving outside the matter's folder, running a program, switching on a law source, asking for a key or using a sending connector is asked even with an "always allow" rule (narrow rules for a host or path still count), and the question says it came up while reading. Web addresses, searches and connector arguments that carry the client's name, a placeholder, a long copied passage or an encoded string are asked with a warning every time; the AI record notes why, without content. Red-team tests with an obeying fake model (English and German). See [SECURITY.md → Prompt injection](SECURITY.md#prompt-injection) and [Hidden instructions in documents](docs/guides/hidden-instructions.md).
+
 ## [0.3.2] - 2026-10-30
 
 (0.3.1 was built but not published; its changes are included here.)

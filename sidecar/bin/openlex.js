@@ -181,7 +181,7 @@ async function askPermission(ev) {
   const always = ev.choices.includes('always_matter') ? 'always_matter' : ev.choices.includes('always_folder') ? 'always_folder' : ev.choices.includes('always') ? 'always' : null
   const keys = `[y]es once${always ? ` / [a]lways${always === 'always_matter' ? ' (this matter)' : always === 'always_folder' ? ' (this folder)' : ''}` : ''} / [n]o`
   const detail = ev.tool === 'run_bash' ? '' : Object.entries(ev.detail || {}).filter(([k]) => k !== 'content').map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`).join(' · ')
-  process.stderr.write(`\n${ev.title} (${ev.risk})\n  ${ev.summary}${detail && !ev.folder ? `\n  ${detail.slice(0, 200)}` : ''}${ev.firmRule ? '\n  (your firm asks for confirmation here)' : ''}\n`)
+  process.stderr.write(`\n${ev.title} (${ev.risk})\n  ${ev.summary}${detail && !ev.folder ? `\n  ${detail.slice(0, 200)}` : ''}${ev.firmRule ? '\n  (your firm asks for confirmation here)' : ''}${ev.warning ? `\n  ! ${ev.warning}` : ''}${ev.caution ? `\n  ! ${ev.caution}` : ''}\n`)
   const rl = readline.createInterface({ input: process.stdin, output: process.stderr })
   const reply = await new Promise((resolve) => rl.question(`  Allow? ${keys}: `, (x) => { rl.close(); resolve(String(x).trim().toLowerCase()) }))
   const decision = reply === '' || reply === 'y' || reply === 'yes' ? 'once' : (reply === 'a' || reply === 'always') && always ? always : 'deny'

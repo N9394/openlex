@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api, streamInvestigate, apiBase } from '../lib/api'
-import ReactMarkdown from 'react-markdown'
+// Answers render through the safe Markdown component (no images load, links need a click).
+import ReactMarkdown from '../components/Markdown'
 import {
   Search,
   FileText,
