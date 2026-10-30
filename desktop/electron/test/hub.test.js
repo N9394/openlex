@@ -192,6 +192,8 @@ test('App chat on the engine: streamed answer through the hub, kept in the matte
     settings.update({ provider: 'openai', overrides: { baseUrl: `http://127.0.0.1:${fake.address().port}/v1`, model: 'gpt-test', nativeTools: false } })
     settings.update({ active: 'openai' })
     policy.setRule(null, { mode: 'allow-list', providers: ['openai'] })
+    // This is about streaming through the hub; the redaction check has its own tests (sidecar/test/redaction.test.js).
+    require(path.join(engineDir, 'redaction_check.js')).setCheck(false)
     const m = require(path.join(engineDir, 'matters.js')).create({ title: 'Alpine share deal' })
 
     const app = new HubClient({ version: '9.9.9', backend: 'http://127.0.0.1:18000', onEvent: () => {} })
