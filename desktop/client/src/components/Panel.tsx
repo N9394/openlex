@@ -23,7 +23,7 @@ import ExportButtons from './ExportButtons'
 export type PanelMode = 'parallel' | 'debate' | 'review'
 export interface PanelMember { name: string; side?: string; label?: string }
 export interface PanelSpec { mode: PanelMode; agents: PanelMember[]; rounds: number; moderator: string | null }
-export interface PanelRun { spec: PanelSpec; question: string; matterId: string | null; sessionId: string | null; attachments: string[]; message: string }
+export interface PanelRun { spec: PanelSpec; question: string; matterId: string | null; sessionId: string | null; attachments: string[]; message: string; redactionCheck?: string }
 interface AgentChoice { name: string; title: string; description?: string; template?: boolean; de?: { title?: string; description?: string } | null }
 
 export const DEFAULT_SPEC: PanelSpec = { mode: 'debate', agents: [{ name: 'claimant-counsel' }, { name: 'defendant-counsel' }], rounds: 2, moderator: 'judge' }
@@ -169,7 +169,7 @@ export default function PanelCard({ run, id, onPermission }: { run?: PanelRun; i
     try {
       const r = await e.stream('/api/panel/run', {
         mode: run.spec.mode, agents: run.spec.agents, rounds: run.spec.rounds, moderator: run.spec.moderator, question: run.question, confirmed: true, interactive: true,
-        message: run.message, ...(run.matterId ? { matterId: run.matterId } : {}), ...(run.sessionId ? { sessionId: run.sessionId } : {}), ...(run.attachments.length ? { attachments: run.attachments } : {}),
+        message: run.message, ...(run.matterId ? { matterId: run.matterId } : {}), ...(run.sessionId ? { sessionId: run.sessionId } : {}), ...(run.attachments.length ? { attachments: run.attachments } : {}), ...(run.redactionCheck ? { redactionCheck: run.redactionCheck } : {}),
       }, (ev) => {
         switch (ev.type) {
           case 'panel_start':

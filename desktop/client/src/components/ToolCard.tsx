@@ -21,6 +21,8 @@ export interface ToolRun {
   sessionId: string | null
   message: string
   options?: Record<string, unknown>
+  /** The confirmed redaction check (online AI). */
+  redactionCheck?: string
 }
 
 export interface Result { kind: string; id: string; name?: string }
@@ -39,7 +41,7 @@ export function ResultCard({ result, matterId }: { result: Result; matterId: str
 
 export default function ToolCard({ tool }: { tool: ToolRun }) {
   if (tool.name === 'draft') return <StartDraft tool={tool} />
-  return <BatchCard kind={tool.name} attachments={tool.attachments} matterId={tool.matterId} options={tool.options} sessionId={tool.sessionId} message={tool.message} />
+  return <BatchCard kind={tool.name} attachments={tool.attachments} matterId={tool.matterId} options={tool.options} sessionId={tool.sessionId} message={tool.message} redactionCheck={tool.redactionCheck} />
 }
 
 /** /draft: the engine writes the first draft (or takes the attached document), then the draft card. */
