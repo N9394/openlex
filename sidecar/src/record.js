@@ -119,7 +119,19 @@ function loadAudit(matterId) {
 
 // ── turning log lines into entries ───────────────────────────────────────
 /** What one audit line adds to an entry. */
+const HIDDEN_WORDS = { PERSON: ['person', 'people'], PARTY: ['name from the matter list', 'names from the matter list'], ORG: ['organisation', 'organisations'], ADDRESS: ['address', 'addresses'], ID: ['ID number', 'ID numbers'], TAXID: ['tax number', 'tax numbers'], REGNO: ['register number', 'register numbers'], CASENO: ['court file number', 'court file numbers'], IBAN: ['IBAN', 'IBANs'], BIC: ['BIC', 'BICs'], CARD: ['card number', 'card numbers'], EMAIL: ['e-mail address', 'e-mail addresses'], PHONE: ['phone number', 'phone numbers'], DATE: ['date of birth', 'dates of birth'], OTHER: ['other item', 'other items'] }
+/** { PERSON: 2, IBAN: 1 } → "2 people, 1 IBAN" (counts only; the record never holds what was hidden). */
+function hiddenWords(h = {}) {
+  return Object.entries(h && typeof h === 'object' ? h : {}).filter(([, n]) => +n > 0)
+    .map(([k, n]) => { const w = HIDDEN_WORDS[k] || ['item', 'items']; return `${+n} ${+n === 1 ? w[0] : w[1]}` }).join(', ')
+}
+
 function absorb(acc, e) {
+  // The redaction check (redaction_check.js): what was decided, in counts.
+  if (e.call === 'redaction-check') {
+    acc.checks.push({ decision: e.decision, hidden: e.hidden || {}, changed: !!e.changed, documents: +e.documents || 0, basic: e.detection === 'basic' })
+    return
+  }
   if (e.provider === 'permissions') {
     if (e.by === 'default' && e.decision === 'allowed') { acc.routine++; return }
     acc.permissions.push({ what: actionOf(e.call), decision: e.decision === 'blocked' ? 'denied' : 'allowed', by: decidedBy(e.by), asked: ['lawyer', 'timeout', 'disconnect'].includes(e.by) })
@@ -155,16 +167,17 @@ function absorb(acc, e) {
   }
   // An AI call.
   const { local, service } = serviceOf(e)
-  if (e.decision === 'blocked') { acc.blocked.push({ what: service, why: /region/i.test(e.reason || '') ? 'outside the approved regions' : 'your client-data rule does not allow it' }); return }
+  if (e.decision === 'blocked') { acc.blocked.push({ what: service, why: /region/i.test(e.reason || '') ? 'outside the approved regions' : /redaction check/i.test(e.reason || '') ? 'the redaction check was not done' : 'your client-data rule does not allow it' }); return }
   const hidden = 'redacted' in e
   const key = `${local ? 'local' : e.provider}|${e.region || ''}|${hidden ? 1 : 0}`
   let s = acc.ai.find((x) => x.key === key)
   if (!s) { s = { key, provider: local ? 'local' : e.provider, service, local, region: local ? null : (e.region || null), namesHidden: hidden, calls: 0, failed: 0 }; acc.ai.push(s) }
   s.calls++
+  if (/^checked/.test(e.check || '')) s.checked = true
   if (e.ok === false) s.failed++
 }
 
-const emptyAcc = () => ({ ai: [], lookups: [], permissions: [], blocked: [], routine: 0 })
+const emptyAcc = () => ({ ai: [], lookups: [], permissions: [], blocked: [], checks: [], routine: 0 })
 
 /** Sentences for the detail view, the same in every front end and export. */
 function detailLines(x) {
@@ -179,10 +192,15 @@ function detailLines(x) {
     for (const a of p.agents || []) lines.push(`Agent ${a.title}: ${a.skipped ? 'did not take part (not allowed for this matter)' : svc(a.services)}`)
     if (p.moderator) lines.push(`Moderator ${p.moderator.title}: ${svc(p.moderator.services)}`)
   }
+  for (const c of x.checks || []) {
+    lines.push(c.decision === 'cancelled'
+      ? `Redaction check: cancelled — nothing was sent`
+      : `Redaction check: ${hiddenWords(c.hidden) || 'nothing'} hidden${c.documents ? ` in ${plural(c.documents, 'text')}` : ''} — ${c.changed ? 'changed by you' : 'as suggested'}${c.basic ? ' (basic detection)' : ''}`)
+  }
   for (const s of x.ai) {
     lines.push(s.local
       ? `AI: on this computer · ${plural(s.calls, 'call')}${s.failed ? ` (${s.failed} failed)` : ''}`
-      : `AI: ${s.service} — sent outside this computer, ${s.namesHidden ? 'names hidden' : 'names not hidden'} · ${plural(s.calls, 'call')}${s.failed ? ` (${s.failed} failed)` : ''}`)
+      : `AI: ${s.service} — sent outside this computer, ${s.namesHidden ? `names and numbers hidden (pseudonymised)${s.checked ? ', checked by you' : ''}` : 'names and numbers not hidden'} · ${plural(s.calls, 'call')}${s.failed ? ` (${s.failed} failed)` : ''}`)
   }
   if (!x.ai.length && x.type === 'request') lines.push('AI: no AI call recorded')
   const online = x.lookups.filter((l) => !l.local)
@@ -254,13 +272,14 @@ function standaloneTitle(e, acc) {
   if (e.provider === 'permissions') return `Permission: ${acc.permissions[0] ? `${acc.permissions[0].what} — ${acc.permissions[0].decision}` : 'routine step allowed'}`
   if (e.provider === 'hook') return 'Your firm\'s rule'
   if (e.provider === 'mcp-server') return 'Another program used OpenLex'
+  if (e.call === 'redaction-check') return e.decision === 'cancelled' ? 'Redaction check cancelled' : 'Redaction check'
   if (e.call === 'monitor') return 'Check for law updates'
   if (e.call === 'test') return 'Test of the AI connection'
   if (e.call === 'law_source' || (e.provider === 'web' && /^source:/.test(String(e.call)))) return 'Looked up the law online'
   if (String(e.provider).startsWith('source:')) return 'Search in your firm\'s database'
   if (String(e.provider).startsWith('mcp:')) return 'Connector used'
   if (e.provider === 'web') return 'Looked up online'
-  if (e.decision === 'blocked') return 'AI call stopped by your client-data rule'
+  if (e.decision === 'blocked') return /redaction check/i.test(e.reason || '') ? 'AI call held back: the redaction check was not done' : 'AI call stopped by your client-data rule'
   return 'AI used outside a question (for example a summary or a check)'
 }
 
@@ -289,7 +308,7 @@ function standaloneEntries(lines) {
     const ms = Math.max(0, Date.parse(g.last) - Date.parse(e.ts))
     return finishEntry({
       id: `l_${e.ts}_${e.provider}`,
-      type: e.provider === 'permissions' || e.provider === 'hook' ? 'permission' : e.decision === 'blocked' ? 'blocked' : ['web', 'mcp-server'].includes(e.provider) || /^(source|mcp):/.test(e.provider) ? 'lookup' : 'call',
+      type: e.call === 'redaction-check' ? 'check' : e.provider === 'permissions' || e.provider === 'hook' ? 'permission' : e.decision === 'blocked' ? 'blocked' : ['web', 'mcp-server'].includes(e.provider) || /^(source|mcp):/.test(e.provider) ? 'lookup' : 'call',
       kind: e.call || '',
       at: e.ts,
       title: `${standaloneTitle(e, g.acc)}${g.n > 1 ? ` (${g.n}×)` : ''}`,
@@ -413,7 +432,7 @@ function summarize(entries) {
 
 function summaryText(s) {
   const parts = [plural(s.requests, 'request')]
-  for (const g of s.left.services) parts.push(`${g.entries} sent to ${g.service}${g.namesHidden === 'all' ? ', names hidden' : g.namesHidden === 'some' ? ', names hidden in some' : ', names not hidden'}`)
+  for (const g of s.left.services) parts.push(`${g.entries} sent to ${g.service}${g.namesHidden === 'all' ? ', names and numbers hidden' : g.namesHidden === 'some' ? ', names and numbers hidden in some' : ', names and numbers not hidden'}`)
   if (!s.left.services.length) parts.push(s.aiCalls ? 'AI only on this computer' : 'no AI calls')
   if (s.online.lookups) parts.push(plural(s.online.lookups, 'online lookup'))
   if (s.permissions.denied) parts.push(`${plural(s.permissions.denied, 'permission')} denied`)
@@ -512,7 +531,7 @@ function applyRetention(now = new Date()) {
 const EXPLAIN_TITLE = 'What this record shows and what it never contains'
 const EXPLAIN = [
   ['Shows', 'Every request made to OpenLex: when, from which window (Word, the terminal app, the command line), the short title of what was asked, the result (answered, number of proposed changes, names of files saved) and how long it took.'],
-  ['AI used', 'Which AI service handled each request and where it ran: on this computer, or an online service and its region. For online services: whether client names were hidden before sending.'],
+  ['AI used', 'Which AI service handled each request and where it ran: on this computer, or an online service and its region. For online services: whether names and numbers were hidden (pseudonymised) before sending, and whether you checked that first. Never what was hidden.'],
   ['Online', 'What was looked up online: only the website or database (for example RIS or EUR-Lex). Only search words or a web address go there, never documents.'],
   ['Permissions', 'Every permission decision: what OpenLex wanted to do (for example save a file), whether it was allowed, and who decided (you, a firm rule, a saved rule, or no answer in time).'],
   ['Never contains', 'The text of documents, the full questions as sent to the AI, the AI\'s answers, the instructions given to the AI, file contents or search words. OpenLex does not store these in the record at all.'],
@@ -569,7 +588,7 @@ function toMarkdown(r, v, opts) {
   out.push('', '## Summary', '', r.summary.text, '',
     `- Requests: ${r.summary.requests} (entries in total: ${r.summary.entries})`,
     `- AI calls: ${r.summary.aiCalls} (${r.summary.localCalls} on this computer, ${r.summary.left.calls} sent outside)`,
-    ...r.summary.left.services.map((g) => `- Sent to ${g.service}: ${plural(g.entries, 'entry', 'entries')}, ${plural(g.calls, 'call')}, client names ${g.namesHidden === 'all' ? 'hidden' : g.namesHidden === 'some' ? 'hidden in some' : 'not hidden'}`),
+    ...r.summary.left.services.map((g) => `- Sent to ${g.service}: ${plural(g.entries, 'entry', 'entries')}, ${plural(g.calls, 'call')}, names and numbers ${g.namesHidden === 'all' ? 'hidden' : g.namesHidden === 'some' ? 'hidden in some' : 'not hidden'}`),
     `- Online lookups: ${r.summary.online.lookups}${r.summary.online.sources.length ? ` (${r.summary.online.sources.join(', ')})` : ''}`,
     `- Permissions: ${r.summary.permissions.asked} asked, ${r.summary.permissions.allowed} allowed, ${r.summary.permissions.denied} denied`,
     `- Stopped by the client-data rule: ${r.summary.blocked}`,
@@ -596,7 +615,7 @@ function toPdf(r, v, opts) {
   const sections = [
     { title: `AI record - ${opts.matterId ? (r.matter?.title || opts.matterId) : 'all matters'}`, rows: [['Selection', scopeText(opts)], ['Made', `${stamp()} by OpenLex`]] },
     { title: EXPLAIN_TITLE, rows: EXPLAIN },
-    { title: 'Summary', rows: [['In short', s.text], ['Requests', String(s.requests)], ['AI calls', `${s.aiCalls} (${s.localCalls} on this computer, ${s.left.calls} sent outside)`], ...s.left.services.map((g) => ['Sent to', `${g.service}: ${plural(g.entries, 'entry', 'entries')}, ${plural(g.calls, 'call')}, client names ${g.namesHidden === 'all' ? 'hidden' : g.namesHidden === 'some' ? 'hidden in some' : 'not hidden'}`]), ['Online', `${s.online.lookups}${s.online.sources.length ? ` (${s.online.sources.join(', ')})` : ''}`], ['Permissions', `${s.permissions.asked} asked, ${s.permissions.allowed} allowed, ${s.permissions.denied} denied`], ['Not sent', String(s.blocked)]] },
+    { title: 'Summary', rows: [['In short', s.text], ['Requests', String(s.requests)], ['AI calls', `${s.aiCalls} (${s.localCalls} on this computer, ${s.left.calls} sent outside)`], ...s.left.services.map((g) => ['Sent to', `${g.service}: ${plural(g.entries, 'entry', 'entries')}, ${plural(g.calls, 'call')}, names and numbers ${g.namesHidden === 'all' ? 'hidden' : g.namesHidden === 'some' ? 'hidden in some' : 'not hidden'}`]), ['Online', `${s.online.lookups}${s.online.sources.length ? ` (${s.online.sources.join(', ')})` : ''}`], ['Permissions', `${s.permissions.asked} asked, ${s.permissions.allowed} allowed, ${s.permissions.denied} denied`], ['Not sent', String(s.blocked)]] },
     { title: `Entries (${r.entries.length})`, rows: r.entries.length ? r.entries.map((x) => [stamp(new Date(x.at)), [opts.titles || x.type !== 'request' ? x.title : (KIND_WORDS[x.kind] || 'Request'), ...x.lines].join(' | ')]) : [['', 'Nothing recorded for this selection.']] },
     { title: 'Check', rows: verifyLines(v).map((l, i) => [i === 0 ? (v.ok ? 'Intact' : 'Changed') : '', l.replace(/^[✓✗] /, (m) => (m.startsWith('✓') ? '[ok] ' : '[changed] '))]) },
   ]

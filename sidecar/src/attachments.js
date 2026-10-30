@@ -38,7 +38,10 @@ function where(matterId) {
   if (privileged || rule.mode === 'local-only') return { local: true, text: 'Stays on this computer: your client-data rule only allows the AI on this computer.' }
   const label = (id) => { try { return require('./providers/catalog').getProvider(id)?.label || id } catch { return id } }
   const names = (rule.providers || []).map(label).join(', ')
-  return { local: false, text: `May be sent to ${names || 'the AI services your client-data rule allows'}${rule.regions ? ` (regions: ${rule.regions.join(', ')})` : ''}${rule.redact ? ', with names hidden' : ''}, when you ask about it.` }
+  const check = require('./redaction_check')
+  const hiding = check.hidingOn(matterId)
+  const checked = check.needed(matterId).needed
+  return { local: false, checked, text: `May be sent to ${names || 'the AI services your client-data rule allows'}${rule.regions ? ` (regions: ${rule.regions.join(', ')})` : ''}${hiding ? ', with names and numbers hidden (pseudonymised)' : ''}, when you ask about it.${checked ? ' Before it is sent, you see what will be hidden (redaction check).' : ''}` }
 }
 
 function prune() {

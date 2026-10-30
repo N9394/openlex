@@ -63,7 +63,7 @@ export default function Settings() {
       ai: pv?.display ? (pv.display[lang] || pv.display.en) : '',
       data: rule.mode === 'local-only'
         ? t('data.local', 'Only this computer')
-        : t('settings.sum.services', '{{n}} services allowed', { n: (rule.providers || []).length }) + (rule.redact ? ` · ${t('settings.sum.names', 'names hidden')}` : '') + ((rule.regions || []).includes('eu') ? ' · EU' : ''),
+        : t('settings.sum.services', '{{n}} services allowed', { n: (rule.providers || []).length }) + (rule.redact ? ` · ${t('settings.sum.names', 'names and numbers hidden')}` : '') + ((rule.regions || []).includes('eu') ? ' · EU' : ''),
       law: sources.length ? t('settings.sum.law', '{{n}} of {{total}} on', { n: on, total: sources.length }) : '',
       permissions: allowed ? t('settings.sum.perms', '{{n}} things allowed without asking', { n: allowed }) : t('settings.sum.permsNone', 'OpenLex asks every time'),
       answers: answers === 'auto' ? t('settings.lang.same', 'same as my question') : answers === 'de' ? 'Deutsch' : 'English',

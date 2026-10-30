@@ -92,7 +92,7 @@ const engine = http.createServer((req, res) => {
         const qs = new URL(req.url, 'http://x').searchParams
         state.recordQueries = [...(state.recordQueries || []), qs.toString()]
         const entries = (state.record || []).filter((x) => qs.get('left') !== '1' || x.left)
-        return json({ matter: qs.get('matterId') ? { id: qs.get('matterId'), title: 'Alpine share deal' } : null, total: entries.length, nextCursor: null, entries, summary: { text: qs.get('left') === '1' ? '1 request · 1 sent to Claude (Anthropic, EU), names hidden · 1 online lookup' : '2 requests · 1 sent to Claude (Anthropic, EU), names hidden · 1 online lookup · 1 permission denied' }, verify: { ok: true, text: 'Record intact.', fingerprint: '3f2a 9c1d' } })
+        return json({ matter: qs.get('matterId') ? { id: qs.get('matterId'), title: 'Alpine share deal' } : null, total: entries.length, nextCursor: null, entries, summary: { text: qs.get('left') === '1' ? '1 request · 1 sent to Claude (Anthropic, EU), names and numbers hidden · 1 online lookup' : '2 requests · 1 sent to Claude (Anthropic, EU), names and numbers hidden · 1 online lookup · 1 permission denied' }, verify: { ok: true, text: 'Record intact.', fingerprint: '3f2a 9c1d' } })
       }
       case 'GET /api/record/verify': return json({ ok: false, text: 'Record changed: Audit log — Line 7 was changed after it was written.', fingerprint: '3f2a 9c1d 77b0 e412', files: [{ name: 'Audit log (AI calls, online lookups, permissions)', ok: false, entries: 9, broken: { line: 7, why: 'Line 7 was changed after it was written.' }, notes: [] }] })
       case 'POST /api/record/export': return json({ ok: true, file: `/ws/Alpine/ai-record-2026-10-29-14-02.${body.format}`, format: body.format, entries: 2, verified: true, fingerprint: '3f2a 9c1d' })
@@ -300,7 +300,7 @@ test('wizard: "Yes, for all matters" with EU only and hidden names → allow-lis
   const f = await waitFor(r, 'answered. Everything is ready.')
   assert.match(f, /✓|\+/)
   assert.deepStrictEqual(posted('/api/policy').at(-1).body.rule, { mode: 'allow-list', providers: ['mistral'], regions: ['eu'], redact: true })
-  assert.match(f, /Client data: may go to Mistral \(EU only, names hidden\)/)
+  assert.match(f, /Client data: may go to Mistral \(EU only, names and numbers hidden\)/)
   r.unmount()
 })
 
@@ -844,17 +844,17 @@ test('explain: the activity grows step by step (✓ done · ▸ now), with times
   assert.strictEqual(explain.checkLine({}).ok, false)
 })
 
-test('explain: where the data went — this computer, a cloud AI, names hidden, public law databases', () => {
+test('explain: where the data went — this computer, a cloud AI, names and numbers hidden, public law databases', () => {
   const local = { type: 'model', provider: 'local', local: true }
   const claude = { type: 'model', provider: 'anthropic', label: 'Anthropic', model: 'claude-sonnet-5-5', region: 'eu-central-1', local: false, redacted: true }
   let m = explain.addModel([], local)
   assert.deepStrictEqual(explain.dataLine(m), { text: 'Stayed on this computer', left: false })
   assert.deepStrictEqual(explain.dataLine([], [], { running: true }), { text: 'Nothing has left this computer so far', left: false })
   m = explain.addModel(explain.addModel(m, claude), claude)
-  assert.deepStrictEqual(explain.dataLine(m), { text: 'Sent to: Claude (Anthropic, EU) — names hidden · 2 times', left: true })
+  assert.deepStrictEqual(explain.dataLine(m), { text: 'Sent to: Claude (Anthropic, EU) — names and numbers hidden (pseudonymised) · 2 times', left: true })
   const open = explain.addModel([], { ...claude, provider: 'openai', label: 'OpenAI', model: 'gpt-5', region: null, redacted: false })
-  assert.strictEqual(explain.dataLine(open).text, 'Sent to: GPT (OpenAI) — names not hidden · once')
-  assert.strictEqual(explain.dataLine(explain.addModel([], { ...claude, provider: 'mistral', model: 'mistral-large', region: 'eu', redacted: false })).text, 'Sent to: Mistral (EU) — names not hidden · once')
+  assert.strictEqual(explain.dataLine(open).text, 'Sent to: GPT (OpenAI) — names and numbers not hidden · once')
+  assert.strictEqual(explain.dataLine(explain.addModel([], { ...claude, provider: 'mistral', model: 'mistral-large', region: 'eu', redacted: false })).text, 'Sent to: Mistral (EU) — names and numbers not hidden · once')
   const web = explain.dataLine(explain.addModel([], local), ['RIS (Austria\'s federal law database)'])
   assert.deepStrictEqual(web, { text: 'Your documents stayed on this computer. Looked up online: RIS (Austria\'s federal law database) (only search words or web addresses)', left: true })
   assert.match(explain.dataLine([], [], { unreported: 'Not reported which AI answered.' }).text, /Not reported/)
@@ -966,18 +966,18 @@ test('chat with a cloud AI and names hidden: "Sent to" cannot be missed; Esc sto
   const r = show(h(App))
   await openChat(r)
   await press(r, 'Can the seller limit liability to the purchase price?', 'enter')
-  await waitFor(r, 'Sent to: Claude (Anthropic, EU) — names hidden · once')
+  await waitFor(r, 'Sent to: Claude (Anthropic, EU) — names and numbers hidden (pseudonymised) · once')
   T += 4000; state.chatSend(scriptStep('search_ris', { query: 'Haftungsbeschränkung' }))
   await waitFor(r, 'Checking the official source')
   T += 3000; state.chatSend({ ...claude, role: 'analyze' })
   state.chatSend({ type: 'step', text: 'writing…', kind: 'writing' })
   state.chatSend({ type: 'text', text: 'In principle yes, but not for' })
   T += 2000
-  let f = await waitFor(r, 'names hidden · 2 times')
+  let f = await waitFor(r, '(pseudonymised) · 2 times')
   await sleep(1100)
   f = r.lastFrame()
-  capture('chat in progress — cloud AI, names hidden', f)
-  assert.match(flat(f), /! Sent to: Claude \(Anthropic, EU\) — names hidden · 2 times\. Also looked up online: RIS/)
+  capture('chat in progress — cloud AI, names and numbers hidden', f)
+  assert.match(flat(f), /! Sent to: Claude \(Anthropic, EU\) — names and numbers hidden \(pseudonymised\) · 2 times\. Also looked up online: RIS/)
   assert.match(f, /Checking the official source \(RIS, Austria's federal law/)
   assert.match(f, /▸ Writing the answer/)
   assert.match(f, /AI: Claude \(Anthropic\) — online AI service/)
@@ -987,7 +987,7 @@ test('chat with a cloud AI and names hidden: "Sent to" cannot be missed; Esc sto
   capture('stopped', f)
   assert.match(flat(f), /Stopped by you\. Kept: the answer so far \(6 words\)\. Nothing more is sent or saved\./)
   assert.match(f, /Stopped after 9 s/)
-  assert.match(flat(f), /! Sent to: Claude \(Anthropic, EU\) — names hidden · 2 times/)
+  assert.match(flat(f), /! Sent to: Claude \(Anthropic, EU\) — names and numbers hidden \(pseudonymised\) · 2 times/)
   const until = Date.now() + 2000
   while (!state.chatClosed && Date.now() < until) await sleep(20)
   assert.ok(state.chatClosed, 'the engine is told to stop')
@@ -1062,7 +1062,7 @@ test('recent activity: when, what was asked, what was looked at, where data went
   assert.match(f, /Took 34 s/)
   assert.match(flat(f), /Looked at: Reading clause 4 \(Liability\); Searching Austrian law: “Haftungsbeschränkung”/)
   assert.match(f, /Law used: ABGB § 1295, ABGB § 879/)
-  assert.match(flat(f), /! Sent to: Claude \(Anthropic, EU\) — names hidden · 3 times\./)
+  assert.match(flat(f), /! Sent to: Claude \(Anthropic, EU\) — names and numbers hidden \(pseudonymised\) · 3 times\./)
   assert.match(f, /Result: Answered, 1 proposed change/)
   await press(r, 'down')
   f = await waitFor(r, 'Stopped by you (what was done so far is kept)')
@@ -1520,7 +1520,7 @@ test('CLI: plain sentences while it works, "Based on" and where the data went; t
   p.finish()
   assert.match(out, /Reading “SPA\.docx” in this folder/)
   assert.match(out, /! Not done — “x\.csv” is outside the folder you are working in/)
-  assert.match(out, /Sent to: Claude \(Anthropic, EU\) — names hidden · once/)
+  assert.match(out, /Sent to: Claude \(Anthropic, EU\) — names and numbers hidden \(pseudonymised\) ·\s+once/)
 })
 
 test('an error: what happened, why, what to do — and the question is not lost', async () => {
@@ -1546,7 +1546,7 @@ const RECORD = () => {
   t.setHours(14, 2, 0, 0)
   return [
     { id: 'r1', type: 'request', kind: 'question', at: t.toISOString(), title: 'Question: “Can the seller limit liability?”', window: 'Word', left: true, outcome: 'done', calls: 3,
-      lines: ['Asked in: Word', 'Matter: Alpine share deal', 'AI: Claude (Anthropic, EU) — sent outside this computer, names hidden · 3 calls', 'Looked up online: RIS (Austria\'s federal law database) — only search words or a web address were sent', 'Permission to save a file: denied — decided by you', 'Result: Answered, 1 proposed change', 'Took 34 s'] },
+      lines: ['Asked in: Word', 'Matter: Alpine share deal', 'AI: Claude (Anthropic, EU) — sent outside this computer, names and numbers hidden (pseudonymised) · 3 calls', 'Looked up online: RIS (Austria\'s federal law database) — only search words or a web address were sent', 'Permission to save a file: denied — decided by you', 'Result: Answered, 1 proposed change', 'Took 34 s'] },
     { id: 'r2', type: 'request', kind: 'review', at: new Date(t.getTime() - 3600000).toISOString(), title: 'Checklist review: “spa”', window: 'Terminal app', left: false, outcome: 'done', calls: 24,
       lines: ['Asked in: Terminal app', 'AI: on this computer · 24 calls', 'Result: Done, saved review.docx', 'Took 6 min'] },
   ]
@@ -1562,10 +1562,10 @@ test('AI record (/record): summary line, entries with marks and details, only-se
   let f = await waitFor(r, 'record intact')
   capture('AI record', f)
   assert.match(f, /OpenLex › AI record/)
-  assert.match(flat(f), /2 requests · 1 sent to Claude \(Anthropic, EU\), names hidden · 1 online lookup · 1 permission denied · record intact ✓/)
+  assert.match(flat(f), /2 requests · 1 sent to Claude \(Anthropic, EU\), names and numbers hidden · 1 online lookup · 1 permission denied · record intact ✓/)
   assert.match(f, /▸ ! \d+ \w+ \d{4} 14:02 · Question: “Can the seller limit liability\?” \(Word\)/)
   assert.match(f, /✓ \d+ \w+ \d{4} 13:02 · Checklist review: “spa” \(Terminal app\)/)
-  assert.match(f, /! AI: Claude \(Anthropic, EU\) — sent outside this computer, names hidden/, 'the meaning is in a mark and words, not only colour')
+  assert.match(f, /! AI: Claude \(Anthropic, EU\) — sent outside this computer, names and numbers\s+hidden \(pseudonymised\)/, 'the meaning is in a mark and words, not only colour')
   assert.match(f, /Permission to save a file: denied — decided by you/)
   assert.match(f, /l only sent outside · p PDF · c CSV · v check · Esc back/)
   assert.match(state.recordQueries.at(-1), /matterId=m_1/)
@@ -1601,7 +1601,7 @@ test('AI record in plain ASCII, and the CLI: openlex record [--left] [--verify] 
   const theme = await import('../tui/theme.mjs')
   theme.configure({ ascii: true }, { tty: false })
   try {
-    const text = cli.recordText({ matter: { id: 'm_1', title: 'Alpine share deal' }, total: 2, entries: RECORD(), summary: { text: '2 requests · 1 sent to Claude (Anthropic, EU), names hidden' }, verify: { ok: true } })
+    const text = cli.recordText({ matter: { id: 'm_1', title: 'Alpine share deal' }, total: 2, entries: RECORD(), summary: { text: '2 requests · 1 sent to Claude (Anthropic, EU), names and numbers hidden' }, verify: { ok: true } })
     assert.ok(/^[\x20-\x7E\n]*$/.test(text), `ASCII only:\n${text}`)
     assert.match(text, /record intact \+/)
     assert.match(text, /^! \d+ \w+ \d{4} 14:02 \| Question: "Can the seller limit liability\?" \(Word\)$/m)
@@ -1610,8 +1610,8 @@ test('AI record in plain ASCII, and the CLI: openlex record [--left] [--verify] 
   state.record = RECORD()
   let x = await run('record', '--matter', 'm_1', '--left', '--from', '2026-10-01')
   capture('openlex record --left', x.out)
-  assert.match(x.out, /^AI record — Alpine share deal\n1 request · 1 sent to Claude \(Anthropic, EU\), names hidden · 1 online lookup · record intact ✓/)
-  assert.match(x.out, /\n    AI: Claude \(Anthropic, EU\) — sent outside this computer, names hidden · 3 calls\n/)
+  assert.match(x.out, /^AI record — Alpine share deal\n1 request · 1 sent to Claude \(Anthropic, EU\), names and numbers hidden · 1 online lookup · record intact ✓/)
+  assert.match(x.out, /\n    AI: Claude \(Anthropic, EU\) — sent outside this computer, names and numbers hidden \(pseudonymised\) · 3 calls\n/)
   assert.match(state.recordQueries.at(-1), /matterId=m_1&from=2026-10-01&left=1&limit=50/)
   x = await run('record', '--verify')
   assert.match(x.out, /^✗ Record changed: Audit log — Line 7 was changed after it was written\.\nFingerprint: 3f2a 9c1d 77b0 e412/)

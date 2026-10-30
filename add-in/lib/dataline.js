@@ -1,7 +1,7 @@
 /* OpenLex Word pane — "Where your data went": one always-visible line.
  * Symbol + words, never colour alone:
  *   ✓ Stayed on this computer
- *   ! Sent to Claude (Anthropic, EU) — names hidden · 2 times
+ *   ! Sent to Claude (Anthropic, EU) — names and numbers hidden (pseudonymised) · 2 times
  *   ! Looked up online: RIS
  * Built from the engine's `model` events (one per AI call) and the
  * `online`/`onlineTo` fields of `step` events. No DOM. */
@@ -18,8 +18,8 @@
     const key = `${ev.local ? 'local' : ev.provider}|${ev.region || ''}|${ev.redacted ? 1 : 0}`
     const out = (models || []).map((m) => Object.assign({}, m))
     const hit = out.find((m) => m.key === key)
-    if (hit) hit.calls++
-    else out.push({ key, provider: ev.provider, label: ev.label, model: ev.model || null, local: !!ev.local, region: ev.region || null, redacted: !!ev.redacted, calls: 1 })
+    if (hit) { hit.calls++; if (ev.checked) hit.checked = true }
+    else out.push({ key, provider: ev.provider, label: ev.label, model: ev.model || null, local: !!ev.local, region: ev.region || null, redacted: !!ev.redacted, ...(ev.checked ? { checked: true } : {}), calls: 1 })
     return out
   }
 
@@ -35,7 +35,7 @@
     const cloud = (models || []).filter((m) => !m.local)
     const web = [...new Set(online || [])]
     const parts = []
-    for (const m of cloud) parts.push(`Sent to ${words.serviceName(m)} — ${m.redacted ? 'names hidden' : 'names not hidden'} · ${words.times(m.calls)}`)
+    for (const m of cloud) parts.push(`Sent to ${words.serviceName(m)} — ${m.redacted ? `names and numbers hidden (pseudonymised)${m.checked ? ', checked by you' : ''}` : 'names and numbers not hidden'} · ${words.times(m.calls)}`)
     if (web.length) parts.push(`Looked up online: ${web.map(short).join(', ')}`)
     if (!parts.length) {
       return { symbol: '✓', left: false, text: running ? 'Nothing has left this computer so far' : 'Stayed on this computer', title: 'The AI ran on this computer and nothing was looked up online.' }

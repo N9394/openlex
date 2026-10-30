@@ -5,7 +5,7 @@
  *   explainStep(ev)            one `step` event → { text, online?, failed?, hide? }
  *   startActivity / applyEvent the live list of steps for one question
  *   activityLines(act, …)      that list as screen lines (✓ done · ▸ now · waiting)
- *   dataLine(models, online)   "Sent to: Claude (Anthropic, EU) — names hidden · 2 times"
+ *   dataLine(models, online)   "Sent to: Claude (Anthropic, EU) — names and numbers hidden (pseudonymised) · 2 times"
  *   basedOnLines(answer)       the "Based on:" block after an answer
  *   checkLine(suggestion)      "checked against ABGB § 933 ✓" / "could not be verified"
  *   startWork / applyProgress  documents of a review, chronology, grid, plan …
@@ -213,8 +213,8 @@ export function addModel(models, ev) {
   const key = `${ev.local ? 'local' : ev.provider}|${ev.region || ''}|${ev.redacted ? 1 : 0}`
   const out = models.map((m) => ({ ...m }))
   const hit = out.find((m) => m.key === key)
-  if (hit) hit.calls++
-  else out.push({ key, provider: ev.provider, label: ev.label, model: ev.model || null, local: !!ev.local, region: ev.region || null, redacted: !!ev.redacted, calls: 1 })
+  if (hit) { hit.calls++; if (ev.checked) hit.checked = true }
+  else out.push({ key, provider: ev.provider, label: ev.label, model: ev.model || null, local: !!ev.local, region: ev.region || null, redacted: !!ev.redacted, ...(ev.checked ? { checked: true } : {}), calls: 1 })
   return out
 }
 
@@ -228,7 +228,7 @@ export function dataLine(models = [], online = [], { running = false, unreported
   const cloud = models.filter((m) => !m.local)
   const parts = []
   if (cloud.length) {
-    parts.push(`Sent to: ${cloud.map((m) => `${serviceName(m)} — ${m.redacted ? 'names hidden' : 'names not hidden'} · ${times(m.calls)}`).join('; ')}`)
+    parts.push(`Sent to: ${cloud.map((m) => `${serviceName(m)} — ${m.redacted ? `names and numbers hidden (pseudonymised)${m.checked ? ', checked by you' : ''}` : 'names and numbers not hidden'} · ${times(m.calls)}`).join('; ')}`)
   }
   const web = [...new Set(online)]
   if (web.length) parts.push(`${cloud.length ? 'Also looked' : 'Looked'} up online: ${web.join(', ')} (only search words or web addresses)`)

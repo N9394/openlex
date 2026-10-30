@@ -156,7 +156,7 @@ export function describeModel(info) {
 export function describeRule(rule, matter) {
   if (matter?.privileged) return 'stays on this computer (privileged)'
   if (!rule || rule.mode !== 'allow-list' || !(rule.providers || []).length) return 'stays on this computer'
-  const extras = [rule.regions?.length ? (rule.regions.every(isEu) ? 'EU only' : rule.regions.join(', ')) : '', rule.redact ? 'names hidden' : ''].filter(Boolean)
+  const extras = [rule.regions?.length ? (rule.regions.every(isEu) ? 'EU only' : rule.regions.join(', ')) : '', rule.redact ? 'names and numbers hidden' : ''].filter(Boolean)
   return `may go to ${rule.providers.map(nameOf).join(', ')}${extras.length ? ` (${extras.join(', ')})` : ''}`
 }
 

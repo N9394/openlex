@@ -317,8 +317,8 @@ async function runPanel(req, res) {
     rec.see(e)
     if (e.type === 'model') {
       const hit = turn.data.find((m) => m.provider === e.provider && m.region === (e.region || null) && m.redacted === !!e.redacted && m.local === !!e.local)
-      if (hit) hit.calls++
-      else turn.data.push({ provider: e.provider, label: e.label, model: e.model || null, local: !!e.local, region: e.region || null, redacted: !!e.redacted, calls: 1 })
+      if (hit) { hit.calls++; if (e.checked) hit.checked = true }
+      else turn.data.push({ provider: e.provider, label: e.label, model: e.model || null, local: !!e.local, region: e.region || null, redacted: !!e.redacted, ...(e.checked ? { checked: true } : {}), calls: 1 })
     } else if (e.type === 'law') for (const s of e.sources || []) { if (!turn.sources.some((x) => (x.chunk_id && x.chunk_id === s.chunk_id) || (x.source_name === s.source_name && x.section === s.section))) turn.sources.push(s) }
     sendSse(res, e)
   }
@@ -1564,8 +1564,8 @@ async function handle(req, res) {
         rec.see(e)
         if (e.type === 'model') {
           const hit = turn.data.find((m) => m.provider === e.provider && m.region === (e.region || null) && m.redacted === !!e.redacted && m.local === !!e.local)
-          if (hit) hit.calls++
-          else turn.data.push({ provider: e.provider, label: e.label, model: e.model || null, local: !!e.local, region: e.region || null, redacted: !!e.redacted, calls: 1 })
+          if (hit) { hit.calls++; if (e.checked) hit.checked = true }
+          else turn.data.push({ provider: e.provider, label: e.label, model: e.model || null, local: !!e.local, region: e.region || null, redacted: !!e.redacted, ...(e.checked ? { checked: true } : {}), calls: 1 })
         }
         sendSse(res, e)
       }
@@ -1700,8 +1700,8 @@ async function handle(req, res) {
         if (e.type === 'law') for (const s of e.sources || []) { if (!turn.sources.some((x) => (x.chunk_id && x.chunk_id === s.chunk_id) || (x.source_name === s.source_name && x.section === s.section))) turn.sources.push(s) }
         else if (e.type === 'model') {
           const hit = turn.data.find((m) => m.provider === e.provider && m.region === (e.region || null) && m.redacted === !!e.redacted && m.local === !!e.local)
-          if (hit) hit.calls++
-          else turn.data.push({ provider: e.provider, label: e.label, model: e.model || null, local: !!e.local, region: e.region || null, redacted: !!e.redacted, calls: 1 })
+          if (hit) { hit.calls++; if (e.checked) hit.checked = true }
+          else turn.data.push({ provider: e.provider, label: e.label, model: e.model || null, local: !!e.local, region: e.region || null, redacted: !!e.redacted, ...(e.checked ? { checked: true } : {}), calls: 1 })
         } else if (e.type === 'step' && e.online && e.onlineTo && !turn.online.includes(e.onlineTo)) turn.online.push(e.onlineTo)
         else if (e.type === 'judge') turn.judge = { ran: !!e.ran, ok: e.ok, reason: e.reason, notes: e.notes }
       }
