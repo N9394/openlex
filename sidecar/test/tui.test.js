@@ -190,6 +190,9 @@ const engine = http.createServer((req, res) => {
           { type: 'progress', step: 'document', index: 2, total: 2, name: 'SPA draft 4.docx' },
           { type: 'done', files: ['/ws/Alpine/review.xlsx', '/ws/Alpine/review.docx'], stats: { documents: 2, verified: 5 } },
         ])
+      case 'POST /api/redaction/check': return json(state.redaction ? { needed: true, review: state.redaction } : { needed: false, local: true })
+      case 'POST /api/redaction/confirm': state.redactionConfirmed = body; return json({ id: body.id, status: 'confirmed', hidden: { PERSON: 1, IBAN: 1 }, changed: true })
+      case 'POST /api/redaction/cancel': state.redactionCancelled = body; return json({ ok: true })
       case 'POST /api/permissions/answer': { const fn = state.pending; state.pending = null; fn?.(body.decision); return json(fn ? { ok: true, ...(body.decision === 'always_folder' ? { saved: 'write_file:~/Clients/Alpine/**' } : body.decision.startsWith('always') ? { saved: 'write_file' } : {}) } : { ok: false, error: 'no such permission request' }, fn ? 200 : 404) }
       case 'GET /api/permissions': return json({ firm: { allow: [], ask: [], deny: ['run_bash'], matters: {} }, user: state.perms, locked: false, defaults: [], pending: [] })
       case 'POST /api/permissions/rules': {
@@ -548,6 +551,49 @@ async function waitAnswers(n, ms = 3000) {
   while (answered().length < n && Date.now() < until) await sleep(20)
   assert.strictEqual(answered().length, n)
 }
+
+test('redaction check: a numbered list before an online AI; number + Enter switches, + adds, s sends, Esc cancels', async () => {
+  prefs({ setupDone: true })
+  Object.assign(state, { active: 'local', policy: { mode: 'local-only' } })
+  state.matters[0].privileged = false
+  state.redaction = {
+    id: 'rc_1', basic: true, groups: ['people', 'orgs', 'addresses', 'ids', 'contact', 'other'],
+    entries: [
+      { key: 'people:johann huber', kind: 'PERSON', group: 'people', text: 'Johann Huber', label: 'Person', confidence: 0.8, on: true, count: 2 },
+      { key: 'people:eva steiner', kind: 'PERSON', group: 'people', text: 'Eva Steiner', label: 'Person', confidence: 0.8, on: true, count: 1 },
+      { key: 'IBAN:at61', kind: 'IBAN', group: 'ids', text: 'AT61 1904 3002 3457 3201', label: 'IBAN', confidence: 0.99, on: true, count: 1 },
+    ],
+  }
+  const r = show(h(App))
+  await openMatterChat(r)
+  const before = posted('/api/chat').length
+  await press(r, 'Who pays?', 'enter')
+  let f = await waitFor(r, 'Check what is hidden before sending')
+  capture('redaction check', f)
+  assert.match(flat(f), /It can miss things, especially indirect details/)
+  assert.match(flat(f), /\[x\] 1 Johann Huber/)
+  assert.strictEqual(posted('/api/chat').length, before, 'nothing sent before the check')
+  // Untick line 2, add "Käufer", send.
+  await press(r, '2', 'enter')
+  f = await waitFor(r, '[ ]  2  Eva Steiner')
+  await press(r, '+', 'K', 'ä', 'u', 'f', 'e', 'r', 'enter')
+  await waitFor(r, 'added by you')
+  await press(r, 's')
+  await waitFor(r, 'Checked by you')
+  assert.deepStrictEqual(state.redactionConfirmed, { id: 'rc_1', off: ['people:eva steiner'], on: [], add: [{ text: 'Käufer', kind: 'OTHER' }] })
+  const chat = posted('/api/chat').at(-1).body
+  assert.strictEqual(chat.redactionCheck, 'rc_1')
+  // Esc: nothing is sent, the question comes back.
+  const n = posted('/api/chat').length
+  await press(r, 'Second question', 'enter')
+  await waitFor(r, 'Check what is hidden before sending')
+  await press(r, 'esc')
+  f = await waitFor(r, 'Nothing was sent')
+  assert.strictEqual(posted('/api/chat').length, n)
+  assert.strictEqual(state.redactionCancelled.id, 'rc_1')
+  state.redaction = null
+  r.unmount()
+})
 
 test('permission prompt: plain words over the chat; Enter = allow once, a = this matter, A = always, n/Esc = no', async () => {
   prefs({ setupDone: true })

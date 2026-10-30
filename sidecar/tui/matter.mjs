@@ -41,6 +41,7 @@ import { useAppCtx } from './context.mjs'
 import { matchInvocation, log, friendly, errorParts, describeRule, describeModel, nameOf } from './api.mjs'
 import { cleanPaths, completePath, shortPath } from './paths.mjs'
 import { PermissionPrompt, PermissionRules, answeredLine } from './permission.mjs'
+import { RedactionPrompt } from './redaction.mjs'
 import { clock, startActivity, applyEvent, activityLines, doneLines, basedOnLines, basedOn, sourcesNote, checkLine, basisText, stopSentence } from './explain.mjs'
 import { pastedFiles, chipLabel, attachSentence, readAttachment, joinTexts } from './attach.mjs'
 import { FolderPicker } from './folder.mjs'
@@ -136,6 +137,7 @@ export function Matter({ matterId = null }) {
   const [notes, setNotes] = useState([]) // [{ kind, text }]
   const [scroll, setScroll] = useState(0)
   const [perm, setPerm] = useState(null) // a permission request waiting for the lawyer
+  const [rcheck, setRcheck] = useState(null) // the redaction check waiting for the lawyer: { review, resolve }
   const [keyFor, setKeyFor] = useState(null) // provider whose key is being typed (/key)
   const [secret, setSecret] = useState('')
   const [returnTo, setReturnTo] = useState('menu') // where a picker opened from the chat goes back to
@@ -281,6 +283,26 @@ export function Matter({ matterId = null }) {
       if (parts.length) { docText = joinTexts(parts); docId = `tui:${key}:${att.map((f) => f.path).join('|')}` }
       if (matterId) for (const n of await copyIntoMatter(att.map((f) => f.path))) sys(n.text, n.kind)
     }
+    // Online AI: the lawyer checks what is hidden first (only this computer: no check).
+    let checked
+    try {
+      const rc = await ctx.api.redactionCheck({ message, ...(docText ? { text: docText, name: att.map((f) => f.name).join(', ') } : {}), matterId: matterId || undefined, messageName: 'Your question' })
+      if (rc?.needed && rc.review) {
+        const d = await new Promise((resolve) => setRcheck({ review: rc.review, resolve }))
+        setRcheck(null)
+        if (!d) {
+          await ctx.api.redactionCancel(rc.review.id).catch(() => {})
+          setInput(typed || text)
+          return sys('Nothing was sent. Your question is back in the field.', 'info')
+        }
+        const r = await ctx.api.redactionConfirm(rc.review.id, d)
+        checked = r.id
+        sys(`Checked by you: ${Object.values(r.hidden || {}).reduce((a, b) => a + b, 0)} things hidden (pseudonymised) before sending.`, 'ok')
+      }
+    } catch (err) {
+      setInput(typed || text)
+      return sys(`The redaction check did not work (${String(err.message).split('\n')[0]}), so nothing was sent.`, 'bad')
+    }
     const t0 = clock.now()
     // If the engine does not report its AI calls, the data line says what the rule allows.
     const rule = matter ? matter.policy || ctx.info.policy?.default : ctx.info.policy?.default
@@ -297,7 +319,7 @@ export function Matter({ matterId = null }) {
     let failed = false
     const flush = () => { clearTimeout(timer); timer = null; if (!buf) return; const t = buf; buf = ''; patch((a) => { a.text += t }) }
     try {
-      await ctx.api.chat({ message, docId, ...(docText ? { text: docText, files: att.map((f) => f.name) } : {}), matterId: matterId || undefined, sessionId, agent: as.name, interactive: true, ...ctx.folderBody() }, (ev) => {
+      await ctx.api.chat({ message, docId, ...(docText ? { text: docText, files: att.map((f) => f.name) } : {}), matterId: matterId || undefined, sessionId, agent: as.name, interactive: true, ...(checked ? { redactionCheck: checked } : {}), ...ctx.folderBody() }, (ev) => {
         const at = clock.now()
         if (ev.type === 'text') {
           // The first words switch the activity to "Writing the answer"; the rest only add text.
@@ -980,7 +1002,9 @@ export function Matter({ matterId = null }) {
         ${shown.map((l, i) => html`<${Text} key=${i} wrap="truncate-end">${l.segs.map((g, k) => html`<${Text} key=${k} dimColor=${!!g.dim} bold=${!!g.bold} color=${g.color}>${g.t}<//>`)}<//>`)}
       <//>
       ${slash.map((s) => html`<${Text} key=${s.key} dimColor wrap="truncate-end">  ${s.text}<//>`)}
-      ${perm
+      ${rcheck
+        ? html`<${RedactionPrompt} key=${rcheck.review.id} review=${rcheck.review} onDone=${rcheck.resolve} />`
+        : perm
         ? html`<${PermissionPrompt} key=${perm.id} req=${perm} onAnswer=${(d) => answerPerm(perm, d)} />`
         : saveAsk
           ? html`<${PermissionPrompt} key="save" req=${saveAsk.req} onAnswer=${(d) => { const s = saveAsk; setSaveAsk(null); if (d === 'deny') return sys(`Not saved: ${s.req.summary}`, 'warn'); saveAnswer(s.arg, d) }} />`
