@@ -1,0 +1,239 @@
+# GOWA licence register — every source of training data, labels or weights.
+#
+# Rule: GOWA is published under Apache-2.0, so nothing non-commercial (NC),
+# nothing with an unknown or unclear licence, and never client data goes in.
+# A source is used only when it is listed here with `include: yes`; the
+# converters, the label script and the trainer refuse anything else
+# (gowa/register.py, check_datasets.py; the engine's test suite validates
+# this file too).
+#
+# Fields (all required):
+#   id          short id, used in every example's "source" field
+#   name        what it is
+#   kind        dataset | corpus | model | labeler | never
+#   source      where it comes from (URL or description)
+#   licence     licence as published (SPDX id where there is one)
+#   commercial  yes | no | unclear — may a commercially usable model be trained on it?
+#   include     yes | no — used for GOWA now
+#   tasks       which GOWA tasks it feeds ([] for none)
+#   reason      why it is in or out, in one line
+# Optional:
+#   subsets     for collections whose parts have their own licences: only the
+#               subsets listed here are cleared (empty = none yet)
+#
+# Format: a strict subset of YAML (one "- id:" block per source, "key: value"
+# lines, [a, b] lists, # comments) so that it can be checked without a YAML
+# library. Licence facts as checked on 2026-10-30 (Hugging Face dataset tags
+# and model cards); re-check before each public release.
+
+datasets:
+  - id: mmbert-small
+    name: mmBERT-small (base encoder for GOWA small)
+    kind: model
+    source: https://huggingface.co/jhu-clsp/mmBERT-small
+    licence: MIT
+    commercial: yes
+    include: yes
+    tasks: [redaction, injection, claim_support, clause_type, relevance, routing, in_force, general]
+    reason: MIT weights; pretraining data MIT (decay data) and ODC-By (FineWeb2).
+
+  - id: cuad
+    name: CUAD — 510 English commercial contracts, 41 clause types
+    kind: dataset
+    source: https://huggingface.co/datasets/theatticusproject/cuad
+    licence: CC-BY-4.0
+    commercial: yes
+    include: yes
+    tasks: [clause_type]
+    reason: Commercial use allowed with attribution (credited in the model card).
+
+  - id: lexglue
+    name: LexGLUE (LEDGAR, UNFAIR-ToS, and other tasks)
+    kind: dataset
+    source: https://huggingface.co/datasets/coastalcph/lex_glue
+    licence: CC-BY-4.0
+    commercial: yes
+    include: yes
+    tasks: [clause_type, relevance]
+    reason: Commercial use allowed with attribution; LEDGAR provisions and UNFAIR-ToS clause categories.
+
+  - id: multi_eurlex
+    name: MultiEURLEX — EU laws in 23 languages with EuroVoc topics
+    kind: dataset
+    source: https://huggingface.co/datasets/coastalcph/multi_eurlex
+    licence: CC-BY-4.0
+    commercial: yes
+    include: yes
+    tasks: [clause_type, relevance, general]
+    reason: Multilingual legal topic labels incl. DE, EN, CS, SK, PL, RO, HU, FR; attribution.
+
+  - id: lextreme
+    name: LEXTREME — multilingual legal benchmark (collection)
+    kind: dataset
+    source: https://huggingface.co/datasets/joelniklaus/lextreme
+    licence: CC-BY-4.0 (collection); each task keeps its own licence
+    commercial: unclear
+    include: yes
+    subsets: []
+    tasks: [clause_type, relevance, general]
+    reason: OK per task only — a subset is used after its own licence was checked and it is listed under subsets.
+
+  - id: tasksource_synthetic_typed
+    name: tasksource synthetic typed decisions
+    kind: dataset
+    source: https://huggingface.co/datasets/tasksource/synthetic-typed-decisions
+    licence: Apache-2.0
+    commercial: yes
+    include: yes
+    tasks: [general]
+    reason: Typed noul/choice/score decisions under Apache-2.0; teaches the question format.
+
+  - id: eurlex_texts
+    name: EUR-Lex legislation texts (official, 24 languages)
+    kind: corpus
+    source: https://eur-lex.europa.eu (reuse under Commission Decision 2011/833/EU)
+    licence: EU reuse policy (attribution)
+    commercial: yes
+    include: yes
+    tasks: [claim_support, relevance, in_force, redaction, injection]
+    reason: Official EU texts may be reused commercially with attribution; input for LLM-made labels.
+
+  - id: ris_at
+    name: Austrian federal law (RIS open data)
+    kind: corpus
+    source: https://data.bka.gv.at (RIS OGD)
+    licence: CC-BY-4.0
+    commercial: yes
+    include: yes
+    tasks: [claim_support, relevance, in_force, redaction, injection]
+    reason: Open government data with attribution.
+
+  - id: legifrance
+    name: French legislation (Légifrance open data)
+    kind: corpus
+    source: https://www.legifrance.gouv.fr (DILA open data)
+    licence: Licence Ouverte / Etalab-2.0
+    commercial: yes
+    include: yes
+    tasks: [claim_support, relevance, in_force, redaction, injection]
+    reason: Open licence allowing commercial reuse with attribution.
+
+  - id: official_laws_de_cz_sk_pl_ro_hu
+    name: Official statute texts from the national gazettes (DE, CZ, SK, PL, RO, HU)
+    kind: corpus
+    source: gesetze-im-internet.de, e-sbirka.cz, slov-lex.sk, isap.sejm.gov.pl, legislatie.just.ro, njt.hu
+    licence: Official works, excluded from copyright (DE §5 UrhG; CZ §3 Act 121/2000; SK §5 Act 185/2015; PL art. 4 copyright act; RO art. 9 Law 8/1996; HU Szjt. 1. § (4))
+    commercial: yes
+    include: yes
+    tasks: [claim_support, relevance, in_force, redaction, injection]
+    reason: Official texts only, taken from the official portals — never from a commercial consolidation or commentary.
+
+  - id: openlex_llm_labels
+    name: Labels made by an open LLM on the included public texts (label_llm.py)
+    kind: dataset
+    source: models/gowa/label_llm.py run on a GPU over the corpora above
+    licence: Apache-2.0 (ours)
+    commercial: yes
+    include: yes
+    tasks: [redaction, injection, claim_support, clause_type, relevance, routing, in_force]
+    reason: Our own labels on cleared public text, made with an Apache-2.0 model; inherits the input texts' attribution duties.
+
+  - id: qwen3
+    name: Qwen3 open-weight models (labeler for label_llm.py)
+    kind: labeler
+    source: https://huggingface.co/Qwen
+    licence: Apache-2.0
+    commercial: yes
+    include: yes
+    tasks: []
+    reason: Apache-2.0 sizes only (check the card of the exact checkpoint); its outputs on public text become our labels.
+
+  - id: openlex_seed
+    name: Hand-written seed examples in this repository (models/gowa/seed/)
+    kind: dataset
+    source: models/gowa/seed/*.jsonl
+    licence: Apache-2.0
+    commercial: yes
+    include: yes
+    tasks: [routing, injection, redaction]
+    reason: Written for OpenLex, invented names only; small, for routing and hard negatives.
+
+  - id: legalbench
+    name: LegalBench
+    kind: dataset
+    source: https://huggingface.co/datasets/nguha/legalbench
+    licence: CC-BY-4.0 overall; per-task licences vary (some NC)
+    commercial: unclear
+    include: no
+    tasks: []
+    reason: Varies per task and some tasks are non-commercial; clear task by task before any use.
+
+  - id: contract_nli
+    name: ContractNLI
+    kind: dataset
+    source: https://huggingface.co/datasets/kiddothe2b/contract-nli
+    licence: CC-BY-NC-SA-4.0 (Hugging Face mirror); official licence unclear
+    commercial: no
+    include: no
+    tasks: []
+    reason: Excluded until the licence is cleared with the authors — NC on the mirror.
+
+  - id: ai4privacy
+    name: ai4privacy PII datasets
+    kind: dataset
+    source: https://huggingface.co/ai4privacy
+    licence: other (custom)
+    commercial: unclear
+    include: no
+    tasks: []
+    reason: Custom licence with restrictions; excluded until cleared.
+
+  - id: kev_decision_v7
+    name: Kev decision-v7 training mix
+    kind: dataset
+    source: https://github.com/jaredpalmer/kev
+    licence: mixed (AG News and TREC unknown, Yelp and IMDb restrictive terms, others vary)
+    commercial: unclear
+    include: no
+    tasks: []
+    reason: Kev's Apache weights do not clean its data; only parts with clear licences may be taken in, each listed on its own.
+
+  - id: tasksource_jev_typed
+    name: tasksource Jev typed decisions
+    kind: dataset
+    source: https://huggingface.co/datasets/tasksource/jev-typed-decisions
+    licence: other
+    commercial: unclear
+    include: no
+    tasks: []
+    reason: Licence "other"; avoid for shipped weights.
+
+  - id: multinli
+    name: MultiNLI
+    kind: dataset
+    source: https://huggingface.co/datasets/nyu-mll/multi_nli
+    licence: mixed (OANC parts and CC-BY-SA-3.0 parts)
+    commercial: unclear
+    include: no
+    tasks: []
+    reason: Mixed sources; check each genre's licence before use.
+
+  - id: horizon_injection_data
+    name: Horizon prompt-injection-guard training data (as listed in its card)
+    kind: dataset
+    source: https://huggingface.co/Horizon-Labs/prompt-injection-guard-small
+    licence: stated permissive only (per card)
+    commercial: unclear
+    include: no
+    tasks: []
+    reason: Pending a spot check of every listed source.
+
+  - id: client_documents
+    name: Client documents and anything from a lawyer's matters
+    kind: never
+    source: OpenLex users' computers
+    licence: confidential
+    commercial: no
+    include: no
+    tasks: []
+    reason: Never used for training or labelling. Nothing leaves the lawyer's computer.

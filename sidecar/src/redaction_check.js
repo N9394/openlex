@@ -106,18 +106,41 @@ const keyOf = (kind, text) => `${detect.GROUPS[kind] === 'people' ? 'people' : k
  *   items   [{ name, text }] — the question, each document
  *   signal  stops the name finder
  * @returns the check: { id, matterId, basic, finder, items: [{ id, name, chars, text, truncated, detection, findings }], entries }
- *   detection per text: 'model' when the name finder really went through
- *   it, else 'basic'. basic: any text without the name finder. finder: why —
- *   'used' | 'failed' (installed, but it did not run) | 'not-installed' |
- *   'unavailable' (no ONNX runtime in this build or on this computer).
+ *   detection per text: 'gowa' when the decision model (redaction v2) classified
+ *   its candidates, 'model' when the name finder really went through it, else
+ *   'basic'. basic: any text with neither. finder: why — 'used' | 'failed'
+ *   (installed, but it did not run) | 'not-installed' | 'unavailable' (no ONNX
+ *   runtime in this build or on this computer). engine: 'gowa' | 'name-finder' |
+ *   'basic' for the whole check; gowa: 'used' | 'failed' | 'off' |
+ *   'not-installed' | 'unavailable' | 'not-yet-available'.
  */
 async function prepare({ matterId = null, items = [], signal } = {}) {
   prune()
   const ner = require('./pii_ner')
+  const v2 = require('./redaction_v2')
   const { terms, keep, patterns } = require('./redact').termsFor(matterId)
   const st = ner.status()
-  const model = st.installed && st.available
+  // Version 2 (the decision model classifies every candidate) when switched on and a local model is ready; else version 1.
+  let gowaOn = v2.ready()
+  const model = !gowaOn && st.installed && st.available
   let failed = false
+  let gowaFailed = false
+  const cache = new Map() // version 2: one decision per distinct candidate across the check
+  let partial = false
+  // One text through version 2; null when the decision model did not run (then version 1 decides).
+  const viaGowa = async (it, extraTerms = []) => {
+    if (!gowaOn) return null
+    try {
+      const r = await v2.findings(it.text, { terms: [...terms, ...extraTerms], keep, patterns, cache, signal })
+      if (r.stats.partial) partial = true
+      if (!r.stats.failed) return r.findings
+    } catch (err) { console.warn('[redaction] decision model failed:', err.message) }
+    console.warn('[redaction] decision model unavailable, basic detection used')
+    gowaOn = false
+    gowaFailed = true
+    partial = true
+    return null
+  }
   const list = []
   for (const [i, it] of (Array.isArray(items) ? items : []).slice(0, 60).entries()) {
     const full = String(it?.text || '')
@@ -125,11 +148,14 @@ async function prepare({ matterId = null, items = [], signal } = {}) {
     const text = full.length > MAX_TEXT ? full.slice(0, MAX_TEXT) : full
     let found = []
     let ran = false
+    const entry = { id: `d${i + 1}`, name: String(it.name || `Document ${i + 1}`).slice(0, 200), chars: full.length, text, truncated: full.length > text.length }
+    const v = await viaGowa(entry)
+    if (v) { entry.detection = 'gowa'; entry.model = []; entry.findings = v; list.push(entry); continue }
     if (model) {
       try { ({ findings: found, ran } = await ner.run(text, { signal })) } catch (err) { console.warn('[redaction] name finder failed:', err.message) }
       if (!ran) failed = true // what it found before it stopped still counts; the check says "basic"
     }
-    list.push({ id: `d${i + 1}`, name: String(it.name || `Document ${i + 1}`).slice(0, 200), chars: full.length, text, truncated: full.length > text.length, detection: ran ? 'model' : 'basic', model: found, findings: detect.scan(text, { terms, keep, patterns, model: found, all: true }) })
+    list.push({ ...entry, detection: ran ? 'model' : 'basic', model: found, findings: detect.scan(text, { terms, keep, patterns, model: found, all: true }) })
   }
   // A person or organisation found in one text counts in the others too
   // ("Huber" in the question, "Mag. Johann Huber" in the contract).
@@ -137,7 +163,14 @@ async function prepare({ matterId = null, items = [], signal } = {}) {
   for (const it of list) for (const f of it.findings) if (['PERSON', 'ORG'].includes(f.kind) && f.on && f.source !== 'term' && f.source !== 'firm') seen.set(detect.norm(f.text), { text: f.text, kind: f.kind, source: 'found' })
   if (seen.size && list.length > 1) {
     const extra = [...seen.values()]
-    for (const it of list) it.findings = detect.scan(it.text, { terms: [...terms, ...extra], keep, patterns, model: it.model, all: true })
+    for (const it of list) {
+      const v = it.detection === 'gowa' ? await viaGowa(it, extra) : null
+      if (v) it.findings = v
+      else {
+        if (it.detection === 'gowa') it.detection = 'basic' // the model stopped working midway: version 1 for this text
+        it.findings = detect.scan(it.text, { terms: [...terms, ...extra], keep, patterns, model: it.model, all: true })
+      }
+    }
   }
   for (const it of list) delete it.model
   // One entry per distinct thing (same kind group, same text), with every place it appears.
@@ -156,12 +189,14 @@ async function prepare({ matterId = null, items = [], signal } = {}) {
     }
   }
   const order = detect.GROUP_ORDER
-  // "With name finder" only when the model really went through every text of this check.
-  const basic = !list.length ? !model : list.some((it) => it.detection !== 'model')
+  // "With name finder" / "with GOWA" only when that model really went through every text of this check.
+  const basic = !list.length ? !model && !gowaOn : list.some((it) => it.detection === 'basic')
   const finder = !st.available ? 'unavailable' : !st.installed ? 'not-installed' : failed ? 'failed' : 'used'
+  const engine = list.length && list.every((it) => it.detection === 'gowa') ? 'gowa' : basic ? 'basic' : 'name-finder'
+  const gowa = gowaFailed ? 'failed' : engine === 'gowa' ? 'used' : v2.status()
   const review = {
     id: `rc_${crypto.randomBytes(8).toString('hex')}`, matterId: matterId || null, at: Date.now(), status: 'open',
-    basic, finder, runtime: st.available ? null : st.runtime?.reason || 'load-failed', items: list,
+    basic, finder, runtime: st.available ? null : st.runtime?.reason || 'load-failed', engine, gowa, ...(partial ? { partial: true } : {}), items: list,
     entries: [...entries.values()].sort((a, b) => order.indexOf(a.group) - order.indexOf(b.group) || b.count - a.count || a.text.localeCompare(b.text)),
   }
   reviews.set(review.id, review)
@@ -217,7 +252,7 @@ function confirm(id, d = {}) {
   for (const a of add) hidden[a.kind] = (hidden[a.kind] || 0) + 1
   const changed = unticked + ticked + add.length > 0
   Object.assign(r, { status: 'confirmed', confirmedAt: Date.now(), terms, keep, hidden, changed, decisions: { unticked, ticked, added: add.length } })
-  require('./policy').audit({ call: 'redaction-check', matter: r.matterId, decision: 'checked', documents: r.items.length, hidden, changed, unticked, ticked, added: add.length, detection: r.basic ? 'basic' : 'with-model' })
+  require('./policy').audit({ call: 'redaction-check', matter: r.matterId, decision: 'checked', documents: r.items.length, hidden, changed, unticked, ticked, added: add.length, detection: r.basic ? 'basic' : 'with-model', ...(r.engine === 'gowa' ? { engine: 'gowa' } : {}) })
   // The text of the check is not needed any more.
   for (const it of r.items) { it.text = ''; it.findings = [] }
   return { id: r.id, status: r.status, hidden, changed }
@@ -231,12 +266,20 @@ function cancel(id) {
   return { ok: true }
 }
 
+// Honest wording for the check window: it finds candidates and suggests; the lawyer reviews.
+const DETECTION_LABELS = {
+  basic: { en: 'Basic detection (patterns, your lists, titles and legal forms)', de: 'Einfache Erkennung (Muster, Ihre Listen, Titel und Rechtsformen)' },
+  'name-finder': { en: 'With the name finder on this computer', de: 'Mit der Namenserkennung auf diesem Computer' },
+  gowa: { en: 'With the OpenLex model (GOWA) on this computer: suggestions for your review', de: 'Mit dem OpenLex-Modell (GOWA) auf diesem Computer: Vorschläge zur Prüfung' },
+}
+
 /** What the window shows: the check without internal fields. */
 function view(r, { lang = 'en' } = {}) {
   const de = /^de/i.test(lang)
   return {
     id: r.id, matterId: r.matterId, status: r.status, basic: r.basic, detection: r.basic ? 'basic' : 'with-model', finder: r.finder, runtime: r.runtime,
-    items: r.items.map((it) => ({ id: it.id, name: it.name, chars: it.chars, truncated: it.truncated, detection: it.detection, text: it.text, findings: it.findings.map((f) => ({ key: f.key, kind: f.kind, group: f.group, start: f.start, end: f.end, on: f.on, confidence: f.confidence, source: f.source })) })),
+    engine: r.engine, engineLabel: DETECTION_LABELS[r.engine]?.[de ? 'de' : 'en'] || '', gowa: r.gowa, ...(r.partial ? { partial: true } : {}),
+    items: r.items.map((it) => ({ id: it.id, name: it.name, chars: it.chars, truncated: it.truncated, detection: it.detection, text: it.text, findings: it.findings.map((f) => ({ key: f.key, kind: f.kind, group: f.group, start: f.start, end: f.end, on: f.on, confidence: f.confidence, source: f.source, ...(f.decided ? { decided: f.decided } : {}) })) })),
     entries: r.entries.map((e) => ({ key: e.key, kind: e.kind, group: e.group, text: e.text, label: e.label?.[de ? 'de' : 'en'] || e.label?.en || e.kind, confidence: e.confidence, sources: e.sources, on: e.on, count: e.count, at: e.at })),
     groups: detect.GROUP_ORDER,
   }
@@ -277,7 +320,7 @@ function assertChecked(matterId) {
 /** For the AI record of one online call: was it checked, did the lawyer change anything, and did the name finder run (detection)? */
 function callNote() {
   const ctx = require('./policy').redactionContext()
-  if (ctx?.review?.status === 'confirmed') return { check: ctx.review.changed ? 'checked-changed' : 'checked', detection: ctx.review.basic ? 'basic' : 'with-model' }
+  if (ctx?.review?.status === 'confirmed') return { check: ctx.review.changed ? 'checked-changed' : 'checked', detection: ctx.review.basic ? 'basic' : 'with-model', ...(ctx.review.engine === 'gowa' ? { engine: 'gowa' } : {}) }
   return { check: 'automatic' }
 }
 

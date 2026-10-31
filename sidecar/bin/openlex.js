@@ -26,6 +26,7 @@
  *   openlex clauses [--type liability] [--query words] [--matter ID]
  *   openlex grid list | new TITLE --columns cols.json [--matter ID] | run ID [--force] | show ID | export ID
  *   openlex decide "text" --question "Is …?" | --questions q.json [--file doc] [--matter ID]
+ *   openlex gowa [status|install|remove|tasks|on TASK|off TASK]   OpenLex's own decision model (GOWA) and its task switches
  *   openlex skills [show NAME | draft "what it should do" [--name N] [--save]]   ("/name …" in ask runs one)
  *   openlex playbook draft FILE… --title T [--focus words] [--save NAME]
  *   openlex monitors [add eurlex|ris "words" | add rss|page URL] [--topics a,b] [--every H] | check [ID] | alerts
@@ -760,6 +761,27 @@ async function main() {
         console.log(`${id}: ${ans}${s.p != null ? `  p=${s.p.toFixed(2)}` : ''}${s.confidence != null ? `  confidence=${s.confidence.toFixed(2)}` : ''}`)
       }
       return
+    }
+    case 'gowa': {
+      const sub = a._[0] || 'status'
+      const showTasks = (t) => {
+        for (const x of t.tasks) console.log(`  ${x.id.padEnd(14)} ${x.on ? 'on ' : 'off'}  threshold ${x.threshold}${x.on && !x.ready ? '  (no decision model ready)' : ''}`)
+      }
+      if (sub === 'status') {
+        const { model: m } = await request('GET', '/api/decide/gowa')
+        if (a.json) return console.log(JSON.stringify(m, null, 2))
+        console.log(`${m.label}: ${m.name} — ${m.status}${m.sizeMB ? ` (${m.sizeMB} MB)` : ''}`)
+        if (m.note) console.log(`  ${m.note}`)
+        console.log(`  base ${m.base}, licence ${m.license}; runtime ${m.runtime.available ? 'available' : `not available (${m.runtime.error})`}`)
+        return
+      }
+      if (sub === 'install' || sub === 'remove') {
+        const r = await request('POST', '/api/decide/gowa', { action: sub })
+        return console.log(r.error ? r.error : `${r.model.name}: ${r.model.status}`)
+      }
+      if (sub === 'tasks') return showTasks(await request('GET', '/api/decide/tasks'))
+      if (sub === 'on' || sub === 'off') return showTasks(await request('POST', '/api/decide/tasks', { task: a._[1], on: sub === 'on' }))
+      throw new Error('usage: openlex gowa [status|install|remove|tasks|on TASK|off TASK]')
     }
     default:
       // No arguments in a terminal: the full-screen app. Piped/scripted: usage.

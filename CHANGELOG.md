@@ -4,6 +4,11 @@ All notable changes to OpenLex are listed here. The format follows [Keep a Chang
 
 ## [Unreleased]
 
+### Added
+- **GOWA (General OpenLex Worker Agent), OpenLex's own decision model: the infrastructure.** It is mmBERT-small with one Kev-style decision head. It answers yes/no, choice and score questions with calibrated probabilities on this computer, through the same System One API as a local Kev or Jev (`decide.json` → `{ "provider": "gowa" }`). The weights are not trained yet, so the engine shows "GOWA small v0 — not yet available". Model management (a pinned download with SHA-256 per file, size, remove), loading on first use, unloading when idle, a CPU thread cap and batching are ready. So are `openlex gowa`, `/api/decide/gowa` and `/api/decide/tasks`. The training pipeline is in `models/gowa/`: licence register, converters, labelling script for public texts, training, int8 export, evaluation, Colab notebook.
+- **Tasks behind switches, all off by default:** the redaction check v2 (candidates from patterns, lists, heuristics, first names, capitalised words and GLiNER; GOWA classifies each one in context, and the lawyer reviews), a prompt-injection flag in the permission prompt (it never blocks), clause types on analysis cards, law-search reranking, request routing, and claim-support hints for the judge. Each task call adds one line to the AI record with counts and confidences, never content.
+- **Rule checks for the judge, on now:** numbers, dates and § / Art. references in a claim that do not appear in the cited source are handed to the judge agent as "possible mismatches". The judge always runs and decides. If the judge is unavailable, the lawyer sees these pointers as "possible mismatch (automatic check, please verify)".
+
 ## [0.3.4] - 2026-10-31
 
 (0.3.1–0.3.3 were built but not published; their changes, listed below, ship with this release.)

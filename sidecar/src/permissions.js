@@ -479,6 +479,8 @@ function audit(entry) {
 async function authorize({ tool, args = {}, matterId = null, turn = null }) {
   let ev = evaluate(tool, args, { matterId })
   const call = tool
+  // The optional injection signal finishes before the guard words its question (no wait when it is off).
+  try { await turn?.settle?.() } catch { /* the signal never stops a call */ }
   // Prompt injection (untrusted.js): after reading a document, page or source,
   // outbound and risky calls ask even with a general allow rule; arguments
   // that would carry client data out always need the lawyer's explicit yes.

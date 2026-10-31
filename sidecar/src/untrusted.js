@@ -111,6 +111,8 @@ class Turn {
     this.matterId = matterId
     this.reads = [] // { label }
     this.texts = []
+    this.injection = [] // { label, p } — passages the injection signal flagged
+    this.pending = []
     // Document names are internal ids (Word, app): it is just "a document".
     if (document && String(document.text || '').trim()) this.read('document', String(document.text), 'document')
   }
@@ -127,6 +129,29 @@ class Turn {
   read(kind, text, label) {
     if (!this.reads.some((r) => r.label === label)) this.reads.push({ kind, label })
     if (text) { this.texts.push(String(text)); if (this.texts.length > 40) this.texts.shift() }
+    if (text) this.signal(String(text), label)
+  }
+
+  /**
+   * The optional prompt-injection signal (decide_tasks.js, switch
+   * "decide.tasks.injection"): a decision model scores the text read. A hit
+   * is a flag in the permission prompt for the lawyer — it never blocks
+   * and never allows anything.
+   */
+  signal(text, label) {
+    let tasks
+    try { tasks = require('./decide_tasks') } catch { return }
+    if (!tasks.flags().injection) return
+    const p = tasks.injectionSignal(text).then((r) => {
+      if (r?.flagged?.length && !this.injection.some((x) => x.label === label)) this.injection.push({ label, p: Math.max(...r.flagged.map((f) => f.p)) })
+    }).catch(() => {})
+    this.pending.push(p)
+  }
+
+  /** Wait for the injection signals still running (immediate when the switch is off). */
+  async settle() {
+    const list = this.pending.splice(0)
+    if (list.length) await Promise.all(list)
   }
 
   get tainted() { return this.reads.length > 0 }
@@ -205,7 +230,8 @@ function guard(tool, args = {}, { ev, turn, matterId = null } = {}) {
   const a = args || {}
   const exfil = OUTBOUND.has(tool) || String(tool).startsWith('mcp__') ? findings(tool, a, turn, matterId) : []
   if (!turn.tainted && !exfil.length) return null
-  const caution = turn.tainted ? `This request came up while reading ${turn.describe()}. Check it carefully: text in it may have asked for this.` : ''
+  const flagged = (turn.injection || []).slice(-2).map((x) => `${x.label} (p ${x.p})`).join(', ')
+  const caution = turn.tainted ? `This request came up while reading ${turn.describe()}. Check it carefully: text in it may have asked for this.${flagged ? ` The OpenLex model (GOWA) flagged a passage in ${flagged} that reads like instructions to an AI — flagged for your review.` : ''}` : ''
   const warning = exfil.length ? warningText(exfil) : undefined
   if (exfil.length) return { ask: true, exfil, caution, warning, narrowRuleOk: false }
   // Untrusted content was read: which calls need the lawyer even with an allow rule?

@@ -857,9 +857,29 @@ async function handle(req, res) {
         if (req.method === 'GET' && p === '/api/decide/config') {
           return sendJson(res, 200, { config: decide.loadConfig(), endpoint: decide.descriptor(), hasKey: await secrets.hasKey('decide') })
         }
+        // GOWA (OpenLex's own decision model) and the task switches.
+        if (req.method === 'GET' && p === '/api/decide/gowa') return sendJson(res, 200, { model: require('./gowa').status() })
+        if (req.method === 'GET' && p === '/api/decide/tasks') return sendJson(res, 200, require('./decide_tasks').status())
         if (req.method !== 'POST') return sendJson(res, 404, { error: 'not found' })
         const body = await readBody(req)
         if (p === '/api/decide/config') return sendJson(res, 200, { config: decide.saveConfig(body.clear ? null : body), endpoint: decide.descriptor() })
+        if (p === '/api/decide/gowa') {
+          const gowa = require('./gowa')
+          if (body.action === 'remove') return sendJson(res, 200, { model: gowa.remove() })
+          if (body.action === 'unload') { gowa.unload(); return sendJson(res, 200, { model: gowa.status() }) }
+          if (!gowa.manifest().files.length) return sendJson(res, 409, { error: gowa.MANIFEST.note, code: 'NOT_AVAILABLE', model: gowa.status() })
+          gowa.install().catch((err) => console.warn('[gowa] download failed:', err.message))
+          return sendJson(res, 202, { model: gowa.status() })
+        }
+        if (p === '/api/decide/tasks') {
+          // { task, on }: the lawyer's switch for one task (refused when the firm locked "decide").
+          const tasks = require('./decide_tasks')
+          if (!tasks.IDS.includes(body.task)) return sendJson(res, 400, { error: `task must be one of ${tasks.IDS.join(', ')}` })
+          const harness = require('./harness')
+          const cur = harness.layers().user.data?.decide || {}
+          harness.setUserSection('decide', { ...cur, tasks: { ...(cur.tasks || {}), [body.task]: !!body.on } })
+          return sendJson(res, 200, tasks.status())
+        }
         if (p === '/api/decide/key') {
           if (body.key === null || body.key === '') await secrets.deleteKey('decide')
           else await secrets.setKey('decide', body.key)
@@ -1172,7 +1192,7 @@ async function handle(req, res) {
       try {
         if (req.method === 'GET' && p === '/api/redaction') {
           const matterId = url.searchParams.get('matterId') || null
-          return sendJson(res, 200, { settings: check.settings(), needed: check.needed(matterId), model: ner.status(), patterns: require('./pii_patterns').describe(url.searchParams.get('lang') || 'en') })
+          return sendJson(res, 200, { settings: check.settings(), needed: check.needed(matterId), model: ner.status(), detection: require('./redaction_v2').detection(), patterns: require('./pii_patterns').describe(url.searchParams.get('lang') || 'en') })
         }
         if (req.method !== 'POST') return sendJson(res, 405, { error: 'POST only' })
         const body = await readBody(req, 60)

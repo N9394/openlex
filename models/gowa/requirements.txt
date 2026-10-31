@@ -1,0 +1,8 @@
+# GOWA training pipeline (GPU box or Colab). Python 3.10+.
+torch>=2.4
+transformers>=4.48   # ModernBERT architecture (mmBERT)
+datasets>=3.0
+onnx>=1.16
+onnxruntime>=1.20
+accelerate>=1.0
+# label_llm.py only (GPU): pip install vllm   (optional; falls back to transformers)
