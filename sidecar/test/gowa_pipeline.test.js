@@ -44,7 +44,7 @@ function parseRegister(text) {
     if (v.length >= 2 && v[0] === v[v.length - 1] && `'"`.includes(v[0])) return v.slice(1, -1)
     return v
   }
-  text.split('\n').forEach((line, i) => {
+  text.split(/\r?\n/).forEach((line, i) => {
     if (!line.trim() || line.trimStart().startsWith('#')) return
     if (line.trimEnd() === 'datasets:') { inList = true; return }
     if (!inList) throw new Error(`line ${i + 1}: expected "datasets:" first`)
@@ -109,7 +109,7 @@ test('seed examples: every line is a valid example from an included source', () 
   const dir = path.join(GOWA_DIR, 'seed')
   let n = 0
   for (const f of fs.readdirSync(dir).filter((x) => x.endsWith('.jsonl'))) {
-    for (const line of fs.readFileSync(path.join(dir, f), 'utf8').split('\n').filter(Boolean)) {
+    for (const line of fs.readFileSync(path.join(dir, f), 'utf8').split(/\r?\n/).filter(Boolean)) {
       const ex = JSON.parse(line)
       assert.strictEqual(entries[ex.source]?.include, 'yes', `${f}: ${ex.source}`)
       assert.ok(TASKS.includes(ex.task))
