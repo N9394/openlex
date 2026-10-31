@@ -10,8 +10,8 @@
  * System One API as decide.js, so a local Kev server, GOWA and Jev are
  * interchangeable behind decide.systemOne().
  *
- * Runs in this process (onnxruntime-node, the tokenizer from
- * @huggingface/transformers). Nothing is sent anywhere. Loaded on first
+ * Runs in this process on the engine's one ONNX runtime (onnx_runtime.js:
+ * onnxruntime-node + @huggingface/tokenizers). Nothing is sent anywhere. Loaded on first
  * use, unloaded after a few idle minutes, CPU threads capped.
  *
  * Files in <data>/models/gowa-small/:
@@ -97,13 +97,10 @@ function fileUrl(m, f) {
 }
 
 // ── runtime availability ──────────────────────────────────────────────────
-// Kept independent of how the app packages onnxruntime-node; swap for the
-// shared check once the desktop bundling lands.
-let rt = null
+// The engine's one ONNX runtime (onnx_runtime.js): the desktop app bundles it,
+// the CLI tarball and Homebrew do not, Intel Macs cannot run it.
 function runtime() {
-  if (rt) return rt
-  try { require('onnxruntime-node'); rt = { available: true } } catch (err) { rt = { available: false, error: String(err.message || err).split('\n')[0].slice(0, 200) } }
-  return rt
+  return require('./onnx_runtime').info()
 }
 
 // ── status ────────────────────────────────────────────────────────────────
@@ -113,6 +110,7 @@ let loading = null
 let idleTimer = null
 let job = null
 let lastError = null
+let lastRun = null // { ok, at, ms?, error? } — did GOWA actually answer, the last time it was asked?
 
 function readConfig(file = path.join(dir(), 'gowa-model.json')) {
   const c = JSON.parse(fs.readFileSync(file, 'utf8'))
@@ -161,6 +159,7 @@ function status() {
     ...(state === 'not-yet-available' ? { note: m.note } : {}),
     runtime: test ? { available: true } : runtime(),
     loaded: !!loaded || (!!test && !!test.loaded),
+    lastRun,
     downloading: job ? { received: job.received, total: bytes, pct: bytes ? Math.round((job.received / bytes) * 100) : 0 } : null,
     error: lastError,
   }
@@ -240,18 +239,14 @@ async function load() {
   if (loading) return loading
   loading = (async () => {
     if (!installed()) throw new Error('GOWA is not installed')
-    const r = runtime()
-    if (!r.available) throw new Error(`the on-device runtime (onnxruntime-node) is not available: ${r.error}`)
+    const rtm = require('./onnx_runtime')
+    const ort = rtm.ort() // throws ONNX_UNAVAILABLE with a plain reason
     const cfg = readConfig()
-    const ort = require('onnxruntime-node')
-    const { AutoTokenizer, env } = await import('@huggingface/transformers')
-    env.allowRemoteModels = false
-    env.localModelPath = path.dirname(dir())
-    const tok = await AutoTokenizer.from_pretrained(MANIFEST.id)
+    const tok = rtm.tokenizer(dir())
     const s = settings()
     const session = await ort.InferenceSession.create(path.join(dir(), 'model.onnx'), { intraOpNumThreads: s.threads, interOpNumThreads: 1, graphOptimizationLevel: 'all' })
     const names = new Set(session.inputNames)
-    const encode = (text) => tok.encode(String(text), { add_special_tokens: false }).map((x) => (Number.isInteger(x) ? x : cfg.unk))
+    const encode = (text) => Array.from(tok.encode(String(text), { add_special_tokens: false }).ids, (x) => (Number.isInteger(x) ? x : cfg.unk))
     const big = (a) => BigInt64Array.from(a, (x) => BigInt(x))
     const run = async (b) => {
       const feeds = {}
@@ -288,7 +283,19 @@ let queue = Promise.resolve() // one batch at a time: the CPU cap holds across c
  *   signal     stops between batches
  * @returns {Promise<{ answers, model, latency_ms, usage, truncated }>}
  */
-async function systemOne({ state, questions, task = null, signal } = {}) {
+async function systemOne(opts = {}) {
+  const t0 = Date.now()
+  try {
+    const r = await answer(opts)
+    lastRun = { ok: true, at: new Date().toISOString(), ms: Date.now() - t0 }
+    return r
+  } catch (err) {
+    lastRun = { ok: false, at: new Date().toISOString(), error: String(err.message || err).slice(0, 200) }
+    throw err
+  }
+}
+
+async function answer({ state, questions, task = null, signal } = {}) {
   const t0 = Date.now()
   const m = await load()
   const cfg = m.cfg
@@ -329,6 +336,7 @@ function thresholds() {
 /** Tests: a backend without files or onnxruntime. run(batch) → flat logits [B*K]. */
 function _setTestBackend(b) {
   unload()
+  lastRun = null
   test = b ? { ...b, config: validateConfig(b.config), loaded: false } : null
 }
 

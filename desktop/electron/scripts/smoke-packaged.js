@@ -12,6 +12,8 @@
  *   3. the bundled engine starts with the packaged Electron's own Node
  *      (ELECTRON_RUN_AS_NODE, exactly as main/engine.js does) and answers
  *      GET /health;
+ *   3b. its ONNX runtime (the name finder's) loads with that Node and runs
+ *      a one-node model;
  *   4. with --launch: the whole app starts (needs a display; on Linux CI run
  *      it under xvfb-run) and its engine and Qdrant answer.
  * Everything runs with a throwaway HOME and data folder, offline, no model.
@@ -129,6 +131,22 @@ async function smokeEngine({ engineDir, execPath = process.execPath, timeoutMs =
   return body
 }
 
+/** The engine's ONNX runtime loads with `execPath` (Electron as Node) and runs a one-node model. */
+function smokeOnnx({ engineDir, execPath = process.execPath }) {
+  const mod = path.join(engineDir, 'src', 'onnx_runtime.js')
+  const script = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'openlex-onnx-')), 'selftest.js')
+  fs.writeFileSync(script, `require(${JSON.stringify(mod)}).selfTest().then((r) => { console.log(JSON.stringify(r)); process.exit(r.ok ? 0 : 1) })\n`)
+  let out
+  try {
+    out = execFileSync(execPath, [script], { encoding: 'utf8', timeout: 60000, cwd: os.tmpdir(), env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' } })
+  } catch (err) {
+    throw new Error(`the ONNX runtime does not run in the packaged engine: ${(err.stdout || '') + (err.stderr || '') || err.message}`)
+  }
+  const r = JSON.parse(out.trim().split('\n').pop())
+  console.log(`  ONNX runtime ${r.version} runs (${path.basename(execPath)}, ${r.ms} ms)`)
+  return r
+}
+
 const HOST_ARCH = process.arch === 'arm64' ? 'arm64' : 'x64'
 
 /** Where electron-builder put the unpacked app (macOS: one folder per arch). */
@@ -156,16 +174,28 @@ function platformId(arch = HOST_ARCH) {
 function checkFiles(resources, arch) {
   const ext = process.platform === 'win32' ? '.exe' : ''
   const id = platformId(arch)
-  const must = ['app.asar', 'engine/src/server.js', 'engine/package.json', 'engine/node_modules', 'engine/add-in/taskpane.html',
+  const ortBin = `engine/node_modules/onnxruntime-node/bin/napi-v6/${id.replace('-', '/')}`
+  // No runtime build for this platform (Intel Macs): no runtime, a note saying why.
+  const noOnnx = fs.existsSync(path.join(resources, 'engine/onnx-runtime.json'))
+  const onnx = noOnnx ? ['engine/onnx-runtime.json'] : [`${ortBin}/onnxruntime_binding.node`, 'engine/node_modules/onnxruntime-common/package.json', 'engine/node_modules/@huggingface/tokenizers/package.json']
+  const must = ['app.asar', 'engine/src/server.js', 'engine/package.json', 'engine/node_modules', 'engine/add-in/taskpane.html', ...onnx,
     'engine/skills', 'engine/playbooks', 'client/index.html', `bin/qdrant-${id}${ext}`, `bin/llama-server-${id}${ext}`, 'hardware-tiers.json']
   for (const f of must) {
     if (!fs.existsSync(path.join(resources, f))) throw new Error(`missing in the packaged app: resources/${f}`)
   }
+  // The ONNX runtime: this platform's binary only, no GPU (DirectML) files, no second copy via transformers.
+  const napi = path.join(resources, 'engine/node_modules/onnxruntime-node/bin/napi-v6')
+  if (noOnnx && fs.existsSync(napi)) throw new Error('onnx-runtime.json says "not bundled" but the runtime is there')
+  const others = []
+  if (!noOnnx) for (const o of fs.readdirSync(napi)) for (const a of fs.readdirSync(path.join(napi, o))) if (`${o}-${a}` !== id) others.push(`${o}/${a}`)
+  if (others.length) throw new Error(`other platforms' ONNX runtime binaries in the packaged app: ${others.join(', ')}`)
+  for (const f of ['DirectML.dll', 'dxcompiler.dll', 'dxil.dll']) if (fs.existsSync(path.join(resources, ortBin, f))) throw new Error(`${f} must not be bundled (the engine runs ONNX on the CPU)`)
+  for (const f of ['engine/node_modules/@huggingface/transformers', 'engine/node_modules/sharp', 'engine/node_modules/onnxruntime-web']) if (fs.existsSync(path.join(resources, f))) throw new Error(`resources/${f} must not be bundled`)
   for (const f of ['server', 'distribution.json', 'engine/distribution.json']) {
     if (fs.existsSync(path.join(resources, f))) throw new Error(`resources/${f} must not be in a community build`)
   }
-  console.log(`  resources ok (${must.length} files/folders; no old server, no distribution settings)`)
-  return { qdrant: path.join(resources, `bin/qdrant-${id}${ext}`) }
+  console.log(`  resources ok (${must.length} files/folders; no old server, no distribution settings; ONNX runtime: ${noOnnx ? 'not for this platform' : `${id} only`})`)
+  return { noOnnx, qdrant: path.join(resources, `bin/qdrant-${id}${ext}`) }
 }
 
 function checkQdrant(binary) {
@@ -215,6 +245,7 @@ async function main() {
   }
   checkQdrant(qdrant)
   await smokeEngine({ engineDir: path.join(app.resources, 'engine'), execPath: app.exe })
+  if (!fs.existsSync(path.join(app.resources, 'engine/onnx-runtime.json'))) smokeOnnx({ engineDir: path.join(app.resources, 'engine'), execPath: app.exe })
   if (process.argv.includes('--launch')) await smokeLaunch({ exe: app.exe })
   console.log('PASS')
 }
@@ -223,4 +254,4 @@ if (require.main === module) {
   main().then(() => process.exit(0), (err) => { console.error(`FAIL: ${err.message}`); process.exit(1) })
 }
 
-module.exports = { smokeEngine, findUnpacked }
+module.exports = { smokeEngine, smokeOnnx, findUnpacked, checkFiles }

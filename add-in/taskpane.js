@@ -596,6 +596,10 @@
     title: 'Vor dem Senden prüfen, was verdeckt wird',
     note: 'OpenLex sucht nach Namen, Nummern und Anschriften und verdeckt, was es findet. Es kann etwas übersehen, vor allem indirekte Angaben (eine seltene Berufsbezeichnung, ein einmaliges Ereignis). Bitte prüfen Sie vor dem Senden. Verdeckter Text wird auf Ihrem Computer ersetzt und in der Antwort wiederhergestellt.',
     basic: 'Einfache Erkennung (Muster, Ihre Liste, Titel und Rechtsformen).',
+    basicFailed: 'Einfache Erkennung: Die Namenserkennung ist installiert, lief für diesen Text aber nicht.',
+    basicNeedsApp: 'Einfache Erkennung (Muster, Ihre Liste, Titel und Rechtsformen). Die Namenserkennung gibt es in der Desktop-App.',
+    basicCannotRun: 'Einfache Erkennung (Muster, Ihre Liste, Titel und Rechtsformen). Die Namenserkennung kann auf diesem Computer nicht laufen.',
+    withModel: 'Mit Namenserkennung (auf diesem Computer).',
     groups: { people: 'Personen', orgs: 'Organisationen', addresses: 'Anschriften', ids: 'Kennungen & Nummern', contact: 'Kontakt', other: 'Sonstiges' },
     none: 'Nichts zum Verdecken gefunden.', also: 'Auch verdecken:', add: 'Hinzufügen', send: 'Mit diesen Verdeckungen senden', cancel: 'Abbrechen',
     cancelled: 'Es wurde nichts gesendet.', sent: (n) => `${n} verdeckt — von Ihnen geprüft.`, question: 'Ihre Frage', doc: 'Das Dokument', scanning: 'Suche nach Namen und Nummern zum Verdecken…',
@@ -603,6 +607,10 @@
     title: 'Check what is hidden before sending',
     note: 'OpenLex looks for names, numbers and addresses and hides what it finds. It can miss things, especially indirect details (a rare job title, a unique event). Please check before sending. Hidden text is replaced on your computer and restored in the answer.',
     basic: 'Basic detection (patterns, your list, titles and company forms).',
+    basicFailed: 'Basic detection: the name finder is installed but did not run for this text.',
+    basicNeedsApp: 'Basic detection (patterns, your list, titles and company forms). The name finder needs the desktop app.',
+    basicCannotRun: 'Basic detection (patterns, your list, titles and company forms). The name finder cannot run on this computer.',
+    withModel: 'With name finder (on this computer).',
     groups: { people: 'People', orgs: 'Organisations', addresses: 'Addresses', ids: 'IDs & numbers', contact: 'Contact', other: 'Other' },
     none: 'Nothing found to hide.', also: 'Also hide:', add: 'Add', send: 'Send with these hidden', cancel: 'Cancel',
     cancelled: 'Nothing was sent.', sent: (n) => `${n} hidden — checked by you.`, question: 'Your question', doc: 'The document', scanning: 'Looking for names and numbers to hide…',
@@ -619,7 +627,11 @@
       card.setAttribute('role', 'group')
       card.setAttribute('aria-label', RC.title)
       card.append(el('div', 'perm-q', RC.title), el('div', 'perm-risk', RC.note))
-      if (review.basic) card.appendChild(el('div', 'perm-risk', RC.basic))
+      // "Basic" unless the name finder really ran for every text (the engine records it per run).
+      card.appendChild(el('div', 'perm-risk', !review.basic ? RC.withModel
+        : review.finder === 'failed' ? RC.basicFailed
+          : review.finder === 'unavailable' ? (review.runtime === 'not-bundled' ? RC.basicNeedsApp : RC.basicCannotRun)
+            : RC.basic))
       const state = new Map(review.entries.map((x) => [x.key, x.on]))
       const added = []
       if (!review.entries.length) card.appendChild(el('div', 'perm-risk', RC.none))

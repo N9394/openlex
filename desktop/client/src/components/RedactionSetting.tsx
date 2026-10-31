@@ -1,6 +1,7 @@
 // "Redaction check before cloud use (recommended)" — the one row under
 // "Where client data may go", plus what belongs to it: the optional name
-// finder (downloaded on request, never bundled) and the active matter's
+// finder (downloaded on request, never bundled; offered only where the ONNX
+// runtime loads — the desktop app, not the CLI) and the active matter's
 // lists (what is always hidden, what stays as it is). The firm can lock the
 // check in openlex.json ("lock": ["redaction"]).
 import { useCallback, useEffect, useState } from 'react'
@@ -44,6 +45,9 @@ export default function RedactionSetting({ allow, say }: { allow: boolean; say?:
   const locked = !!st.settings?.locked
   const on = st.settings?.check !== false
   const model = st.model || {}
+  // available: the ONNX runtime loads here (the desktop app); installed: the files are on disk.
+  const canRun = model.available !== false
+  const needsApp = !canRun && model.runtime?.reason === 'not-bundled'
   const setCheck = async (v: boolean) => {
     try { await engine()!.call('POST', '/api/redaction/settings', { check: v }); await load(); say?.(v ? t('redaction.setOn', 'Redaction check is on: before anything goes to an online AI, you see what is hidden.') : t('redaction.setOff', 'Redaction check is off.'), v ? 'ok' : 'warn') } catch (err) { setError(friendly(err)) }
   }
@@ -69,7 +73,13 @@ export default function RedactionSetting({ allow, say }: { allow: boolean; say?:
       </label>
       <div className="ml-6 text-xs text-antique space-y-1">
         <p>
-          {model.installed
+          {!canRun
+            ? (model.installed
+              ? t('redaction.modelBroken', 'The name finder is downloaded but cannot run on this computer, so detection stays basic: {{error}}', { error: model.runtime?.error || '' })
+              : needsApp
+                ? t('redaction.modelNeedsApp', 'Basic detection (patterns, your lists, titles and company forms). The name finder needs the desktop app.')
+                : t('redaction.modelCannotRun', 'Basic detection (patterns, your lists, titles and company forms). The name finder cannot run on this computer: {{error}}', { error: model.runtime?.error || '' }))
+            : model.installed
             ? t('redaction.modelOn', 'Name finder installed ({{name}}, {{mb}} MB, licence {{licence}}). It runs on this computer.', { name: model.name, mb: model.sizeMB, licence: model.license })
             : model.downloading
               ? t('redaction.modelLoading', 'Downloading the name finder… {{pct}} %', { pct: model.downloading.pct })
@@ -77,7 +87,7 @@ export default function RedactionSetting({ allow, say }: { allow: boolean; say?:
           {' '}
           {!model.downloading && (model.installed
             ? <button type="button" className="underline hover:text-cream" onClick={() => modelAction('remove')}>{t('redaction.modelRemove', 'Remove')}</button>
-            : <button type="button" className="underline hover:text-cream" onClick={() => modelAction('install')} data-testid="redaction-model-install">{t('redaction.modelInstall', 'Download')}</button>)}
+            : canRun && <button type="button" className="underline hover:text-cream" onClick={() => modelAction('install')} data-testid="redaction-model-install">{t('redaction.modelInstall', 'Download')}</button>)}
         </p>
         {model.error && <p className="text-red-400">{model.error}</p>}
       </div>

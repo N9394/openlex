@@ -216,3 +216,30 @@ test('backends: a cloud endpoint never answers a local-only task; GOWA does when
     decide.saveConfig(null)
   }
 })
+
+test('honest status: no ONNX runtime → installed but not ready, a call fails and says so (lastRun)', async () => {
+  const rtm = require('../src/onnx_runtime')
+  fake.writeFakeModel(gowa.dir())
+  rtm.setLoader((name) => { const e = new Error(`Cannot find module '${name}'`); e.code = 'MODULE_NOT_FOUND'; throw e })
+  try {
+    const s = gowa.status()
+    assert.strictEqual(s.installed, true)
+    assert.strictEqual(s.runtime.available, false)
+    assert.strictEqual(s.runtime.reason, 'not-bundled')
+    assert.strictEqual(gowa.ready(), false)
+    assert.strictEqual(decide.backend({ localOnly: true }), null, 'no backend without a runtime')
+    await assert.rejects(gowa.systemOne({ state: 'x', questions: { q: { type: 'noul' } } }), (e) => e.code === 'ONNX_UNAVAILABLE')
+    assert.strictEqual(gowa.status().lastRun.ok, false)
+  } finally {
+    rtm.setLoader(null)
+    gowa.unload()
+    fs.rmSync(gowa.dir(), { recursive: true, force: true })
+  }
+  if (ortOk) {
+    fake.writeFakeModel(gowa.dir())
+    await gowa.systemOne({ state: 'the contract', questions: { q: { type: 'noul' } } })
+    assert.strictEqual(gowa.status().lastRun.ok, true, 'it really ran')
+    gowa.unload()
+    fs.rmSync(gowa.dir(), { recursive: true, force: true })
+  }
+})

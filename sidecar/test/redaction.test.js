@@ -300,6 +300,7 @@ test('the name finder: its findings join the check (model mocked, nothing downlo
   const r = await check.prepare({ matterId: null, items: [{ name: 'Levél', text }] })
   const v = check.view(r)
   assert.strictEqual(v.basic, false)
+  assert.deepStrictEqual([v.detection, v.finder, v.items[0].detection], ['with-model', 'used', 'model'])
   assert.deepStrictEqual(v.entries.map((e) => [e.text, e.sources[0], e.on]), [['Kovács Péter', 'model', true], ['Szabó Anna', 'model', true]])
   ner.setRunner(null)
   check.cancel(r.id)

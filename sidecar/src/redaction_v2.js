@@ -51,6 +51,18 @@ function ready() {
   try { return require('./decide_tasks').enabled('redaction') } catch { return false }
 }
 
+/** Why version 2 does or does not run: 'ready' | 'off' | 'not-yet-available' | 'not-installed' | 'unavailable' (no ONNX runtime). */
+function status() {
+  if (ready()) return 'ready'
+  try { if (!require('./decide_tasks').flags().redaction) return 'off' } catch { return 'off' }
+  try {
+    const g = require('./gowa').status()
+    if (!g.runtime.available) return 'unavailable'
+    if (!g.installed) return g.status === 'not-yet-available' ? 'not-yet-available' : 'not-installed'
+  } catch { return 'unavailable' }
+  return 'off'
+}
+
 /** What the check says about its detection, honestly. */
 function detection() {
   if (ready()) return 'gowa'
@@ -144,4 +156,4 @@ async function findings(text, { terms = [], keep = [], patterns = [], cache = ne
   return { findings: out.map((f, i) => ({ ...f, id: `f${i + 1}` })), stats }
 }
 
-module.exports = { ready, detection, findings, context, WINDOW, MAX_ASK }
+module.exports = { ready, status, detection, findings, context, WINDOW, MAX_ASK }

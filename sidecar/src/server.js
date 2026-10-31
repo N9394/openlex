@@ -1223,6 +1223,9 @@ async function handle(req, res) {
         if (p === '/api/redaction/settings') { const st = check.setCheck(body.check !== false); hub.publish('policy-changed', {}, clientOf(req)); return sendJson(res, 200, { settings: st }) }
         if (p === '/api/redaction/model') {
           if (body.action === 'remove') return sendJson(res, 200, { model: ner.remove() })
+          // No ONNX runtime here (CLI tarball, Homebrew): nothing to download that could run.
+          const st = ner.status()
+          if (!st.available) return sendJson(res, 409, { error: st.runtime?.reason === 'not-bundled' ? 'The name finder needs the desktop app.' : `The name finder cannot run on this computer: ${st.runtime?.error || 'the ONNX runtime does not load'}`, code: 'ONNX_UNAVAILABLE', model: st })
           ner.install().catch((err) => console.warn('[redaction] model download failed:', err.message))
           return sendJson(res, 200, { model: ner.status() })
         }

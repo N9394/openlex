@@ -16,9 +16,9 @@ import { engine } from '../lib/commands'
 import { friendly } from '../lib/turn'
 
 export interface CheckFinding { key: string; kind: string; group: string; start: number; end: number; on: boolean; confidence: number; source: string }
-export interface CheckItem { id: string; name: string; chars: number; truncated: boolean; text: string; findings: CheckFinding[] }
+export interface CheckItem { id: string; name: string; chars: number; truncated: boolean; detection?: 'model' | 'basic'; text: string; findings: CheckFinding[] }
 export interface CheckEntry { key: string; kind: string; group: string; text: string; label: string; confidence: number; sources: string[]; on: boolean; count: number; at: { item: string; start: number; end: number }[] }
-export interface CheckReview { id: string; matterId: string | null; basic: boolean; items: CheckItem[]; entries: CheckEntry[]; groups: string[] }
+export interface CheckReview { id: string; matterId: string | null; basic: boolean; detection?: 'basic' | 'with-model'; finder?: 'used' | 'failed' | 'not-installed' | 'unavailable'; runtime?: 'not-bundled' | 'load-failed' | null; items: CheckItem[]; entries: CheckEntry[]; groups: string[] }
 
 const WINDOW = 12000 // characters of a long document shown around the chosen place
 const LONG = 40000
@@ -173,7 +173,15 @@ export default function RedactionCheck({ review, onDone }: { review: CheckReview
           <div>
             <h2 className="font-serif text-lg text-parchment inline-flex items-center gap-2"><ShieldCheck size={18} className="text-accent" /> {t('redaction.title', 'Check what is hidden before sending')}</h2>
             <p className="text-xs text-antique mt-1 max-w-3xl" data-testid="redaction-note">{t('redaction.note', 'OpenLex looks for names, numbers and addresses and hides what it finds. It can miss things, especially indirect details (a rare job title, a unique event). Please check before sending. Hidden text is replaced on your computer and restored in the answer.')}</p>
-            {review.basic && <p className="text-xs text-antique mt-1" data-testid="redaction-basic">{t('redaction.basic', 'Basic detection: patterns, your matter\'s list, titles and company forms. The optional name finder (Settings) also finds names without a title.')}</p>}
+            {/* "basic" unless the name finder really ran for every text of this check (the engine records it per run). */}
+            {review.basic
+              ? <p className="text-xs text-antique mt-1" data-testid="redaction-basic">{
+                review.finder === 'failed' ? t('redaction.basicFailed', 'Basic detection: the name finder is installed but did not run for this text, so only patterns, your matter\'s list, titles and company forms were used.')
+                  : review.finder === 'unavailable' ? (review.runtime === 'not-bundled'
+                    ? t('redaction.basicNeedsApp', 'Basic detection: patterns, your matter\'s list, titles and company forms. The name finder needs the desktop app.')
+                    : t('redaction.basicCannotRun', 'Basic detection: patterns, your matter\'s list, titles and company forms. The name finder cannot run on this computer.'))
+                    : t('redaction.basic', 'Basic detection: patterns, your matter\'s list, titles and company forms. The optional name finder (Settings) also finds names without a title.')}</p>
+              : <p className="text-xs text-antique mt-1" data-testid="redaction-with-model">{t('redaction.withModel', 'With name finder: names, organisations and addresses without a title or company form were looked for too (on this computer).')}</p>}
           </div>
           <button type="button" onClick={cancel} className="text-antique hover:text-cream" aria-label={t('common.close', 'Close')}><X size={18} /></button>
         </div>

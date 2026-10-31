@@ -72,7 +72,7 @@ Everything runs on your computer. Nothing is sent anywhere to find names.
 | US | 1600 Main Street, Town, ST 12345 | — |
 
 3. **Names by their surroundings:** a title before a name ("Herr", "Frau", "Dr.", "Mag.", "Ing.", "JUDr.", "Mgr.", "pan", "pani", "domnul", "Mr.", "Ms." …) and a legal form after a company name ("GmbH", "AG", "KG", "s.r.o.", "a.s.", "sp. z o.o.", "S.A.", "SRL", "Kft.", "Zrt.", "LLC", "Inc." …). A name found once is found again in the other texts of the same check.
-4. **Optional name finder** (Settings): a small model that also finds names, organisations and addresses without a title or legal form. Without it the check says "basic detection".
+4. **Optional name finder** (Settings, desktop app): a small model that also finds names, organisations and addresses without a title or legal form. The check says "with name finder" only when the model really went through every text of that check; otherwise it says "basic detection" and why. The AI record and the data line note which it was.
 
 The list of patterns is one data file in the engine (`sidecar/src/pii_patterns.js`), with tests for valid and invalid numbers.
 
@@ -80,6 +80,7 @@ The list of patterns is one data file in the engine (`sidecar/src/pii_patterns.j
 
 - Model: [GLiNER-X small](https://huggingface.co/knowledgator/gliner-x-small) by Knowledgator, licence Apache-2.0. It was trained for about 20 languages, among them German, English, Czech, Polish and Romanian; Slovak and Hungarian work through their neighbours, less reliably.
 - Size: about 190 MB to download (a 173 MB model file plus its word list). It is never part of the installer; it is downloaded only when you click "Download", from Hugging Face at a fixed version, and every file is checked against its SHA-256 before it is used. "Remove" deletes it.
+- Where it runs: in the desktop app on Windows, Linux and Apple Silicon Macs, which include the runtime it needs (ONNX Runtime, CPU only). Not on Intel Macs (the runtime no longer supports them) and not in the CLI or Homebrew install — there Settings does not offer it and the check says so.
 - It runs on your computer (it is not a chat AI and sends nothing). A 30-page contract takes about ten seconds. Very long documents: the first ~150 pages go through the name finder; the rest is checked by the other rules.
 
 ## Your firm's settings
