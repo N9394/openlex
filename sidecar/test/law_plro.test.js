@@ -56,8 +56,9 @@ const fake = http.createServer((req, res) => {
     const p = u.pathname
     seen.push({ path: req.url, method: req.method, headers: req.headers, body })
     const src = p.split('/')[1]
-    if (down.has(src)) { res.writeHead(503); return res.end() }
-    const send = (type, data, status = 200) => { res.writeHead(status, { 'Content-Type': type }); res.end(data) }
+    if (down.has(src)) { res.writeHead(503, { Connection: 'close' }); return res.end() }
+    // Connection: close — Windows sometimes reuses a socket the test server already closed (ECONNRESET).
+    const send = (type, data, status = 200) => { res.writeHead(status, { 'Content-Type': type, Connection: 'close' }); res.end(data) }
     const json = (o, status = 200) => send('application/json', typeof o === 'string' || Buffer.isBuffer(o) ? o : JSON.stringify(o), status)
     // Sejm ELI
     if (p === '/sejm/acts/search') return json(fixture('sejm-search.json'))
