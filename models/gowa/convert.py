@@ -43,7 +43,14 @@ def need(source):
 def load(name, config=None, split=None, revision=None):
     from datasets import load_dataset
 
-    return load_dataset(name, config, split=split, revision=revision)
+    try:
+        return load_dataset(name, config, split=split, revision=revision)
+    except RuntimeError as err:
+        # Newer `datasets` no longer runs loading scripts (cuad-qa, multi_eurlex): use the Hub's
+        # automatic Parquet conversion of the same dataset instead.
+        if "Dataset scripts are no longer supported" not in str(err) or revision:
+            raise
+        return load_dataset(name, config, split=split, revision="refs/convert/parquet")
 
 
 # ── CUAD: clause types ────────────────────────────────────────────────────
@@ -303,7 +310,7 @@ def _kev_synthetic(a):
                     **({"criteria": q["criteria"]} if q.get("criteria") else {}), "answer": _kev_answer(q),
                     "split": "test" if int(r["_meta"]["pair_id"].rsplit("-", 1)[1]) % 10 == 0 else "train"})
     src = need("kev_compositional")
-    n_struct = max(1, (a.limit or 1920) // 32)
+    n_struct = min(200, max(1, (a.limit or 1920) // 32))  # Kev's generator has ~220 distinct structures
     trees = {f"rand:{composition.canonical(t)}": t for t in composition.sample_trees(n_struct, "openlex-gowa-structures")}
     for i, r in enumerate(composition.generate(8, "openlex-gowa-composition", styles=KEV_TRAIN_STYLES, trees=trees)):
         q = r["questions"]["decision"]
