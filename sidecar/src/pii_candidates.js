@@ -43,7 +43,8 @@ const STOP = new Set(('Herr Herrn Frau Fräulein Mr Mrs Ms Miss Dr Prof Mag Pan 
 
 const WORD = "\\p{Lu}[\\p{Ll}\\p{Lu}'’-]*\\p{Ll}[\\p{Ll}'’-]*"
 const PARTICLE = '(?:von|van|de|der|den|zu|da|di|del|la|le|y)'
-const RUN_RE = new RegExp(`(?<![\\p{L}\\d])${WORD}(?:\\s(?:${PARTICLE}\\s)?${WORD}){0,3}(?![\\p{L}\\d])`, 'gu')
+// Words of one run are separated by spaces only: a name never continues on the next line.
+const RUN_RE = new RegExp(`(?<![\\p{L}\\d])${WORD}(?:[ \\t](?:${PARTICLE}[ \\t])?${WORD}){0,3}(?![\\p{L}\\d])`, 'gu')
 
 /** Does position i start a sentence (text start, after . ! ? : ; a line break or a list marker)? */
 function sentenceStart(text, i) {
@@ -59,7 +60,8 @@ function ngrams(text, { max = 4000 } = {}) {
     let start = m.index
     // Leading stop words and the particles they leave behind ("Zwischen der Alpenbau" → "Alpenbau").
     while (words.length && (STOP.has(words[0]) || new RegExp(`^${PARTICLE}$`).test(words[0]))) { start += words[0].length + 1; words = words.slice(1) }
-    while (words.length && STOP.has(words[words.length - 1])) words = words.slice(0, -1)
+    // Trailing stop words go, unless they follow a first name ("Daniel Price": a surname that is also a word).
+    while (words.length && STOP.has(words[words.length - 1]) && !(words.length > 1 && isFirstName(words[words.length - 2]))) words = words.slice(0, -1)
     if (!words.length) continue
     // A sentence's first word is capitalised anyway: it does not count ("Kann Huber …" → "Huber").
     // Names at a sentence start are still proposed by the first-name source and the lists.
@@ -78,11 +80,15 @@ function names(text, { extra = null } = {}) {
   const out = []
   for (const m of text.matchAll(RUN_RE)) {
     const words = m[0].split(/\s+/)
-    for (let i = 0; i < words.length - 1; i++) {
+    for (let i = 0; i < words.length; i++) {
       if (!isFirstName(words[i], extra)) continue
-      const start = m.index + words.slice(0, i).join(' ').length + (i ? 1 : 0)
-      const value = words.slice(i).filter((w, j) => j === 0 || !STOP.has(w)).join(' ')
-      if (value.split(' ').length < 2) continue
+      // Family name first (Hungarian "Nagy Péter", lists "Novák Jan"): the capitalised word before it belongs to it.
+      const from = i > 0 && !STOP.has(words[i - 1]) ? i - 1 : i
+      // The word right after a first name stays even when it is also an ordinary word ("Daniel Price").
+      const parts = words.slice(from).filter((w, j) => j <= i - from + 1 || !STOP.has(w))
+      if (parts.length < 2) continue
+      const start = m.index + words.slice(0, from).join(' ').length + (from ? 1 : 0)
+      const value = text.slice(start, start + parts.join(' ').length)
       out.push({ kind: 'PERSON', start, end: start + value.length, confidence: 0.6 })
       break
     }
@@ -90,7 +96,26 @@ function names(text, { extra = null } = {}) {
   return out
 }
 
+// Names in capitals (headings of court documents, tables, signature blocks): "ANTHONY MASON",
+// "ROSE, Margaret", "PETIT Julien", "ZAUNER M.". A known first name among the words → a likely
+// person; a short capitalised line on its own → a candidate for the decision model.
+const CAPS_WORD = "\\p{Lu}[\\p{Lu}'’-]+"
+const CAPS_RE = new RegExp(`(?<![\\p{L}\\d])${CAPS_WORD}(?:,?[ \\t]+(?:${CAPS_WORD}|\\p{Lu}\\p{Ll}+|\\p{Lu}\\.)){1,3}(?![\\p{L}\\d])`, 'gu')
+const title = (w) => w.charAt(0) + w.slice(1).toLocaleLowerCase()
+function caps(text, { extra = null } = {}) {
+  const out = []
+  for (const m of text.matchAll(CAPS_RE)) {
+    const words = m[0].split(/,?[ \t]+/)
+    const known = words.some((w) => isFirstName(title(w), extra) || isFirstName(w, extra))
+    const alone = /(?:^|\n)[ \t]*$/.test(text.slice(Math.max(0, m.index - 20), m.index)) && /^[ \t]*(?:\n|$)/.test(text.slice(m.index + m[0].length, m.index + m[0].length + 5))
+    if (known) out.push({ kind: 'PERSON', start: m.index, end: m.index + m[0].length, confidence: 0.6 })
+    else if (alone && words.length <= 3) out.push({ kind: 'OTHER', start: m.index, end: m.index + m[0].length, confidence: 0.3 })
+  }
+  return out
+}
+
 register({ id: 'names', label: 'Common first names', find: async (text) => names(text) })
+register({ id: 'caps', label: 'Names in capitals', find: async (text) => caps(text) })
 register({ id: 'ngrams', label: 'Capitalised words', find: async (text) => ngrams(text) })
 register({
   id: 'gliner',
@@ -116,4 +141,4 @@ async function find(text, { signal, only = null, skip = [] } = {}) {
   return { found, used }
 }
 
-module.exports = { register, unregister, list, find, ngrams, names, STOP }
+module.exports = { register, unregister, list, find, ngrams, names, caps, STOP }

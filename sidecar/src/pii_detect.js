@@ -50,17 +50,61 @@ const CAP = "\\p{Lu}[\\p{Ll}'’-]+(?:-\\p{Lu}[\\p{Ll}'’-]+)?"
 const TITLES = "(?:Herrn?|Frau|Fräulein|Dr\\.(?:\\s?(?:iur|jur|med|phil|rer\\.\\s?nat)\\.)?|Mag\\.(?:\\s?\\(FH\\))?(?:\\s?iur\\.)?|MMag\\.|DDr\\.|DI|Dipl\\.-Ing\\.|Dipl\\.-Kfm\\.|Prof\\.|Univ\\.-Prof\\.|Ing\\.|MUDr\\.|JUDr\\.|Mgr\\.|Bc\\.|PhDr\\.|RNDr\\.|Ph\\.D\\.|doc\\.|pan|pani|pana|panią|panem|paní|panu|pán|pána|pánovi|domnul|doamna|domnului|doamnei|dl\\.|dna\\.|d-na|d-l|Mr\\.?|Mrs\\.?|Ms\\.?|Miss|Hon\\.|ifj\\.|özv\\.)"
 // Words after a title that are roles, not names.
 const ROLE_WORDS = new Set(['klägerin', 'kläger', 'beklagte', 'beklagten', 'beklagter', 'antragsteller', 'antragstellerin', 'antragsgegner', 'antragsgegnerin', 'vorsitzende', 'vorsitzender', 'rechtsanwalt', 'rechtsanwältin', 'richter', 'richterin', 'notar', 'notarin', 'kollege', 'kollegin', 'präsident', 'präsidentin', 'bürgermeister', 'bürgermeisterin', 'geschäftsführer', 'geschäftsführerin', 'president', 'justice', 'judge', 'chairman', 'counsel', 'mandant', 'mandantin', 'zeuge', 'zeugin', 'sachverständige', 'sachverständiger', 'minister', 'ministerin', 'doktor', 'professor'])
-const PERSON_RE = new RegExp(`(?<![\\p{L}])((?:${TITLES}\\s+)+)((?:${CAP}|\\p{Lu}\\.)(?:\\s(?:(?:von|van|de|der|den|zu|da|di|del|la|le)\\s)?(?:${CAP}|\\p{Lu}\\.)){0,3})(?![\\p{L}])`, 'gu')
+const PERSON_RE = new RegExp(`(?<![\\p{L}])((?:${TITLES}[ \\t]+)+)((?:${CAP}|\\p{Lu}\\.)(?:[ \\t](?:(?:von|van|de|der|den|zu|da|di|del|la|le)[ \\t])?(?:${CAP}|\\p{Lu}\\.)){0,3})(?![\\p{L}])`, 'gu')
 
 const FORMS = "(?:GmbH(?:\\s&\\sCo\\.?\\sKG)?|AG|KG|OG|OHG|SE|KGaA|e\\.\\s?U\\.|e\\.\\s?V\\.|UG(?:\\s\\(haftungsbeschränkt\\))?|PartG(?:\\smbB)?|spol\\.\\ss\\s?r\\.\\s?o\\.|s\\.\\s?r\\.\\s?o\\.|a\\.\\s?s\\.|v\\.\\s?o\\.\\s?s\\.|k\\.\\s?s\\.|sp\\.\\sz\\so\\.\\s?o\\.|sp\\.\\sj\\.|sp\\.\\sk\\.|sp\\.\\sp\\.|S\\.A\\.|SA|S\\.R\\.L\\.|SRL|S\\.C\\.S\\.|Kft\\.|Zrt\\.|Nyrt\\.|Bt\\.|Kkt\\.|LLC|L\\.L\\.C\\.|Inc\\.|Corp\\.|Corporation|Ltd\\.?|Limited|LLP|L\\.P\\.|plc|PLC|N\\.V\\.|B\\.V\\.|S\\.p\\.A\\.|S\\.r\\.l\\.|SAS|SARL)"
 const FORM_END = new RegExp(`\\s${FORMS}$`, 'u')
 const FORM_ONLY = new RegExp(`^${FORMS}$`, 'u')
 const ORG_WORD = "(?:\\p{Lu}[\\p{L}\\d&'’.-]*|\\d+[\\p{L}\\d]*|&)"
-const ORG_RE = new RegExp(`(?<![\\p{L}\\d])(${ORG_WORD}(?:\\s(?:${ORG_WORD}|und|and|a|i|és|și|şi|e|&\\sCo\\.?|von|der|des|de|la|du)){0,5})\\s(${FORMS})(?![\\p{L}\\d])`, 'gu')
+// Spaces only between the words: an organisation's name does not continue on the next line.
+const ORG_RE = new RegExp(`(?<![\\p{L}\\d])(${ORG_WORD}(?:[ \\t](?:${ORG_WORD}|und|and|a|i|és|și|şi|e|&[ \\t]Co\\.?|von|der|des|de|la|du)){0,5})[ \\t](${FORMS})(?![\\p{L}\\d])`, 'gu')
 const LEAD_STOP = new Set(['die', 'der', 'das', 'den', 'dem', 'des', 'the', 'a', 'an', 'eine', 'einer', 'ein', 'firma', 'gesellschaft', 'společnost', 'spoločnosť', 'spółka', 'spółki', 'spółką', 'firmą', 'firma', 'societatea', 'societății', 'cég', 'társaság', 'mit', 'und', 'and', 'zwischen', 'between', 'von', 'bei', 'für', 'for', 'with', 'gegen', 'against', 'v.', 'vs.', 'gegenüber', 'sowie', 'als', 'as', 'by', 'to', 'of', 'in', 'zur', 'zum', 'beklagte', 'klägerin', 'kläger', 'beklagten', 'auftraggeber', 'auftragnehmer', 'käufer', 'käuferin', 'verkäufer', 'verkäuferin', 'mieter', 'mieterin', 'vermieter', 'vermieterin', 'lieferant', 'kunde', 'does', 'do', 'did', 'is', 'are', 'was', 'were', 'has', 'have', 'if', 'when', 'why', 'how', 'what', 'who', 'can', 'could', 'should', 'would', 'will', 'may', 'must', 'ist', 'hat', 'haben', 'wird', 'kann', 'soll', 'muss', 'darf', 'wenn', 'ob', 'wie', 'was', 'wer', 'warum', 'nach', 'gemäß', 'laut', 'durch', 'über', 'unter', 'auch', 'dass', 'bitte', 'please', 'check', 'prüfe', 'prüfen', 'schreibe', 'write', 'draft', 'entwirf', 'hier', 'here', 'dear', 'sehr', 'geehrte', 'liebe', 'an', 'am', 'im', 'vom', 'beim'])
+
+// Table columns: the header says what a column holds ("DOB", "Né(e) le", "NI number", "Name"),
+// so every cell below it is that kind — names and numbers in tables have no other clue.
+const COLUMN_KINDS = [
+  ['DATE', /^(?:dob|d\.o\.b\.?|date of birth|born|geb\.?|geboren(?: am)?|geburtsdatum|né(?:\(e\)|e)? le|date de naissance|data urodzenia|dátum narodenia|datum narození|narozen[áa]?|data nașterii|data naşterii|născut[ăa]?|születési (?:idő|dátum)|szül\.?)$/iu],
+  ['ID', /(?:\bni\b(?: number| no\.?)?|nino|national insurance|ppsn?\b|pps number|n° ?ss|sécurité sociale|svnr|sv-?(?:nummer|nr\.?)|sozialversicherungsnummer|steuer-?id|pesel|rodné číslo|r\.\s?č\.|\bcnp\b|\btaj\b|adóazonosító|passport|reisepass|ausweis(?:nummer)?|id (?:number|no\.?)|personal (?:number|no\.?)|\bnip\b|číslo op|číslo dokladu)/iu],
+  ['PERSON', /^(?:name|full name|employee|employee name|salarié(?:e)?|nom|nom et prénom|prénom et nom|jméno(?: a příjmení)?|meno(?: a priezvisko)?|imię i nazwisko|nazwisko i imię|nume(?: și prenume)?|nume și prenume|név|mitarbeiter(?:in)?|arbeitnehmer(?:in)?|dienstnehmer(?:in)?|zaměstnanec|zamestnanec|pracownik|angajat|munkavállaló|tenant|mieter(?:in)?|witness|zeuge|zeugin|beneficiary|heir|erbe|erbin|shareholder|gesellschafter(?:in)?|director|geschäftsführer(?:in)?)$/iu],
+  ['ADDRESS', /^(?:address|home address|adresse|anschrift|wohnort|wohnadresse|adresa|adres|cím|domiciliu|bydliště|bydlisko)$/iu],
+]
+const CELL_OK = { DATE: /\d/, ID: /\d/, PERSON: /\p{Lu}/u, ADDRESS: /\p{L}.*\d|\d.*\p{L}/u }
+
+function tableCells(text) {
+  const out = []
+  const lines = []
+  let at = 0
+  for (const line of text.split('\n')) { lines.push({ line, start: at }); at += line.length + 1 }
+  const sep = (l) => (l.includes('|') ? '|' : l.includes('\t') ? '\t' : null)
+  for (let i = 0; i < lines.length; i++) {
+    const { line } = lines[i]
+    const sp = sep(line)
+    if (!sp || line.split(sp).length < 3) continue
+    const kinds = line.split(sp).map((c) => { const t = c.trim(); const k = COLUMN_KINDS.find(([, re]) => re.test(t)); return k ? k[0] : null })
+    if (!kinds.some(Boolean)) continue
+    for (let j = i + 1; j < lines.length; j++) {
+      const row = lines[j]
+      if (!row.line.trim() || sep(row.line) !== sp) break
+      if (/^[\s|:+-]+$/.test(row.line)) continue // a separator line (|---|---|)
+      let pos = row.start
+      row.line.split(sp).forEach((cell, c) => {
+        const kind = kinds[c]
+        const lead = cell.length - cell.trimStart().length
+        const value = cell.trim()
+        if (kind && value && value.length <= 120 && CELL_OK[kind].test(value)) {
+          out.push({ kind, start: pos + lead, end: pos + lead + value.length, confidence: kind === 'PERSON' ? 0.8 : 0.85, source: 'heuristic' })
+        }
+        pos += cell.length + sp.length
+      })
+      i = j
+    }
+  }
+  return out
+}
 
 function heuristics(text) {
   const out = []
+  out.push(...tableCells(text))
   for (const m of text.matchAll(PERSON_RE)) {
     let name = m[2]
     const start = m.index + m[1].length
@@ -166,6 +210,8 @@ function nameForms(word) {
  * Built for the decision model's weak spots (later mentions, declension, capitals, no clue):
  * once a name is found anywhere, every form of it is found everywhere.
  */
+// Words that may stand before a last name without being part of it.
+const LEAD_NOT = `(?:${[...require('./pii_candidates').STOP].filter((w) => /^\p{Lu}\p{Ll}+$/u.test(w)).map(escapeRe).join('|')}|Dear|Liebe|Lieber|Sehr|Geehrte|Hallo|Hello|Hi|Bonjour|Ahoj|Dobrý|Dzień|Szia|Bună)[ \\t]`
 function spread(text, found, keep) {
   const { isFirstName } = require('./pii_names')
   const out = []
@@ -194,7 +240,7 @@ function spread(text, found, keep) {
       continue
     }
     const kind = f.kind === 'PARTY' ? 'PERSON' : f.kind
-    const words = value.split(/\s+/).filter((w) => /^\p{Lu}/u.test(w) && !/^\p{Lu}\.$/u.test(w))
+    const words = value.split(/[\s,;]+/).filter((w) => /^\p{Lu}/u.test(w) && !/^\p{Lu}\.$/u.test(w))
     if (!words.length) continue
     // The whole name (each word in its forms), so "Jany Novákové" and "JANA NOVÁKOVÁ" are found.
     if (!listed || words.length > 1) add(`P:${norm(value)}`, `${B}${words.map(nameForms).join('\\s+')}${E}`, kind, f.confidence, source)
@@ -204,7 +250,9 @@ function spread(text, found, keep) {
       if (w.length < 3 || FORM_ONLY.test(w) || keep.has(norm(w))) continue
       if (i === 0 && !isFirstName(w)) continue // a first word that is not a known first name may be an ordinary word
       // Initials before or after belong to the name ("J. Huber", "ZAUNER M.", "K. István", "Mateus O.").
-      add(`P1:${norm(w)}`, `${B}(?:\\p{Lu}\\.\\s?)*${nameForms(w)}(?:\\s\\p{Lu}\\.)?${E}`, kind, i === 0 ? 0.55 : conf, source)
+      // A capitalised word right before the last name is taken along ("Siobhan Baker" when only "Baker" was known).
+      const lead = i === words.length - 1 ? `(?:(?!${LEAD_NOT})\\p{Lu}\\p{Ll}+[ \\t])?` : ''
+      add(`P1:${norm(w)}`, `${B}${lead}(?:\\p{Lu}\\.[ \\t]?)*${nameForms(w)}(?:[ \\t]\\p{Lu}\\.)?${E}`, kind, i === 0 ? 0.55 : conf, source)
       // Lower case, where a name stands alone on a line or before a comma (e-mail sign-offs: "petr", "natalia z.").
       const lw = escapeRe(w.toLocaleLowerCase())
       add(`L:${norm(w)}`, `(?<=(?:^|\\n)[ \\t>]*)${lw}(?:\\s\\p{Ll}\\.)?(?=[ \\t]*(?:\\n|$|,))`, kind, 0.55, source)

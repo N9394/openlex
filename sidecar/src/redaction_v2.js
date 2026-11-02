@@ -44,7 +44,7 @@ const WINDOW = 240 // characters of context on each side
 const MAX_ASK = 2000 // distinct candidates asked per check; beyond that, version 1 decides
 const BATCH = 32
 // Which stage-1 findings the model may re-classify (lists and fixed-shape patterns stay as they are).
-const ASK_SOURCES = new Set(['heuristic', 'model', 'gliner', 'names', 'ngrams'])
+const ASK_SOURCES = new Set(['heuristic', 'model', 'gliner', 'names', 'ngrams', 'caps'])
 const ASK_KINDS = new Set(['PERSON', 'ORG', 'ADDRESS', 'OTHER'])
 
 function ready() {
