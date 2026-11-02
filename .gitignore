@@ -17,3 +17,6 @@ models/gowa/data/
 models/gowa/runs/
 models/gowa/release/
 models/gowa/eval/
+
+# third-party clones and downloads (never committed)
+models/gowa/third_party/
