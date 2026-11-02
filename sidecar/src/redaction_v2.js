@@ -173,10 +173,48 @@ async function findings(text, { terms = [], keep = [], patterns = [], cache = ne
         return d && !f.decided ? { ...f, kind: d.kind, group: d.group, label: d.label, confidence: d.confidence, decided: d.decided } : f
       })
       again.stats.asked += stats.asked
-      return again
+      return occurrences(text, again, signal)
     }
+    return occurrences(text, { findings: out.map((f, i) => ({ ...f, id: `f${i + 1}` })), stats }, signal)
   }
   return { findings: out.map((f, i) => ({ ...f, id: `f${i + 1}` })), stats }
+}
+
+const MAX_OCCURRENCES = 600
+
+/**
+ * The second look, per occurrence. Decisions above are made once per distinct text, and a
+ * name's forms are spread everywhere — so "Koch" the surname and "der Koch" the cook, or "Brno"
+ * in an address and in a hospital's name, get the same answer. The uncertain ones are asked
+ * again, each in its own context:
+ *   a single word that is ticked because a name was spread (a surname alone), or
+ *   a single word the model decided once that appears more than once.
+ * The model may only untick, and only when it is confident; the occurrence stays in the check
+ * (shown, unticked), so the lawyer still sees it. It never drops anything.
+ */
+async function occurrences(text, result, signal) {
+  const count = new Map()
+  for (const f of result.findings) { const k = detect.norm(f.text); count.set(k, (count.get(k) || 0) + 1) }
+  const ask = result.findings.filter((f) => f.on && ['PERSON', 'ORG', 'ADDRESS', 'OTHER'].includes(f.kind) && !/\s/.test(f.text) &&
+    (f.source === 'spread' || (f.decided && count.get(detect.norm(f.text)) > 1))).slice(0, MAX_OCCURRENCES)
+  result.stats.occurrences = 0
+  if (!ask.length) return result
+  const tasks = require('./decide_tasks')
+  const verdict = new Map()
+  for (let i = 0; i < ask.length; i += BATCH) {
+    if (signal?.aborted) break
+    const part = ask.slice(i, i + BATCH)
+    const res = await tasks.classifyCandidates(part.map((f) => ({ text: f.text, context: context(text, f.start, f.end) })), { signal })
+    if (!res) break // the model stopped: the ticks stay (the safe side)
+    part.forEach((f, j) => { if (res[j]) verdict.set(f.id, res[j]) })
+    result.stats.occurrences += part.length
+  }
+  result.findings = result.findings.map((f) => {
+    const d = verdict.get(f.id)
+    if (!d || d.kind !== null || d.outcome !== 'automate') return f
+    return { ...f, on: false, decided: { answer: d.answer, p: d.p, outcome: d.outcome, occurrence: true } }
+  })
+  return result
 }
 
 module.exports = { ready, status, detection, findings, context, WINDOW, MAX_ASK }

@@ -132,17 +132,33 @@ function setupEngine(model) {
 const ORACLE_KIND = { PERSON: 'person', ORG: 'organisation', ADDRESS: 'address', ID: 'id_number', IBAN: 'id_number', DATE: 'other_personal', EMAIL: 'other_personal', PHONE: 'other_personal', OTHER: 'other_personal' }
 let oracleDoc = null
 const squash = (s) => String(s).replace(/\s+/g, ' ').trim().toLowerCase()
+/** The doc without whitespace, and a map back to the original positions. */
+function compact(text) {
+  let flat = ''
+  const at = []
+  for (let i = 0; i < text.length; i++) if (!/\s/.test(text[i])) { flat += text[i]; at.push(i) }
+  return { flat, at }
+}
 function oracleRule(state, _instructions, options) {
-  const m = state.match(/⟦ (.+?) ⟧/)
+  const m = state.match(/^(.*?)⟦ (.+?) ⟧/s)
   if (!m || !oracleDoc) return null
-  const c = squash(m[1])
-  let answer = 'not_personal'
-  for (const g of oracleDoc.spans) {
-    if (g.kind === 'NOT' || g.kind === 'OPT') continue
-    const t = squash(g.text)
-    if (t === c || t.includes(c)) { answer = ORACLE_KIND[g.kind]; break }
+  const pick = (answer) => options.findIndex((o) => o.startsWith(answer.replace('_', ' ')) || o.startsWith(answer))
+  // Where is this occurrence? Match the text just before it plus the candidate, whitespace ignored.
+  oracleDoc.flat ??= compact(oracleDoc.text)
+  const before = m[1].replace(/^…/, '').replace(/\s+/g, '').slice(-40)
+  const cand = m[2].replace(/\s+/g, '')
+  const { flat, at } = oracleDoc.flat
+  const k = flat.indexOf(before + cand)
+  if (k >= 0 && flat.indexOf(before + cand, k + 1) < 0) {
+    const s0 = at[k + before.length]
+    const e0 = at[k + before.length + cand.length - 1] + 1
+    const g = oracleDoc.spans.find((g) => g.kind !== 'OPT' && g.start < e0 && s0 < g.end)
+    return pick(!g || g.kind === 'NOT' ? 'not_personal' : ORACLE_KIND[g.kind])
   }
-  return options.findIndex((o) => o.startsWith(answer.replace('_', ' ')) || o.startsWith(answer))
+  // Not locatable (repeated passage): decide by the text.
+  const c = squash(m[2])
+  const g = oracleDoc.spans.find((g) => g.kind !== 'NOT' && g.kind !== 'OPT' && (squash(g.text) === c || squash(g.text).includes(c)))
+  return pick(g ? ORACLE_KIND[g.kind] : 'not_personal')
 }
 
 async function runDoc(eng, doc, mode) {
