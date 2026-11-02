@@ -132,42 +132,86 @@ function termHits(text, terms) {
   for (const t of list) {
     const re = new RegExp(`(?<![\\p{L}\\p{N}])${escapeRe(String(t.text).trim()).replace(/\s+/g, '\\s+')}(?![\\p{L}\\p{N}])`, 'giu')
     // "found": seen in another text of the same check — as certain as a finding, not a listed term.
-    for (const m of text.matchAll(re)) out.push({ kind: t.kind || 'PARTY', start: m.index, end: m.index + m[0].length, confidence: t.source === 'found' ? 0.8 : 1, source: t.source === 'found' ? 'heuristic' : (t.source || 'term') })
+    for (const m of text.matchAll(re)) out.push({ kind: t.kind || 'PARTY', start: m.index, end: m.index + m[0].length, confidence: t.source === 'found' ? 0.8 : 1, source: t.source === 'found' ? 'spread' : (t.source || 'term') })
   }
   return out
 }
 
+// Case endings a name can carry in our languages (DE/EN genitive, CS/SK/PL declension,
+// RO article, HU case suffixes). Matched after a name's stem, so "Nováková" also finds
+// "Novákové"/"Novákovou", "Kowalski" "Kowalskiego", "Popescu" "Popescului", "Kovács" "Kovácsnak".
+const NAME_ENDINGS = ["s", "'s", "’s", "es", "a", "á", "e", "é", "i", "í", "o", "u", "y", "ý", "ą", "ę", "ou", "ovi", "owi", "em", "om", "ej", "ého", "ému", "ým", "ých", "ými", "iego", "iemu", "im", "ich", "ul", "ului", "ei", "lui", "ăi", "nak", "nek", "val", "vel", "tól", "től", "ról", "ről", "hoz", "hez", "höz", "nál", "nél", "ért", "t", "ot", "et", "at", "ban", "ben", "ra", "re"]
+  .sort((a, b) => b.length - a.length)
+const STEM_DROP = /(?:ov[áa]|[aáeéiíoóuůyýăą])$/u
+
+/** Regex source for a name word in its inflected forms, as written and in capitals. */
+function nameForms(word) {
+  const stems = new Set([word])
+  const m = STEM_DROP.exec(word)
+  if (m && word.length - 1 >= 4) stems.add(word.slice(0, -1)) // Nováková → Novákov, Kowalski → Kowalsk
+  if (/ov[áa]$/u.test(word) && word.length - 3 >= 4) stems.add(word.slice(0, -3) + 'ov')
+  const alt = (list) => [...list].sort((a, b) => b.length - a.length).map(escapeRe).join('|')
+  const ends = alt(NAME_ENDINGS)
+  const up = (s) => s.toLocaleUpperCase()
+  return `(?:(?:${alt(stems)})(?:${ends})?|(?:${alt([...stems].map(up))})(?:${alt(NAME_ENDINGS.map(up))})?)`
+}
+
 /**
- * Other places where a found person or organisation appears again: the
- * last name alone ("Huber" after "Mag. Johann Huber"), an organisation's
- * name without its legal form, and the same words where no title stood.
+ * Other places where a found person or organisation appears again:
+ *   the full name and its parts in their inflected forms and in capitals
+ *   ("Nováková" → "Novákové", "NOVÁKOVÁ"; "Kowalski" → "Kowalskiego"),
+ *   the last name alone ("Huber" after "Mag. Johann Huber"), with an initial before it ("J. Huber"),
+ *   a known first name alone ("Jana" in "Hi Jana,"), the initials ("J. N.", "JN"),
+ *   an organisation's name without its legal form.
+ * Built for the decision model's weak spots (later mentions, declension, capitals, no clue):
+ * once a name is found anywhere, every form of it is found everywhere.
  */
 function spread(text, found, keep) {
+  const { isFirstName } = require('./pii_names')
   const out = []
   const seen = new Set()
+  const add = (key, src, kind, confidence, source) => {
+    if (seen.has(key)) return
+    seen.add(key)
+    for (const m of text.matchAll(new RegExp(src, 'gu'))) out.push({ kind, start: m.index, end: m.index + m[0].length, confidence, source })
+  }
+  const B = '(?<![\\p{L}\\p{N}])'
+  const E = '(?![\\p{L}\\p{N}])'
   for (const f of found) {
     if (!['PERSON', 'ORG', 'PARTY'].includes(f.kind)) continue
     const value = text.slice(f.start, f.end)
     if (keep.has(norm(value))) continue
     const listed = f.source === 'term' || f.source === 'firm'
-    const forms = []
-    if (!listed) forms.push([value, f.kind])
-    const words = value.split(/\s+/)
+    // 'spread': a form of a name found elsewhere — the decision model never overrules it.
+    const source = 'spread'
     const isOrg = f.kind === 'ORG' || FORM_END.test(value)
     if (isOrg) {
+      if (!listed) add(`ORG:${norm(value)}`, `${B}${escapeRe(value)}${E}`, 'ORG', f.confidence, source)
       const core = value.replace(FORM_END, '')
-      if (core !== value && core.length >= 4) forms.push([core, 'ORG'])
-    } else if (words.length > 1) {
-      const last = words[words.length - 1]
-      if (last.length >= 4 && /^\p{Lu}/u.test(last) && !FORM_ONLY.test(last)) forms.push([last, f.kind === 'PARTY' ? 'PERSON' : f.kind])
+      if (core !== value && core.length >= 4 && !keep.has(norm(core))) {
+        add(`ORG:${norm(core)}`, `${B}(?:${escapeRe(core)}|${escapeRe(core.toLocaleUpperCase())})${E}`, 'ORG', Math.min(f.confidence, 0.6), source)
+      }
+      continue
     }
-    for (const [form, kind] of forms) {
-      const key = `${kind}:${norm(form)}`
-      if (seen.has(key) || keep.has(norm(form))) continue
-      seen.add(key)
-      const re = new RegExp(`(?<![\\p{L}\\p{N}])${escapeRe(form)}(?![\\p{L}\\p{N}])`, 'gu')
-      for (const m of text.matchAll(re)) out.push({ kind, start: m.index, end: m.index + m[0].length, confidence: form === value ? f.confidence : Math.min(f.confidence, 0.6), source: listed ? 'heuristic' : f.source })
+    const kind = f.kind === 'PARTY' ? 'PERSON' : f.kind
+    const words = value.split(/\s+/).filter((w) => /^\p{Lu}/u.test(w) && !/^\p{Lu}\.$/u.test(w))
+    if (!words.length) continue
+    // The whole name (each word in its forms), so "Jany Novákové" and "JANA NOVÁKOVÁ" are found.
+    if (!listed || words.length > 1) add(`P:${norm(value)}`, `${B}${words.map(nameForms).join('\\s+')}${E}`, kind, f.confidence, source)
+    if (words.length < 2) continue
+    const conf = Math.min(f.confidence, 0.6)
+    for (const [i, w] of words.entries()) {
+      if (w.length < 3 || FORM_ONLY.test(w) || keep.has(norm(w))) continue
+      if (i === 0 && !isFirstName(w)) continue // a first word that is not a known first name may be an ordinary word
+      // Initials before or after belong to the name ("J. Huber", "ZAUNER M.", "K. István", "Mateus O.").
+      add(`P1:${norm(w)}`, `${B}(?:\\p{Lu}\\.\\s?)*${nameForms(w)}(?:\\s\\p{Lu}\\.)?${E}`, kind, i === 0 ? 0.55 : conf, source)
+      // Lower case, where a name stands alone on a line or before a comma (e-mail sign-offs: "petr", "natalia z.").
+      const lw = escapeRe(w.toLocaleLowerCase())
+      add(`L:${norm(w)}`, `(?<=(?:^|\\n)[ \\t>]*)${lw}(?:\\s\\p{Ll}\\.)?(?=[ \\t]*(?:\\n|$|,))`, kind, 0.55, source)
     }
+    // Initials: "J. N.", "J.N.", "JN" (capitals only).
+    const ini = words.map((w) => escapeRe(w[0]))
+    add(`I:${ini.join('')}`, `${B}(?:${ini.join('\\.\\s?')}\\.|${ini.join('')})${E}`, kind, 0.55, source)
   }
   return out
 }

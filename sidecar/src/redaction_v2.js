@@ -85,7 +85,7 @@ function context(text, start, end) {
  *   signal
  * @returns {Promise<{ findings, stats: { candidates, asked, automated, escalated, dropped, partial, failed?, sources } }>}
  */
-async function findings(text, { terms = [], keep = [], patterns = [], cache = new Map(), signal } = {}) {
+async function findings(text, { terms = [], keep = [], patterns = [], cache = new Map(), signal, respread = false } = {}) {
   text = String(text || '')
   const stats = { candidates: 0, asked: 0, automated: 0, escalated: 0, dropped: 0, partial: false, sources: [] }
   const { found, used } = await candidates.find(text, { signal })
@@ -153,6 +153,29 @@ async function findings(text, { terms = [], keep = [], patterns = [], cache = ne
     out.push({ kind, group: detect.GROUPS[kind] || 'other', text: text.slice(f.start, f.end), start: f.start, end: f.end, confidence: d.p, source: 'model', label: detect.KIND_LABELS[kind], on: d.outcome === 'automate' && d.kind !== null, decided: { answer: d.answer, p: d.p, outcome: d.outcome } })
   }
   out.sort((a, b) => a.start - b.start)
+  // Names the model confidently ticked are spread like the matter's list: every other form of
+  // them in this text (surname alone, initials, declension, capitals) is found and ticked too,
+  // and the model is not asked again about those forms (a lookalike surname stays ticked).
+  if (!respread) {
+    const have = new Set(terms.map((t) => detect.norm(typeof t === 'string' ? t : t.text)))
+    const found = new Map()
+    for (const f of out) {
+      if (!f.on || !['PERSON', 'ORG'].includes(f.kind) || !f.decided || f.decided.outcome !== 'automate') continue
+      const k = detect.norm(f.text)
+      if (!have.has(k)) found.set(k, { text: f.text, kind: f.kind, source: 'found' })
+    }
+    if (found.size) {
+      const again = await findings(text, { terms: [...terms, ...found.values()], keep, patterns, cache, signal, respread: true })
+      // Keep the model's own decision on the spans it decided (the AI record shows it).
+      const first = new Map(out.filter((f) => f.decided).map((f) => [`${f.start}:${f.end}`, f]))
+      again.findings = again.findings.map((f) => {
+        const d = first.get(`${f.start}:${f.end}`)
+        return d && !f.decided ? { ...f, kind: d.kind, group: d.group, label: d.label, confidence: d.confidence, decided: d.decided } : f
+      })
+      again.stats.asked += stats.asked
+      return again
+    }
+  }
   return { findings: out.map((f, i) => ({ ...f, id: `f${i + 1}` })), stats }
 }
 

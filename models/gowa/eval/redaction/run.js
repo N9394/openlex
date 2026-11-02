@@ -16,6 +16,8 @@
  *   v1          version 1: pii_detect.scan alone
  *   candidates  every candidate any source proposes — the ceiling GOWA can reach
  *               (GOWA only classifies what it is shown)
+ *   oracle      version 2 with a perfect model built from the gold answers — what is left
+ *               missing here is the harness's gap, not the model's
  *   gowa        version 2 with the GOWA model given by --model (a release folder
  *               with model.onnx, tokenizer.json, tokenizer_config.json, gowa-model.json)
  *
@@ -111,9 +113,9 @@ function setupEngine(model) {
   const data = fs.mkdtempSync(path.join(os.tmpdir(), 'openlex-redeval-'))
   process.env.LEXVAULT_DATA_DIR = data
   const req = (m) => require(path.join(SIDECAR, 'src', m))
-  const eng = { detect: req('pii_detect'), candidates: req('pii_candidates'), v2: req('redaction_v2'), harness: req('harness'), gowa: null }
+  const eng = { detect: req('pii_detect'), candidates: req('pii_candidates'), v2: req('redaction_v2'), harness: req('harness'), gowa: req('gowa') }
+  eng.harness.setUserSection('decide', { tasks: { redaction: true } })
   if (model) {
-    eng.gowa = req('gowa')
     const dest = path.join(data, 'models', eng.gowa.MANIFEST.id)
     fs.mkdirSync(dest, { recursive: true })
     for (const f of eng.gowa.REQUIRED) {
@@ -121,9 +123,26 @@ function setupEngine(model) {
       if (!fs.existsSync(src)) throw new Error(`--model: ${f} missing in ${model}`)
       fs.symlinkSync(src, path.join(dest, f))
     }
-    eng.harness.setUserSection('decide', { tasks: { redaction: true } })
   }
   return eng
+}
+
+// The oracle: a perfect decision model built from the gold answers. It shows how far the harness
+// gets when the model is never wrong, so every gap left in "oracle" is the harness's, not GOWA's.
+const ORACLE_KIND = { PERSON: 'person', ORG: 'organisation', ADDRESS: 'address', ID: 'id_number', IBAN: 'id_number', DATE: 'other_personal', EMAIL: 'other_personal', PHONE: 'other_personal', OTHER: 'other_personal' }
+let oracleDoc = null
+const squash = (s) => String(s).replace(/\s+/g, ' ').trim().toLowerCase()
+function oracleRule(state, _instructions, options) {
+  const m = state.match(/⟦ (.+?) ⟧/)
+  if (!m || !oracleDoc) return null
+  const c = squash(m[1])
+  let answer = 'not_personal'
+  for (const g of oracleDoc.spans) {
+    if (g.kind === 'NOT' || g.kind === 'OPT') continue
+    const t = squash(g.text)
+    if (t === c || t.includes(c)) { answer = ORACLE_KIND[g.kind]; break }
+  }
+  return options.findIndex((o) => o.startsWith(answer.replace('_', ' ')) || o.startsWith(answer))
 }
 
 async function runDoc(eng, doc, mode) {
@@ -136,6 +155,11 @@ async function runDoc(eng, doc, mode) {
   const { found } = await eng.candidates.find(text, {})
   const cands = [...base, ...found]
   if (mode === 'candidates') return { findings: cands.map((c) => ({ ...c, on: true })), candidates: cands }
+  if (mode === 'oracle') {
+    oracleDoc = doc
+    if (!eng.oracle) eng.oracle = require(path.join(SIDECAR, 'test', 'fixtures', 'scripted_gowa')).scripted(oracleRule)
+    eng.gowa._setTestBackend(eng.oracle)
+  } else eng.gowa._setTestBackend(null)
   const r = await eng.v2.findings(text, { cache: new Map() })
   if (r.stats.failed) throw new Error(`GOWA failed on ${doc.id}`)
   return { findings: r.findings, candidates: cands, stats: r.stats }
@@ -177,7 +201,7 @@ async function main() {
   const docs = loadGold(a.gold || path.join(HERE, 'gold'), a.lang)
   if (!docs.length) throw new Error('no gold documents')
   const eng = setupEngine(a.model)
-  const modes = ['v1', 'candidates', ...(a.model ? ['gowa'] : [])]
+  const modes = ['v1', 'candidates', 'oracle', ...(a.model ? ['gowa'] : [])]
   const res = {}
   for (const mode of modes) {
     const all = []
@@ -211,10 +235,12 @@ async function main() {
   const md = report(res, modes, docs)
   if (a.out) fs.writeFileSync(a.out, md)
   process.stdout.write(md)
-  for (const what of a.list) {
-    const m = res.gowa || res.v1
+  for (let what of a.list) {
+    const [mn, w] = what.includes(':') ? what.split(':') : [res.gowa ? 'gowa' : 'v1', what]
+    const m = res[mn]
+    what = w
     const pick = what === 'drops' ? m.drops || [] : what === 'false' ? m.rows.filter((r) => r.outcome === 'false_hide') : m.ents.filter((r) => r.outcome === what)
-    console.log(`\n## ${what} (${res.gowa ? 'gowa' : 'v1'})`)
+    console.log(`\n## ${what} (${mn})`)
     for (const r of pick) console.log(`${r.doc}\t${r.g.kind}\t${r.g.tags.join(',')}\t${r.g.text}`)
   }
   if (a.json) fs.writeFileSync(a.json, JSON.stringify(Object.fromEntries(Object.entries(res).map(([k, v]) => [k, { ...v, rows: undefined, ents: undefined, drops: v.drops?.length, regressions: v.regressions?.length }])), null, 2))
@@ -223,7 +249,7 @@ async function main() {
 
 /** The release gate. Numbers are proposals until the founder signs them off (see README.md). */
 function gates(res) {
-  const m = res.gowa || res.v1
+  const m = res.gowa || res.oracle || res.v1
   const k = (kind) => m.kind[kind] || { n: 0, hidden: 0, missed: 0 }
   const fixed = [...FIXED].reduce((s, x) => ({ n: s.n + k(x).n, hidden: s.hidden + k(x).hidden }), { n: 0, hidden: 0 })
   const out = [
@@ -250,9 +276,9 @@ function table(title, modes, res, key, label = (x) => x) {
 }
 
 function report(res, modes, docs) {
-  const m = res.gowa || res.v1
+  const m = res.gowa || res.oracle || res.v1
   let s = `# Redaction check — evaluation\n\n${docs.length} documents, ${m.ents.length} entities, ${m.nots} lookalikes (${[...new Set(docs.map((d) => d.lang))].join(', ')}). ${new Date().toISOString().slice(0, 16)}Z\n\n`
-  s += `## Release gate (${res.gowa ? 'with GOWA' : 'version 1 only — no model given'})\n\n`
+  s += `## Release gate (${res.gowa ? 'with GOWA' : 'oracle: a perfect model — the harness ceiling'})\n\n`
   for (const g of gates(res)) s += `- ${g.pass ? 'PASS' : '**FAIL**'} — ${g.name}: ${g.value}\n`
   s += `\n## Outcomes\n\n| mode | hidden | partial | shown (unticked) | missed | docs with a leak | lookalikes hidden | extra ticks | time |\n|---|---|---|---|---|---|---|---|---|\n`
   for (const mo of modes) {
