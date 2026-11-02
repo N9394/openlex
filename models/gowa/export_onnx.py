@@ -56,9 +56,9 @@ from gowa.data import read_jsonl
 from gowa.model import GowaModel
 
 ENGINE_FILES = ["model.onnx", "tokenizer.json", "tokenizer_config.json", "gowa-model.json"]
-VARIANTS = ["int8", "int8-pc", "int8-pc-emb8row", "int8-pc-emb8row-head32", "int8-pc-emb16", "int8-pc-emb16-head32", "int8-pc-emb32", "fp32"]
+VARIANTS = ["int8", "int8-pc", "int8-pc-emb8row", "int8-pc-emb8row-head32", "int8-pc-emb16", "int8-pc-emb16-head32", "int8-pc-emb32", "fp16", "fp32"]
 # "auto" tries these in this order (roughly smallest first) and keeps the first that passes.
-AUTO_ORDER = ["int8-pc", "int8-pc-emb8row", "int8-pc-emb8row-head32", "int8-pc-emb16", "int8-pc-emb16-head32", "int8-pc-emb32", "fp32"]
+AUTO_ORDER = ["int8-pc", "int8-pc-emb8row", "int8-pc-emb8row-head32", "int8-pc-emb16", "int8-pc-emb16-head32", "fp16", "int8-pc-emb32", "fp32"]
 HEAD_NODE_RE = re.compile(r"^/m/(q|k)/")  # the decision head's two Linear layers in the exported graph
 
 
@@ -165,6 +165,13 @@ def build_variant(variant: str, fp32: Path, pre: Path | None, target: Path):
     """Write `variant` of the fp32 graph to `target`."""
     if variant == "fp32":
         shutil.copy(fp32, target)
+        return
+    if variant == "fp16":
+        # All weights in float16, inputs/outputs kept float32 (half the size, usually near-lossless).
+        import onnx
+        from onnxconverter_common import float16
+        m = float16.convert_float_to_float16(onnx.load(str(fp32)), keep_io_types=True)
+        onnx.save(m, str(target))
         return
     from onnxruntime.quantization import QuantType, quantize_dynamic
 

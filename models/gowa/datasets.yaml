@@ -101,7 +101,7 @@ datasets:
   - id: ris_at
     name: Austrian federal law (RIS open data)
     kind: corpus
-    source: https://data.bka.gv.at (RIS OGD)
+    source: https://data.bka.gv.at (RIS OGD); copy used for training text: github.com/legalize-dev/legalize-at
     licence: CC-BY-4.0
     commercial: yes
     include: yes
@@ -127,6 +127,16 @@ datasets:
     include: yes
     tasks: [claim_support, relevance, in_force, redaction, injection]
     reason: Official texts only, taken from the official portals — never from a commercial consolidation or commentary.
+
+  - id: legifrance_fr
+    name: French legislation from Légifrance (DILA), via legalize-fr
+    kind: corpus
+    source: https://www.legifrance.gouv.fr (DILA open data); copy used: github.com/legalize-dev/legalize-fr
+    licence: Licence Ouverte / Open Licence 2.0 (Etalab)
+    commercial: yes
+    include: yes
+    tasks: [claim_support, relevance, in_force, redaction, injection]
+    reason: Open government licence allowing commercial reuse with attribution.
 
   - id: openlex_llm_labels
     name: Labels made by an open LLM on the included public texts (label_llm.py)
