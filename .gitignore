@@ -16,6 +16,7 @@ __pycache__/
 models/gowa/data/
 models/gowa/runs/
 models/gowa/release/
-models/gowa/eval/
+models/gowa/eval/*
+!models/gowa/eval/redaction/
 
 models/gowa/third_party/corpora/
