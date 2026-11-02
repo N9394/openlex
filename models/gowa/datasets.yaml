@@ -188,15 +188,144 @@ datasets:
     tasks: []
     reason: Custom licence with restrictions; excluded until cleared.
 
+  # ── Kev decision-v7, audited source by source (2026-11-02) ────────────────
+  # Kev's released models (github.com/jaredpalmer/kev, commit 2074cc44,
+  # evals/v7/decision-v7/manifest.json) share one training set: 10,000
+  # records from ten public datasets (public-pool-v4) + 896 generated policy
+  # records + 1,680 records from 60 generated rule structures. Kev's Apache
+  # weights do not clean its data, so the mixed dump stays out and each part
+  # is judged on the licence its own authors publish. convert.py kev_clean
+  # builds examples only from the parts below with include: yes, fetched
+  # from their own upstream (not from a Kev dump).
   - id: kev_decision_v7
-    name: Kev decision-v7 training mix
+    name: Kev decision-v7 training mix as a whole (the mixed dump)
     kind: dataset
-    source: https://github.com/jaredpalmer/kev
-    licence: mixed (AG News and TREC unknown, Yelp and IMDb restrictive terms, others vary)
+    source: https://github.com/jaredpalmer/kev (evals/v7/decision-v7; train.jsonl on the Hub mirror jaredpalmer/kev-suites)
+    licence: mixed — see the per-source entries below (AG News, Yelp, IMDb, Amazon NC or restrictive; TREC, SST-5 unknown)
+    commercial: no
+    include: no
+    tasks: []
+    reason: The mix contains non-commercial and unknown parts; only the cleared sources below are taken in, each from its own upstream.
+
+  - id: banking77
+    name: BANKING77 (PolyAI) — 13,083 online-banking queries, 77 intents (Kev decision-v7, choice)
+    kind: dataset
+    source: https://github.com/PolyAI-LDN/task-specific-datasets (banking_data/, commit 57ec275d)
+    licence: CC-BY-4.0
+    commercial: yes
+    include: yes
+    tasks: [general]
+    reason: CC-BY-4.0 per PolyAI's own repository; attribution in the model card. Feeds choice questions (intent, up to 20 options with a none-of-the-above variant).
+
+  - id: multinli
+    name: MultiNLI (NYU) — 433k sentence pairs; only the non-fiction genres (Kev decision-v7, choice)
+    kind: dataset
+    source: https://huggingface.co/datasets/nyu-mll/multi_nli (the authors' own release, revision da70db2a; cims.nyu.edu/~sbowman/multinli)
+    licence: OANC licence (free use, modification and sharing) for the government, slate, telephone and travel genres; the fiction genre is dropped (one CC-BY-SA-3.0 work)
+    commercial: yes
+    include: yes
+    tasks: [general]
+    reason: Per the authors' data statement the non-fiction genres are under the permissive OANC licence; fiction is excluded by the converter (genre filter) because one work in it is share-alike. Feeds choice (entailment / neutral / contradiction).
+
+  - id: kev_legacy_policy
+    name: Kev generated policy cases (contrastive.py families; 896 records in decision-v7; noul / choice / score)
+    kind: dataset
+    source: https://github.com/jaredpalmer/kev kev/contrastive.py @ 2074cc44, vendored in models/gowa/third_party/kev/
+    licence: Apache-2.0
+    commercial: yes
+    include: yes
+    tasks: [general]
+    reason: Template code under Apache-2.0 with invented names and amounts, no third-party text; we regenerate with our own seed (NOTICE kept in third_party/kev).
+
+  - id: kev_compositional
+    name: Kev generated rule-structure cases (composition.py; 1,680 records from 60 structures in decision-v7; choice)
+    kind: dataset
+    source: https://github.com/jaredpalmer/kev kev/composition.py @ 2074cc44, vendored in models/gowa/third_party/kev/
+    licence: Apache-2.0
+    commercial: yes
+    include: yes
+    tasks: [general]
+    reason: Template code under Apache-2.0, no third-party text; regenerated with our own seed, held-out structures stay excluded as in Kev.
+
+  - id: boolq
+    name: BoolQ (Google) — 15,942 yes/no questions on Wikipedia passages (Kev decision-v7, noul)
+    kind: dataset
+    source: https://github.com/google-research-datasets/boolean-questions (HF google/boolq)
+    licence: CC-BY-SA-3.0
+    commercial: yes
+    include: no
+    tasks: []
+    reason: REVIEW — share-alike; whether SA reaches trained weights is not settled. Out until the founder decides (would feed noul).
+
+  - id: dbpedia14
+    name: DBpedia-14 (Zhang et al. 2015) — 630k Wikipedia abstracts, 14 classes (Kev decision-v7, choice)
+    kind: dataset
+    source: https://huggingface.co/datasets/fancyzhx/dbpedia_14 (from DBpedia 2014)
+    licence: CC-BY-SA-3.0 (and GFDL, inherited from DBpedia / Wikipedia)
+    commercial: yes
+    include: no
+    tasks: []
+    reason: REVIEW — share-alike plus GFDL; out until the founder decides whether SA on model weights is acceptable (would feed choice).
+
+  - id: agnews
+    name: AG News (Zhang et al. 2015, from the ComeToMyHead corpus) — 127,600 news articles, 4 topics (Kev decision-v7, choice + noul)
+    kind: dataset
+    source: http://groups.di.unipi.it/~gulli/AG_corpus_of_news_articles.html (HF fancyzhx/ag_news)
+    licence: none published; the corpus page says research and other non-commercial activity
+    commercial: no
+    include: no
+    tasks: []
+    reason: The source corpus is provided for research and non-commercial activity only; the HF card says licence unknown.
+
+  - id: yelp_review_full
+    name: Yelp Review Full (Zhang et al. 2015, from the Yelp Dataset Challenge) — 700k reviews, 1-5 stars (Kev decision-v7, score + noul)
+    kind: dataset
+    source: https://www.yelp.com/dataset (HF Yelp/yelp_review_full)
+    licence: Yelp Dataset Terms of Use (other; personal, educational and academic use only)
+    commercial: no
+    include: no
+    tasks: []
+    reason: Yelp's dataset agreement does not allow commercial use.
+
+  - id: imdb
+    name: IMDb Large Movie Review Dataset (Maas et al. 2011) — 50k reviews, positive/negative (Kev decision-v7, noul)
+    kind: dataset
+    source: https://ai.stanford.edu/~amaas/data/sentiment/ (HF stanfordnlp/imdb)
+    licence: none published (HF "other"); review text is IMDb user content under IMDb's conditions of use
+    commercial: no
+    include: no
+    tasks: []
+    reason: No licence from the authors and IMDb's terms restrict commercial reuse of its content.
+
+  - id: amazon_reviews_multi
+    name: Multilingual Amazon Reviews Corpus, English part (Keung et al. 2020) — 210k reviews, 1-5 stars (Kev decision-v7, score)
+    kind: dataset
+    source: https://registry.opendata.aws/amazon-reviews-ml/ (Kev uses the SetFit/amazon_reviews_multi_en mirror)
+    licence: Amazon's own agreement, non-commercial research only (the SetFit mirror's Apache-2.0 tag does not override it)
+    commercial: no
+    include: no
+    tasks: []
+    reason: Non-commercial research licence ("you may not ... make any commercial use"); the dataset has since been withdrawn by Amazon.
+
+  - id: sst5
+    name: Stanford Sentiment Treebank, 5 classes (Socher et al. 2013, from Rotten Tomatoes via Pang & Lee) — 11,855 sentences (Kev decision-v7, score)
+    kind: dataset
+    source: https://nlp.stanford.edu/sentiment/ (Kev uses SetFit/sst5)
+    licence: none published (HF stanfordnlp/sst says unknown; the mirror has no licence)
     commercial: unclear
     include: no
     tasks: []
-    reason: Kev's Apache weights do not clean its data; only parts with clear licences may be taken in, each listed on its own.
+    reason: No licence from the authors; the review snippets are Rotten Tomatoes content.
+
+  - id: trec
+    name: TREC question classification (Li & Roth 2002) — 5,952 questions, 6 coarse types (Kev decision-v7, choice)
+    kind: dataset
+    source: https://cogcomp.seas.upenn.edu/Data/QA/QC/ (HF CogComp/trec)
+    licence: none published (HF card says unknown)
+    commercial: unclear
+    include: no
+    tasks: []
+    reason: No licence from the authors; questions partly come from TREC collections with their own terms.
 
   - id: tasksource_jev_typed
     name: tasksource Jev typed decisions
@@ -207,16 +336,6 @@ datasets:
     include: no
     tasks: []
     reason: Licence "other"; avoid for shipped weights.
-
-  - id: multinli
-    name: MultiNLI
-    kind: dataset
-    source: https://huggingface.co/datasets/nyu-mll/multi_nli
-    licence: mixed (OANC parts and CC-BY-SA-3.0 parts)
-    commercial: unclear
-    include: no
-    tasks: []
-    reason: Mixed sources; check each genre's licence before use.
 
   - id: horizon_injection_data
     name: Horizon prompt-injection-guard training data (as listed in its card)

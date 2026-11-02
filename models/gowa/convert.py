@@ -11,6 +11,7 @@ with its source id.
     python convert.py redaction     --corpus corpus/eurlex_de.jsonl --out data/redaction_de.jsonl
     python convert.py injection     --corpus corpus/eurlex_de.jsonl --out data/injection_de.jsonl
     python convert.py seed          --out data/seed.jsonl
+    python convert.py kev_clean     --out data/kev_clean.jsonl --limit 5000
 
 A corpus file is JSONL with {"source": <register id>, "lang": "de", "text": "..."}
 — public law texts only (fetch_corpus is up to you: official portals, see
@@ -213,6 +214,114 @@ def injection(a):
     return out
 
 
+# ── kev_clean: the cleared parts of Kev's decision-v7 mix ────────────────
+# Kev (github.com/jaredpalmer/kev) trains on ten public datasets plus two
+# generated sets. Only the parts with a clear permissive licence are used
+# (datasets.yaml: banking77, multinli without fiction, kev_legacy_policy,
+# kev_compositional), each fetched from its own upstream. Question wording
+# follows Kev's converters (kev/data.py) so the decision style matches.
+BANKING77_URL = "https://raw.githubusercontent.com/PolyAI-LDN/task-specific-datasets/57ec275d8078af65b7731c2a98be812d844a6d6b/banking_data/{split}.csv"
+MULTINLI_REV = "da70db2af9d09693783c3320c4249840212ee221"
+MNLI = {"entailment": "The hypothesis follows from the premise", "neutral": "The hypothesis may or may not be true given the premise",
+        "contradiction": "The hypothesis contradicts the premise"}
+NONE_OPTIONS = [("other", "None of the above"), ("none", "None of these"), ("not_listed", "Not listed here"), ("other", "Something else"),
+                ("no_match", "No option matches")]
+KEV_LEGACY_FAMILIES = ["return_window", "spend_threshold", "age_eligibility", "quantity_limit", "warranty_claim", "sla_response", "late_fee", "volume_discount"]
+KEV_TRAIN_STYLES = (0, 1, 3, 4)  # style 2 is Kev's locked test style
+
+
+def _kev_answer(q):
+    lab = q["label"]
+    return bool(lab) if q["type"] == "noul" else int(lab) if q["type"] == "score" else str(lab)
+
+
+def _banking77(a, rng):
+    import csv
+    import io
+    import urllib.request
+
+    src = need("banking77")
+    out = []
+    for split in ("train", "test"):
+        with urllib.request.urlopen(BANKING77_URL.format(split=split), timeout=60) as r:
+            rows = list(csv.DictReader(io.StringIO(r.read().decode("utf-8"))))
+        intents = sorted({x["category"] for x in rows})
+        rng.shuffle(rows)
+        cap = a.limit if split == "train" else max(1, a.limit // 10) if a.limit else 0
+        for x in rows[: cap or None]:
+            gold = x["category"]
+            opts = [gold] + rng.sample([i for i in intents if i != gold], min(a.max_options - 1, len(intents) - 1))
+            crit = {o: None for o in opts}
+            answer = gold
+            r = rng.random()
+            if r < 0.10:  # Kev-style: the true option removed, "none of the above" is right
+                del crit[gold]
+                nk, nd = rng.choice(NONE_OPTIONS)
+                crit[nk] = nd
+                answer = nk
+            elif r < 0.22:  # ... or offered as a wrong alternative
+                nk, nd = rng.choice(NONE_OPTIONS)
+                crit[nk] = nd
+            keys = list(crit)
+            rng.shuffle(keys)
+            out.append({"task": "general", "lang": "en", "source": src, "type": "choice", "state": x["text"],
+                        "instructions": "Which banking intent best describes this customer message?", "criteria": {k: crit[k] for k in keys},
+                        "answer": answer, "split": split})
+    return out
+
+
+def _multinli(a, rng):
+    src = need("multinli")
+    out = []
+    keys = list(MNLI)
+    for split, sp in (("train", "train"), ("validation_matched", "test")):
+        ds = load("nyu-mll/multi_nli", split=split, revision=a.revision or MULTINLI_REV)
+        ds = ds.filter(lambda r: r["genre"] != "fiction" and r["label"] in (0, 1, 2))  # fiction holds a CC-BY-SA work
+        idx = list(range(len(ds)))
+        rng.shuffle(idx)
+        cap = a.limit if sp == "train" else max(1, a.limit // 10) if a.limit else 0
+        for i in idx[: cap or None]:
+            r = ds[i]
+            assert r["genre"] != "fiction"
+            out.append({"task": "general", "lang": "en", "source": src, "type": "choice", "state": r["premise"],
+                        "instructions": f'Hypothesis: "{r["hypothesis"]}" How does it relate to the premise?', "criteria": dict(MNLI),
+                        "answer": keys[r["label"]], "split": sp})
+    return out
+
+
+def _kev_synthetic(a):
+    sys.path.insert(0, str(HERE))
+    from third_party.kev import composition, contrastive
+
+    out = []
+    src = need("kev_legacy_policy")
+    pairs = max(1, (a.limit or 896) // (2 * len(KEV_LEGACY_FAMILIES)))
+    recs, _ = contrastive.generate(pairs, "openlex-gowa-policy", KEV_LEGACY_FAMILIES)
+    for r in recs:
+        q = r["questions"]["decision"]
+        out.append({"task": "general", "lang": "en", "source": src, "type": q["type"], "state": r["state"], "instructions": q["instructions"],
+                    **({"criteria": q["criteria"]} if q.get("criteria") else {}), "answer": _kev_answer(q),
+                    "split": "test" if int(r["_meta"]["pair_id"].rsplit("-", 1)[1]) % 10 == 0 else "train"})
+    src = need("kev_compositional")
+    n_struct = max(1, (a.limit or 1920) // 32)
+    trees = {f"rand:{composition.canonical(t)}": t for t in composition.sample_trees(n_struct, "openlex-gowa-structures")}
+    for i, r in enumerate(composition.generate(8, "openlex-gowa-composition", styles=KEV_TRAIN_STYLES, trees=trees)):
+        q = r["questions"]["decision"]
+        out.append({"task": "general", "lang": "en", "source": src, "type": "choice", "state": r["state"], "instructions": q["instructions"],
+                    "criteria": q["criteria"], "answer": _kev_answer(q),
+                    "split": "test" if r["_meta"]["group_id"].endswith("/0") else "train"})
+    return out
+
+
+def kev_clean(a):
+    """Cleared Kev decision-v7 sources only. --limit caps training examples per public source (test gets a tenth)."""
+    rng = random.Random(13)
+    parts = {"banking77": _banking77(a, rng), "multinli": _multinli(a, rng), "kev_synthetic": _kev_synthetic(a)}
+    for k, v in parts.items():
+        print(f"  {k}: {len(v)} examples ({sum(1 for x in v if x.get('split') == 'test')} test)")
+    return [x for v in parts.values() for x in v]
+
+
 def seed(a):
     out = []
     for f in sorted((HERE / "seed").glob("*.jsonl")):
@@ -226,7 +335,7 @@ def seed(a):
 
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("dataset", choices=["cuad", "ledgar", "unfair_tos", "multi_eurlex", "lextreme", "redaction", "injection", "seed"])
+    p.add_argument("dataset", choices=["cuad", "ledgar", "unfair_tos", "multi_eurlex", "lextreme", "redaction", "injection", "seed", "kev_clean"])
     p.add_argument("--out", required=True)
     p.add_argument("--revision", default=None, help="pin the Hugging Face dataset revision")
     p.add_argument("--langs", nargs="+", default=["de", "en", "cs", "sk", "pl", "ro", "hu", "fr"])
@@ -236,6 +345,7 @@ def main(argv=None):
     p.add_argument("--corpus", default=None, help="public-text corpus JSONL for redaction/injection")
     p.add_argument("--per-doc", type=int, default=20)
     p.add_argument("--limit", type=int, default=0)
+    p.add_argument("--max-options", type=int, default=20, help="kev_clean: options shown per BANKING77 question (gold + random others)")
     a = p.parse_args(argv)
     rows = globals()[a.dataset](a)
     n = write_jsonl(a.out, rows)
