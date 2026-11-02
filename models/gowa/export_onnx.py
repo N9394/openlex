@@ -168,11 +168,22 @@ def build_variant(variant: str, fp32: Path, pre: Path | None, target: Path):
         return
     if variant == "fp16":
         # All weights in float16, inputs/outputs kept float32 (half the size, usually near-lossless).
+        # The converter can leave a Cast whose declared output type no longer matches (ORT refuses to load
+        # "Type (tensor(float16)) of output arg ... does not match expected type (tensor(float))"), so Cast
+        # nodes stay float32; if a graph still doesn't load, LayerNorm/Softmax-type ops stay float32 too.
         import onnx
+        import onnxruntime as ort
         from onnxconverter_common import float16
-        m = float16.convert_float_to_float16(onnx.load(str(fp32)), keep_io_types=True)
-        onnx.save(m, str(target))
-        return
+        base = list(float16.DEFAULT_OP_BLOCK_LIST)
+        for block in (base + ["Cast"], base + ["Cast", "LayerNormalization", "Softmax", "ReduceMean", "Pow", "Sqrt", "Erf"]):
+            m = float16.convert_float_to_float16(onnx.load(str(fp32)), keep_io_types=True, op_block_list=block)
+            onnx.save(m, str(target))
+            try:
+                ort.InferenceSession(str(target), providers=["CPUExecutionProvider"])
+                return
+            except Exception as e:
+                print(f"fp16 graph did not load with op_block_list +{block[len(base):]}: {str(e)[:200]}")
+        raise RuntimeError("fp16 conversion produced no loadable graph")
     from onnxruntime.quantization import QuantType, quantize_dynamic
 
     if variant == "int8":
