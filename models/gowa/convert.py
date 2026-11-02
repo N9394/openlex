@@ -83,9 +83,15 @@ def ledgar(a):
     for split in ("train", "validation", "test"):
         ds = load("coastalcph/lex_glue", "ledgar", split=split, revision=a.revision)
         names = ds.features["label"].names
+        rng = random.Random(f"gowa-ledgar-{split}")
         for r in ds:
+            # 100 provision types don't fit next to the clause text: show the right one plus
+            # (--max-options - 1) random others, as for BANKING77.
+            gold = names[r["label"]]
+            opts = [gold] + rng.sample([n for n in names if n != gold], min(a.max_options - 1, len(names) - 1))
+            rng.shuffle(opts)
             out.append({"task": "clause_type", "lang": "en", "source": src, "type": "choice", "state": r["text"][:3000],
-                        "instructions": "Which type of contract provision is this?", "criteria": {n: None for n in names}, "answer": names[r["label"]],
+                        "instructions": "Which type of contract provision is this?", "criteria": {n: None for n in opts}, "answer": gold,
                         "split": "train" if split == "train" else "test"})
     return out
 
