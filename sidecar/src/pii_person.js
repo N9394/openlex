@@ -80,9 +80,15 @@ function widen(text, f) {
     if (!ok) break
     start = b.start
   }
-  // initials go on: "A. H." + "-K."
-  const ini = text.slice(end, end + 6).match(/^-\p{Lu}\./u)
+  // initials go on: "A. H." + "-K.", "Lucía F." + " O."
+  const ini = text.slice(end, end + 6).match(/^(?:-|[ \u00a0])\p{Lu}\.(?![\p{L}])/u)
   if (ini && INITIALS.test(words[words.length - 1])) end += ini[0].length
+  // a lower-case initial before a lower-case name ("ľ. kráľ" in a signature)
+  const lo = text.slice(Math.max(0, start - 4), start).match(/(?:^|[\s„"“(])(\p{Ll}\.[ \u00a0])$/u)
+  if (lo && /^\p{Ll}/u.test(f.text)) start -= lo[1].length
+  // a name broken over two lines after a first name ("Witolda\nPawlaka –")
+  const nl = text.slice(end, end + 40).match(/^\n(\p{Lu}\p{Ll}+)(?=[\s,.;–-])/u)
+  if (nl && words.length === 1 && firstName(words[0]) && !STOP.has(nl[1]) && !firstName(nl[1])) end += nl[0].length
   const a = after(text, end)
   if (a && !/^\p{Ll}/u.test(f.text)) {
     if (firstName(a.w) && !firstName(text.slice(start, end).split(/\s+/u)[0]) && (a.comma ? CAPS.test(words[0]) || slot(text, start) : true)) end = a.end // "Huber Andreas", "NOWAK, Zdeněk"
@@ -126,4 +132,28 @@ function glue(text, findings) {
     .sort((a, b) => a.start - b.start || b.end - a.end)
 }
 
-module.exports = { glue }
+/**
+ * Lower-case sign-offs of a name hidden elsewhere: "Viele Grüße\nkerstin", "…: natalia z.".
+ * Only where the word stands alone on its line (or ends the line after a colon), with at most an initial.
+ */
+function signoffs(text, findings) {
+  const words = new Set()
+  for (const f of findings) {
+    if (!f.on || f.kind !== 'PERSON') continue
+    for (const w of f.text.split(/[\s,]+/u)) if (/^\p{Lu}\p{Ll}{2,}$/u.test(w) && !TITLES.has(w) && !STOP.has(w)) words.add(w.toLocaleLowerCase())
+  }
+  if (!words.size) return findings
+  const esc = (w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const re = new RegExp(`(?<=(?:^|\\n)[ \\t>]*|:[ \\t]+)(?:${[...words].map(esc).join('|')})(?:[ \\t]\\p{Ll}\\.)?(?=[ \\t]*(?:\\n|$|,))`, 'gu')
+  const add = []
+  for (const m of text.matchAll(re)) {
+    const start = m.index
+    const end = start + m[0].length
+    if (findings.some((f) => f.on && f.start < end && start < f.end)) continue
+    const { GROUPS, KIND_LABELS } = require('./pii_detect')
+    add.push({ kind: 'PERSON', group: GROUPS.PERSON, label: KIND_LABELS.PERSON, text: m[0], start, end, confidence: 0.55, source: 'spread', on: true })
+  }
+  return add.length ? [...findings, ...add].sort((a, b) => a.start - b.start || b.end - a.end) : findings
+}
+
+module.exports = { glue, signoffs }

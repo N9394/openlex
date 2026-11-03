@@ -66,3 +66,26 @@ test('person cues without a known first name are proposed to the model (initials
   for (const want of ['Wagner', 'ZAUNER M.', 'Inès Benkirane', 'Nagy', 'Tóth', 'Lindner']) assert.ok(got.includes(want), `${want}: ${JSON.stringify(got)}`)
   assert.ok(!got.some((g) => /Schedule|Annex/.test(g)))
 })
+
+test('inflected and derived forms of a name found elsewhere are spread (possessives, family-name-first, mobile e, Hungarian lengthening)', () => {
+  const d = require('../src/pii_detect')
+  const spread = (name, t) => d.scan(t, { terms: [{ text: name, kind: 'PERSON', source: 'found' }], all: true }).map((f) => f.text)
+  assert.deepStrictEqual(spread('Tomáš Novák', 'Tomáš Novák platil. Novákův syn je ochoten'), ['Tomáš Novák', 'Novákův'])
+  assert.deepStrictEqual(spread('ŠVEC Lubomír', 'ŠVEC Lubomír. Švcova přihláška. Švec'), ['ŠVEC Lubomír', 'Švcova', 'Švec'])
+  assert.deepStrictEqual(spread('Kočí Zdeňka', 'Kočí Zdeňka. Kočímu byla zaslána'), ['Kočí Zdeňka', 'Kočímu'])
+  assert.deepStrictEqual(spread('Silvia Mrázová', 'Silvia Mrázová; Silviin servisný zošit'), ['Silvia Mrázová', 'Silviin'])
+  assert.deepStrictEqual(spread('Ewa Nowicka', 'Ewa Nowicka. Ewei i se va comunica'), ['Ewa Nowicka', 'Ewei'])
+  assert.deepStrictEqual(spread('Juhász Ferenc', 'Juhász Ferenc. Juhász kontra Tóth'), ['Juhász Ferenc', 'Juhász'])
+  // a short surname takes only name-like endings: "Lisowa", never "List" or "Lisa"
+  assert.deepStrictEqual(spread('Lis Joanna', 'Lis Joanna. Lisowa kandydatura. List. Lisa'), ['Lis Joanna', 'Lisowa'])
+})
+
+test('lower-case sign-offs of a hidden name; initials that go on', () => {
+  const { glue, signoffs } = require('../src/pii_person')
+  const t = 'Kerstin Fischer schrieb.\n\nViele Grüße\nkerstin\n\nkerstin ist nett'
+  const out = signoffs(t, [{ kind: 'PERSON', text: 'Kerstin Fischer', start: 0, end: 15, on: true }])
+  assert.deepStrictEqual(out.map((f) => f.text), ['Kerstin Fischer', 'kerstin'])
+  const u = 'Signed by the Tenants: Lucía F. O.   Mateus O.'
+  const s = u.indexOf('Lucía F.')
+  assert.deepStrictEqual(glue(u, [{ kind: 'PERSON', text: 'Lucía F.', start: s, end: s + 8, on: true }]).map((f) => f.text), ['Lucía F. O.'])
+})

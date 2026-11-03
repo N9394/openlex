@@ -86,7 +86,11 @@ function names(text, { extra = null } = {}) {
       const from = i > 0 && !STOP.has(words[i - 1]) ? i - 1 : i
       // The word right after a first name stays even when it is also an ordinary word ("Daniel Price").
       const parts = words.slice(from).filter((w, j) => j <= i - from + 1 || !STOP.has(w))
-      if (parts.length < 2) continue
+      if (parts.length < 2) {
+        // A known first name alone ("Jens hat …", "Dear Tomasz,"): a weaker candidate, the model decides from the context.
+        if (words.length === 1 && words[i].length >= 3) out.push({ kind: 'PERSON', start: m.index, end: m.index + words[i].length, confidence: 0.4 })
+        continue
+      }
       const start = m.index + words.slice(0, from).join(' ').length + (from ? 1 : 0)
       const value = text.slice(start, start + parts.join(' ').length)
       out.push({ kind: 'PERSON', start, end: start + value.length, confidence: 0.6 })

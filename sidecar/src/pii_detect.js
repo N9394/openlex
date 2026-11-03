@@ -187,17 +187,38 @@ function termHits(text, terms) {
 const NAME_ENDINGS = ["s", "'s", "’s", "es", "a", "á", "e", "é", "i", "í", "o", "u", "y", "ý", "ą", "ę", "ou", "ovi", "owi", "em", "om", "ej", "ého", "ému", "ým", "ých", "ými", "iego", "iemu", "im", "ich", "ul", "ului", "ei", "lui", "ăi", "nak", "nek", "val", "vel", "tól", "től", "ról", "ről", "hoz", "hez", "höz", "nál", "nél", "ért", "t", "ot", "et", "at", "ban", "ben", "ra", "re"]
   .sort((a, b) => b.length - a.length)
 const STEM_DROP = /(?:ov[áa]|[aáeéiíoóuůyýăą])$/u
+// Forms made from a name rather than case endings: possessives and family names
+// ("Novákův syn", "Sokolova advokátka", "Silviin zošit", "Lisowa kandydatura", "Kowalówna", "Kočímu").
+const NAME_DERIVED = ['ův', 'ova', 'ovo', 'ovu', 'owa', 'owej', 'ową', 'ówna', 'ówny', 'mu', 'ho', 'in', 'ina', 'ino', 'né', 'ék']
+// A short stem ("Lis", "Ew") only with a longer, name-like ending — never "List" or "Lisa".
+const SHORT_ENDINGS = ['ův', 'ova', 'owa', 'owej', 'ową', 'ówna', 'owi', 'ovi', 'em', 'ei', 'ou', 'ej']
 
 /** Regex source for a name word in its inflected forms, as written and in capitals. */
 function nameForms(word) {
+  // ŠVEC is Švec too: its forms ("Švcova") are written in normal case
+  if (/^\p{Lu}[\p{Lu}'’-]+$/u.test(word)) word = word.charAt(0) + word.slice(1).toLocaleLowerCase()
   const stems = new Set([word])
+  const short = new Set()
   const m = STEM_DROP.exec(word)
   if (m && word.length - 1 >= 4) stems.add(word.slice(0, -1)) // Nováková → Novákov, Kowalski → Kowalsk
+  else if (m && word.length - 1 >= 2) short.add(word.slice(0, -1)) // Ewa → Ew(ei)
   if (/ov[áa]$/u.test(word) && word.length - 3 >= 4) stems.add(word.slice(0, -3) + 'ov')
+  // Hungarian lengthens a final a/e before a suffix (Mónika → Mónikától, Varga → Vargával)
+  if (/[ae]$/u.test(word) && word.length >= 4) stems.add(word.slice(0, -1) + (word.endsWith('a') ? 'á' : 'é'))
+  // Czech, Slovak and Polish drop a mobile e (Švec → Švcova, Janek → Janka)
+  const mobile = /^(.{2,})e([^\p{L}]?[bcčdďfghjklľmnňprřsštťvwzž])$/u.exec(word)
+  if (mobile) short.add(mobile[1] + mobile[2])
+  if (word.length <= 3) { short.add(word); stems.delete(word) }
   const alt = (list) => [...list].sort((a, b) => b.length - a.length).map(escapeRe).join('|')
-  const ends = alt(NAME_ENDINGS)
+  const ends = alt([...NAME_ENDINGS, ...NAME_DERIVED])
+  const shortEnds = alt(SHORT_ENDINGS)
   const up = (s) => s.toLocaleUpperCase()
-  return `(?:(?:${alt(stems)})(?:${ends})?|(?:${alt([...stems].map(up))})(?:${alt(NAME_ENDINGS.map(up))})?)`
+  const parts = []
+  if (stems.size) parts.push(`(?:${alt(stems)})(?:${ends})?`)
+  if (word.length <= 3) parts.push(escapeRe(word))
+  if (short.size) parts.push(`(?:${alt(short)})(?:${shortEnds})`)
+  parts.push(`(?:${alt([word, ...stems].map(up))})(?:${alt(NAME_ENDINGS.map(up))})?`)
+  return `(?:${parts.join('|')})`
 }
 
 /**
@@ -248,7 +269,10 @@ function spread(text, found, keep) {
     const conf = Math.min(f.confidence, 0.6)
     for (const [i, w] of words.entries()) {
       if (w.length < 3 || FORM_ONLY.test(w) || keep.has(norm(w))) continue
-      if (i === 0 && !isFirstName(w)) continue // a first word that is not a known first name may be an ordinary word
+      // A first word that is not a known first name may be an ordinary word, unless the name is
+      // written family name first ("Juhász Ferenc", "Kočí Zdeňka", "ŠVEC Lubomír").
+      const familyFirst = words.length === 2 && !isFirstName(w) && (isFirstName(words[1].charAt(0) + words[1].slice(1).toLocaleLowerCase()) || /^\p{Lu}[\p{Lu}'’-]+$/u.test(w))
+      if (i === 0 && !isFirstName(w) && !familyFirst) continue
       // Initials before or after belong to the name ("J. Huber", "ZAUNER M.", "K. István", "Mateus O.").
       // A capitalised word right before the last name is taken along ("Siobhan Baker" when only "Baker" was known).
       const lead = i === words.length - 1 ? `(?:(?!${LEAD_NOT})\\p{Lu}\\p{Ll}+[ \\t])?` : ''

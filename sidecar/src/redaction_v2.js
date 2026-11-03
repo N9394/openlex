@@ -186,7 +186,8 @@ async function findings(text, { terms = [], keep = [], patterns = [], cache = ne
  */
 function addresses(text, result) {
   const before = result.findings.length
-  const persons = require('./pii_person').glue(text, result.findings)
+  const person = require('./pii_person')
+  const persons = person.signoffs(text, person.glue(text, result.findings))
   result.stats.names_widened = persons.filter((f) => f.widened).length
   result.findings = require('./pii_address').glue(text, persons).map(({ widened, ...f }, i) => ({ ...f, id: `f${i + 1}` }))
   result.stats.addresses = result.findings.filter((f) => f.source === 'address').length

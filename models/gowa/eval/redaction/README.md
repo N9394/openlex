@@ -25,7 +25,7 @@ Two errors are counted separately because they are the ones that hurt:
 
 | | 2026-11-02 | 2026-11-03 |
 |---|---|---|
-| all entities hidden | 76.5% | 95.6% |
+| all entities hidden | 76.5% | 97.0% |
 | health details (OTHER) hidden | 12% | 88.2% |
 | partly hidden (a leak) | 15% | 2.3% |
 | persons hidden / missed | 77.9% / 6.7% | 96.2% / 3.2% |
@@ -33,7 +33,7 @@ Two errors are counted separately because they are the ones that hurt:
 | fixed shapes hidden (gate 99%) | 88% | 99.4% ✅ |
 | lookalikes wrongly hidden (gate ≤ 10%) | 2.3% | 2.3% ✅ |
 
-Still failing: persons missed 3.2% (gate 1%) — names without any clue, lower-case sign-offs ("kerstin"), inflected forms (Gáborral, Novákův, Silviin); persons hidden in HU 93.5% and PL 94.3% (gate 95%); health details (OTHER) 88.2% with the health source (`pii_health.js`); the two left are a cause written around the condition ("the mould made her asthma worse", "a minor burn to his left hand and anxiety, for which…"). Court case numbers are shown unticked by design. The real GOWA run (`--model`) is still to do.
+Update 2026-11-03 (evening): all four gates pass in oracle mode — persons missed 0.7%, persons hidden ≥ 97.1% in every language (cs 100, de 99.1, en 98.8, fr 98.1, hu 100, pl 97.1, ro 100, sk 100), fixed shapes 99.4%, lookalikes 2.3%; all entities hidden 97.0%. What did it: derived and inflected name forms (Novákův, Švcova, Kočímu, Silviin, Lisowa, Kowalówna, Ewei, Mónikától), family-name-first spreading (Juhász Ferenc, ŠVEC Lubomír), a lone known first name as a weak candidate, lower-case sign-offs, initials that go on (Lucía F. O.). Left: bare initials with no name nearby (C. Ó S., C. L., „M.“), a name broken over two lines after an inflected first name, a lower-case first name whose full form is not hidden anywhere. The oracle is the harness ceiling; the real GOWA run (`--model`) decides the release.
 
 ## Outcomes per entity
 - **hidden**: ticked findings cover all of it
