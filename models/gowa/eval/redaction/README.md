@@ -13,13 +13,26 @@ GOWA's known weaknesses decide what the harness must do. Every gold entity carri
 | w3 | later mention (surname alone, initials) | a bare "Huber" looks like a word | propagation across the document and the matter |
 | w4 | no cue context (table, header, signature, ALL CAPS) | training always had a lead phrase ("represented by …") | candidate sources for upper-case lines and table cells; **persons fail closed** (unsure → ticked) |
 | w5 | lookalike (Koch, Wolf, Král; "Huber & Partner") | genuinely ambiguous | GOWA's context, plus: a token that is part of a ticked name elsewhere is never dropped |
-| w6 | boundary (multi-part names, addresses over lines) | classifies spans as given | span merging: adjacent name / address parts become one finding |
+| w6 | boundary (multi-part names, addresses over lines) | classifies spans as given | **name glue** (`pii_person.js`: first name, initials, title, particles, surname-first) and **address glue** (`pii_address.js`: street + postcode + town + flat, over a line break; court addresses left alone) |
 | w8 | fixed shape (IBAN, e-mail, phone, IDs, date of birth) | — | patterns with checksums; **never decided by the model** |
 | w9 | foreign name in the document | name lists are per language | all supported languages' name lists in every document |
 
 Two errors are counted separately because they are the ones that hurt:
 - **dangerous drop**: a candidate that GOWA confidently classified "not personal data", so it disappeared. Gate: 0.
 - **regression**: hidden by version 1 (no model), not hidden with GOWA. Gate: 0. Switching GOWA on must never make the check worse.
+
+## Where it stands (2026-11-03, oracle = a perfect decision model, so this is the harness ceiling)
+
+| | 2026-11-02 | 2026-11-03 |
+|---|---|---|
+| all entities hidden | 76.5% | 94.5% |
+| partly hidden (a leak) | 15% | 2.3% |
+| persons hidden / missed | 77.9% / 6.7% | 96.2% / 3.2% |
+| addresses hidden | 58% | 99.3% |
+| fixed shapes hidden (gate 99%) | 88% | 99.4% ✅ |
+| lookalikes wrongly hidden (gate ≤ 10%) | 2.3% | 2.3% ✅ |
+
+Still failing: persons missed 3.2% (gate 1%) — names without any clue, lower-case sign-offs ("kerstin"), inflected forms (Gáborral, Novákův, Silviin); persons hidden in HU 93.5% and PL 94.3% (gate 95%); health data (OTHER) 12% — needs its own candidate source. Court case numbers are shown unticked by design. The real GOWA run (`--model`) is still to do.
 
 ## Outcomes per entity
 - **hidden**: ticked findings cover all of it
