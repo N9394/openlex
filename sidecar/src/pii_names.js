@@ -20,11 +20,23 @@ const NAMES = {
   it: 'Alessandro Andrea Anna Antonio Chiara Francesca Francesco Giorgio Giovanni Giulia Giuseppe Laura Luca Marco Maria Matteo Paolo Roberto Sara Stefano',
 }
 
-const ALL = new Set(Object.values(NAMES).flatMap((s) => s.split(/\s+/)))
+// More frequent given names per language (public name statistics; seed for candidate generation).
+const MORE = {"de": "Heinz Klaus Jürgen Dieter Manfred Wolfgang Uwe Rainer Horst Günter Karl Friedrich Wilhelm Werner Kurt Ernst Rudolf Walter Otto Lukas Leon Felix Maximilian Jonas Paul Elias Noah Tobias Julian Sebastian Fabian Dominik Patrick Stefan Markus Thomas Michael Martin Matthias Robert Ralf Frank Jörg Sven Kerstin Sabine Petra Monika Ursula Renate Karin Heike Silke Anke Nicole Sandra Stefanie Melanie Julia Lisa Laura Lea Lena Leonie Marie Sophie Valentina Annegret Brigitte Gisela Helga Waltraud Elfriede Theresa Magdalena Katharina Verena Doris Simone Tanja Daniela Bettina Franziska Lisa",
+  "en": "Marcus Siobhan Niamh Aoife Ciarán Ciaran Declan Róisín Roisin Sinéad Sinead Seán Sean Eoin Cormac Fergus Fiona Graham Edith Anjali Priya Hannah Kwabena Kit Tony Daniel Peter Paul Richard Robert Thomas William Henry Oliver Harry Jack Charlie Jacob Alfie Freddie Archie Leo Oscar Lucas Ethan Samuel Benjamin Joshua Luke Adam Ryan Liam Conor Aidan Patrick Kevin Brian Gary Stephen Steven Simon Neil Ian Colin Keith Craig Scott Stuart Jamie Lewis Callum Olivia Amelia Isla Ava Mia Sophie Grace Lily Freya Ella Chloe Sarah Rachel Rebecca Lucy Charlotte Katie Megan Holly Lauren Natalie Victoria Helen Susan Patricia Deborah Julie Claire Louise Joanne Nicola Gemma Kelly Donna Angela Wendy Carol Ruth Jean Mateus Henrik Lucía Lucia Jordi",
+  "fr": "Laurent Hugo Marc Pierre Jean-Pierre Jean-Luc Jean-Marc Paul Luc Olivier Thierry Pascal Éric Eric Patrick Bernard Daniel Didier Gilles Yves Hervé Sébastien Vincent Guillaume Maxime Thomas Alexandre Romain Arthur Gabriel Raphaël Léo Lucas Nathan Théo Jules Adam Claire Sophie Sylvie Valérie Sandrine Céline Aurélie Julie Pauline Margaux Inès Jade Louise Emma Alice Sarah Juliette Hélène Monique Brigitte Chantal Dominique Véronique Patricia Christine Nadia Fatima Mohamed Karim Oliver",
+  "cs": "Bohumil Bohuslav Dušan František Jakub Jaromír Jindřich Karel Ladislav Lukáš Libor Luboš Marek Matěj Ondřej Radek Roman Stanislav Vojtěch Zbyněk David Filip Adam Daniel Dominik Šárka Alena Božena Dana Helena Ivana Jitka Klára Ludmila Monika Simona Tereza Zdeňka Zuzana Barbora Michaela Martina Anna Adéla Eliška Bc",
+  "sk": "Andrej Branislav Dušan Ivan Igor Juraj Ľuboš Ľudovít Matej Milan Miloš Pavol Radoslav Rastislav Róbert Roman Samuel Viktor Vladimír Zoltán Dominik Filip Jakub Lukáš Adam Daniel Alena Beáta Dana Darina Eva Ivana Janka Lenka Ľubica Mária Martina Michaela Monika Natália Silvia Soňa Tatiana Veronika Viera Zdenka Aliaksandr",
+  "pl": "Adam Artur Bartosz Damian Dariusz Dawid Henryk Jacek Jakub Janusz Jarosław Jerzy Józef Kamil Karol Kazimierz Leszek Łukasz Maciej Mariusz Mateusz Mirosław Rafał Roman Ryszard Sławomir Szymon Tadeusz Wiesław Witold Wojciech Zbigniew Zdzisław Aleksandra Alicja Beata Bożena Danuta Dorota Elżbieta Grażyna Halina Irena Iwona Jadwiga Janina Justyna Krystyna Marta Monika Natalia Renata Teresa Urszula Wanda Weronika Oleksandr Oleksandra",
+  "ro": "Radu Dan Ștefan Stefan Bogdan Cătălin Ciprian Claudiu Cosmin Dorin Dragoș Emil Eugen Florin Gelu Horia Iulian Liviu Lucian Marius Mircea Ovidiu Petru Remus Sorin Teodor Tudor Valentin Victor Viorel Alina Anca Carmen Corina Diana Gabriela Georgeta Irina Larisa Laura Lavinia Liliana Luminița Magdalena Mihaela Monica Oana Raluca Roxana Simona Valentina Vasilica Elena-Cristina",
+  "hu": "Ádám Ákos András Árpád Bálint Barnabás Bence Csaba Dániel Dávid Endre Gergely Gyula Imre Károly Kristóf Lajos Levente Máté Miklós Nándor Norbert Ottó Pál Richárd Róbert Szabolcs Tibor Viktor Ágnes Anikó Beáta Bernadett Csilla Dóra Edit Emese Enikő Eszter Gabriella Henrietta Ildikó Judit Julianna Krisztina Ilona Márta Melinda Mónika Nikolett Noémi Orsolya Piroska Rita Szilvia Tímea Valéria Veronika Viktória Zsuzsanna"}
+const ALL = new Set([...Object.values(NAMES), ...Object.values(MORE)].flatMap((s) => s.split(/\s+/)).filter((w) => w.length > 2))
 
 /** Is this word a common first name (any of our languages, or the firm's list)? */
 function isFirstName(word, extra = null) {
-  return ALL.has(word) || !!extra?.has(word)
+  if (ALL.has(word) || extra?.has(word)) return true
+  // hyphenated first names: Jean-Pierre, Elena-Cristina, Maria-Magdalena
+  const parts = String(word).split('-')
+  return parts.length > 1 && parts.every((p) => ALL.has(p) || extra?.has(p))
 }
 
 module.exports = { NAMES, isFirstName }

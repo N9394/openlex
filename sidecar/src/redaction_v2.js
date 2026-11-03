@@ -180,10 +180,15 @@ async function findings(text, { terms = [], keep = [], patterns = [], cache = ne
   return { findings: out.map((f, i) => ({ ...f, id: `f${i + 1}` })), stats }
 }
 
-/** One address, one finding: the pieces of an address (street, postcode, town, flat) are joined (pii_address.js). */
+/**
+ * One person, one finding, and one address, one finding: a ticked name is widened over its first
+ * name, initials and title (pii_person.js); the pieces of an address are joined (pii_address.js).
+ */
 function addresses(text, result) {
   const before = result.findings.length
-  result.findings = require('./pii_address').glue(text, result.findings).map((f, i) => ({ ...f, id: `f${i + 1}` }))
+  const persons = require('./pii_person').glue(text, result.findings)
+  result.stats.names_widened = persons.filter((f) => f.widened).length
+  result.findings = require('./pii_address').glue(text, persons).map(({ widened, ...f }, i) => ({ ...f, id: `f${i + 1}` }))
   result.stats.addresses = result.findings.filter((f) => f.source === 'address').length
   result.stats.address_pieces_joined = Math.max(0, before - result.findings.length + result.stats.addresses)
   return result

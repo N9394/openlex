@@ -70,7 +70,7 @@ test('two stages: the model ticks people and organisations, drops plain words, n
   assert.strictEqual(f['Johann Huber'].on, true)
   assert.strictEqual(f['Johann Huber'].decided.outcome, 'automate')
   assert.strictEqual(f['Jana Nováková'].on, true)
-  assert.strictEqual(f['Petra Gruber'].on, true)
+  assert.strictEqual(f['Mag. Petra Gruber'].on, true, 'the name glue takes the title along')
   assert.ok(f['Alpenbau GmbH'].on)
   // Lists and patterns: as in version 1, not asked.
   assert.strictEqual(f.Linz.source, 'term')
@@ -93,8 +93,8 @@ test('unsure: a new candidate is shown unticked for the lawyer; a version-1 find
   gowa._setTestBackend(scripted(() => null)) // the model is unsure about everything
   const { findings, stats } = await v2.findings(TEXT)
   const f = byText(findings)
-  assert.strictEqual(f['Petra Gruber'].on, true, 'title heuristic (v1) keeps its tick')
-  assert.strictEqual(f['Petra Gruber'].decided.outcome, 'escalate')
+  assert.strictEqual(f['Mag. Petra Gruber'].on, true, 'title heuristic (v1) keeps its tick')
+  assert.strictEqual(f['Mag. Petra Gruber'].decided.outcome, 'escalate')
   const extra = findings.filter((x) => x.source === 'model')
   assert.ok(extra.length > 0)
   assert.ok(extra.every((x) => x.on === false), 'new candidates the model is unsure about are unticked')
