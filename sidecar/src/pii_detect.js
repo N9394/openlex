@@ -141,7 +141,7 @@ function patterns(text, extra = []) {
       if (m[0] === '') { re.lastIndex++; continue }
       const sub = m[1] !== undefined && p.re.source.startsWith('(') ? m[1] : m[0]
       const start = m.index + (sub === m[0] ? 0 : m[0].indexOf(sub))
-      const value = sub.replace(/[\s,.;:]+$/, '')
+      const value = p.keepDot && /(?:\br|\d)\.$/.test(sub.trimEnd()) ? sub.trimEnd() : sub.replace(/[\s,.;:]+$/, '')
       if (!value) continue
       const before = text.slice(Math.max(0, start - (p.window || 40)), start)
       // Without the words before it, try again one character later ("Az. 2 O 123/20": the match must not swallow "Az.").
