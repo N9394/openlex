@@ -58,3 +58,11 @@ test('lookalikes and sentence words are not pulled in; unticked findings stay as
   t = 'Kerstin Fischer'
   assert.deepStrictEqual(glue(t, [at(t, 'Fischer', { on: false })]).map((f) => [f.text, f.on]), [['Fischer', false]])
 })
+
+test('person cues without a known first name are proposed to the model (initials, titles, birth names)', () => {
+  const { cues } = require('../src/pii_candidates')
+  const t = 'Monteur J. Wagner) | 6\n11 | ZAUNER M. | Bahnhof\nMaître Inès Benkirane, avant\nPán Nagy trvalo\nTisztelt Tóth Úr!\nMag. Theresa Wolf, geb. Lindner\nSchedule A. The parties\nsee Annex B.\n'
+  const got = cues(t).map((f) => t.slice(f.start, f.end))
+  for (const want of ['Wagner', 'ZAUNER M.', 'Inès Benkirane', 'Nagy', 'Tóth', 'Lindner']) assert.ok(got.includes(want), `${want}: ${JSON.stringify(got)}`)
+  assert.ok(!got.some((g) => /Schedule|Annex/.test(g)))
+})

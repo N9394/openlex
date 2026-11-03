@@ -114,7 +114,32 @@ function caps(text, { extra = null } = {}) {
   return out
 }
 
+// Person cues without a known first name: an initial with a surname ("J. Wagner", "ZAUNER M.",
+// "Lengyel D."), a title before a name ("Maître Inès Benkirane", "M. Petit", "Pán Nagy", "dr. Kis")
+// or after it ("Tóth Úr"), and a birth name ("geb. Lindner", "roz. Vránová", "z domu Krawiec", "née Martin").
+const NAMEW = "\\p{Lu}[\\p{Ll}'’]+(?:-\\p{Lu}[\\p{Ll}'’]+)?"
+const CUE_RES = [
+  new RegExp(`(?<![\\p{L}.])\\p{Lu}\\.(?:[ \\t]?\\p{Lu}\\.)?[ \\t](${NAMEW})(?![\\p{L}])`, 'gu'),
+  new RegExp(`(?<![\\p{L}])((?:${NAMEW}|\\p{Lu}{2,})[ \\t]\\p{Lu}\\.)(?=[ \\t]*(?:\\||\\n|$)|\\s{3,})`, 'gu'),
+  new RegExp(`(?<![\\p{L}])(?:Maître|Me|M\\.|Mme|Mlle|Mr|Mrs|Ms|Dr\\.?|dr\\.|Pán|Pani|Pan|Panie|Paní|Herr|Herrn|Frau|domnul|doamna|dl\\.|dna\\.|Ing\\.|Mgr\\.|Bc\\.|JUDr\\.|MUDr\\.|Mag\\.)[ \\t](${NAMEW}(?:[ \\t]${NAMEW})?)`, 'gu'),
+  new RegExp(`(?<![\\p{L}])(${NAMEW})[ \\t](?:Úr|úr|Asszony|asszony)(?![\\p{L}])`, 'gu'),
+  new RegExp(`(?<![\\p{L}])(?:geb\\.|geborene|geborener|roz\\.|rozená|rod\\.|rodená|z domu|născută|născut|née|nee)[ \\t](${NAMEW})`, 'gu'),
+]
+function cues(text) {
+  const out = []
+  CUE_RES.forEach((re, i) => {
+    for (const m of text.matchAll(re)) {
+      const name = m[1]
+      const start = m.index + m[0].indexOf(name)
+      if (STOP.has(name.split(/[ \t]/)[0])) continue
+      out.push({ kind: 'PERSON', start, end: start + name.length, confidence: 0.6 })
+    }
+  })
+  return out
+}
+
 register({ id: 'names', label: 'Common first names', find: async (text) => names(text) })
+register({ id: 'cues', label: 'Initials, titles and birth names', find: async (text) => cues(text) })
 register({ id: 'caps', label: 'Names in capitals', find: async (text) => caps(text) })
 register({ id: 'ngrams', label: 'Capitalised words', find: async (text) => ngrams(text) })
 register({
@@ -141,4 +166,4 @@ async function find(text, { signal, only = null, skip = [] } = {}) {
   return { found, used }
 }
 
-module.exports = { register, unregister, list, find, ngrams, names, caps, STOP }
+module.exports = { register, unregister, list, find, ngrams, names, caps, cues, STOP }
