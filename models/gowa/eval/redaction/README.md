@@ -25,14 +25,15 @@ Two errors are counted separately because they are the ones that hurt:
 
 | | 2026-11-02 | 2026-11-03 |
 |---|---|---|
-| all entities hidden | 76.5% | 94.5% |
+| all entities hidden | 76.5% | 95.6% |
+| health details (OTHER) hidden | 12% | 88.2% |
 | partly hidden (a leak) | 15% | 2.3% |
 | persons hidden / missed | 77.9% / 6.7% | 96.2% / 3.2% |
 | addresses hidden | 58% | 99.3% |
 | fixed shapes hidden (gate 99%) | 88% | 99.4% ✅ |
 | lookalikes wrongly hidden (gate ≤ 10%) | 2.3% | 2.3% ✅ |
 
-Still failing: persons missed 3.2% (gate 1%) — names without any clue, lower-case sign-offs ("kerstin"), inflected forms (Gáborral, Novákův, Silviin); persons hidden in HU 93.5% and PL 94.3% (gate 95%); health data (OTHER) 12% — needs its own candidate source. Court case numbers are shown unticked by design. The real GOWA run (`--model`) is still to do.
+Still failing: persons missed 3.2% (gate 1%) — names without any clue, lower-case sign-offs ("kerstin"), inflected forms (Gáborral, Novákův, Silviin); persons hidden in HU 93.5% and PL 94.3% (gate 95%); health details (OTHER) 88.2% with the health source (`pii_health.js`); the two left are a cause written around the condition ("the mould made her asthma worse", "a minor burn to his left hand and anxiety, for which…"). Court case numbers are shown unticked by design. The real GOWA run (`--model`) is still to do.
 
 ## Outcomes per entity
 - **hidden**: ticked findings cover all of it

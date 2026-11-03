@@ -140,6 +140,7 @@ function cues(text) {
 
 register({ id: 'names', label: 'Common first names', find: async (text) => names(text) })
 register({ id: 'cues', label: 'Initials, titles and birth names', find: async (text) => cues(text) })
+register({ id: 'health', label: 'Health details', find: async (text) => require('./pii_health').health(text) })
 register({ id: 'caps', label: 'Names in capitals', find: async (text) => caps(text) })
 register({ id: 'ngrams', label: 'Capitalised words', find: async (text) => ngrams(text) })
 register({
