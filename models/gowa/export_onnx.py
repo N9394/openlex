@@ -30,7 +30,14 @@ the smallest that passes the check):
     int8-pc-emb16           per-channel int8 MatMuls; embedding table fp16 (cast after the lookup)
     int8-pc-emb16-head32    as above, head kept fp32
     int8-pc-emb32           per-channel int8 MatMuls; embedding table fp32
+    fp16w                   every weight stored as float16 and cast back to float32 when the
+                            model loads; all maths stays float32 (half the size, near-lossless,
+                            no converter: the graph is unchanged apart from the casts)
+    fp16w-emb8row           as fp16w, the embedding table int8 with one scale per row
     fp32                    no quantisation
+
+--max-bytes (default 180 MB, the GOWA share of the 400 MB promise for app + GOWA) is a hard
+limit on model.onnx + tokenizer.json: a variant over it does not pass. Run trim_vocab.py first.
 
 The check is a hard failure: the shipped model must agree with PyTorch on
 the winning option for at least --min-agreement of the held-out questions
@@ -56,9 +63,13 @@ from gowa.data import read_jsonl
 from gowa.model import GowaModel
 
 ENGINE_FILES = ["model.onnx", "tokenizer.json", "tokenizer_config.json", "gowa-model.json"]
-VARIANTS = ["int8", "int8-pc", "int8-pc-emb8row", "int8-pc-emb8row-head32", "int8-pc-emb16", "int8-pc-emb16-head32", "int8-pc-emb32", "fp16", "fp32"]
+VARIANTS = ["int8", "int8-pc", "int8-pc-emb8row", "int8-pc-emb8row-head32", "int8-pc-emb16", "int8-pc-emb16-head32", "int8-pc-emb32",
+            "fp16w-emb8row", "fp16w", "fp16", "fp32"]
 # "auto" tries these in this order (roughly smallest first) and keeps the first that passes.
-AUTO_ORDER = ["int8-pc", "int8-pc-emb8row", "int8-pc-emb8row-head32", "int8-pc-emb16", "int8-pc-emb16-head32", "fp16", "int8-pc-emb32", "fp32"]
+# The int8 MatMul variants diverged on mmBERT (best 97.5 % agreement on v0b), so the weight-only
+# float16 ones come first.
+AUTO_ORDER = ["fp16w-emb8row", "fp16w", "int8-pc-emb8row", "int8-pc-emb8row-head32", "int8-pc-emb16", "int8-pc-emb16-head32", "fp16", "int8-pc-emb32", "fp32"]
+MAX_BYTES = 180_000_000
 HEAD_NODE_RE = re.compile(r"^/m/(q|k)/")  # the decision head's two Linear layers in the exported graph
 
 
@@ -161,10 +172,42 @@ def _rewrite_embedding(path: Path, mode: str):
     onnx.save(m, str(path))
 
 
+def _weights_fp16(path: Path, min_elems: int = 1024):
+    """Store every float32 weight with at least `min_elems` values as float16, followed by a Cast back
+    to float32 (ONNX Runtime folds the casts when the session loads; the maths stays float32)."""
+    import numpy as np
+    import onnx
+    from onnx import TensorProto, helper, numpy_helper
+
+    m = onnx.load(str(path))
+    casts, keep = [], []
+    for init in list(m.graph.initializer):
+        n = int(np.prod(init.dims)) if init.dims else 1
+        if init.data_type != TensorProto.FLOAT or n < min_elems:
+            keep.append(init)
+            continue
+        w = numpy_helper.to_array(init)
+        keep.append(numpy_helper.from_array(w.astype(np.float16), init.name + "_w16"))
+        casts.append(helper.make_node("Cast", [init.name + "_w16"], [init.name], to=TensorProto.FLOAT, name=init.name + "_to_fp32"))
+    del m.graph.initializer[:]
+    m.graph.initializer.extend(keep)
+    nodes = casts + list(m.graph.node)
+    del m.graph.node[:]
+    m.graph.node.extend(nodes)
+    onnx.checker.check_model(m)
+    onnx.save(m, str(path))
+
+
 def build_variant(variant: str, fp32: Path, pre: Path | None, target: Path):
     """Write `variant` of the fp32 graph to `target`."""
     if variant == "fp32":
         shutil.copy(fp32, target)
+        return
+    if variant.startswith("fp16w"):
+        shutil.copy(fp32, target)
+        if variant.endswith("-emb8row"):
+            _rewrite_embedding(target, "int8row")
+        _weights_fp16(target)
         return
     if variant == "fp16":
         # All weights in float16, inputs/outputs kept float32 (half the size, usually near-lossless).
@@ -270,8 +313,8 @@ def compare(path: Path, feeds, ref, questions, meta) -> dict:
             "agreement": round(agree / max(1, len(feeds)), 5), "n": len(feeds)}
 
 
-def passes(r: dict, min_agreement: float, max_diff: float) -> bool:
-    return r["agreement"] >= min_agreement and r["max_diff"] <= max_diff
+def passes(r: dict, min_agreement: float, max_diff: float, max_bytes: int | None = None) -> bool:
+    return r["agreement"] >= min_agreement and r["max_diff"] <= max_diff and (not max_bytes or r["bytes"] <= max_bytes)
 
 
 def main(argv=None):
@@ -286,6 +329,7 @@ def main(argv=None):
     p.add_argument("--check-n", type=int, default=400, help="questions in the check")
     p.add_argument("--min-agreement", type=float, default=0.995)
     p.add_argument("--max-diff", type=float, default=0.05)
+    p.add_argument("--max-bytes", type=int, default=MAX_BYTES, help="size limit for model.onnx + tokenizer.json (0 = none)")
     p.add_argument("--allow-divergence", action="store_true", help="ship even if the check fails (debugging only)")
     p.add_argument("--keep-fp32", action="store_true")
     p.add_argument("--version", default=None, help="version string for gowa-model.json (default: from the run)")
@@ -340,23 +384,27 @@ def main(argv=None):
             report[v] = {"error": str(e)[:300]}
             print(f"  {v:<24} failed to build: {str(e)[:200]}")
             continue
-        r["passes"] = passes(r, a.min_agreement, a.max_diff)
+        tok_bytes = (out / "tokenizer.json").stat().st_size
+        r["bytes_with_tokenizer"] = r["bytes"] + tok_bytes
+        r["passes"] = passes(r, a.min_agreement, a.max_diff) and (not a.max_bytes or r["bytes_with_tokenizer"] <= a.max_bytes)
         report[v] = r
         print(f"  {v:<24} {r['bytes'] / 1e6:7.1f} MB  max diff {r['max_diff']:.4f}  mean diff {r['mean_diff']:.5f}  "
-              f"argmax agreement {r['agreement'] * 100:.2f}%  {'PASS' if r['passes'] else 'fail'}", flush=True)
+              f"argmax agreement {r['agreement'] * 100:.2f}%  {'PASS' if r['passes'] else 'fail'}"
+              f"{'' if not a.max_bytes or r['bytes_with_tokenizer'] <= a.max_bytes else '  (over the size limit: run trim_vocab.py)'}", flush=True)
         if a.variant != "all" and r["passes"]:
             chosen = v
             break
     if a.variant == "all":
         ok = [v for v in report if report[v].get("passes")]
         chosen = min(ok, key=lambda v: report[v]["bytes"]) if ok else None
-    summary = {"variants": report, "check_n": len(questions), "check_data": check_paths, "min_agreement": a.min_agreement, "max_diff": a.max_diff}
+    summary = {"variants": report, "check_n": len(questions), "check_data": check_paths, "min_agreement": a.min_agreement, "max_diff": a.max_diff,
+               "max_bytes": a.max_bytes}
     if chosen is None:
         built = [v for v in order if "bytes" in report.get(v, {})]
         if not a.allow_divergence or not built:
             (out / "export_report.json").write_text(json.dumps({"chosen": None, **summary}, indent=2))
             sys.exit(f"export failed: no variant agrees with PyTorch (need argmax agreement >= {a.min_agreement} and max probability "
-                     f"difference <= {a.max_diff}); see {out / 'export_report.json'}. --allow-divergence ships anyway.")
+                     f"difference <= {a.max_diff}) within {a.max_bytes / 1e6:.0f} MB; see {out / 'export_report.json'}. --allow-divergence ships anyway.")
         chosen = built[-1]
         print(f"WARNING: shipping {chosen} although it fails the check (--allow-divergence)")
     shutil.copy(work / f"{chosen}.onnx", out / "model.onnx")
