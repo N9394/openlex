@@ -173,11 +173,20 @@ async function findings(text, { terms = [], keep = [], patterns = [], cache = ne
         return d && !f.decided ? { ...f, kind: d.kind, group: d.group, label: d.label, confidence: d.confidence, decided: d.decided } : f
       })
       again.stats.asked += stats.asked
-      return occurrences(text, again, signal)
+      return addresses(text, await occurrences(text, again, signal))
     }
-    return occurrences(text, { findings: out.map((f, i) => ({ ...f, id: `f${i + 1}` })), stats }, signal)
+    return addresses(text, await occurrences(text, { findings: out.map((f, i) => ({ ...f, id: `f${i + 1}` })), stats }, signal))
   }
   return { findings: out.map((f, i) => ({ ...f, id: `f${i + 1}` })), stats }
+}
+
+/** One address, one finding: the pieces of an address (street, postcode, town, flat) are joined (pii_address.js). */
+function addresses(text, result) {
+  const before = result.findings.length
+  result.findings = require('./pii_address').glue(text, result.findings).map((f, i) => ({ ...f, id: `f${i + 1}` }))
+  result.stats.addresses = result.findings.filter((f) => f.source === 'address').length
+  result.stats.address_pieces_joined = Math.max(0, before - result.findings.length + result.stats.addresses)
+  return result
 }
 
 const MAX_OCCURRENCES = 600
