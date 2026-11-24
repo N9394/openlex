@@ -1,0 +1,28 @@
+{"id": "route-ro-001", "text": "Clauza 7 este valabilă în forma actuală?", "answer": "question", "tags": ["hard"]}
+{"id": "route-ro-002", "text": "Ce înseamnă clauza penală de la art. 9 și când se aplică?", "answer": "question", "tags": ["clear"]}
+{"id": "route-ro-003", "text": "Conform acestui contract, poate locatarul să subînchirieze spațiul fără acordul proprietarului?", "answer": "question", "tags": ["clear"]}
+{"id": "route-ro-004", "text": "cine plateste impozitul pe cladire conform contractului asta", "answer": "question", "tags": ["clear", "informal", "no-diacritics"]}
+{"id": "route-ro-005", "text": "Reformulează clauza 7 ca să fie valabilă.", "answer": "rewrite", "tags": ["hard"]}
+{"id": "route-ro-006", "text": "Scurtează te rog art. 5 privind garanția pentru vicii.", "answer": "rewrite", "tags": ["clear"]}
+{"id": "route-ro-007", "text": "Fă termenul de preaviz reciproc.", "answer": "rewrite", "tags": ["clear", "short"]}
+{"id": "route-ro-008", "text": "rescrie clauza de neconcurenta sa fie mai putin restrictiva", "answer": "rewrite", "tags": ["clear", "informal", "no-diacritics"]}
+{"id": "route-ro-009", "text": "Verifică clauza 7 dacă are probleme.", "answer": "review", "tags": ["hard"]}
+{"id": "route-ro-010", "text": "Analizează contractul de cesiune de părți sociale și marchează riscurile pentru cedent.", "answer": "review", "tags": ["clear"]}
+{"id": "route-ro-011", "text": "Care clauze din contractul de închiriere sunt dezavantajoase pentru chiriaș?", "answer": "review", "tags": ["hard"]}
+{"id": "route-ro-012", "text": "uita-te pe contractul de antrepriza daca e ceva in neregula", "answer": "review", "tags": ["clear", "informal", "no-diacritics"]}
+{"id": "route-ro-013", "text": "Caută jurisprudența actuală a ÎCCJ privind clauze ca cea de la punctul 7.", "answer": "research", "tags": ["hard"]}
+{"id": "route-ro-014", "text": "Găsește pe legislatie.just.ro forma actualizată a art. 1270 din Codul civil.", "answer": "research", "tags": ["clear"]}
+{"id": "route-ro-015", "text": "A pronunțat ÎCCJ recent vreo decizie RIL privind clauza penală?", "answer": "research", "tags": ["hard"]}
+{"id": "route-ro-016", "text": "cauta decizii noi CJUE pe clauze abuzive in credite pls", "answer": "research", "tags": ["clear", "informal", "no-diacritics"]}
+{"id": "route-ro-017", "text": "Pune-mi termenele din acest contract în calendar.", "answer": "files", "tags": ["hard"]}
+{"id": "route-ro-018", "text": "Exportă documentul în PDF.", "answer": "files", "tags": ["clear", "short"]}
+{"id": "route-ro-019", "text": "Fă un tabel cu toți asociații, CUI-ul și sediul fiecăruia.", "answer": "files", "tags": ["clear"]}
+{"id": "route-ro-020", "text": "salveaza asta ca v2 in dosarul Popescu", "answer": "files", "tags": ["clear", "informal", "no-diacritics"]}
+{"id": "route-ro-021", "text": "Folosește clauza 7 standard din baza noastră de modele.", "answer": "firm", "tags": ["hard"]}
+{"id": "route-ro-022", "text": "Avem un model al firmei pentru contractul de împrumut între societăți?", "answer": "firm", "tags": ["clear"]}
+{"id": "route-ro-023", "text": "Găsește clauza de confidențialitate pe care am folosit-o în tranzacția Carpați Invest.", "answer": "firm", "tags": ["clear"]}
+{"id": "route-ro-024", "text": "Redactează procura după modelul casei, nu după varianta ta.", "answer": "firm", "tags": ["hard"]}
+{"id": "route-ro-025", "text": "Mulțumesc, atât.", "answer": "other", "tags": ["clear", "short"]}
+{"id": "route-ro-026", "text": "Bună ziua", "answer": "other", "tags": ["clear", "short"]}
+{"id": "route-ro-027", "text": "Cum schimb parola contului?", "answer": "other", "tags": ["clear", "short"]}
+{"id": "route-ro-028", "text": "cand expira abonamentul nostru", "answer": "other", "tags": ["hard", "short", "informal", "no-diacritics"]}

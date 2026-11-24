@@ -1,0 +1,28 @@
+{"id": "route-pl-001", "text": "Czy pkt 7 w tym brzmieniu jest w ogóle ważny?", "answer": "question", "tags": ["hard"]}
+{"id": "route-pl-002", "text": "Co oznacza kara umowna w § 5 i kiedy możemy jej żądać?", "answer": "question", "tags": ["clear"]}
+{"id": "route-pl-003", "text": "Czy według tej umowy najemca może podnająć lokal bez zgody wynajmującego?", "answer": "question", "tags": ["clear"]}
+{"id": "route-pl-004", "text": "kto placi za remont wg tej umowy najmu", "answer": "question", "tags": ["clear", "informal", "no-diacritics"]}
+{"id": "route-pl-005", "text": "Przeredaguj pkt 7 tak, żeby był ważny.", "answer": "rewrite", "tags": ["hard"]}
+{"id": "route-pl-006", "text": "Skróć proszę § 9 o odpowiedzialności za wady.", "answer": "rewrite", "tags": ["clear"]}
+{"id": "route-pl-007", "text": "Zrób okres wypowiedzenia obustronny.", "answer": "rewrite", "tags": ["clear", "short"]}
+{"id": "route-pl-008", "text": "przepisz klauzule o zakazie konkurencji zeby byla mniej restrykcyjna", "answer": "rewrite", "tags": ["clear", "informal", "no-diacritics"]}
+{"id": "route-pl-009", "text": "Sprawdź pkt 7 pod kątem problemów.", "answer": "review", "tags": ["hard"]}
+{"id": "route-pl-010", "text": "Przejrzyj umowę sprzedaży udziałów i zaznacz ryzyka dla sprzedającego.", "answer": "review", "tags": ["clear"]}
+{"id": "route-pl-011", "text": "Które postanowienia tego regulaminu mogą zostać uznane za abuzywne?", "answer": "review", "tags": ["hard"]}
+{"id": "route-pl-012", "text": "zerknij na te umowe o dzielo czy cos jest nie tak", "answer": "review", "tags": ["clear", "informal", "no-diacritics"]}
+{"id": "route-pl-013", "text": "Znajdź aktualne orzecznictwo SN dotyczące klauzul takich jak pkt 7.", "answer": "research", "tags": ["hard"]}
+{"id": "route-pl-014", "text": "Wyszukaj w ISAP aktualne brzmienie art. 471 Kodeksu cywilnego.", "answer": "research", "tags": ["clear"]}
+{"id": "route-pl-015", "text": "Czy SN wydał ostatnio jakieś uchwały w sprawie kredytów frankowych?", "answer": "research", "tags": ["hard"]}
+{"id": "route-pl-016", "text": "poszukaj nowych wyrokow TSUE ws klauzul abuzywnych pls", "answer": "research", "tags": ["clear", "informal", "no-diacritics"]}
+{"id": "route-pl-017", "text": "Wpisz mi terminy z tej umowy do kalendarza.", "answer": "files", "tags": ["hard"]}
+{"id": "route-pl-018", "text": "Wyeksportuj to do PDF.", "answer": "files", "tags": ["clear", "short"]}
+{"id": "route-pl-019", "text": "Zrób tabelę wszystkich wspólników z NIP i adresami.", "answer": "files", "tags": ["clear"]}
+{"id": "route-pl-020", "text": "zapisz to jako v3 w folderze sprawy Nowak", "answer": "files", "tags": ["clear", "informal"]}
+{"id": "route-pl-021", "text": "Użyj naszej standardowej klauzuli 7 z bazy wzorów.", "answer": "firm", "tags": ["hard"]}
+{"id": "route-pl-022", "text": "Mamy kancelaryjny wzór umowy inwestycyjnej?", "answer": "firm", "tags": ["clear", "short"]}
+{"id": "route-pl-023", "text": "Znajdź klauzulę poufności, której użyliśmy przy transakcji Wisła Capital.", "answer": "firm", "tags": ["clear"]}
+{"id": "route-pl-024", "text": "Przygotuj pełnomocnictwo według naszego kancelaryjnego wzoru, a nie po swojemu.", "answer": "firm", "tags": ["hard"]}
+{"id": "route-pl-025", "text": "Dzięki, to wszystko.", "answer": "other", "tags": ["clear", "short"]}
+{"id": "route-pl-026", "text": "Dzień dobry", "answer": "other", "tags": ["clear", "short"]}
+{"id": "route-pl-027", "text": "Jak zmienić język interfejsu na angielski?", "answer": "other", "tags": ["clear"]}
+{"id": "route-pl-028", "text": "ile kosztuje licencja dla kolejnej osoby", "answer": "other", "tags": ["hard", "informal"]}

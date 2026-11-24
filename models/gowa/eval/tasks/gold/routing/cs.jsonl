@@ -1,0 +1,28 @@
+{"id": "route-cs-001", "text": "Je bod 7 v této podobě vůbec vymahatelný?", "answer": "question", "tags": ["hard"]}
+{"id": "route-cs-002", "text": "Co znamená smluvní pokuta v čl. 9 a kdy se platí?", "answer": "question", "tags": ["clear"]}
+{"id": "route-cs-003", "text": "Může jednatel podle této smlouvy sám podepsat úvěr nad 1 mil. Kč?", "answer": "question", "tags": ["clear"]}
+{"id": "route-cs-004", "text": "jaka je promlceci lhuta u te zapujcky v cl. 4?", "answer": "question", "tags": ["clear", "informal", "no-diacritics"]}
+{"id": "route-cs-005", "text": "Přeformuluj bod 7 tak, aby byl vymahatelný.", "answer": "rewrite", "tags": ["hard"]}
+{"id": "route-cs-006", "text": "Zkrať prosím čl. 5 o odpovědnosti za vady.", "answer": "rewrite", "tags": ["clear"]}
+{"id": "route-cs-007", "text": "Udělej výpovědní lhůtu oboustrannou.", "answer": "rewrite", "tags": ["clear", "short"]}
+{"id": "route-cs-008", "text": "prepis tu klauzuli o zakazu konkurence aby byla min prisna", "answer": "rewrite", "tags": ["clear", "informal", "no-diacritics"]}
+{"id": "route-cs-009", "text": "Zkontroluj bod 7, jestli tam nejsou problémy.", "answer": "review", "tags": ["hard"]}
+{"id": "route-cs-010", "text": "Projdi smlouvu o převodu podílu a označ rizika pro prodávajícího.", "answer": "review", "tags": ["clear"]}
+{"id": "route-cs-011", "text": "Jsou v těch obchodních podmínkách nějaká jednostranná nebo zneužívající ujednání?", "answer": "review", "tags": ["hard"]}
+{"id": "route-cs-012", "text": "mrkni na tu najemni smlouvu jestli tam neni neco spatne", "answer": "review", "tags": ["clear", "informal", "no-diacritics"]}
+{"id": "route-cs-013", "text": "Najdi aktuální judikaturu NS k ujednáním jako bod 7.", "answer": "research", "tags": ["hard"]}
+{"id": "route-cs-014", "text": "Vyhledej aktuální znění § 2950 občanského zákoníku.", "answer": "research", "tags": ["clear"]}
+{"id": "route-cs-015", "text": "Rozhodoval Nejvyšší soud nedávno o promlčení smluvní pokuty?", "answer": "research", "tags": ["hard"]}
+{"id": "route-cs-016", "text": "dohledej novou judikaturu k odpovednosti jednatele pls", "answer": "research", "tags": ["clear", "informal", "no-diacritics"]}
+{"id": "route-cs-017", "text": "Dej mi termíny z této smlouvy do kalendáře.", "answer": "files", "tags": ["hard"]}
+{"id": "route-cs-018", "text": "Exportuj to do PDF.", "answer": "files", "tags": ["clear", "short"]}
+{"id": "route-cs-019", "text": "Vytvoř tabulku všech smluvních stran s IČO a sídlem.", "answer": "files", "tags": ["clear"]}
+{"id": "route-cs-020", "text": "uloz to jako verzi 3 do slozky Novák s.r.o.", "answer": "files", "tags": ["clear", "informal", "no-diacritics"]}
+{"id": "route-cs-021", "text": "Použij náš standardní bod 7 z databáze vzorů.", "answer": "firm", "tags": ["hard"]}
+{"id": "route-cs-022", "text": "Máme v kanceláři vzor smlouvy o převodu obchodního podílu?", "answer": "firm", "tags": ["clear"]}
+{"id": "route-cs-023", "text": "Najdi doložku o mlčenlivosti, kterou jsme použili v transakci Vltava Invest.", "answer": "firm", "tags": ["clear"]}
+{"id": "route-cs-024", "text": "Připrav plnou moc podle našeho kancelářského vzoru, ne podle svého.", "answer": "firm", "tags": ["hard"]}
+{"id": "route-cs-025", "text": "Díky, to je vše.", "answer": "other", "tags": ["clear", "short"]}
+{"id": "route-cs-026", "text": "Dobrý den", "answer": "other", "tags": ["clear", "short"]}
+{"id": "route-cs-027", "text": "Jak si změním heslo do aplikace?", "answer": "other", "tags": ["clear"]}
+{"id": "route-cs-028", "text": "kolik stoji licence pro dalsiho kolegu", "answer": "other", "tags": ["hard", "informal", "no-diacritics"]}

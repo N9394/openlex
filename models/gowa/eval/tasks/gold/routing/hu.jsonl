@@ -1,0 +1,28 @@
+{"id": "route-hu-001", "text": "Érvényes a 7. pont ebben a formában?", "answer": "question", "tags": ["hard"]}
+{"id": "route-hu-002", "text": "Mit jelent a 9. pontban a kötbér, és mikor kell megfizetni?", "answer": "question", "tags": ["clear"]}
+{"id": "route-hu-003", "text": "A szerződés szerint albérletbe adhatja a bérlő a helyiséget a bérbeadó hozzájárulása nélkül?", "answer": "question", "tags": ["clear"]}
+{"id": "route-hu-004", "text": "ki fizeti a kozos koltseget a berleti szerzodes szerint", "answer": "question", "tags": ["clear", "informal", "no-diacritics"]}
+{"id": "route-hu-005", "text": "Fogalmazd át a 7. pontot, hogy érvényes legyen.", "answer": "rewrite", "tags": ["hard"]}
+{"id": "route-hu-006", "text": "Rövidítsd le a hibás teljesítésről szóló 5. pontot.", "answer": "rewrite", "tags": ["clear"]}
+{"id": "route-hu-007", "text": "Legyen kölcsönös a felmondási idő.", "answer": "rewrite", "tags": ["clear", "short"]}
+{"id": "route-hu-008", "text": "ird at a versenytilalmi klauzulat hogy kevesbe legyen szigoru", "answer": "rewrite", "tags": ["clear", "informal", "no-diacritics"]}
+{"id": "route-hu-009", "text": "Nézd át a 7. pontot, van-e benne probléma.", "answer": "review", "tags": ["hard"]}
+{"id": "route-hu-010", "text": "Vizsgáld át az üzletrész-adásvételi szerződést, és jelöld az eladóra kockázatos pontokat.", "answer": "review", "tags": ["clear"]}
+{"id": "route-hu-011", "text": "Mely rendelkezések hátrányosak a megrendelőre ebben a vállalkozási szerződésben?", "answer": "review", "tags": ["hard"]}
+{"id": "route-hu-012", "text": "nezz ra az aszf-re pls h van-e benne valami egyoldalu", "answer": "review", "tags": ["clear", "informal", "no-diacritics"]}
+{"id": "route-hu-013", "text": "Keress friss kúriai gyakorlatot a 7. ponthoz hasonló kikötésekről.", "answer": "research", "tags": ["hard"]}
+{"id": "route-hu-014", "text": "Keresd ki a Nemzeti Jogszabálytárból a Ptk. 6:186. § hatályos szövegét.", "answer": "research", "tags": ["clear"]}
+{"id": "route-hu-015", "text": "Hozott a Kúria mostanában jogegységi határozatot devizahiteles ügyekben?", "answer": "research", "tags": ["hard"]}
+{"id": "route-hu-016", "text": "keress uj iteleteket a vezeto tisztsegviselo felelossegerol", "answer": "research", "tags": ["clear", "informal", "no-diacritics"]}
+{"id": "route-hu-017", "text": "Írd be a naptáramba a szerződés határidőit.", "answer": "files", "tags": ["hard"]}
+{"id": "route-hu-018", "text": "Exportáld PDF-be.", "answer": "files", "tags": ["clear", "short"]}
+{"id": "route-hu-019", "text": "Készíts táblázatot a tagokról cégjegyzékszámmal és székhellyel.", "answer": "files", "tags": ["clear"]}
+{"id": "route-hu-020", "text": "mentsd el v2-kent a Kovacs ugy mappajaba", "answer": "files", "tags": ["clear", "informal", "no-diacritics"]}
+{"id": "route-hu-021", "text": "Használd a mintatárunkból a szokásos 7. pontot.", "answer": "firm", "tags": ["hard"]}
+{"id": "route-hu-022", "text": "Van irodai mintánk tagi kölcsönszerződésre?", "answer": "firm", "tags": ["clear", "short"]}
+{"id": "route-hu-023", "text": "Keresd meg a titoktartási kikötést, amit a Duna Holding ügyletben használtunk.", "answer": "firm", "tags": ["clear"]}
+{"id": "route-hu-024", "text": "A meghatalmazást az irodai minta alapján készítsd el, ne a saját változatod szerint.", "answer": "firm", "tags": ["hard"]}
+{"id": "route-hu-025", "text": "Köszi, ennyi.", "answer": "other", "tags": ["clear", "short"]}
+{"id": "route-hu-026", "text": "Jó napot!", "answer": "other", "tags": ["clear", "short"]}
+{"id": "route-hu-027", "text": "Hogyan állíthatom át az alkalmazást sötét módra?", "answer": "other", "tags": ["clear"]}
+{"id": "route-hu-028", "text": "mikor jar le az elofizetesunk", "answer": "other", "tags": ["hard", "short", "informal", "no-diacritics"]}
