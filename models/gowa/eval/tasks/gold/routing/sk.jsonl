@@ -1,0 +1,28 @@
+{"id": "route-sk-001", "text": "Je bod 7 v tejto podobe vôbec platný?", "answer": "question", "tags": ["hard"]}
+{"id": "route-sk-002", "text": "Čo znamená v čl. 6 zádržné a kedy ho musíme vrátiť?", "answer": "question", "tags": ["clear"]}
+{"id": "route-sk-003", "text": "Môže konateľ podľa tejto zmluvy sám predať nehnuteľnosť spoločnosti?", "answer": "question", "tags": ["clear"]}
+{"id": "route-sk-004", "text": "kto znasa naklady na opravy podla tej najomnej zmluvy", "answer": "question", "tags": ["clear", "informal", "no-diacritics"]}
+{"id": "route-sk-005", "text": "Preformuluj bod 7 tak, aby bol platný.", "answer": "rewrite", "tags": ["hard"]}
+{"id": "route-sk-006", "text": "Skráť prosím čl. 8 o zodpovednosti za vady.", "answer": "rewrite", "tags": ["clear"]}
+{"id": "route-sk-007", "text": "Sprav výpovednú lehotu obojstrannú.", "answer": "rewrite", "tags": ["clear", "short"]}
+{"id": "route-sk-008", "text": "prepis tu zmluvnu pokutu nech je nizsia a primerana", "answer": "rewrite", "tags": ["clear", "informal", "no-diacritics"]}
+{"id": "route-sk-009", "text": "Skontroluj bod 7, či tam nie sú problémy.", "answer": "review", "tags": ["hard"]}
+{"id": "route-sk-010", "text": "Prejdi zmluvu o prevode obchodného podielu a vyznač riziká pre kupujúceho.", "answer": "review", "tags": ["clear"]}
+{"id": "route-sk-011", "text": "Ktoré ustanovenia tejto zmluvy o dielo sú nevýhodné pre objednávateľa?", "answer": "review", "tags": ["hard"]}
+{"id": "route-sk-012", "text": "pozri sa na tie VOP ci tam nieco nesmrdi", "answer": "review", "tags": ["clear", "informal", "no-diacritics"]}
+{"id": "route-sk-013", "text": "Nájdi aktuálnu judikatúru NS SR k dojednaniam ako bod 7.", "answer": "research", "tags": ["hard"]}
+{"id": "route-sk-014", "text": "Vyhľadaj na Slov-Lexe aktuálne znenie § 57 Obchodného zákonníka.", "answer": "research", "tags": ["clear"]}
+{"id": "route-sk-015", "text": "Rozhodoval Ústavný súd nedávno o neprimeraných zmluvných pokutách?", "answer": "research", "tags": ["hard"]}
+{"id": "route-sk-016", "text": "dohladaj nove rozhodnutia k zodpovednosti konatela pls", "answer": "research", "tags": ["clear", "informal", "no-diacritics"]}
+{"id": "route-sk-017", "text": "Daj mi lehoty z tejto zmluvy do kalendára.", "answer": "files", "tags": ["hard"]}
+{"id": "route-sk-018", "text": "Ulož to ako PDF.", "answer": "files", "tags": ["clear", "short"]}
+{"id": "route-sk-019", "text": "Vytvor tabuľku všetkých nájomcov s dátumom skončenia nájmu.", "answer": "files", "tags": ["clear"]}
+{"id": "route-sk-020", "text": "uloz to ako v2 do spisu Kovac", "answer": "files", "tags": ["clear", "informal", "no-diacritics"]}
+{"id": "route-sk-021", "text": "Použi náš štandardný bod 7 z databázy vzorov.", "answer": "firm", "tags": ["hard"]}
+{"id": "route-sk-022", "text": "Máme kancelársky vzor zmluvy o zriadení záložného práva?", "answer": "firm", "tags": ["clear"]}
+{"id": "route-sk-023", "text": "Nájdi doložku o mlčanlivosti, ktorú sme použili pri transakcii Tatra Holding.", "answer": "firm", "tags": ["clear"]}
+{"id": "route-sk-024", "text": "Priprav splnomocnenie podľa nášho kancelárskeho vzoru, nie podľa svojho.", "answer": "firm", "tags": ["hard"]}
+{"id": "route-sk-025", "text": "Ďakujem, to je všetko.", "answer": "other", "tags": ["clear", "short"]}
+{"id": "route-sk-026", "text": "Ahoj", "answer": "other", "tags": ["clear", "short"]}
+{"id": "route-sk-027", "text": "Ako si v aplikácii zapnem tmavý režim?", "answer": "other", "tags": ["clear"]}
+{"id": "route-sk-028", "text": "kedy nam konci predplatne", "answer": "other", "tags": ["hard", "short", "informal", "no-diacritics"]}

@@ -1,0 +1,28 @@
+{"id": "route-de-001", "text": "Ist Punkt 7 so überhaupt wirksam?", "answer": "question", "tags": ["hard"]}
+{"id": "route-de-002", "text": "Was bedeutet der Kündigungsverzicht in § 5 des Mietvertrags?", "answer": "question", "tags": ["clear"]}
+{"id": "route-de-003", "text": "Wer trägt nach diesem Vertrag die Kosten für die Erhaltung der Therme?", "answer": "question", "tags": ["clear"]}
+{"id": "route-de-004", "text": "kann der vermieter laut vertrag die miete einfach erhoehen?", "answer": "question", "tags": ["clear", "informal", "no-diacritics"]}
+{"id": "route-de-005", "text": "Formulier Punkt 7 bitte so um, dass er hält.", "answer": "rewrite", "tags": ["hard"]}
+{"id": "route-de-006", "text": "Mach die Kündigungsfrist in § 4 beidseitig.", "answer": "rewrite", "tags": ["clear"]}
+{"id": "route-de-007", "text": "Bitte den Absatz zur Wertsicherung kürzen und verständlicher formulieren.", "answer": "rewrite", "tags": ["clear"]}
+{"id": "route-de-008", "text": "kannst du die haftungsklausel etwas mieterfreundlicher machen", "answer": "rewrite", "tags": ["clear", "informal"]}
+{"id": "route-de-009", "text": "Prüf Punkt 7 auf Probleme.", "answer": "review", "tags": ["hard", "short"]}
+{"id": "route-de-010", "text": "Bitte den Mietvertrag auf unzulässige Klauseln nach MRG und KSchG durchsehen.", "answer": "review", "tags": ["clear"]}
+{"id": "route-de-011", "text": "Welche Klauseln im GmbH-Gesellschaftsvertrag sind für unsere Mandantin nachteilig?", "answer": "review", "tags": ["hard"]}
+{"id": "route-de-012", "text": "schau mal drüber ob im AGB-entwurf was einseitig ist", "answer": "review", "tags": ["clear", "informal"]}
+{"id": "route-de-013", "text": "Such mir aktuelle OGH-Judikatur zu Klauseln wie Punkt 7.", "answer": "research", "tags": ["hard"]}
+{"id": "route-de-014", "text": "Gibt es neue BGH-Entscheidungen zu Schönheitsreparaturklauseln?", "answer": "research", "tags": ["hard"]}
+{"id": "route-de-015", "text": "Bitte im RIS die aktuelle Fassung von § 16 MRG nachschauen.", "answer": "research", "tags": ["clear"]}
+{"id": "route-de-016", "text": "aktuelle rspr zur befristung von mietvertraegen raussuchen pls", "answer": "research", "tags": ["clear", "informal", "no-diacritics"]}
+{"id": "route-de-017", "text": "Trag mir die Fristen aus diesem Vertrag in den Kalender ein.", "answer": "files", "tags": ["hard"]}
+{"id": "route-de-018", "text": "Als PDF exportieren.", "answer": "files", "tags": ["clear", "short"]}
+{"id": "route-de-019", "text": "Leg eine Excel-Liste aller Mieter mit ihren Kündigungsterminen an.", "answer": "files", "tags": ["clear"]}
+{"id": "route-de-020", "text": "speicher das als v2 im akt huber ab", "answer": "files", "tags": ["clear", "informal"]}
+{"id": "route-de-021", "text": "Nimm unsere Standardklausel 7 aus der Mustersammlung.", "answer": "firm", "tags": ["hard"]}
+{"id": "route-de-022", "text": "Haben wir eine Kanzleivorlage für einen Treuhandvertrag?", "answer": "firm", "tags": ["clear"]}
+{"id": "route-de-023", "text": "Verwende das Vollmachtsmuster der Kanzlei statt einer eigenen Fassung.", "answer": "firm", "tags": ["hard"]}
+{"id": "route-de-024", "text": "such mal unser muster fuer den gmbh-gesellschaftsvertrag vom letzten jahr", "answer": "firm", "tags": ["clear", "informal", "no-diacritics"]}
+{"id": "route-de-025", "text": "Danke, passt so.", "answer": "other", "tags": ["clear", "short"]}
+{"id": "route-de-026", "text": "Servus", "answer": "other", "tags": ["clear", "short"]}
+{"id": "route-de-027", "text": "Wie stelle ich die Sprache der App auf Englisch um?", "answer": "other", "tags": ["clear"]}
+{"id": "route-de-028", "text": "Warum wurde unsere Kreditkarte zweimal belastet?", "answer": "other", "tags": ["hard"]}

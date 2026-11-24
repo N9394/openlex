@@ -18,5 +18,6 @@ models/gowa/runs/
 models/gowa/release/
 models/gowa/eval/*
 !models/gowa/eval/redaction/
+!models/gowa/eval/tasks/
 
 models/gowa/third_party/corpora/

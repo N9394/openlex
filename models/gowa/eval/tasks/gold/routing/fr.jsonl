@@ -1,0 +1,28 @@
+{"id": "route-fr-001", "text": "La clause 7 est-elle valable en l'état ?", "answer": "question", "tags": ["hard"]}
+{"id": "route-fr-002", "text": "Que signifie la clause résolutoire de l'article 12 du bail ?", "answer": "question", "tags": ["clear"]}
+{"id": "route-fr-003", "text": "Selon ce contrat, qui supporte les frais de remise en état à la fin du bail commercial ?", "answer": "question", "tags": ["clear"]}
+{"id": "route-fr-004", "text": "c'est quoi la diff entre caution et garantie autonome dans l'art 8", "answer": "question", "tags": ["clear", "informal"]}
+{"id": "route-fr-005", "text": "Reformule la clause 7 pour qu'elle soit valable.", "answer": "rewrite", "tags": ["hard"]}
+{"id": "route-fr-006", "text": "Raccourcis l'article 5 sur la garantie des vices cachés.", "answer": "rewrite", "tags": ["clear"]}
+{"id": "route-fr-007", "text": "Rends le préavis réciproque.", "answer": "rewrite", "tags": ["clear", "short"]}
+{"id": "route-fr-008", "text": "tu peux réécrire la clause de non-concurrence en moins restrictif stp", "answer": "rewrite", "tags": ["clear", "informal"]}
+{"id": "route-fr-009", "text": "Vérifie la clause 7 : y a-t-il des problèmes ?", "answer": "review", "tags": ["hard"]}
+{"id": "route-fr-010", "text": "Passe en revue la cession de parts et signale les risques pour le cédant.", "answer": "review", "tags": ["clear"]}
+{"id": "route-fr-011", "text": "Quelles clauses de ces CGV pourraient être jugées abusives ou déséquilibrées ?", "answer": "review", "tags": ["hard"]}
+{"id": "route-fr-012", "text": "jette un oeil au bail commercial voir si qqch cloche", "answer": "review", "tags": ["clear", "informal"]}
+{"id": "route-fr-013", "text": "Trouve la jurisprudence récente de la Cour de cassation sur des clauses comme la 7.", "answer": "research", "tags": ["hard"]}
+{"id": "route-fr-014", "text": "Cherche sur Légifrance la version en vigueur de l'article 1231-5 du Code civil.", "answer": "research", "tags": ["clear"]}
+{"id": "route-fr-015", "text": "La Cour de cassation s'est-elle prononcée récemment sur la clause pénale manifestement excessive ?", "answer": "research", "tags": ["hard"]}
+{"id": "route-fr-016", "text": "trouve moi des arrets recents sur le dol dans les cessions de fonds de commerce", "answer": "research", "tags": ["clear", "informal"]}
+{"id": "route-fr-017", "text": "Mets les échéances de ce contrat dans mon agenda.", "answer": "files", "tags": ["hard"]}
+{"id": "route-fr-018", "text": "Exporte en PDF.", "answer": "files", "tags": ["clear", "short"]}
+{"id": "route-fr-019", "text": "Crée un tableau des associés avec SIREN et adresse.", "answer": "files", "tags": ["clear"]}
+{"id": "route-fr-020", "text": "enregistre ca en v3 dans le dossier Dubois", "answer": "files", "tags": ["clear", "informal"]}
+{"id": "route-fr-021", "text": "Utilise notre clause 7 type de la base de modèles du cabinet.", "answer": "firm", "tags": ["hard"]}
+{"id": "route-fr-022", "text": "On a un modèle maison de pacte d'associés ?", "answer": "firm", "tags": ["clear"]}
+{"id": "route-fr-023", "text": "Retrouve la clause de confidentialité qu'on a utilisée dans le dossier Loire Participations.", "answer": "firm", "tags": ["clear"]}
+{"id": "route-fr-024", "text": "Rédige le pouvoir selon notre trame interne, pas selon ta propre version.", "answer": "firm", "tags": ["hard"]}
+{"id": "route-fr-025", "text": "Merci, c'est tout.", "answer": "other", "tags": ["clear", "short"]}
+{"id": "route-fr-026", "text": "Bonjour", "answer": "other", "tags": ["clear", "short"]}
+{"id": "route-fr-027", "text": "Comment passer l'interface en anglais ?", "answer": "other", "tags": ["clear"]}
+{"id": "route-fr-028", "text": "Notre facture du mois dernier est fausse.", "answer": "other", "tags": ["hard"]}
