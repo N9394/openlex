@@ -109,7 +109,7 @@ Hungary and Cyprus: Ansvar is not suggested there, because the official sites fo
 1. In your Ansvar workspace, create a *service credential*.
 2. Paste it as `client-id:client-secret` in `/law` → Ansvar → Paste a service credential (or `openlex sources key ansvar`).
 
-Setting this up for your firm? We do it as part of support: https://calendly.com/nicolas-jansa
+Setting this up for your firm? We do it as part of support: https://calendly.com/nicolas-jansa/openlex-setup-cloud-ai-and-sources
 
 <a id="ris"></a>
 ### RIS Austria
@@ -123,14 +123,14 @@ The [RIS open-data terms](https://data.bka.gv.at/ris/api/v2.6/) are binding for 
 - **Keep a local copy (optional):** `/law` → RIS Austria → Keep a local copy, or `openlex sources nightcopy ris on`. OpenLex then fetches what you asked for during the day, and refreshes copies older than a week, in the next allowed hours: at most 60 requests a night, single look-ups, not a mass download. The copy stays on this computer.
 - **A full mirror** of RIS for your firm is a mass download: the terms ask you to announce it first to ris.it@bka.gv.at (purpose, the program's name and contact address, the IP addresses, and when it runs).
 
-Setting this up for your firm? We do it as part of support: https://calendly.com/nicolas-jansa
+Setting this up for your firm? We do it as part of support: https://calendly.com/nicolas-jansa/openlex-setup-cloud-ai-and-sources
 
 <a id="eurlex"></a>
 ### EUR-Lex
 
 Nothing to register. OpenLex uses the EU Publications Office's open data service (Cellar: SPARQL and REST), which is free and needs no key. It does not read the EUR-Lex website, which blocks programs. (EUR-Lex also has a SOAP web service that needs an EU Login and a request form; OpenLex does not need it.) Time: none. Cost: none.
 
-Setting this up for your firm? We do it as part of support: https://calendly.com/nicolas-jansa
+Setting this up for your firm? We do it as part of support: https://calendly.com/nicolas-jansa/openlex-setup-cloud-ai-and-sources
 
 <a id="neuris"></a>
 ### German federal law (NeuRIS)
@@ -141,7 +141,7 @@ It is still in its public test phase and has not published a licence for its dat
 
 A search returns statutes first, then federal court decisions. A decision opens with its Leitsatz, Tenor, Tatbestand and Gründe.
 
-Setting this up for your firm? We do it as part of support: https://calendly.com/nicolas-jansa
+Setting this up for your firm? We do it as part of support: https://calendly.com/nicolas-jansa/openlex-setup-cloud-ai-and-sources
 
 <a id="gii"></a>
 ### German federal laws (gesetze-im-internet.de)
@@ -151,7 +151,7 @@ The official consolidated edition of all German federal statutes and regulations
 - **Online (the default):** OpenLex fetches the list of laws once a day, finds a law by its abbreviation ("BGB", "§ 433 BGB") or the words of its title, and reads the law's official XML when you open it.
 - **Offline mode (optional):** in `/law`, "Work fully offline" can keep all federal laws on this computer. OpenLex shows the size first (an estimate, roughly 100–300 MB including the search index), and only downloads after you say yes. It downloads from gesetze-im-internet.de itself, one request a second (about 1.5 hours), and builds a search index on this computer. After that, look-ups of German federal law never leave this computer. Remove the copy in `/law` at any time.
 
-Setting this up for your firm? We do it as part of support: https://calendly.com/nicolas-jansa
+Setting this up for your firm? We do it as part of support: https://calendly.com/nicolas-jansa/openlex-setup-cloud-ai-and-sources
 
 <a id="openlegaldata"></a>
 ### Open Legal Data (German case law)
@@ -166,7 +166,7 @@ Over 400,000 German court decisions of all levels, federal and Länder, with ful
 2. On your account page, copy your API token.
 3. `/law` → Open Legal Data → Add your free key (optional), or `openlex sources key openlegaldata`.
 
-Setting this up for your firm? We do it as part of support: https://calendly.com/nicolas-jansa
+Setting this up for your firm? We do it as part of support: https://calendly.com/nicolas-jansa/openlex-setup-cloud-ai-and-sources
 
 <a id="slovlex"></a>
 ### Slov-Lex Slovakia
@@ -175,7 +175,7 @@ Nothing to register. OpenLex reads the Ministry of Justice's official static edi
 
 Slovak court decisions (the Ministry of Justice's open interface): coming once the ministry confirms the terms for reuse.
 
-Setting this up for your firm? We do it as part of support: https://calendly.com/nicolas-jansa
+Setting this up for your firm? We do it as part of support: https://calendly.com/nicolas-jansa/openlex-setup-cloud-ai-and-sources
 
 <a id="esbirka"></a>
 ### e-Sbírka Czechia: works without a key; your free key is an upgrade
@@ -191,7 +191,7 @@ With your own free key, OpenLex uses the official e-Sbírka REST API instead, wi
 5. **The answer comes by data box** within 10 working days: a letter with the conditions of use and your access key.
 6. **Add the key:** `/law` → e-Sbírka Czechia → Add your free key, or `openlex sources key esbirka`. Keep to the conditions in the letter (for example, the number of requests).
 
-Setting this up for your firm? We do it as part of support: https://calendly.com/nicolas-jansa
+Setting this up for your firm? We do it as part of support: https://calendly.com/nicolas-jansa/openlex-setup-cloud-ai-and-sources
 
 <a id="fedlex"></a>
 ### Fedlex Switzerland
@@ -203,7 +203,7 @@ Nothing to register. OpenLex reads Swiss federal law from the Federal Chanceller
 - **Pace:** Fedlex publishes no request limit; OpenLex sends one request at a time, at most two a second.
 - **Not covered:** cantonal law (there is no open cantonal interface; LexFind has no API).
 
-Setting this up for your firm? We do it as part of support: https://calendly.com/nicolas-jansa
+Setting this up for your firm? We do it as part of support: https://calendly.com/nicolas-jansa/openlex-setup-cloud-ai-and-sources
 
 <a id="opencaselaw"></a>
 ### opencaselaw.ch
@@ -214,7 +214,7 @@ Nothing to register. opencaselaw.ch is a free community project that collects Sw
 - **Licence:** CC0 for the decisions (the European Court of Human Rights judgments in the collection are excluded from CC0); Swiss court decisions are free of copyright anyway (Art. 5 URG).
 - **Pace:** no published limit; OpenLex sends one request at a time, a few a second at most.
 
-Setting this up for your firm? We do it as part of support: https://calendly.com/nicolas-jansa
+Setting this up for your firm? We do it as part of support: https://calendly.com/nicolas-jansa/openlex-setup-cloud-ai-and-sources
 
 <a id="legalize"></a>
 ### Legalize (laws of many countries)
@@ -226,7 +226,7 @@ Setting this up for your firm? We do it as part of support: https://calendly.com
 - **Freshness:** `/law` shows when each country was last updated. A country not updated for more than 60 days is flagged ("may be out of date"); on 2026-10-30 that was the case for CH, PL, US, FR, SK and RO (last updated 2026-06-23), while AT, DE, CZ, NL, UK and EU were updated that week.
 - **Austria and the RIS terms:** legalize-at is built from the RIS open-data interface (README: "Bundesrecht konsolidiert" via the RIS OGD API, CC BY 4.0). Its README does not say that it keeps to the RIS usage terms (night window, one request every two seconds, no parallel requests), and its pipeline code fetches with several parallel requests. When you use legalize-at, you read from GitHub or legalize.dev, not from RIS, so the RIS terms are a matter for the repository's maintainer; OpenLex itself only contacts RIS in the hours the terms allow.
 
-Setting this up for your firm? We do it as part of support: https://calendly.com/nicolas-jansa
+Setting this up for your firm? We do it as part of support: https://calendly.com/nicolas-jansa/openlex-setup-cloud-ai-and-sources
 
 <a id="ukleg"></a>
 ### legislation.gov.uk
@@ -239,7 +239,7 @@ Nothing to register. OpenLex uses the published data interface of [legislation.g
 
 Licence: Open Government Licence v3.0 (Crown and Parliamentary copyright). The service allows at most 1,500 requests per 5 minutes and asks programs to say who they are: OpenLex sends one request at a time, 200 ms apart, and names itself.
 
-Setting this up for your firm? We do it as part of support: https://calendly.com/nicolas-jansa
+Setting this up for your firm? We do it as part of support: https://calendly.com/nicolas-jansa/openlex-setup-cloud-ai-and-sources
 
 <a id="ukcaselaw"></a>
 ### Find Case Law (UK)
@@ -253,7 +253,7 @@ Nothing to register. OpenLex uses the published interface of [Find Case Law](htt
 
 Rate limit: at most 1,000 requests per 5 minutes; OpenLex sends one request at a time, 300 ms apart.
 
-Setting this up for your firm? We do it as part of support: https://calendly.com/nicolas-jansa
+Setting this up for your firm? We do it as part of support: https://calendly.com/nicolas-jansa/openlex-setup-cloud-ai-and-sources
 
 <a id="bwb"></a>
 ### Dutch law (BWB)
@@ -264,7 +264,7 @@ Licence: CC0 (open data of the Dutch government). Cost: none. Key: none. Time: n
 
 OpenLex uses the official search service (zoekservice.overheid.nl, SRU) and the official repository (repository.officiele-overheidspublicaties.nl). There is no published rate limit; OpenLex sends one request at a time, at most four a second.
 
-Setting this up for your firm? We do it as part of support: https://calendly.com/nicolas-jansa
+Setting this up for your firm? We do it as part of support: https://calendly.com/nicolas-jansa/openlex-setup-cloud-ai-and-sources
 
 <a id="rechtspraak"></a>
 ### Dutch case law (rechtspraak.nl)
@@ -275,7 +275,7 @@ The open data service has no search by words. OpenLex finds a decision by its EC
 
 Licence: Public Domain Mark (no restrictions). Cost: none. Key: none. Time: none. OpenLex sends one request at a time, at most five a second.
 
-Setting this up for your firm? We do it as part of support: https://calendly.com/nicolas-jansa
+Setting this up for your firm? We do it as part of support: https://calendly.com/nicolas-jansa/openlex-setup-cloud-ai-and-sources
 
 ---
 
@@ -300,7 +300,7 @@ OpenLex exchanges the key for a short-lived token (OAuth 2.0 client credentials)
 
 **Terms to know.** Court decisions are published pseudonymised. French law forbids reusing the identity data of judges and court clerks to evaluate, analyse, compare or predict their professional practice (art. L111-13 of the Code de l'organisation judiciaire). OpenLex only looks decisions up, one question at a time.
 
-Setting this up for your firm? We do it as part of support: https://calendly.com/nicolas-jansa
+Setting this up for your firm? We do it as part of support: https://calendly.com/nicolas-jansa/openlex-setup-cloud-ai-and-sources
 
 <a id="ecfr"></a>
 ### eCFR (US federal regulations)
@@ -309,7 +309,7 @@ Nothing to register. OpenLex uses the official eCFR API of the Office of the Fed
 
 The eCFR is an editorial compilation, updated daily; the official legal edition is the annual CFR on govinfo.gov. OpenLex sends one request at a time, half a second apart.
 
-Setting this up for your firm? We do it as part of support: https://calendly.com/nicolas-jansa
+Setting this up for your firm? We do it as part of support: https://calendly.com/nicolas-jansa/openlex-setup-cloud-ai-and-sources
 
 <a id="govinfo"></a>
 ### GovInfo (US Code, laws, federal courts): your free key
@@ -325,7 +325,7 @@ GovInfo needs a key from api.data.gov. It is free and comes at once. Time: two m
 
 A key allows 1,000 requests an hour. OpenLex sends one request at a time, a second apart, and sends the key only to api.govinfo.gov, in a header (never in a web address). Some court opinions are published only as PDF; OpenLex reads the PDF on this computer, and if it cannot, it gives the court's docket text and the link.
 
-Setting this up for your firm? We do it as part of support: https://calendly.com/nicolas-jansa
+Setting this up for your firm? We do it as part of support: https://calendly.com/nicolas-jansa/openlex-setup-cloud-ai-and-sources
 
 <a id="courtlistener"></a>
 ### CourtListener (US case law): your free token
@@ -340,7 +340,7 @@ The API needs your own free token. Time: five minutes. Cost: none for light use.
 
 The free token has a small allowance (a few requests a minute, a limited number a day). OpenLex keeps to it: one request at a time, 12 seconds apart, so a search with the full text of a decision takes about half a minute. If you use it a lot, a Free Law Project membership ($10–100 a month) raises the allowance; the token stays the same.
 
-Setting this up for your firm? We do it as part of support: https://calendly.com/nicolas-jansa
+Setting this up for your firm? We do it as part of support: https://calendly.com/nicolas-jansa/openlex-setup-cloud-ai-and-sources
 
 <a id="sejm"></a>
 ### Sejm ELI (Poland)
@@ -351,7 +351,7 @@ Nothing to register. OpenLex uses the Sejm's official ELI interface (api.sejm.go
 - **The text** is the consolidated text the Sejm Chancellery prepares (tekst ujednolicony). It is unofficial: the binding text is the one published in the Journal of Laws, and OpenLex says so with every answer. Where there is no consolidated text, OpenLex shows the text as published (without later amendments) and says that too.
 - The interface publishes no rate limit. OpenLex sends one request at a time, a third of a second apart.
 
-Setting this up for your firm? We do it as part of support: https://calendly.com/nicolas-jansa
+Setting this up for your firm? We do it as part of support: https://calendly.com/nicolas-jansa/openlex-setup-cloud-ai-and-sources
 
 <a id="saos"></a>
 ### SAOS (Polish court judgments)
@@ -363,7 +363,7 @@ Nothing to register. SAOS (System Analizy Orzeczeń Sądowych) is a research col
 - **Licence:** judgments are official documents without copyright (art. 4 of the Polish Copyright Act). SAOS states no licence for its collection, so OpenLex labels it a community source.
 - **Terms note:** SAOS's robots.txt asks web crawlers to stay out of its interface. OpenLex does not crawl: it makes one look-up per question, one request at a time, a second apart. If your firm wants certainty, ask SAOS (saos.org.pl) for confirmation.
 
-Setting this up for your firm? We do it as part of support: https://calendly.com/nicolas-jansa
+Setting this up for your firm? We do it as part of support: https://calendly.com/nicolas-jansa/openlex-setup-cloud-ai-and-sources
 
 <a id="rolegis"></a>
 ### legislatie.just.ro (Romania)
@@ -375,7 +375,7 @@ Nothing to register. OpenLex uses the Ministry of Justice's official free web se
 - **Plain http:** the service's own description publishes a plain-http address, and its https side does not answer programs. Your search words (never a document) therefore travel unencrypted to the ministry.
 - No published rate limit. OpenLex sends one request at a time, a second apart, and reuses the session token.
 
-Setting this up for your firm? We do it as part of support: https://calendly.com/nicolas-jansa
+Setting this up for your firm? We do it as part of support: https://calendly.com/nicolas-jansa/openlex-setup-cloud-ai-and-sources
 
 <a id="rodata"></a>
 ### Romanian law (community data, no licence file)
@@ -387,7 +387,7 @@ Off until you switch it on, and used only from a copy on your computer. It is a 
 - **Searching** happens on this computer only; nothing is sent anywhere. Each answer says "From your local copy of the community data of <date> (no licence file)". OpenLex warns when the copy is more than 60 days old; download again to refresh it.
 - Time: the download and the index take from a few minutes to an hour, depending on your connection. Cost: none.
 
-Setting this up for your firm? We do it as part of support: https://calendly.com/nicolas-jansa
+Setting this up for your firm? We do it as part of support: https://calendly.com/nicolas-jansa/openlex-setup-cloud-ai-and-sources
 
 <a id="no-automated-access"></a>
 ### Hungary, Cyprus, South Africa: no automated access
@@ -412,7 +412,7 @@ You can read these sites yourself in your browser (`/law` opens them). If your f
 
 Addresses: Hungary — the operator of njt.hu (MKIFK Zrt.); Cyprus — CyLaw (the Cyprus Bar Association's KINOP); South Africa — Laws.Africa / AfricanLII and SAFLII.
 
-Setting this up for your firm? We do it as part of support: https://calendly.com/nicolas-jansa
+Setting this up for your firm? We do it as part of support: https://calendly.com/nicolas-jansa/openlex-setup-cloud-ai-and-sources
 
 ## What leaves this computer
 

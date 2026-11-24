@@ -2,7 +2,7 @@
 
 This guide is for lawyers who want OpenLex to use a strong AI model in the cloud without handing client work to a consumer chat service. You do it once, it takes about 30 minutes, and you need no technical knowledge, just a credit card and someone at the firm who may sign up for cloud services.
 
-**Rather not do it yourself?** In OpenLex, go to **Settings → AI** and click **Set it up for me** to book a setup call. We go through these steps with you on screen. You keep the account and the key; we never see your key or your documents.
+**Rather not do it yourself?** In OpenLex, go to **Settings → AI** and click **Set it up for me** to book a setup call (or book directly: https://calendly.com/nicolas-jansa/openlex-setup-cloud-ai-and-sources). We go through these steps with you on screen. You keep the account and the key; we never see your key or your documents.
 
 What you will have at the end:
 
