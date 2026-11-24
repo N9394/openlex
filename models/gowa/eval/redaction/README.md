@@ -35,6 +35,8 @@ Two errors are counted separately because they are the ones that hurt:
 
 Update 2026-11-03 (evening): all four gates pass in oracle mode — persons missed 0.7%, persons hidden ≥ 97.1% in every language (cs 100, de 99.1, en 98.8, fr 98.1, hu 100, pl 97.1, ro 100, sk 100), fixed shapes 99.4%, lookalikes 2.3%; all entities hidden 97.0%. What did it: derived and inflected name forms (Novákův, Švcova, Kočímu, Silviin, Lisowa, Kowalówna, Ewei, Mónikától), family-name-first spreading (Juhász Ferenc, ŠVEC Lubomír), a lone known first name as a weak candidate, lower-case sign-offs, initials that go on (Lucía F. O.). Left: bare initials with no name nearby (C. Ó S., C. L., „M.“), a name broken over two lines after an inflected first name, a lower-case first name whose full form is not hidden anywhere. The oracle is the harness ceiling; the real GOWA run (`--model`) decides the release.
 
+Update 2026-11-24: first real run (GOWA v0b, vocabulary trimmed to 80k, fp16w export 146.8 MB with 100% agreement; the 116.2 MB fp16w-emb8row gives the same numbers). The size budget holds, the quality does not: persons hidden 41%, persons missed 23%, 141 dangerous drops, 100 regressions vs version 1; fixed shapes 99.4% and lookalikes 3.5% pass. v0b's redaction calibration (temperature 0.14, threshold 1.0) came from a synthetic held-out set it got 100% on, so it is confidently wrong on realistic documents and the "unsure → keep version 1" rule never fires. Redaction stays off; next is realistic training data and a retrain.
+
 ## Outcomes per entity
 - **hidden**: ticked findings cover all of it
 - **partial**: part of it stays visible (counts as a leak)
