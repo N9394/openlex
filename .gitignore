@@ -11,3 +11,12 @@ certs/*.pem
 .env*
 desktop/electron/resources/
 .claude/
+__pycache__/
+*.pyc
+models/gowa/data/
+models/gowa/runs/
+models/gowa/release/
+models/gowa/eval/*
+!models/gowa/eval/redaction/
+
+models/gowa/third_party/corpora/

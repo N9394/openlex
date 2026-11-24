@@ -59,6 +59,7 @@ def parse_args(argv=None):
     p.add_argument("--max-error", type=float, default=0.02, help="error budget among automated answers, for the per-task thresholds")
     p.add_argument("--save-every", type=int, default=500)
     p.add_argument("--bf16", action="store_true", help="bfloat16 autocast (Ampere GPUs: RTX 3060, A100, L4)")
+    p.add_argument("--fp16", action="store_true", help="float16 autocast with loss scaling (T4 and other pre-Ampere GPUs)")
     p.add_argument("--grad-ckpt", action="store_true", help="gradient checkpointing (less memory)")
     p.add_argument("--seed", type=int, default=13)
     p.add_argument("--workers", type=int, default=2)
@@ -125,11 +126,11 @@ def save_checkpoint(path: Path, model, opt, sched, step, epoch_pos, args):
 
 
 @torch.no_grad()
-def predict(model, loader, device, bf16):
+def predict(model, loader, device, bf16, fp16=False):
     model.eval()
     rows = []
     for b in loader:
-        with torch.autocast(device.type, dtype=torch.bfloat16, enabled=bf16 and device.type == "cuda"):
+        with torch.autocast(device.type, dtype=torch.bfloat16 if bf16 else torch.float16, enabled=(bf16 or fp16) and device.type == "cuda"):
             lg = model(b["input_ids"].to(device), b["attention_mask"].to(device), b["option_index"].to(device), b["decide_index"].to(device))
         lg = lg.float().cpu()
         for i in range(lg.size(0)):
@@ -225,21 +226,27 @@ def main(argv=None):
     loss_fn = torch.nn.CrossEntropyLoss()
     model.train()
     t0 = time.time()
+    # Mixed precision: bf16 on Ampere (no scaling needed), fp16 + loss scaling on a T4.
+    amp_on = device.type == "cuda" and (args.bf16 or args.fp16)
+    amp_dtype = torch.bfloat16 if args.bf16 else torch.float16
+    scaler = torch.amp.GradScaler("cuda", enabled=bool(args.fp16 and device.type == "cuda"))
     micro = 0
     done = step >= total
     while not done:
         for pos, b in enumerate(train_dl):
             if start_pos and pos < start_pos:
                 continue  # roughly skip what the previous session saw in this epoch (the order is reshuffled)
-            with torch.autocast(device.type, dtype=torch.bfloat16, enabled=args.bf16 and device.type == "cuda"):
+            with torch.autocast(device.type, dtype=amp_dtype, enabled=amp_on):
                 lg = model(b["input_ids"].to(device), b["attention_mask"].to(device), b["option_index"].to(device), b["decide_index"].to(device))
             loss = loss_fn(masked_logits(lg.float(), b["counts"].to(device)), b["y"].to(device)) / args.grad_accum
-            loss.backward()
+            scaler.scale(loss).backward()
             micro += 1
             if micro % args.grad_accum:
                 continue
+            scaler.unscale_(opt)
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-            opt.step()
+            scaler.step(opt)
+            scaler.update()
             sched.step()
             opt.zero_grad(set_to_none=True)
             step += 1
@@ -253,7 +260,7 @@ def main(argv=None):
         start_pos = 0
 
     # ── calibration on the held-out set ──
-    rows_out = predict(model, held_dl, device, args.bf16) if len(held_ds) else []
+    rows_out = predict(model, held_dl, device, args.bf16, args.fp16) if len(held_ds) else []
     T, temps, thresholds, report = calibrate(rows_out, args.max_error) if rows_out else (1.0, {}, {}, {})
     final = out / "final"
     shutil.rmtree(final, ignore_errors=True)

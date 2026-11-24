@@ -239,6 +239,27 @@ function einOk(m) {
  * (+, 00, 0, a bracket), or is grouped 3-3-3/3-3-4 (CZ, PL, SK, US), or
  * "Tel." stands before it.
  */
+/** Irish PPS number: weights 8..2 on the digits, the second letter counts ×9, mod 23 → the check letter. */
+function ppsnOk(m) {
+  const v = m.replace(/\s/g, '').toUpperCase()
+  const x = /^(\d{7})([A-W])([A-IW]?)$/.exec(v)
+  if (!x) return false
+  let sum = 0
+  for (let i = 0; i < 7; i++) sum += +x[1][i] * (8 - i)
+  if (x[3] && x[3] !== 'W') sum += (x[3].charCodeAt(0) - 64) * 9
+  const r = sum % 23
+  return 'WABCDEFGHIJKLMNOPQRSTUV'[r] === x[2]
+}
+
+/** French NIR: key = 97 − (the 13 digits mod 97); Corsica 2A/2B count as 19/18. */
+function nirOk(m) {
+  const v = m.replace(/\s/g, '').toUpperCase()
+  if (!/^[12]\d{4}(?:\d{2}|2[AB])\d{8}$/.test(v)) return false
+  const body = v.slice(0, 13).replace('2A', '19').replace('2B', '18')
+  const key = +v.slice(13)
+  return 97 - Number(BigInt(body) % 97n) === key
+}
+
 function phoneOk(m, before = '') {
   const t = String(m).trim()
   const s = digits(t)
@@ -255,8 +276,8 @@ function phoneOk(m, before = '') {
 const L = '\\p{Lu}[\\p{L}\'’-]{0,40}' // a capitalised word (bounded: long runs must stay linear)
 const W = '[\\p{L}\'’.-]+' // any word
 const NUM = '\\d{1,5}[a-zA-Z]?(?:\\s?[-/]\\s?\\d{1,5}[a-zA-Z]?)*' // house number: 12, 12a, 12/3/7, 12-14
-const MONTHS = 'Jänner|Januar|Jan\\.?|Februar|Feber|Feb\\.?|März|Mär\\.?|April|Apr\\.?|Mai|Juni|Juli|August|Aug\\.?|September|Sept?\\.?|Oktober|Okt\\.?|November|Nov\\.?|Dezember|Dez\\.?|January|February|March|May|June|July|October|Oct\\.?|December|Dec\\.?|ledna|února|března|dubna|května|června|července|srpna|září|října|listopadu|prosince|januára|februára|marca|apríla|mája|júna|júla|augusta|septembra|októbra|novembra|decembra|stycznia|lutego|kwietnia|maja|czerwca|lipca|sierpnia|września|października|listopada|grudnia|ianuarie|februarie|martie|aprilie|mai|iunie|iulie|septembrie|octombrie|noiembrie|decembrie|január|február|március|április|május|június|július|augusztus|szeptember|október|december'
-const DATE = `(?:\\d{1,2}\\.\\s?\\d{1,2}\\.\\s?\\d{2,4}|\\d{1,2}/\\d{1,2}/\\d{2,4}|\\d{4}-\\d{2}-\\d{2}|\\d{4}\\.\\s?\\d{2}\\.\\s?\\d{2}\\.?|\\d{1,2}\\.?\\s(?:${MONTHS})\\s\\d{4}|(?:${MONTHS})\\s\\d{1,2},?\\s\\d{4})`
+const MONTHS = 'Jänner|Januar|Jan\\.?|Februar|Feber|Feb\\.?|März|Mär\\.?|April|Apr\\.?|Mai|Juni|Juli|August|Aug\\.?|September|Sept?\\.?|Oktober|Okt\\.?|November|Nov\\.?|Dezember|Dez\\.?|January|February|March|May|June|July|October|Oct\\.?|December|Dec\\.?|ledna|února|března|dubna|května|června|července|srpna|září|října|listopadu|prosince|januára|februára|marca|apríla|mája|júna|júla|augusta|septembra|októbra|novembra|decembra|stycznia|lutego|kwietnia|maja|czerwca|lipca|sierpnia|września|października|listopada|grudnia|ianuarie|februarie|martie|aprilie|mai|iunie|iulie|septembrie|octombrie|noiembrie|decembrie|január|február|március|április|május|június|július|augusztus|szeptember|október|december|janvier|février|mars|avril|juin|juillet|août|septembre|octobre|novembre|décembre|január|február|március|április|május|június|július|augusztus|szeptember|október|december'
+const DATE = `(?:\\d{4}\\.\\s(?:${MONTHS})\\s\\d{1,2}\\.|\\d{1,2}\\.\\s?\\d{1,2}\\.\\s?\\d{2,4}|\\d{1,2}/\\d{1,2}/\\d{2,4}|\\d{4}-\\d{2}-\\d{2}|\\d{4}\\.\\s?\\d{2}\\.\\s?\\d{2}\\.?|\\d{1,2}\\.?\\s(?:${MONTHS})\\s\\d{4}|(?:${MONTHS})\\s\\d{1,2},?\\s\\d{4})`
 const re = (s, f = 'gu') => new RegExp(s, f)
 
 // Street words per language family (the end of a street name, or its prefix).
@@ -281,7 +302,15 @@ const PATTERNS = [
   { id: 'card', country: '*', kind: 'CARD', label: { en: 'Card number', de: 'Kartennummer' }, re: /\b(?:\d[ -]?){12,18}\d\b/g, validate: luhnOk, confidence: 0.9 },
 
   // Dates of birth (only with the words around them)
-  { id: 'dob', country: '*', kind: 'DATE', label: { en: 'Date of birth', de: 'Geburtsdatum' }, re: re(`(${DATE})`), context: /(?:geb\.|geboren(?:\s+am)?|Geburtsdatum|Geb\.-?Datum|born(?:\s+on)?|date of birth|DOB|d\.o\.b\.|nar\.|narozen[áa]?|narodený|narodená|dátum narodenia|datum narození|ur\.|urodzon[ya]|data urodzenia|născut[ăa]?|data nașterii|data naşterii|szül\.|született|születési idő)\s*[:,]?\s*(?:am|on|dne|dňa|dnia|în|la)?\s*$/iu, window: 40, confidence: 0.95 },
+  { id: 'dob', country: '*', kind: 'DATE', label: { en: 'Date of birth', de: 'Geburtsdatum' }, re: re(`(${DATE}(?:\\s?r\\.)?)`), keepDot: true, context: /(?:geb\.|geboren(?:\s+am)?|Geburtsdatum|Geb\.-?Datum|born(?:\s+on)?|date of birth|DOB|d\.o\.b\.|nar\.|narozen[áa]?|narodený|narodená|dátum narodenia|datum narození|ur\.|urodzon\p{L}*|data urodzenia|născut[ăa]?|data nașterii|data naşterii|szül\.|született|születési idő|né(?:\(e\)|e)? le|date de naissance|urodzon\p{L}* dnia|urodził[ao]? się)\s*[:,]?\s*(?:am|on|dne|dňa|dnia|în|la(?: data de)?|le|in|v|w)?\s*(?:\p{Lu}[\p{L}-]+(?:[\s-]\p{Lu}[\p{L}-]+){0,2},?\s*)?$/iu, window: 60, confidence: 0.95 },
+  // A reference after its label ("our ref SB/WRO/0412", "Kundennummer: K-40912", "dowodem osobistym nr CAX 418273",
+  // "evidenčné číslo PO-482KX", "registration SK19 XHT"): any value with a digit. The label is the evidence.
+  { id: 'ref.ctx', country: '*', kind: 'ID', label: { en: 'Reference or document number', de: 'Referenz- oder Dokumentnummer' },
+    re: /(?<![A-Za-z0-9/.-])((?:[A-Z]{1,6}(?:\s?nr\.)?[\s-]){0,2}(?=[A-Za-z0-9/.-]{0,30}\d)[A-Za-z0-9][A-Za-z0-9/-]{0,30}(?:\.[A-Za-z0-9]{1,10}){0,3}(?:\s[A-Z]{2,3}(?=[\s,.;)]|$))?)/gu, // bounded: linear on any input
+    context: new RegExp(String.raw`(?:\b(?:our|your|my)\s+ref(?:erence)?\.?|\bref(?:erence)?\.?(?:\s+no\.?)?|claim\s+no\.?|case\s+no\.?|file\s+no\.?|company\s+(?:no\.?|number)|registered\s+number|registration(?:\s+(?:no\.?|number|mark))?|under\s+number|title\s+number|policy\s+(?:no\.?|number)|account\s+(?:no\.?|number)|customer\s+(?:no\.?|number)|membership\s+(?:no\.?|number)|passport\s+(?:no\.?|number)|licen[cs]e\s+(?:no\.?|number)|card\s+ending|WRC\s+ref\.?|PPS\s+No\.?|` + String.raw`Kunden(?:nummer|-?Nr\.?)|Vertrags(?:nummer|-?Nr\.?)|Versicherungs(?:nummer|schein(?:nummer)?)|Polizzen(?:nummer)?|Policennummer|Mitglieds(?:nummer|-?Nr\.?)|Personalnummer|Ausweis(?:nummer|-?Nr\.?)|Reisepass(?:nummer)?|Pass-?Nr\.?|(?:amtliches\s+)?Kennzeichen(?:\s+(?:war|ist|lautet|lautete))?|Aktenzahl|Ihr\s+Zeichen|Unser\s+Zeichen|` + String.raw`ev\.\s?č\.|evidenčn\p{L}*\s+čísl\p{L}*|číslo\s+dokladu|čísl\p{L}*\s+dokladu|preukaz\p{L}*\s+č\.|pas\p{L}*\s+č\.|vložka\s+č\.|registrační\s+značk\p{L}*|SPZ|EČV|ČAK|SAK|` + String.raw`dowod\p{L}*\s+osobist\p{L}*\s+(?:nr|seria)|paszport\p{L}*\s+nr|Rep\.\s?A\s+nr|nr\s+rejestracyjn\p{L}*|numer\p{L}*\s+rejestracyjn\p{L}*|nr\s+wpisu|wpis\p{L}*\s+nr|radców\s+prawnych[^\n]{0,40}\snr|` + String.raw`CI\s+seria|BI\s+seria|seria|pașaport\p{L}*\s+nr\.?|paşaport\p{L}*\s+nr\.?|număr\p{L}*\s+de\s+înmatriculare|nr\.\s+de\s+înmatriculare|` + String.raw`KASZ|rendszám\p{L}*|személyi\s+igazolvány\p{L}*\s+szám\p{L}*|útlevél\p{L}*\s+szám\p{L}*|ügyfélszám|` + String.raw`n°\s+de\s+dossier|dossier\s+n°|réf\.|référence|immatricul\p{L}*|numéro\s+(?:de\s+)?(?:client|dossier|contrat|passeport|police))\s*[:#]?\s*(?:nr\.?|no\.?|n°|č\.)?\s*$`, 'iu'),
+    window: 60, validate: (v) => v.replace(/[^A-Za-z0-9]/g, '').length >= 4 && !/^(?:19|20)\d{2}$/.test(v), confidence: 0.85 },
+  // Notarial and court register numbers on their own line ("N 412/2026", "Nz 38811/2026", "NCRls 39204/2026").
+  { id: 'ref.notary', country: 'CZ SK', kind: 'ID', label: { en: 'Register number', de: 'Registerzahl' }, re: /(?<=^|\n)(?:N|Nz|NCRls|Up|Sp|Zn)\s\d{1,6}\/\d{4}(?=\s*(?:\n|$))/gu, confidence: 0.8 },
 
   // Addresses
   { id: 'addr.dach', country: 'AT DE CH', kind: 'ADDRESS', label: { en: 'Street address', de: 'Anschrift' }, re: re(`(?<![\\p{L}])(?!(?:Die|Der|Das|Den|Dem|Des|Eine|Einer|Ein|Jede|Diese|Dieser|Jeder|Unsere|Ihre|Seine)\\s)(?:${L}[\\s-](?:\\p{Lu}[\\p{Ll}ß]*?)?|\\p{Lu}[\\p{Ll}ß]*?)${STREET_SUFFIX}\\s${NUM}(?:\\s?/\\s?(?:Top|Stiege|Tür)\\s?\\d+)*(?:,?\\s(?:(?:A|D|CH)-)?\\d{4,5}\\s${CITY_DE})?`, 'gu'), confidence: 0.85 },
@@ -316,9 +345,15 @@ const PATTERNS = [
   // Passports and identity cards (only with the words around them)
   { id: 'passport', country: '*', kind: 'ID', label: { en: 'Passport or ID card number', de: 'Reisepass- oder Ausweisnummer' }, re: /(?<![A-Z0-9])((?=[A-Z0-9 ]{0,13}\d)[A-Z0-9]{1,3}\s?[A-Z0-9]{5,9})\b/g, context: /(?:Reisepass(?:nummer|-Nr\.?)?|Pass(?:nummer|-Nr\.?|nr\.)|Personalausweis(?:nummer|-Nr\.?)?|Ausweis(?:nummer|-Nr\.?)|Identitätsausweis|passport(?: no\.?| number| #)?|ID card(?: no\.?| number)?|identity card(?: no\.?| number)?|driver'?s licen[cs]e(?: no\.?| number)?|Führerschein(?:nummer|-Nr\.?)?|číslo pasu|cestovní pas|č\.\s?OP|občanský průkaz|občiansky preukaz|číslo OP|numer paszportu|paszport(?:u)?(?: nr)?|dowód osobisty|dowodu osobistego|seria i numer|pașaport|paşaport|carte de identitate|CI seria|seria|útlevél(?:szám)?|személyi igazolvány(?:szám)?)\s*(?:Nr\.?|No\.?|number|nr\.?|číslo|szám|:|#)?\s*[:.]?\s*$/iu, window: 45, confidence: 0.9 },
 
+  { id: 'uk.nino', country: 'GB', kind: 'ID', label: { en: 'UK National Insurance number', de: 'Sozialversicherungsnummer (UK)' }, re: /\b(?!BG|GB|NK|KN|TN|NT|ZZ)[A-CEGHJ-PR-TW-Z][A-CEGHJ-NPR-TW-Z]\s?\d{2}\s?\d{2}\s?\d{2}\s?[A-D]\b/g, confidence: 0.9 },
+  { id: 'ie.ppsn', country: 'IE', kind: 'ID', label: { en: 'Irish PPS number', de: 'PPS-Nummer (IE)' }, re: /\b\d{7}[A-W][A-IW]?\b/g, validate: ppsnOk, confidence: 0.9 },
+  { id: 'fr.nir', country: 'FR', kind: 'ID', label: { en: 'French social security number (NIR)', de: 'Sozialversicherungsnummer (FR)' }, re: /\b[12]\s?\d{2}\s?(?:0[1-9]|1[0-2]|[2-9]\d)\s?(?:\d{2}|2[AB])\s?\d{3}\s?\d{3}\s?\d{2}\b/g, validate: nirOk, confidence: 0.95 },
+  { id: 'de.stnr', country: 'DE', kind: 'TAXID', label: { en: 'German tax number (Steuernummer)', de: 'Steuernummer' }, re: /\b\d{2,3}\/\d{3,4}\/\d{4,5}\b/g, confidence: 0.8 },
+  { id: 'vin', country: '*', kind: 'ID', label: { en: 'Vehicle identification number (VIN)', de: 'Fahrzeug-Identifizierungsnummer (FIN)' }, re: /\b(?=[A-HJ-NPR-Z0-9]{17}\b)(?=(?:[^\d\s]*\d){3})(?=(?:[\d]*[A-HJ-NPR-Z]){2})[A-HJ-NPR-Z0-9]{17}\b/g, confidence: 0.85 },
+
   // Company register and tax numbers of businesses
   { id: 'at.fn', country: 'AT', kind: 'REGNO', label: { en: 'Company register number (FN)', de: 'Firmenbuchnummer (FN)' }, re: /\bFN\s?\d{1,6}\s?[a-z]\b/g, confidence: 0.95 },
-  { id: 'at.uid', country: 'AT DE', kind: 'TAXID', label: { en: 'VAT number', de: 'UID-Nummer' }, re: /\b(?:ATU\d{8}|DE\d{9})\b/g, confidence: 0.9 },
+  { id: 'at.uid', country: 'AT DE', kind: 'TAXID', label: { en: 'VAT number', de: 'UID-Nummer' }, re: /\b(?:ATU\s?\d{8}|DE\s?\d{3}\s?\d{3}\s?\d{3})\b/g, confidence: 0.9 },
   { id: 'de.hr', country: 'DE', kind: 'REGNO', label: { en: 'Commercial register number (HRB/HRA)', de: 'Handelsregisternummer (HRB/HRA)' }, re: /\b(?:HRB|HRA|GnR|PR|VR)\s?\d{1,6}(?:\s?[A-Z]{1,2}\b)?/g, confidence: 0.9 },
   { id: 'ch.uid', country: 'CH', kind: 'REGNO', label: { en: 'Swiss business ID (UID)', de: 'Unternehmens-Identifikationsnummer (UID)' }, re: /\bCHE-?\d{3}\.?\d{3}\.?\d{3}\b/g, validate: chUidOk, confidence: 0.95 },
   { id: 'czsk.ico', country: 'CZ SK', kind: 'REGNO', label: { en: 'Company ID (IČO)', de: 'Firmennummer (IČO)' }, re: /\b\d{2}\s?\d{3}\s?\d{3}\b/g, validate: icoOk, context: /(?:IČO?|IČ|ICO|IČ DPH|DIČ)\s*[:.]?\s*(?:CZ|SK)?\s*$/u, window: 15, confidence: 0.9 },
@@ -342,5 +377,5 @@ function describe(lang = 'en') {
 
 module.exports = {
   PATTERNS, describe,
-  check: { ibanOk, luhnOk, atSvnrOk, deTaxIdOk, deSvnrOk, ean13Ok, chUidOk, rcOk, peselOk, nipOk, cnpOk, cuiOk, tajOk, huTaxOk, icoOk, ssnOk, einOk, phoneOk },
+  check: { ppsnOk, nirOk, ibanOk, luhnOk, atSvnrOk, deTaxIdOk, deSvnrOk, ean13Ok, chUidOk, rcOk, peselOk, nipOk, cnpOk, cuiOk, tajOk, huTaxOk, icoOk, ssnOk, einOk, phoneOk },
 }

@@ -6,3 +6,4 @@ onnx>=1.16
 onnxruntime>=1.20
 accelerate>=1.0
 # label_llm.py only (GPU): pip install vllm   (optional; falls back to transformers)
+onnxconverter-common>=1.14

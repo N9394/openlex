@@ -44,7 +44,7 @@ const WINDOW = 240 // characters of context on each side
 const MAX_ASK = 2000 // distinct candidates asked per check; beyond that, version 1 decides
 const BATCH = 32
 // Which stage-1 findings the model may re-classify (lists and fixed-shape patterns stay as they are).
-const ASK_SOURCES = new Set(['heuristic', 'model', 'gliner', 'names', 'ngrams'])
+const ASK_SOURCES = new Set(['heuristic', 'model', 'gliner', 'names', 'ngrams', 'caps', 'cues', 'health'])
 const ASK_KINDS = new Set(['PERSON', 'ORG', 'ADDRESS', 'OTHER'])
 
 function ready() {
@@ -85,7 +85,7 @@ function context(text, start, end) {
  *   signal
  * @returns {Promise<{ findings, stats: { candidates, asked, automated, escalated, dropped, partial, failed?, sources } }>}
  */
-async function findings(text, { terms = [], keep = [], patterns = [], cache = new Map(), signal } = {}) {
+async function findings(text, { terms = [], keep = [], patterns = [], cache = new Map(), signal, respread = false } = {}) {
   text = String(text || '')
   const stats = { candidates: 0, asked: 0, automated: 0, escalated: 0, dropped: 0, partial: false, sources: [] }
   const { found, used } = await candidates.find(text, { signal })
@@ -153,7 +153,83 @@ async function findings(text, { terms = [], keep = [], patterns = [], cache = ne
     out.push({ kind, group: detect.GROUPS[kind] || 'other', text: text.slice(f.start, f.end), start: f.start, end: f.end, confidence: d.p, source: 'model', label: detect.KIND_LABELS[kind], on: d.outcome === 'automate' && d.kind !== null, decided: { answer: d.answer, p: d.p, outcome: d.outcome } })
   }
   out.sort((a, b) => a.start - b.start)
+  // Names the model confidently ticked are spread like the matter's list: every other form of
+  // them in this text (surname alone, initials, declension, capitals) is found and ticked too,
+  // and the model is not asked again about those forms (a lookalike surname stays ticked).
+  if (!respread) {
+    const have = new Set(terms.map((t) => detect.norm(typeof t === 'string' ? t : t.text)))
+    const found = new Map()
+    for (const f of out) {
+      if (!f.on || !['PERSON', 'ORG'].includes(f.kind) || !f.decided || f.decided.outcome !== 'automate') continue
+      const k = detect.norm(f.text)
+      if (!have.has(k)) found.set(k, { text: f.text, kind: f.kind, source: 'found' })
+    }
+    if (found.size) {
+      const again = await findings(text, { terms: [...terms, ...found.values()], keep, patterns, cache, signal, respread: true })
+      // Keep the model's own decision on the spans it decided (the AI record shows it).
+      const first = new Map(out.filter((f) => f.decided).map((f) => [`${f.start}:${f.end}`, f]))
+      again.findings = again.findings.map((f) => {
+        const d = first.get(`${f.start}:${f.end}`)
+        return d && !f.decided ? { ...f, kind: d.kind, group: d.group, label: d.label, confidence: d.confidence, decided: d.decided } : f
+      })
+      again.stats.asked += stats.asked
+      return addresses(text, await occurrences(text, again, signal))
+    }
+    return addresses(text, await occurrences(text, { findings: out.map((f, i) => ({ ...f, id: `f${i + 1}` })), stats }, signal))
+  }
   return { findings: out.map((f, i) => ({ ...f, id: `f${i + 1}` })), stats }
+}
+
+/**
+ * One person, one finding, and one address, one finding: a ticked name is widened over its first
+ * name, initials and title (pii_person.js); the pieces of an address are joined (pii_address.js).
+ */
+function addresses(text, result) {
+  const before = result.findings.length
+  const person = require('./pii_person')
+  const persons = person.signoffs(text, person.glue(text, result.findings))
+  result.stats.names_widened = persons.filter((f) => f.widened).length
+  result.findings = require('./pii_address').glue(text, persons).map(({ widened, ...f }, i) => ({ ...f, id: `f${i + 1}` }))
+  result.stats.addresses = result.findings.filter((f) => f.source === 'address').length
+  result.stats.address_pieces_joined = Math.max(0, before - result.findings.length + result.stats.addresses)
+  return result
+}
+
+const MAX_OCCURRENCES = 600
+
+/**
+ * The second look, per occurrence. Decisions above are made once per distinct text, and a
+ * name's forms are spread everywhere — so "Koch" the surname and "der Koch" the cook, or "Brno"
+ * in an address and in a hospital's name, get the same answer. The uncertain ones are asked
+ * again, each in its own context:
+ *   a single word that is ticked because a name was spread (a surname alone), or
+ *   a single word the model decided once that appears more than once.
+ * The model may only untick, and only when it is confident; the occurrence stays in the check
+ * (shown, unticked), so the lawyer still sees it. It never drops anything.
+ */
+async function occurrences(text, result, signal) {
+  const count = new Map()
+  for (const f of result.findings) { const k = detect.norm(f.text); count.set(k, (count.get(k) || 0) + 1) }
+  const ask = result.findings.filter((f) => f.on && ['PERSON', 'ORG', 'ADDRESS', 'OTHER'].includes(f.kind) && !/\s/.test(f.text) &&
+    (f.source === 'spread' || (f.decided && count.get(detect.norm(f.text)) > 1))).slice(0, MAX_OCCURRENCES)
+  result.stats.occurrences = 0
+  if (!ask.length) return result
+  const tasks = require('./decide_tasks')
+  const verdict = new Map()
+  for (let i = 0; i < ask.length; i += BATCH) {
+    if (signal?.aborted) break
+    const part = ask.slice(i, i + BATCH)
+    const res = await tasks.classifyCandidates(part.map((f) => ({ text: f.text, context: context(text, f.start, f.end) })), { signal })
+    if (!res) break // the model stopped: the ticks stay (the safe side)
+    part.forEach((f, j) => { if (res[j]) verdict.set(f.id, res[j]) })
+    result.stats.occurrences += part.length
+  }
+  result.findings = result.findings.map((f) => {
+    const d = verdict.get(f.id)
+    if (!d || d.kind !== null || d.outcome !== 'automate') return f
+    return { ...f, on: false, decided: { answer: d.answer, p: d.p, outcome: d.outcome, occurrence: true } }
+  })
+  return result
 }
 
 module.exports = { ready, status, detection, findings, context, WINDOW, MAX_ASK }
